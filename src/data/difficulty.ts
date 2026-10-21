@@ -61,7 +61,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyDef>> = {
     maxHealth: 0,
     pickupRate: 1,
     areaHeal: 1,
-    fluff: 1.25,
+    fluff: 2,
   },
   hardcore: {
     id: 'hardcore',
@@ -75,7 +75,7 @@ export const DIFFICULTIES: Readonly<Record<DifficultyId, DifficultyDef>> = {
     maxHealth: -1,
     pickupRate: 0.7,
     areaHeal: 0,
-    fluff: 1.6,
+    fluff: 5,
   },
 };
 

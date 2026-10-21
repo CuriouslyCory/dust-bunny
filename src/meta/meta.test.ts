@@ -79,14 +79,26 @@ describe('stat stacking: Character + Upgrades + Perks', () => {
 
 describe('fluffForRun', () => {
   it('follows the design formula', () => {
-    // 10×2 + 400/20 + 3×10 = 70
-    expect(fluffForRun('died', stats())).toBe(70);
-    expect(fluffForRun('quit', stats({ maxRadius: 1.26, debrisAbsorbed: 19, tierReached: 1 }))).toBe(Math.floor(2.52 + 0.95 + 10));
+    // 3×4 + 10/30 + 400/1000 = 12.73
+    expect(fluffForRun('died', stats())).toBe(12);
+    expect(fluffForRun('quit', stats({ maxRadius: 1.26, debrisAbsorbed: 19, tierReached: 1 }))).toBe(Math.floor(4 + 1.26 / 30 + 19 / 1000));
   });
 
   it('multiplies by 1.5 on victory before flooring', () => {
-    expect(fluffForRun('victory', stats({ maxRadius: 50.3, debrisAbsorbed: 3001, tierReached: 5 }))).toBe(Math.floor((100.6 + 150.05 + 50) * 1.5));
-    expect(fluffForRun('died', stats({ maxRadius: 80, debrisAbsorbed: 2000, tierReached: 6, houseCleared: true }))).toBe(Math.floor((160 + 100 + 60) * 1.25));
+    expect(fluffForRun('victory', stats({ maxRadius: 50.3, debrisAbsorbed: 3001, tierReached: 5 }))).toBe(Math.floor((20 + 50.3 / 30 + 3001 / 1000) * 1.5));
+    expect(fluffForRun('died', stats({ maxRadius: 80, debrisAbsorbed: 2000, tierReached: 6, houseCleared: true }))).toBe(Math.floor((24 + 80 / 30 + 2000 / 1000) * 1.25));
+  });
+
+  it('pays a Casual win about one base-level Upgrade', () => {
+    // A typical full completion: top Tier, radius past the 300 cm cap, ~3500 Debris.
+    const win = stats({ maxRadius: 650, debrisAbsorbed: 3500, tierReached: 9, houseCleared: true, neighborhoodCleared: true });
+    const casual = fluffForRun('victory', win);
+    expect(casual).toBeGreaterThanOrEqual(40);
+    expect(casual).toBeLessThanOrEqual(80);
+    expect(fluffForRun('victory', { ...win, difficulty: 'arcade' })).toBeLessThanOrEqual(160);
+    const hardcore = fluffForRun('victory', { ...win, difficulty: 'hardcore' });
+    expect(hardcore).toBeGreaterThanOrEqual(300);
+    expect(hardcore).toBeLessThanOrEqual(400);
   });
 });
 
@@ -186,7 +198,7 @@ describe('MetaProgress', () => {
     const meta = new MetaProgress(memStorage());
     const e = { reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
     const a = meta.awardRun(e);
-    expect(a.fluff).toBe(Math.floor((100 + 20 + 30) * 1.5));
+    expect(a.fluff).toBe(Math.floor((12 + 50 / 30 + 400 / 1000) * 1.5));
     expect(meta.awardRun(e)).toBe(a);
     expect(meta.fluff).toBe(a.fluff);
     expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1, bestRadius: 50, bestTier: 3 });

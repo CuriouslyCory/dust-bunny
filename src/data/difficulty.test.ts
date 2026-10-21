@@ -131,9 +131,10 @@ describe('difficulty in a Run', () => {
 
   it('pays more Fluff on harder difficulties', () => {
     const stats = { maxRadius: 10, debrisAbsorbed: 400, tierReached: 3 };
-    expect(fluffForRun('died', stats)).toBe(70);
-    expect(fluffForRun('died', { ...stats, difficulty: 'casual' })).toBe(70);
-    expect(fluffForRun('died', { ...stats, difficulty: 'arcade' })).toBe(Math.floor(70 * DIFFICULTIES.arcade.fluff));
-    expect(fluffForRun('died', { ...stats, difficulty: 'hardcore' })).toBe(Math.floor(70 * DIFFICULTIES.hardcore.fluff));
+    const base = 3 * 4 + 10 / 30 + 400 / 1000;
+    expect(fluffForRun('died', stats)).toBe(12);
+    expect(fluffForRun('died', { ...stats, difficulty: 'casual' })).toBe(12);
+    expect(fluffForRun('died', { ...stats, difficulty: 'arcade' })).toBe(Math.floor(base * DIFFICULTIES.arcade.fluff));
+    expect(fluffForRun('died', { ...stats, difficulty: 'hardcore' })).toBe(Math.floor(base * DIFFICULTIES.hardcore.fluff));
   });
 });

@@ -103,8 +103,8 @@ Picked on Character select (↑/↓ or the Difficulty switch), remembered in the
 | Difficulty | Hazard speed | Alive budget | Spawn interval | Grace period | Telegraphs, cooldowns, summons | Hearts | Pickups | Heal on new area | Fluff | Score |
 |------------|--------------|--------------|----------------|--------------|--------------------------------|--------|---------|------------------|-------|-------|
 | Casual (default) | ×1   | ×1    | ×1   | ×1    | ×1    | —  | ×1   | 1 | ×1    | ×1    |
-| Arcade           | ×1.2 | ×1.25 | ×0.8 | ×0.6  | ×0.85 | —  | ×1   | 1 | ×1.25 | ×1.25 |
-| Hardcore         | ×1.4 | ×1.6  | ×0.6 | ×0.35 | ×0.7  | −1 (min 1) | ×0.7 | 0 | ×1.6 | ×1.6 |
+| Arcade           | ×1.2 | ×1.25 | ×0.8 | ×0.6  | ×0.85 | —  | ×1   | 1 | ×2    | ×1.25 |
+| Hardcore         | ×1.4 | ×1.6  | ×0.6 | ×0.35 | ×0.7  | −1 (min 1) | ×0.7 | 0 | ×5   | ×1.6 |
 
 Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweeps and spray droplets. Casual is the original balance.
 
@@ -116,7 +116,7 @@ Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweep
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(min(maxRadius, 300) × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×1.25, Hardcore ×1.6).
+Fluff earned per Run ≈ `floor(tierReached × 4 + min(maxRadius, 300) / 30 + debrisAbsorbed / 1000)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). Targets: a Casual Run that clears the house or wins pays about 40–80 Fluff (one base-level Upgrade), Arcade 80–160, Hardcore 300–400 for Runs that reach the city. Buying every Upgrade (about 1,545 Fluff) takes about 20 Casual wins or 4 Hardcore wins.
 
 ## Screens
 
