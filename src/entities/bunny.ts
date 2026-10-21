@@ -43,6 +43,16 @@ export class Bunny {
   readonly rollQuat = new Quaternion();
   readonly damageFilters: DamageFilter[] = [];
 
+  // Roguelike hooks (Pickups/Perks set these; see docs/architecture.md "Roguelike hooks").
+  /** Bubble Wrap charges; each blocks one hit (handled by the combat damage filter). */
+  shield = 0;
+  /** Dust Cloud: while true, Hazards must not target, chase, pull or damage the Bunny. */
+  hiddenFromHazards = false;
+  /** Second Wind charges; a lethal hit restores full health instead (combat damage filter). */
+  revives = 0;
+  /** Spiky Dash: while `dashing`, Hazard contact stuns the Hazard instead of hurting the Bunny. */
+  spikyDash = false;
+
   constructor(
     private readonly events: EventBus,
     readonly stats: StatBlock,

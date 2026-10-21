@@ -2,6 +2,7 @@
 import { getTier } from '../../data/tiers';
 import type { GameEvents } from '../../core/events';
 import { createLeaderboardPanel } from '../leaderboard/panel';
+import { getMeta } from '../../meta/meta';
 import { h, registerScreen } from '../screens';
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -13,7 +14,9 @@ export function registerBuiltinScreens(): void {
     id: 'title',
     create(game) {
       const play = h('button', { className: 'btn primary', textContent: 'Play' });
-      play.onclick = () => game.startRun();
+      play.onclick = () => game.go('characterSelect');
+      const shop = h('button', { className: 'btn', textContent: 'Shop' });
+      shop.onclick = () => game.go('shop', { back: 'title' });
       const scores = h('button', { className: 'btn', textContent: 'Leaderboard' });
       scores.onclick = () => game.go('leaderboard');
       const el = h(
@@ -22,6 +25,7 @@ export function registerBuiltinScreens(): void {
         h('h1', { textContent: 'Dust Bunny' }),
         h('p', { className: 'sub', textContent: 'Roll. Absorb. Grow. Avoid the cleaning crew.' }),
         play,
+        shop,
         scores,
         h('p', { className: 'hint', textContent: 'WASD / arrows or click-and-hold to roll · Space/Shift to dash · Esc/P to pause' }),
       );
@@ -30,7 +34,7 @@ export function registerBuiltinScreens(): void {
         enter: () => play.focus(),
         onKey(e) {
           if (isKey(e, 'Enter', 'Space')) {
-            game.startRun();
+            game.go('characterSelect');
             return true;
           }
           return false;
@@ -87,13 +91,15 @@ export function registerBuiltinScreens(): void {
       const again = h('button', { className: 'btn primary', textContent: 'Play again' });
       again.onclick = () => game.startRun();
       const board = createLeaderboardPanel({ submit: true });
+      const shop = h('button', { className: 'btn', textContent: 'Shop' });
+      shop.onclick = () => game.go('shop', { back: 'characterSelect' });
       const toTitle = h('button', { className: 'btn', textContent: 'Title' });
       toTitle.onclick = () => {
         game.disposeRun();
         game.go('title');
       };
       return {
-        el: h('div', { className: 'panel' }, title, list, board.el, again, toTitle),
+        el: h('div', { className: 'panel' }, title, list, board.el, again, shop, toTitle),
         enter(params) {
           const e = params as GameEvents['runEnded'] | undefined;
           if (!e) return;
@@ -106,6 +112,8 @@ export function registerBuiltinScreens(): void {
             ['Tier reached', `${s.tierReached} · ${getTier(s.tierReached).name}`],
             ['Seed', s.seed],
           ];
+          const award = getMeta().awardRun(e);
+          rows.push(['Fluff earned', `+${award.fluff}${e.reason === 'victory' ? ' (×1.5)' : ''}`], ['Fluff total', String(award.total)]);
           list.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { textContent: k }), h('dd', { textContent: v })]));
           board.showRun(e);
           again.focus();
