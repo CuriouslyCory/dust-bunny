@@ -9,6 +9,10 @@
  *   progress (another device), that copy replaces the local one.
  * - The device remembers which account it last synced. Signing in to a different account loads that
  *   account's progress (or a fresh save) instead of handing it the previous player's.
+ * - It also remembers when it has changes the server hasn't confirmed (say, an Upgrade bought
+ *   offline). Spending changes neither lifetime counter, so on such a tie the device's copy wins;
+ *   without unsynced changes a tie goes to the server, so a stale device can't undo another
+ *   device's purchases.
  */
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, isEmptyProgress, sameProgress, validateProgress, type Progress } from '../shared/progress';
@@ -17,6 +21,8 @@ import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from
 
 /** localStorage key: id of the account this device's save was last synced with. */
 export const CLOUD_USER_KEY = 'dust-bunny:cloud-user';
+/** localStorage key: id of the account with local changes the server hasn't confirmed yet. */
+export const CLOUD_DIRTY_KEY = 'dust-bunny:cloud-dirty';
 
 export type CloudSaveStatus = 'off' | 'syncing' | 'synced' | 'error';
 
@@ -39,6 +45,12 @@ const freshProgress = (): Progress => progressOf(defaultSave());
 interface ProgressResponse {
   accepted?: boolean;
   progress: Progress | null;
+}
+
+class StatusError extends Error {
+  constructor(readonly status: number) {
+    super(`progress ${status}`);
+  }
 }
 
 export function createCloudSave(meta: MetaProgress, account: AccountClient, opts: CloudSaveOptions = {}) {
@@ -65,14 +77,38 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     for (const l of listeners) l(s);
   }
 
-  async function call(init?: RequestInit): Promise<Progress | null> {
+  async function call(init?: RequestInit): Promise<{ accepted: boolean; progress: Progress | null }> {
     const res = await doFetch(baseUrl, { credentials: 'same-origin', ...init, headers: { Accept: 'application/json', ...init?.headers } });
-    if (!res.ok) throw new Error(`progress ${res.status}`);
+    if (!res.ok) throw new StatusError(res.status);
     const body = (await res.json()) as ProgressResponse;
-    if (body.progress === null) return null;
+    if (body.progress === null) return { accepted: body.accepted !== false, progress: null };
     const v = validateProgress(body.progress);
     if (!v.ok) throw new Error(`bad progress: ${v.message}`);
-    return v.value;
+    return { accepted: body.accepted !== false, progress: v.value };
+  }
+
+  function storageGet(key: string): string | null {
+    try {
+      return storage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function storageSet(key: string, value: string): void {
+    try {
+      storage?.setItem(key, value);
+    } catch {
+      /* storage blocked: the next sign-in just merges again */
+    }
+  }
+
+  /** Remember (across reloads) that this account has changes the server hasn't confirmed. */
+  function setDirty(dirty: boolean): void {
+    if (!userId) return;
+    const current = storageGet(CLOUD_DIRTY_KEY);
+    if (dirty && current !== userId) storageSet(CLOUD_DIRTY_KEY, userId);
+    else if (!dirty && current === userId) storageSet(CLOUD_DIRTY_KEY, '');
   }
 
   /** Replaces the synced fields of the local save (the store's listeners see it as one change). */
@@ -86,10 +122,21 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     });
   }
 
-  /** Uploads; when the server refuses (it holds more progress), adopts its copy. */
+  /**
+   * Uploads a snapshot. Accepted: remember it as synced; changes made while the request was in
+   * flight stay local and upload next. Refused (the server holds more progress): adopt its copy.
+   */
   async function upload(p: Progress): Promise<void> {
-    const stored = await call({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
-    if (stored) adopt(stored);
+    const res = await call({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
+    if (!res.progress) return;
+    if (res.accepted) {
+      lastSynced = res.progress;
+      if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
+      else schedule(debounceMs);
+    } else {
+      adopt(res.progress);
+      setDirty(false);
+    }
   }
 
   /** Runs sync steps one at a time; a failure marks the status and schedules a retry. */
@@ -103,37 +150,42 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
         if (userId === forUser) setStatus('synced');
       } catch (err) {
         console.warn('[cloudSave]', err);
-        if (userId === forUser) {
-          setStatus('error');
-          schedule(retryMs);
-        }
+        if (userId !== forUser) return;
+        setStatus('error');
+        // Session gone (expired or signed out elsewhere): re-check it instead of retrying.
+        if (err instanceof StatusError && err.status === 401) void account.refresh();
+        else schedule(retryMs);
       }
     });
     return chain;
   }
 
   async function connect(id: string): Promise<void> {
-    const remote = await call();
+    const remote = (await call()).progress;
     if (userId !== id) return;
     const local = progressOf(meta.data);
-    const previous = storage?.getItem(CLOUD_USER_KEY) ?? null;
+    const previous = storageGet(CLOUD_USER_KEY);
     if (previous && previous !== id) {
       // This device's save belongs to another account: start from this account's copy.
       adopt(remote ?? freshProgress());
+      setDirty(false);
     } else if (!remote) {
       if (!isEmptyProgress(local)) await upload(local);
       else lastSynced = local;
-    } else if (compareProgress(local, remote) > 0) {
-      await upload(local);
     } else {
-      adopt(remote);
+      const order = compareProgress(local, remote);
+      const unsynced = storageGet(CLOUD_DIRTY_KEY) === id && !sameProgress(local, remote);
+      if (order > 0 || (order === 0 && unsynced)) await upload(local);
+      else {
+        adopt(remote);
+        setDirty(false);
+      }
     }
-    try {
-      storage?.setItem(CLOUD_USER_KEY, id);
-    } catch {
-      /* storage blocked: next sign-in just merges again */
-    }
-    if (userId === id) connected = true;
+    storageSet(CLOUD_USER_KEY, id);
+    if (userId !== id) return;
+    connected = true;
+    // Changes made while connecting were not scheduled (see onChange): pick them up now.
+    if (lastSynced && !sameProgress(progressOf(meta.data), lastSynced)) schedule(debounceMs);
   }
 
   function pushIfChanged(): Promise<void> {
@@ -170,9 +222,10 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   }
 
   const offStore = meta.store.onChange(() => {
-    if (!userId || !connected || !lastSynced) return; // not connected yet: connect() reconciles everything
-    if (sameProgress(progressOf(meta.data), lastSynced)) return;
-    schedule(debounceMs);
+    if (!userId) return;
+    if (lastSynced && sameProgress(progressOf(meta.data), lastSynced)) return;
+    setDirty(true);
+    if (connected) schedule(debounceMs); // not connected yet: connect() reconciles everything
   });
   const offAccount = account.subscribe(onAccount);
 

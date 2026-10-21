@@ -40,13 +40,14 @@ const hostOf = (url: string | undefined): string | null => {
 
 /**
  * Hosts Better Auth may build callback URLs for: the canonical BETTER_AUTH_URL, this Vercel
- * deployment's own URLs (production, branch and per-deployment) and local dev. Each also becomes a
- * trusted origin for redirects. OAuth itself only succeeds where the provider has that host's
- * redirect URI registered.
+ * deployment's own URLs (production, branch and per-deployment) and, outside production, local
+ * dev. Each also becomes a trusted origin for redirects. OAuth itself only succeeds where the
+ * provider has that host's redirect URI registered.
  */
 export function allowedHosts(env: Env = process.env): string[] {
-  const hosts = [env.BETTER_AUTH_URL, env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_BRANCH_URL, env.VERCEL_URL].map(hostOf);
-  return [...new Set([...hosts.filter((h): h is string => Boolean(h)), 'localhost:*', '127.0.0.1:*'])];
+  const hosts = [env.BETTER_AUTH_URL, env.VERCEL_PROJECT_PRODUCTION_URL, env.VERCEL_BRANCH_URL, env.VERCEL_URL].map(hostOf).filter((h): h is string => Boolean(h));
+  if (env.VERCEL_ENV !== 'production') hosts.push('localhost:*', '127.0.0.1:*');
+  return [...new Set(hosts)];
 }
 
 export function authOptions(env: Env = process.env): BetterAuthOptions {
@@ -61,7 +62,12 @@ export function authOptions(env: Env = process.env): BetterAuthOptions {
     appName: 'Dust Bunny',
     secret: env.BETTER_AUTH_SECRET,
     basePath: '/api/auth',
-    baseURL: { allowedHosts: allowedHosts(env), ...(env.BETTER_AUTH_URL ? { fallback: env.BETTER_AUTH_URL } : {}) },
+    baseURL: {
+      allowedHosts: allowedHosts(env),
+      ...(env.BETTER_AUTH_URL ? { fallback: env.BETTER_AUTH_URL } : {}),
+      // Vercel serves only HTTPS; never let a callback URL come out as http:// there.
+      protocol: env.VERCEL ? 'https' : 'auto',
+    },
     database: getPool(),
     socialProviders,
     session: {

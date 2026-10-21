@@ -7,7 +7,7 @@
 import { attachDatabasePool } from '@vercel/functions';
 import pg from 'pg';
 import { HttpError } from './http.js';
-import { SCHEMA } from './schema.js';
+import { SCHEMA, SCHEMA_PROBE } from './schema.js';
 
 let pool: pg.Pool | null = null;
 let schemaReady: Promise<void> | null = null;
@@ -32,9 +32,14 @@ export async function query<T>(text: string, params: unknown[] = []): Promise<T[
   return res.rows as T[];
 }
 
-/** Applies SCHEMA once per instance (retried on the next call if it fails). */
+/**
+ * Applies SCHEMA once per instance (retried on the next call if it fails). A cold start whose
+ * database is already current costs one probe query, not the DDL (which would briefly lock tables).
+ */
 export function ensureSchema(): Promise<void> {
   schemaReady ??= (async () => {
+    const [probe] = await query<{ ready: boolean }>(SCHEMA_PROBE);
+    if (probe?.ready) return;
     for (const stmt of SCHEMA) await query(stmt);
   })().catch((err: unknown) => {
     schemaReady = null;

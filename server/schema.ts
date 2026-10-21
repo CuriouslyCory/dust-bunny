@@ -3,9 +3,19 @@
  * in ./db.ts). Keep db/schema.sql in sync. Order matters: later tables reference "user".
  *
  * The four auth tables are Better Auth's core schema (user, session, account, verification) as
- * `better-auth/db/migration` generates it for Postgres; server/auth.test.ts checks that Better Auth
+ * `better-auth/db/migration` generates it for Postgres; server/api.test.ts checks that Better Auth
  * finds nothing to migrate after these statements ran.
  */
+
+/**
+ * True when the newest objects in SCHEMA already exist, so the DDL can be skipped. Update it to
+ * check whatever a schema change adds.
+ */
+export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
+  AND to_regclass('public.verification_identifier_idx') IS NOT NULL
+  AND EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'public' AND table_name = 'leaderboard_scores' AND column_name = 'user_id') AS ready`;
+
 export const SCHEMA: readonly string[] = [
   // --- Better Auth (accounts and sessions) ---
   `CREATE TABLE IF NOT EXISTS "user" (

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
-import { CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
+import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
 import type { KeyValueStorage } from './save';
 
@@ -21,8 +21,11 @@ function fakeServer() {
   const rows = new Map<string, Progress>();
   let user: string | null = null;
   let down = false;
+  /** While set, PUTs wait for it (simulates a slow request). */
+  let gate: Promise<void> | null = null;
   const puts: Progress[] = [];
   const fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    if (init?.method === 'PUT' && gate) await gate;
     if (down) return new Response('{}', { status: 503, headers: { 'content-type': 'application/json' } });
     if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
     const stored = rows.get(user) ?? null;
@@ -39,7 +42,17 @@ function fakeServer() {
     puts,
     fetch: fetch as unknown as typeof globalThis.fetch,
     signIn: (id: string) => (user = id),
+    signOut: () => (user = null),
     setDown: (d: boolean) => (down = d),
+    /** Holds PUTs until the returned function is called. */
+    hold: () => {
+      let release!: () => void;
+      gate = new Promise((r) => (release = r));
+      return () => {
+        gate = null;
+        release();
+      };
+    },
   };
 }
 
@@ -51,7 +64,9 @@ function fakeAccount() {
     state = { ...state, ...s };
     for (const l of listeners) l(state);
   };
+  const refresh = vi.fn(async () => state);
   const client = {
+    refresh,
     get state() {
       return state;
     },
@@ -63,6 +78,7 @@ function fakeAccount() {
   } as unknown as AccountClient;
   return {
     client,
+    refresh,
     signIn: (id: string) => set({ status: 'signedIn', user: { id, name: id, image: null } }),
     signOut: () => set({ status: 'signedOut', user: null }),
   };
@@ -169,6 +185,71 @@ describe('cloud save', () => {
     await vi.advanceTimersByTimeAsync(1100);
     expect(s.server.puts).toEqual([]);
     expect(s.meta.fluff).toBe(0);
+  });
+
+  it('keeps changes made while an upload is in flight', async () => {
+    const s = setup(prog(500, 500, 5));
+    await s.signIn('u1');
+    const release = s.server.hold();
+    s.meta.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150); // upload of "A" starts and waits
+    s.meta.buy('magnetism'); // "B" while it is in flight
+    release();
+    await vi.runAllTimersAsync();
+    expect(s.meta.level('fast_feet')).toBe(1);
+    expect(s.meta.level('magnetism')).toBe(1);
+    expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1, magnetism: 1 });
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('');
+  });
+
+  it('keeps changes made while connecting', async () => {
+    const s = setup(prog(500, 500, 5));
+    s.server.rows.set('u1', prog(100, 100, 2));
+    const release = s.server.hold();
+    s.server.signIn('u1');
+    s.acct.signIn('u1');
+    await vi.advanceTimersByTimeAsync(10); // guest upload waiting
+    s.meta.buy('fast_feet');
+    release();
+    await vi.runAllTimersAsync();
+    expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1 });
+  });
+
+  it('on a tie, uploads only if this device has unsynced changes', async () => {
+    // Bought offline last session: the device copy wins the tie.
+    const offline = setup(prog(10, 300, 6, { reroll: 1 }), { [CLOUD_USER_KEY]: 'u1', [CLOUD_DIRTY_KEY]: 'u1' });
+    offline.server.rows.set('u1', prog(150, 300, 6));
+    await offline.signIn('u1');
+    expect(offline.server.rows.get('u1')).toEqual(prog(10, 300, 6, { reroll: 1 }));
+
+    // A stale device (nothing unsynced): the server copy, with another device's purchase, wins.
+    const stale = setup(prog(150, 300, 6), { [CLOUD_USER_KEY]: 'u1' });
+    stale.server.rows.set('u1', prog(10, 300, 6, { reroll: 1 }));
+    await stale.signIn('u1');
+    expect(progressOf(stale.meta.data)).toEqual(prog(10, 300, 6, { reroll: 1 }));
+    expect(stale.server.puts).toEqual([]);
+  });
+
+  it('marks unsynced changes while the server is down', async () => {
+    const s = setup(prog(500, 500, 5));
+    await s.signIn('u1');
+    s.server.setDown(true);
+    s.meta.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.cloud.status).toBe('error');
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('u1');
+  });
+
+  it('re-checks the session instead of retrying on 401', async () => {
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    s.server.signOut(); // session revoked server-side
+    s.meta.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.acct.refresh).toHaveBeenCalled();
+    const calls = (s.server.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect((s.server.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(calls);
   });
 
   it('stops syncing on sign-out', async () => {

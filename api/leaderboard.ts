@@ -115,7 +115,11 @@ async function submit(request: Request): Promise<Response> {
   const s = result.value;
 
   await ensureSchema();
-  const user = await sessionUser(request);
+  // An auth problem must not cost anyone their score: post it anonymously instead.
+  const user = await sessionUser(request).catch((err: unknown) => {
+    console.error('[leaderboard] session lookup failed', err);
+    return null;
+  });
 
   const [recent] = await query<{ n: number; oldest: number | null }>(
     `SELECT count(*)::int AS n, extract(epoch FROM min(created_at))::float AS oldest

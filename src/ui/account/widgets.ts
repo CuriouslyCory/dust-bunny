@@ -56,12 +56,11 @@ export function providerButtons(account: AccountClient, opts: ProviderButtonsOpt
   const compact = opts.size === 'compact';
   const el = h('div', { className: `acct-providers${compact ? ' compact' : ''}` });
   const render = () => {
-    const { providers, pending } = account.state;
+    const { providers } = account.state;
     el.replaceChildren(
       ...providers.map((p) => {
         const label = compact ? PROVIDER_LABELS[p] : `Continue with ${PROVIDER_LABELS[p]}`;
         const b = h('button', { type: 'button', className: `btn acct-provider acct-provider-${p}` }, providerIcon(p), h('span', { textContent: label }));
-        b.disabled = pending;
         b.addEventListener('click', () => void account.signIn(p));
         return b;
       }),
