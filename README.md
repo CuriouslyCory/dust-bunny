@@ -7,6 +7,8 @@ A three.js roguelike in the browser. You are a dust bunny rolling across a house
 - Move: WASD / arrow keys, or click and hold to roll towards the cursor
 - Dash: Space / Shift
 - Pause: Esc / P
+- Mute: M
+- Touch: drag on the left side to steer (virtual joystick); tap the right side or the Dash button to dash
 
 ## Local development
 
@@ -37,5 +39,5 @@ The table is created on first request. `db/schema.sql` contains the same DDL if 
 
 1. Import the GitHub repo into Vercel (Add New → Project). `vercel.json` sets the framework (Vite), `pnpm build` and the `dist` output, so no other settings are needed.
 2. Add a database: in the project open **Storage → Marketplace → Neon → Connect**, create (or pick) a database and connect it to the project's environments. The integration sets `DATABASE_URL`. If you use an existing Neon project instead, add `DATABASE_URL` (the pooled connection string) under **Settings → Environment Variables**.
-3. Optionally set `LEADERBOARD_IP_SALT` to a random string.
+3. Optionally set `LEADERBOARD_IP_SALT` to a random string, and `SITE_URL` (e.g. `https://dustbunny.example`) if the site is served from a custom domain. Social-card image URLs are made absolute at build time from `SITE_URL`, falling back to Vercel's production domain.
 4. Deploy (or redeploy after adding the env vars). If `DATABASE_URL` is missing, the API returns 503 and the game falls back to the local leaderboard.
