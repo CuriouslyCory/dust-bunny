@@ -1,4 +1,5 @@
 /** Absorb rule, growth formula, magnet pull and the absorb system. */
+import { tierForRadius } from '../data/tiers';
 import { TUNING } from '../data/tuning';
 import type { Debris } from '../entities/debris';
 import { SYSTEM_ORDER, type System } from '../game/system';
@@ -6,6 +7,11 @@ import { SYSTEM_ORDER, type System } from '../game/system';
 /** Debris of radius `size` can be absorbed by a Bunny of `radius` iff size <= radius × absorbRatio. */
 export function canAbsorb(radius: number, absorbRatio: number, size: number): boolean {
   return size <= radius * absorbRatio;
+}
+
+/** Effective growth factor at a radius: TUNING.growthFactor × the Tier's `growth` pacing multiplier. */
+export function growthFactorAt(radius: number): number {
+  return TUNING.growthFactor * tierForRadius(radius).growth;
 }
 
 /** r' = cbrt(r³ + growthFactor × growthMultiplier × massMult × size³) */

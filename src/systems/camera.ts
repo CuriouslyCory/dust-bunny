@@ -11,6 +11,7 @@ import { Fog, PerspectiveCamera, Vector3 } from 'three';
 import { clamp, damp } from '../core/math';
 import { getTier } from '../data/tiers';
 import { TUNING } from '../data/tuning';
+import type { Run } from '../game/run';
 
 export function cameraDistanceFor(radius: number, tier: number): number {
   const c = TUNING.camera;
@@ -103,6 +104,19 @@ export function floorPointVisible(dx: number, dz: number, view: ViewInfo, margin
   const up = h * Math.sin(p) - height * Math.cos(p);
   const t = Math.tan(((view.fovDeg * Math.PI) / 180) / 2);
   return Math.abs(up) <= depth * t && Math.abs(side) <= depth * t * view.aspect;
+}
+
+/** Framing to keep spawns out of: the live camera (if rendering), never tighter than the Tier's target framing. */
+export function spawnView(run: Run): ViewInfo {
+  const target = cameraDistanceFor(run.bunny.radius, run.tier);
+  const v = run.viewInfo;
+  // The live distance lags a Tier-up zoom; never use less than the Tier's (aspect-framed) target.
+  return v ? { ...v, distance: Math.max(v.distance, target * framingForAspect(v.aspect).distanceScale) } : { distance: target, aspect: DEFAULT_VIEW_ASPECT, fovDeg: TUNING.camera.fov };
+}
+
+/** True if a floor point is on screen right now (Hazards use it so they never attack from off screen). */
+export function onScreen(run: Run, x: number, z: number, margin = 0): boolean {
+  return floorPointVisible(x - run.bunny.x, z - run.bunny.z, spawnView(run), margin);
 }
 
 export class CameraRig {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
-import { DIRECTOR, ROBOVAC_9000, ROOMBA } from '../data/hazards';
+import { DIRECTOR, ROBOVAC_9000, ROOMBA, UPRIGHT_VACUUM } from '../data/hazards';
 import { getTier, MAX_TIER, TIERS } from '../data/tiers';
 import { TUNING } from '../data/tuning';
 import { Run } from '../game/run';
@@ -13,7 +13,9 @@ import { installRunHazards } from './install';
 import { puddleScale } from './mop';
 import { bossSizeAfterHits } from './robovac';
 import { planShed } from './shed';
-import { inCone } from './uprightVacuum';
+import { inCone, type UprightVacuum } from './uprightVacuum';
+import type { SprayBottle } from './sprayBottle';
+import { onScreen, spawnView } from '../systems/camera';
 import { installRunHooks } from '../meta/install';
 
 const makeRun = (seed = 'hazards') => {
@@ -222,6 +224,62 @@ describe('roguelike hooks', () => {
     h.x = b.x + b.radius + ROOMBA.size - 1;
     run.hazards.update(1 / 60, run);
     expect(b.health).toBe(b.maxHealth);
+  });
+
+  it('backs off after a hit instead of pinning the Bunny (no repeat hit when i-frames end)', () => {
+    for (const id of ['roomba', 'mop', 'upright_vacuum']) {
+      const { run } = makeRun(`recoil-${id}`);
+      moveToOpenFloor(run);
+      const b = run.bunny;
+      b.setRadius(8);
+      const h = run.hazards.spawn(id, b.x + b.radius + 10, b.z);
+      h.x = b.x + b.radius + h.size - 2;
+      run.hazards.update(1 / 60, run);
+      expect(b.health).toBe(b.maxHealth - 1);
+      const d0 = Math.hypot(h.x - b.x, h.z - b.z);
+      // Hold the Bunny in place (as if against a wall) until the i-frames run out.
+      const [bx, bz] = [b.x, b.z];
+      for (let i = 0; i < 70; i++) {
+        b.x = bx;
+        b.z = bz;
+        b.invulnerable = Math.max(0, b.invulnerable - 1 / 60);
+        run.hazards.update(1 / 60, run);
+      }
+      expect(b.invulnerable).toBe(0);
+      expect(b.health).toBe(b.maxHealth - 1);
+      expect(Math.hypot(h.x - b.x, h.z - b.z)).toBeGreaterThan(d0);
+    }
+  });
+
+  it('the Upright Vacuum cuts out after a hit and deals 1 damage', () => {
+    const { run } = makeRun('vacuum-hit');
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(10);
+    const h = run.hazards.spawn('upright_vacuum', b.x + b.radius + UPRIGHT_VACUUM.size - 2, b.z) as UprightVacuum;
+    h.state = 'on';
+    run.hazards.update(1 / 60, run);
+    expect(b.health).toBe(b.maxHealth - UPRIGHT_VACUUM.damage);
+    expect(UPRIGHT_VACUUM.damage).toBe(1);
+    expect(h.state).toBe('off');
+  });
+
+  it('a Spray Bottle only shoots from on screen', () => {
+    const { run } = makeRun('spray-screen');
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(10);
+    const view = spawnView(run);
+    // Straight below the Bunny (towards the camera) and in range, but off the bottom of the screen.
+    const below = run.hazards.spawn('spray_bottle', b.x, b.z + view.distance * 0.6) as SprayBottle;
+    below.yaw = Math.PI; // already aimed at the Bunny
+    expect(onScreen(run, below.x, below.z)).toBe(false);
+    for (let i = 0; i < 120; i++) run.hazards.update(1 / 60, run);
+    expect(below.state).toBe('idle');
+    const above = run.hazards.spawn('spray_bottle', b.x, b.z - view.distance * 0.4) as SprayBottle;
+    above.yaw = 0;
+    for (let i = 0; i < 30; i++) run.hazards.update(1 / 60, run);
+    expect(above.state).not.toBe('idle');
   });
 
   it('a blocked hit (Bubble Wrap) does not stick or shed', () => {

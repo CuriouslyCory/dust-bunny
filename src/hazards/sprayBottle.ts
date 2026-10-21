@@ -7,6 +7,7 @@ import { Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import type { Rng } from '../core/rng';
 import { SPRAY_BOTTLE, tierValue } from '../data/hazards';
 import type { Run } from '../game/run';
+import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
 import { bunnySheltered, canTarget, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
@@ -54,7 +55,8 @@ export class SprayBottle extends BaseHazard {
     const dz = b.z - this.z;
     const dist = Math.hypot(dx, dz);
     const range = tierValue(c.range, run.tier);
-    const inRange = canTarget(run) && dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight);
+    // Only shoot from on screen, so the player can always see the bottle and its aim lane.
+    const inRange = canTarget(run) && dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight) && onScreen(run, this.x, this.z);
     this.timer -= dt;
 
     if (this.state === 'telegraph' && !canTarget(run)) {

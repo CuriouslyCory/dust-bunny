@@ -12,6 +12,9 @@
  * Suction strength is a fraction of the Bunny's max speed at the strongest point, so it
  * stays escapable at every Tier; it is multiplied by the Bunny's suctionMultiplier stat.
  */
+/** Seconds a Roomba / Mop / Upright Vacuum holds still after landing a hit (no pinning against walls). */
+export const HAZARD_RECOIL = 1.4;
+
 export type PerTier = readonly [number, number, number, number, number];
 
 export const ROOMBA = {
@@ -129,7 +132,8 @@ export const UPRIGHT_VACUUM = {
   size: 30,
   height: 110,
   mass: 3.5,
-  damage: 2,
+  /** 1 (design said 2): with Zap's 2 hearts a 2-damage hit was a one-shot. Shedding makes it hurt. */
+  damage: 1,
   knockbackCm: 40,
   knockbackRadii: 3,
   shedFraction: 0.06,
@@ -138,7 +142,7 @@ export const UPRIGHT_VACUUM = {
   /** Suction cone half-angle (radians) and reach (cm from the intake). */
   coneHalfAngle: 0.5,
   coneRange: 170,
-  suctionStrength: 0.6,
+  suctionStrength: 0.45,
   /** Cycle: warm-up (telegraph) → suction on → off. */
   warmup: 0.8,
   on: 3.5,
@@ -152,7 +156,8 @@ export const ROBOVAC_9000 = {
   contactRadius: 34,
   height: 21,
   mass: 6,
-  damage: 2,
+  /** 1 per hit (2 one-shot Zap); charges still knock hard and shed mass. */
+  damage: 1,
   knockbackCm: 70,
   knockbackRadii: 3,
   /** Mass shed by the Bunny when hit by the boss. */
@@ -219,7 +224,7 @@ export const DIRECTOR = {
     {
       budget: [4, 5],
       interval: [6, 5],
-      types: { roomba: { weight: 1.2, max: 2 }, broom: { weight: 1, max: 1 }, spray_bottle: { weight: 0.6, max: 1 }, mop: { weight: 1, max: 2 }, upright_vacuum: { weight: 1, max: 2 } },
+      types: { roomba: { weight: 1.2, max: 2 }, broom: { weight: 1, max: 1 }, spray_bottle: { weight: 0.6, max: 1 }, mop: { weight: 1, max: 2 }, upright_vacuum: { weight: 0.8, max: 1 } },
     },
     {
       budget: [4, 5],

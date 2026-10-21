@@ -4,10 +4,10 @@
  * The boss's mini Roombas reuse this with MINI_ROOMBA tuning.
  */
 import type { Rng } from '../core/rng';
-import { MINI_ROOMBA, ROOMBA } from '../data/hazards';
+import { HAZARD_RECOIL, MINI_ROOMBA, ROOMBA } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle } from './common';
+import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, ringDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 
@@ -26,6 +26,7 @@ export class Roomba extends BaseHazard {
     private readonly cfg: RoombaTuning,
   ) {
     super(id, def, x, z, cfg.size, 'roomba');
+    this.recoilHeight = this.cfg.height;
     const s = cfg.size / ROOMBA.size;
     this.model.scale.setScalar(s);
     this.yaw = rng.range(-Math.PI, Math.PI);
@@ -79,7 +80,11 @@ export class Roomba extends BaseHazard {
 
   onContact(run: Run): void {
     if (bunnySheltered(run, this.cfg.height)) return;
-    if (!this.stunned) hitBunny(run, this.x, this.z, { damage: this.cfg.damage, source: this.def.id, knockbackCm: this.cfg.knockbackCm, knockbackRadii: this.cfg.knockbackRadii });
+    if (!this.stunned && this.recoilFor <= 0 && hitBunny(run, this.x, this.z, { damage: this.cfg.damage, source: this.def.id, knockbackCm: this.cfg.knockbackCm, knockbackRadii: this.cfg.knockbackRadii })) {
+      // Pause, then drive off the other way instead of pinning the Bunny.
+      this.recoilFor = HAZARD_RECOIL;
+      this.yaw = yawOf(this.x - run.bunny.x, this.z - run.bunny.z);
+    }
     pushBunnyOut(run, this.x, this.z, this.size);
   }
 }

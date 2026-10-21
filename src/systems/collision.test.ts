@@ -4,8 +4,8 @@ import { TUNING } from '../data/tuning';
 import { Run } from '../game/run';
 import { hazardFloorFree } from '../hazards/common';
 import { collisionSystem, wallRadiusAt } from './collision';
-import { clutterFree, clutterSpacing, reachableBy, spawnView } from './spawner';
-import { floorPointVisible } from './camera';
+import { clutterFree, clutterSpacing, reachableBy } from './spawner';
+import { floorPointVisible, spawnView } from './camera';
 
 const makeRun = (seed = 'collision') => new Run(new EventBus(), { seed, characterId: 'lint' });
 

@@ -9,7 +9,7 @@ import type { Rng } from '../core/rng';
 import { BROOM, DIRECTOR, LINT_ROLLER, MOP, ROBOVAC_9000, ROOMBA, SPRAY_BOTTLE, UPRIGHT_VACUUM, type TierSpawnTable } from '../data/hazards';
 import { MAX_TIER, tierProgress } from '../data/tiers';
 import type { Run } from '../game/run';
-import { viewRadiusFor } from '../systems/camera';
+import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import type { Hazard, HazardManager } from './index';
 
@@ -120,7 +120,8 @@ export class HazardDirector {
       const d = this.rng.range(inner, outer);
       const x = b.x + Math.cos(a) * d;
       const z = b.z + Math.sin(a) * d;
-      if (hazardFloorFree(house, x, z, radius, height)) return { x, z };
+      // Off screen too: on portrait the view reaches past the ring at the top of the screen.
+      if (hazardFloorFree(house, x, z, radius, height) && !onScreen(run, x, z, radius)) return { x, z };
     }
     // The view may cover the whole house (Tier 5): take the farthest valid random spot.
     let best: { x: number; z: number } | null = null;
@@ -130,9 +131,11 @@ export class HazardDirector {
       const x = this.rng.range(bd.minX, bd.maxX);
       const z = this.rng.range(bd.minZ, bd.maxZ);
       const d = Math.hypot(x - b.x, z - b.z);
-      if (d > bestD && d <= outer && hazardFloorFree(house, x, z, radius, height)) {
+      // Prefer hidden spots (behind the camera); otherwise the farthest one.
+      const score = onScreen(run, x, z, radius) ? d : d + 1e4;
+      if (score > bestD && d <= outer && hazardFloorFree(house, x, z, radius, height)) {
         best = { x, z };
-        bestD = d;
+        bestD = score;
       }
     }
     return best;

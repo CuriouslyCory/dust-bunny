@@ -15,7 +15,7 @@ import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
-import { cameraDistanceFor, DEFAULT_VIEW_ASPECT, framingForAspect, floorPointVisible, viewRadiusFor, type ViewInfo } from './camera';
+import { floorPointVisible, spawnView, viewRadiusFor } from './camera';
 import { passesUnder } from './collision';
 
 /** True if a Debris disc of radius `size` can sit at (x, z): inside a room, clear of walls and solid furniture. */
@@ -71,14 +71,6 @@ export function clutterFree(field: DebrisField, x: number, z: number, size: numb
     if (len2(d.x - x, d.z - z) < clutterSpacing(s, d.size)) return false;
   }
   return true;
-}
-
-/** Framing to keep spawns out of: the live camera (if rendering), never tighter than the Tier's target framing. */
-export function spawnView(run: Run): ViewInfo {
-  const target = cameraDistanceFor(run.bunny.radius, run.tier);
-  const v = run.viewInfo;
-  // The live distance lags a Tier-up zoom; never use less than the Tier's (aspect-framed) target.
-  return v ? { ...v, distance: Math.max(v.distance, target * framingForAspect(v.aspect).distanceScale) } : { distance: target, aspect: DEFAULT_VIEW_ASPECT, fovDeg: TUNING.camera.fov };
 }
 
 export class DebrisSpawner implements System {

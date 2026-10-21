@@ -4,7 +4,7 @@
  * Contact: 2 damage, knockback, and it sucks some mass off the Bunny.
  */
 import type { Rng } from '../core/rng';
-import { UPRIGHT_VACUUM } from '../data/hazards';
+import { HAZARD_RECOIL, UPRIGHT_VACUUM } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
@@ -39,6 +39,7 @@ export class UprightVacuum extends BaseHazard {
     private readonly rng: Rng,
   ) {
     super(id, def, x, z, UPRIGHT_VACUUM.size, 'upright_vacuum');
+    this.recoilHeight = UPRIGHT_VACUUM.height;
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.timer = rng.range(0.5, UPRIGHT_VACUUM.off);
     const c = UPRIGHT_VACUUM;
@@ -96,8 +97,14 @@ export class UprightVacuum extends BaseHazard {
   onContact(run: Run): void {
     const c = UPRIGHT_VACUUM;
     if (bunnySheltered(run, c.height)) return;
-    if (!this.stunned && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii }) && run.bunny.alive) {
-      shedMass(run, this.rng, c.shedFraction, this.def.id);
+    if (!this.stunned && this.recoilFor <= 0 && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii })) {
+      // It chokes on the Bunny and cuts out, so the suction can't drag it straight back in
+      // for a second 2-damage hit as soon as the i-frames end.
+      this.state = 'off';
+      this.timer = c.off;
+      this.cone.visible = false;
+      this.recoilFor = HAZARD_RECOIL;
+      if (run.bunny.alive) shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
     pushBunnyOut(run, this.x, this.z, this.size);
   }

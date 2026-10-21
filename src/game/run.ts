@@ -9,14 +9,13 @@ import { Rng } from '../core/rng';
 import { getCharacter } from '../data/characters';
 import { DEBRIS_TYPES } from '../data/debris';
 import { tierForRadius } from '../data/tiers';
-import { TUNING } from '../data/tuning';
 import { Bunny } from '../entities/bunny';
 import { DebrisField, type Debris } from '../entities/debris';
 import { BASE_BUNNY_STATS, StatBlock, type StatModifier } from '../entities/stats';
 import { HazardManager } from '../hazards';
 import { perkRegistry } from '../perks';
 import { PickupManager } from '../pickups';
-import { absorbSystem, growRadius, magnetSystem } from '../systems/absorb';
+import { absorbSystem, growRadius, growthFactorAt, magnetSystem } from '../systems/absorb';
 import { collisionSystem } from '../systems/collision';
 import { growthSystem } from '../systems/growth';
 import { movementSystem } from '../systems/movement';
@@ -119,7 +118,7 @@ export class Run {
   /** Grows the Bunny by an absorbed object and emits debrisAbsorbed. */
   absorbMass(size: number, mass: number, typeId: string, position: Vec3Like, kind: 'debris' | 'hazard'): void {
     const b = this.bunny;
-    b.setRadius(growRadius(b.radius, size, mass, b.stats.get('growthMultiplier'), TUNING.growthFactor));
+    b.setRadius(growRadius(b.radius, size, mass, b.stats.get('growthMultiplier'), growthFactorAt(b.radius)));
     this.events.emit('debrisAbsorbed', { typeId, size, position, radius: b.radius, kind });
   }
 

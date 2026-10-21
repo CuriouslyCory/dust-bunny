@@ -53,8 +53,8 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Broom          | 2         | sweep arc 40      | telegraphed sweeping arc at a fixed spot | 1 + big knockback |
 | Spray Bottle   | 2         | 8                 | stationary turret, fires mist droplets at the Bunny | 1 per droplet |
 | Mop            | 3         | 15                | follows a path, leaves a wet trail that slows | 1 on contact; trail slows |
-| Upright Vacuum | 4         | 30                | slow, strong suction cone in front | 2 |
-| Robo-Vac 9000  | 5 (boss)  | 30                | hunts the Bunny, telegraphed charge attacks | 2 |
+| Upright Vacuum | 4         | 30                | slow, strong suction cone in front | 1, sheds mass |
+| Robo-Vac 9000  | 5 (boss)  | 30                | hunts the Bunny, telegraphed charge attacks | 1, sheds mass |
 
 A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 wins the Run.
 

@@ -8,14 +8,16 @@ export interface TierDef {
   minRadius: number;
   /** Camera distance = radius × cameraScale (smoothed). Rising per Tier = extra pull-back on Tier-up. */
   cameraScale: number;
+  /** Multiplies TUNING.growthFactor while in this Tier (pacing knob per Tier; 1 = neutral). */
+  growth: number;
 }
 
 export const TIERS: readonly TierDef[] = [
-  { index: 1, id: 'speck', name: 'Speck', minRadius: 1, cameraScale: 13 },
-  { index: 2, id: 'fluff', name: 'Fluff', minRadius: 3, cameraScale: 14.5 },
-  { index: 3, id: 'tumbleweed', name: 'Tumbleweed', minRadius: 8, cameraScale: 16 },
-  { index: 4, id: 'dust_devil', name: 'Dust Devil', minRadius: 20, cameraScale: 17.5 },
-  { index: 5, id: 'dust_titan', name: 'Dust Titan', minRadius: 45, cameraScale: 19 },
+  { index: 1, id: 'speck', name: 'Speck', minRadius: 1, cameraScale: 13, growth: 0.75 },
+  { index: 2, id: 'fluff', name: 'Fluff', minRadius: 3, cameraScale: 14.5, growth: 0.85 },
+  { index: 3, id: 'tumbleweed', name: 'Tumbleweed', minRadius: 8, cameraScale: 16, growth: 0.85 },
+  { index: 4, id: 'dust_devil', name: 'Dust Devil', minRadius: 20, cameraScale: 17.5, growth: 1 },
+  { index: 5, id: 'dust_titan', name: 'Dust Titan', minRadius: 45, cameraScale: 19, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

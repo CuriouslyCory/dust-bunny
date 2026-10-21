@@ -7,6 +7,7 @@
 import type { Rng } from '../core/rng';
 import { ROBOVAC_9000 } from '../data/hazards';
 import type { Run } from '../game/run';
+import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
 import { absorbRadiusFor, applySuction, bunnySheltered, canTarget, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
 import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
@@ -88,7 +89,7 @@ export class RoboVac9000 extends BaseHazard {
           this.summonTimer = c.summonInterval;
           this.summon(run);
         }
-        if (this.timer <= 0 && dist < c.chargeTrigger && canTarget(run)) {
+        if (this.timer <= 0 && dist < c.chargeTrigger && canTarget(run) && onScreen(run, this.x, this.z)) {
           this.enter('telegraph', c.telegraph);
           this.yaw = yawOf(dx, dz);
           this.chargeDirX = Math.sin(this.yaw);

@@ -6,7 +6,7 @@
  * while stunned. Prints when each Tier is reached, plus how the Run ended.
  *
  * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
- *                 [--quiet] [--stalls] [--perks=id,id] [--upgrades=id:level,...]
+ *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  */
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
@@ -19,6 +19,9 @@ import type { Hazard } from '../src/hazards';
 import { installRunHazards } from '../src/hazards/install';
 import type { RoboVac9000 } from '../src/hazards/robovac';
 import type { SprayBottle } from '../src/hazards/sprayBottle';
+import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
+import type { Broom } from '../src/hazards/broom';
+import { BROOM, UPRIGHT_VACUUM } from '../src/data/hazards';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { installCombatHooks } from '../src/perks/combat';
 import { draftForRun } from '../src/perks/draft';
@@ -37,6 +40,8 @@ const chars = (opt('chars') ?? 'lint,tumble,zap').split(',');
 const withHazards = !args.includes('--no-hazards');
 const quiet = args.includes('--quiet');
 const stalls = args.includes('--stalls');
+/** Hazards hit as usual (knockback, shedding) but can't kill: measures pacing, not survival. */
+const god = args.includes('--god');
 const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
 const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
@@ -219,6 +224,9 @@ class Bot implements InputSource {
   private steer: { x: number; z: number } | null = null;
   /** Seconds with nothing reachable to absorb in view. */
   starved = 0;
+  private chaseTime = 0;
+  private readonly nearDanger: Array<{ x: number; z: number }> = [];
+  private readonly chaseGiveUp = new Map<number, number>();
 
   constructor(private readonly run: Run) {
     this.rng = new Rng(`${run.config.seed}:bot`);
@@ -226,7 +234,7 @@ class Bot implements InputSource {
   }
 
   /** Repulsion from Hazards the Bunny cannot absorb; a chase target for ones it can. */
-  private hazardSteer(): { x: number; z: number; urgent: boolean; chase: Hazard | null } {
+  private hazardSteer(): { x: number; z: number; urgent: boolean; chase: Hazard | null; near: Array<{ x: number; z: number }> } {
     const { bunny, hazards } = this.run;
     const r = bunny.radius;
     const ratio = bunny.stats.get('absorbRatio');
@@ -235,6 +243,7 @@ class Bot implements InputSource {
     let urgent = false;
     let chase: Hazard | null = null;
     let chaseD = Infinity;
+    this.nearDanger.length = 0;
     for (const h of hazards.hazards) {
       if (h.dead) continue;
       const dx = bunny.x - h.x;
@@ -258,6 +267,31 @@ class Bot implements InputSource {
         x += -fz * side * 2;
         z += fx * side * 2;
       }
+      const vac = h.def.id === 'upright_vacuum' ? (h as UprightVacuum) : null;
+      if (vac && vac.state !== 'off') {
+        // Step out of the (telegraphed) suction cone sideways and back.
+        const it = { x: vac.x + Math.sin(vac.yaw) * vac.size * 0.7, z: vac.z + Math.cos(vac.yaw) * vac.size * 0.7 };
+        if (inCone(it.x, it.z, vac.yaw, UPRIGHT_VACUUM.coneHalfAngle + 0.25, UPRIGHT_VACUUM.coneRange * 1.3, bunny.x, bunny.z, r)) {
+          const fx = Math.sin(vac.yaw);
+          const fz = Math.cos(vac.yaw);
+          const side = fx * dz - fz * dx >= 0 ? 1 : -1;
+          x += (-fz * side * 2.5 + (dx / d) * 1.5) * 4;
+          z += (fx * side * 2.5 + (dz / d) * 1.5) * 4;
+          urgent = vac.state === 'on';
+        }
+      }
+      const broom = h.def.id === 'broom' ? (h as Broom) : null;
+      if (broom && broom.state !== 'idle') {
+        const bx = bunny.x - broom.pivotX;
+        const bz = bunny.z - broom.pivotZ;
+        const bd = Math.hypot(bx, bz) || 1;
+        const reachB = BROOM.sweepRadius + BROOM.headRadius + r + 10;
+        if (bd < reachB) {
+          x += (bx / bd) * 3;
+          z += (bz / bd) * 3;
+          urgent = true;
+        }
+      }
       if (boss && (boss.state === 'telegraph' || boss.state === 'charge')) {
         const fx = Math.sin(boss.yaw);
         const fz = Math.cos(boss.yaw);
@@ -268,14 +302,15 @@ class Bot implements InputSource {
         continue;
       }
       const danger = reach + Math.max(30, r * 3);
+      if (d < danger) this.nearDanger.push({ x: -dx / d, z: -dz / d });
       if (d < danger) {
-        const w = (danger - d) / danger;
-        x += (dx / d) * w * 2;
-        z += (dz / d) * w * 2;
+        const w = (danger - d) / (danger - reach * 0.9);
+        x += (dx / d) * w * 4;
+        z += (dz / d) * w * 4;
         if (d < reach + r) urgent = true;
       }
     }
-    return { x, z, urgent, chase };
+    return { x, z, urgent, chase, near: this.nearDanger };
   }
 
   private pickTarget(): void {
@@ -333,14 +368,32 @@ class Bot implements InputSource {
     this.replan -= dt;
     this.dashTimer -= dt;
     this.stuckTimer += dt;
-    const avoid = withHazards ? this.hazardSteer() : { x: 0, z: 0, urgent: false, chase: null };
-    if (avoid.chase) {
-      const dx = avoid.chase.x - bunny.x;
-      const dz = avoid.chase.z - bunny.z;
+    const avoid: ReturnType<Bot['hazardSteer']> = withHazards ? this.hazardSteer() : { x: 0, z: 0, urgent: false, chase: null, near: [] };
+    let chaseSteer: { x: number; z: number } | null = null;
+    if (avoid.chase && (this.chaseGiveUp.get(avoid.chase.id) ?? 0) <= this.run.time) {
+      this.planner.ensure();
+      if (this.replan <= 0) {
+        this.replan = 0.3;
+        this.planner.flood();
+      }
+      chaseSteer = this.planner.steerTo(avoid.chase.x, avoid.chase.z, bunny.radius + avoid.chase.size);
+      this.chaseTime += dt;
+      if (!chaseSteer || this.chaseTime > 12) {
+        this.chaseGiveUp.set(avoid.chase.id, this.run.time + 8);
+        this.chaseTime = 0;
+        chaseSteer = null;
+      }
+    } else this.chaseTime = 0;
+    if (avoid.chase && chaseSteer) {
+      const dx = chaseSteer.x - bunny.x;
+      const dz = chaseSteer.z - bunny.z;
       const d = Math.hypot(dx, dz) || 1;
-      const dash = this.dashTimer <= 0 && d > bunny.radius * 3;
-      if (dash) this.dashTimer = 1;
-      return { moveX: dx / d, moveZ: dz / d, dash };
+      // Don't chase through a Hazard that hurts.
+      if (!(avoid.near ?? []).some((n) => (dx / d) * n.x + (dz / d) * n.z > 0.3)) {
+        const dash = this.dashTimer <= 0 && d > bunny.radius * 3;
+        if (dash) this.dashTimer = 1;
+        return { moveX: dx / d, moveZ: dz / d, dash };
+      }
     }
     if (this.stuckTimer > 0.8) {
       const moved = Math.hypot(bunny.x - this.lastPos.x, bunny.z - this.lastPos.z);
@@ -375,6 +428,14 @@ class Bot implements InputSource {
         mz = dz / d;
       }
     }
+    // Never steer towards a Hazard we're close to.
+    for (const n of avoid.near ?? []) {
+      const dot = mx * n.x + mz * n.z;
+      if (dot > 0) {
+        mx -= dot * n.x;
+        mz -= dot * n.z;
+      }
+    }
     mx += avoid.x;
     mz += avoid.z;
     const m = Math.hypot(mx, mz) || 1;
@@ -402,6 +463,12 @@ for (const characterId of chars) {
       installRunHazards(run);
       // Same as installRunHooks (src/meta/install.ts), which also pulls in UI/CSS.
       installCombatHooks(run);
+      if (god) {
+        run.bunny.damageFilters.push((amount) => {
+          if (run.bunny.health - amount <= 0) run.bunny.heal(run.bunny.maxHealth);
+          return Math.min(amount, run.bunny.health - 1);
+        });
+      }
       run.pickups.director ??= createPickupDirector();
       events.on('tierUp', () => {
         const offer = draftForRun(run);
@@ -427,6 +494,11 @@ for (const characterId of chars) {
     const t0 = performance.now();
     for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < 5); i++) {
       run.update(dt);
+      if (traceAt !== undefined && run.time > traceAt && run.time < traceAt + 6 && i % 15 === 0) {
+        const b = run.bunny;
+        const hz = run.hazards.hazards.map((h) => `${h.def.id}${'state' in h ? `:${(h as { state: string }).state}` : ''}@(${h.x.toFixed(0)},${h.z.toFixed(0)}) d=${Math.hypot(h.x - b.x, h.z - b.z).toFixed(0)}`);
+        console.log(`  t=${run.time.toFixed(2)} b=(${b.x.toFixed(0)},${b.z.toFixed(0)}) r=${b.radius.toFixed(1)} hp=${b.health} inv=${b.invulnerable.toFixed(2)} v=(${b.vx.toFixed(0)},${b.vz.toFixed(0)}) ${hz.join(' ')}`);
+      }
       if (run.time >= nextSample) {
         nextSample += 60;
         const b = run.bunny;

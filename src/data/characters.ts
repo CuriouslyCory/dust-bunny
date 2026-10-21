@@ -64,7 +64,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     strengths: ['Fast', 'Built-in magnet pull', 'Short Dash cooldown'],
     weaknesses: ['Only 2 hearts', 'Smaller start', 'Suction pulls 1.5× harder'],
     look: { color: '#c9c2f2', tipColor: '#f2eeff', furLength: 0.8, fluffiness: 0.2, eyeStyle: 'sparkly', glow: 0.15 },
-    stats: { speed: 1.3, maxHealth: 2, startRadius: 0.9, dashCooldown: 2, magnetRadius: 0.6, suctionMultiplier: 1.5 },
+    stats: { speed: 1.3, maxHealth: 2, startRadius: 0.9, dashCooldown: 2, magnetRadius: 0.45, suctionMultiplier: 1.5 },
   }),
 ];
 

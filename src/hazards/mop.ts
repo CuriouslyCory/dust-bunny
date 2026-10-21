@@ -4,7 +4,7 @@
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { MOP } from '../data/hazards';
+import { HAZARD_RECOIL, MOP } from '../data/hazards';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
 import { BaseHazard } from './base';
@@ -47,6 +47,7 @@ export class Mop extends BaseHazard {
     rng: Rng,
   ) {
     super(id, def, x, z, MOP.size, 'mop');
+    this.recoilHeight = MOP.height;
     const room = roomAt(run.house, x, z);
     if (room) {
       const r = room.rect;
@@ -130,7 +131,7 @@ export class Mop extends BaseHazard {
 
   onContact(run: Run): void {
     if (bunnySheltered(run, MOP.height)) return;
-    if (!this.stunned) hitBunny(run, this.x, this.z, { damage: MOP.damage, source: this.def.id, knockbackCm: MOP.knockbackCm, knockbackRadii: MOP.knockbackRadii });
+    if (!this.stunned && this.recoilFor <= 0 && hitBunny(run, this.x, this.z, { damage: MOP.damage, source: this.def.id, knockbackCm: MOP.knockbackCm, knockbackRadii: MOP.knockbackRadii })) this.recoilFor = HAZARD_RECOIL;
     pushBunnyOut(run, this.x, this.z, this.size);
   }
 

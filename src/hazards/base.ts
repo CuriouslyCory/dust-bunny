@@ -10,7 +10,7 @@ import { DIRECTOR, tierValue, type PerTier } from '../data/hazards';
 import { tierProgress } from '../data/tiers';
 import type { Run } from '../game/run';
 import { createModel } from '../world/models';
-import { bunnyCanAbsorb } from './common';
+import { bunnyCanAbsorb, moveCircle } from './common';
 import { DECAL_COLORS, ringDecal, type Decal } from './decals';
 import { playAbsorbFx } from './fx';
 import type { Hazard, HazardDef, HazardShape } from './index';
@@ -28,6 +28,11 @@ export abstract class BaseHazard implements Hazard {
   time = 0;
   /** Spiky Dash stun (set and counted down by the combat System): no movement or attacks. */
   stunnedFor = 0;
+
+  /** Seconds the Hazard backs off after landing a hit, so it can't pin the Bunny against a wall. */
+  recoilFor = 0;
+  /** Height used for collision while backing off (furniture it can drive under). */
+  protected recoilHeight = 20;
 
   get stunned(): boolean {
     return this.stunnedFor > 0;
@@ -59,8 +64,23 @@ export abstract class BaseHazard implements Hazard {
 
   update(dt: number, run: Run): void {
     this.time += dt;
-    if (!this.stunned) this.tick(dt, run);
+    if (this.recoilFor > 0) {
+      this.recoilFor -= dt;
+      this.backOff(dt, run);
+    } else if (!this.stunned) this.tick(dt, run);
     this.sync(run);
+  }
+
+  /** Drives straight away from the Bunny (used while recoiling after a hit). */
+  protected backOff(dt: number, run: Run): void {
+    const b = run.bunny;
+    const dx = this.x - b.x;
+    const dz = this.z - b.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const step = Math.max(30, this.size * 2) * dt;
+    const m = moveCircle(run.house, this.x, this.z, this.size, this.recoilHeight, (dx / d) * step, (dz / d) * step);
+    this.x = m.x;
+    this.z = m.z;
   }
 
   /** Called after tick: syncs the model transform and the absorbable marker. */
