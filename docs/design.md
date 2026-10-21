@@ -6,9 +6,11 @@ Terms follow `CONTEXT.md`. Numbers below are starting points; tune them in the d
 
 Katamari-style growth roguelike on a house floor, rendered in three.js. You start as a 1 cm Speck under the couch, absorbing lint and staples. Every Tier you grow into pulls the camera back, reveals more of the house, and turns former Obstacles into Debris. Roombas, lint rollers, brooms, and other cleaning gear roam the floor and hurt you, until you are big enough to absorb them too. Final goal: absorb the Robo-Vac 9000 boss.
 
-Target: a 10–15 minute demo-quality house, then a 5–8 minute neighborhood finale, playable on desktop (keyboard/mouse) and mobile (touch).
+Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, then a 7–10 minute city finale, playable on desktop (keyboard/mouse) and mobile (touch).
 
-**Neighborhood phase.** Absorbing the Robo-Vac 9000 no longer ends the Run: the front door at the end of the hallway swings open and a door compass points to it. Rolling out of it fades into a seeded suburban street (about 96 × 72 m: a main street and a cross street, seven houses with yards and driveways, a park). Outdoor Debris runs from pinecones and garden gnomes up to bikes, picnic tables and parked cars; houses and big trees stay Obstacles. Absorbing the Street Sweeper (arrives at Tier 7) wins the Run.
+**Neighborhood phase.** Absorbing the Robo-Vac 9000 no longer ends the Run: the front door at the end of the hallway swings open and a door compass points to it. Rolling out of it fades into a seeded suburban street (about 96 × 72 m: a main street and a cross street, seven houses with yards and driveways, a park). Outdoor Debris runs from pinecones and garden gnomes up to bikes, picnic tables and parked cars; houses and big trees stay Obstacles. Absorbing the Street Sweeper (arrives at Tier 7) lifts the road barrier at one end of the main street.
+
+**City phase.** Rolling through the barrier fades into a seeded city at golden hour (about 320 × 240 m: three avenues and four streets with sidewalks and crosswalks, office towers and plazas downtown, apartments, shop rows and brick lofts further out, two parking lots, a park square with a fountain). City Debris runs from trash bags, parking meters and phone booths up to taxis, food trucks, fountains, buses, fire trucks and shipping containers; buildings stay Obstacles and fade when they hide the Bunny. Absorbing the Garbage Truck (arrives at Tier 9) wins the Run.
 
 ## Tech
 
@@ -38,7 +40,9 @@ Target: a 10–15 minute demo-quality house, then a 5–8 minute neighborhood fi
 | 4 | Dust Devil | 20 – 45           | shoes, books, remotes, slippers, cat toys, lint rollers | most of the house |
 | 5 | Dust Titan | 45 – 75           | chairs, laundry baskets, Roombas, the boss; outside: gnomes, pumpkins, cones | whole house / front yard |
 | 6 | Dust Storm | 75 – 160          | mailboxes, trash cans, bikes, grills, shrubs, benches   | the block |
-| 7 | Dust Cyclone | 160+            | picnic tables, golf carts, swing sets, cars, the Street Sweeper | the neighborhood |
+| 7 | Dust Cyclone | 160 – 320       | picnic tables, golf carts, swing sets, cars, the Street Sweeper; in the city: trash bags, meters, phone booths, mopeds, hot dog carts | the neighborhood / a few city blocks |
+| 8 | Dust Hurricane | 320 – 600     | taxis, police cars, vans, food trucks, city trees, statues, fountains | downtown |
+| 9 | Dust Colossus | 600+           | buses, fire trucks, cement mixers, trams, shipping containers, the Garbage Truck | the whole city |
 
 Camera distance and fog distance scale with radius so the visible floor area grows each Tier. Areas are gated physically: e.g. the gap under the couch skirt and closed doors are passable/absorbable only at certain sizes.
 
@@ -70,7 +74,7 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Lawn Mower     | 6         | 65                | ≈ 93            | unmanned push mower patrolling a lane | 1 + knockback, sheds mass |
 | Street Sweeper | 7 (boss)  | 150               | ≈ 214 (≈ 155 after two chips) | hunts with suction, telegraphed charges, stunned by houses / trees, summons mini mowers | 1, sheds mass |
 
-**The city (after the Street Sweeper, Bunny r ≈ 230 on arrival):**
+**The city (after the Street Sweeper, Bunny r ≈ 175–230 on arrival):**
 
 | Hazard          | From Tier | Size (cm, radius) | Absorbable at r | Behaviour | Damage |
 |-----------------|-----------|-------------------|-----------------|-----------|--------|
@@ -100,7 +104,7 @@ Each Character has a distinct colour and fur look.
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(maxRadius × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.25 if the house was cleared but the Run ended outside).
+Fluff earned per Run ≈ `floor(min(maxRadius, 300) × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was).
 
 ## Screens
 

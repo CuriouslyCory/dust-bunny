@@ -1,6 +1,6 @@
 # Dust Bunny
 
-A three.js roguelike in the browser. You are a dust bunny rolling across a house floor: absorb Debris smaller than you to grow through five Tiers, avoid the cleaning Hazards until you can absorb them too, and absorb the Robo-Vac 9000. That opens the front door: roll out into the neighborhood, grow through two more Tiers among yard ornaments, bikes and parked cars, and finally absorb the Street Sweeper. Built with Vite + TypeScript; see `docs/design.md` for the game design.
+A three.js roguelike in the browser. You are a dust bunny rolling across a house floor: absorb Debris smaller than you to grow through five Tiers, avoid the cleaning Hazards until you can absorb them too, and absorb the Robo-Vac 9000. That opens the front door: roll out into the neighborhood, grow through two more Tiers among yard ornaments, bikes and parked cars, and absorb the Street Sweeper. That lifts the road barrier to the city: roll downtown among taxis, buses and skyscrapers, and finally absorb the Garbage Truck. Built with Vite + TypeScript; see `docs/design.md` for the game design.
 
 ## Controls
 

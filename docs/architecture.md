@@ -83,8 +83,8 @@ The bus lives on `Game` and outlives Runs: subscribe once at boot. Handlers run 
 | `hazardAbsorbed` | `{ hazardId, defId, size, radius, boss }` | `HazardManager` (before `hazardRemoved`) |
 | `hazardTelegraph` | `{ hazardId, defId, attack, duration }` | Hazards, when a floor telegraph starts |
 | `bunnyShed` | `{ volume, pieces, source, radius }` | `shedMass` (Lint Roller, Upright Vacuum, boss) |
-| `bossSpawned` / `bossStunned` / `bossHit` | `{ hazardId, absorbRadius, name }` / `{ hazardId }` / `{ hazardId, size, absorbRadius }` | Director / area bosses (Robo-Vac 9000, Street Sweeper) |
-| `bossDefeated` / `victory` | `{ hazardId, defId, timeSec }` / `{ timeSec, radius }` | boss `onAbsorbed`; the Robo-Vac 9000 opens the front door, the Street Sweeper emits `victory` right before `runEnded` (`victory`) |
+| `bossSpawned` / `bossStunned` / `bossHit` | `{ hazardId, absorbRadius, name }` / `{ hazardId }` / `{ hazardId, size, absorbRadius }` | Director / area bosses (Robo-Vac 9000, Street Sweeper, Garbage Truck) |
+| `bossDefeated` / `victory` | `{ hazardId, defId, timeSec }` / `{ timeSec, radius }` | boss `onAbsorbed`; the Robo-Vac 9000 opens the front door, the Street Sweeper the road barrier, the Garbage Truck emits `victory` right before `runEnded` (`victory`) |
 | `pickupSpawned` / `pickupCollected` / `pickupExpired` | `{ pickupId, defId }` / `{ defId }` | `PickupManager` |
 | `perkApplied` | `{ perkId, stacks }` | `Run.applyPerk` |
 | `exitOpened` | `{ area, x, z }` (exit centre) | `Run.openExit` (after the Robo-Vac 9000 / Street Sweeper) |
