@@ -55,8 +55,12 @@ export interface ProviderButtonsOptions {
 export function providerButtons(account: AccountClient, opts: ProviderButtonsOptions = {}): HTMLElement {
   const compact = opts.size === 'compact';
   const el = h('div', { className: `acct-providers${compact ? ' compact' : ''}` });
+  // Rebuild only when the provider list changes, so keyboard focus survives other account updates.
+  let shown = '';
   const render = () => {
     const { providers } = account.state;
+    if (providers.join() === shown) return;
+    shown = providers.join();
     el.replaceChildren(
       ...providers.map((p) => {
         const label = compact ? PROVIDER_LABELS[p] : `Continue with ${PROVIDER_LABELS[p]}`;

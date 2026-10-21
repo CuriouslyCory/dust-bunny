@@ -87,4 +87,17 @@ describe('account client', () => {
     expect(calls.at(-1)).toMatchObject({ path: '/sign-out', init: { method: 'POST' } });
     expect(seen).toEqual(['signedIn', 'signedOut']);
   });
+
+  it('stays signed in when sign-out fails', async () => {
+    const { fetch } = fakeFetch({
+      '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+      '/get-session': () => jsonResponse(USER),
+      '/sign-out': () => jsonResponse({ message: 'down' }, 503),
+    });
+    const a = createAccountClient({ fetch });
+    await a.refresh();
+    await expect(a.signOut()).rejects.toThrow();
+    expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' } });
+    expect(a.state.error).toMatch(/Could not sign out/);
+  });
 });

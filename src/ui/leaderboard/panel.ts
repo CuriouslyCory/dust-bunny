@@ -79,8 +79,13 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
   // "Posting as …": verified when signed in, otherwise anonymous with sign-in buttons.
   const postingAs = h('p', { className: 'lb-as' });
   const signInButtons = providerButtons(account, { size: 'compact' });
+  let postingKey = '';
   account.subscribe((s) => {
     postingAs.hidden = s.status === 'unknown' || s.status === 'unavailable';
+    // Rebuild only when who is posting changes, so focus on the sign-in buttons survives.
+    const key = `${s.status}|${s.user?.id}|${s.user?.name}`;
+    if (key === postingKey) return;
+    postingKey = key;
     if (s.status === 'signedIn') {
       postingAs.replaceChildren(h('span', {}, 'Posting as ', h('strong', { textContent: '✓ verified' }), ` (${s.user?.name || 'signed in'})`));
       // First visit after signing in: suggest the account's name.
@@ -189,7 +194,9 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       submitted = { entry: res.entry, rank: res.rank };
       input.value = res.entry.name;
       const where = res.online ? '' : ' on this device';
-      msg.textContent = `${res.rank ? `Rank #${res.rank}${where}` : `Saved${where}`} · ${res.entry.score.toLocaleString()} pts${res.nameCensored ? ' (name replaced)' : ''}`;
+      // What the server stored, not what the "Posting as" line expected (a failed session lookup posts anonymously).
+      const how = res.online ? (res.entry.verified ? ' · ✓ verified' : ' · anonymous') : '';
+      msg.textContent = `${res.rank ? `Rank #${res.rank}${where}` : `Saved${where}`} · ${res.entry.score.toLocaleString()} pts${how}${res.nameCensored ? ' (name replaced)' : ''}`;
       form.hidden = true;
       setStatus(res.online);
       await refresh();

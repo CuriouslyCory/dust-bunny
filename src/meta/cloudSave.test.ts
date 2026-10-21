@@ -252,6 +252,41 @@ describe('cloud save', () => {
     expect((s.server.fetch as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(calls);
   });
 
+  it('re-uploads when a Run ended while a refused upload was in flight', async () => {
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    s.server.rows.set('u1', prog(80, 200, 5)); // another device got further
+    const release = s.server.hold();
+    s.meta.store.update((d) => {
+      d.fluff += 1; // a small change: refused against 200
+      d.stats.totalFluffEarned += 1;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    s.meta.store.update((d) => {
+      d.fluff += 400; // big Run while the request is in flight: now ahead of 200
+      d.stats.totalFluffEarned += 400;
+      d.stats.runs += 1;
+    });
+    release();
+    await vi.runAllTimersAsync();
+    expect(s.meta.fluff).toBe(451);
+    expect(s.server.rows.get('u1')?.stats.totalFluffEarned).toBe(501);
+  });
+
+  it('flush reports whether the server has everything', async () => {
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    s.meta.buy('fast_feet');
+    expect(await s.cloud.flush()).toBe(true);
+    expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1 });
+    s.server.setDown(true);
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    expect(await s.cloud.flush()).toBe(false);
+  });
+
   it('stops syncing on sign-out', async () => {
     const s = setup(prog(50, 100, 3));
     await s.signIn('u1');

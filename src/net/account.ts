@@ -208,12 +208,15 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
       }
     },
 
+    /** Signs out once the server confirms; on failure the player stays signed in, with `error` set, and this rejects. */
     async signOut(): Promise<void> {
       try {
         await request('/sign-out', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      } finally {
-        set({ status: state.providers.length ? 'signedOut' : state.status, user: null, pending: false, error: null });
+      } catch (err) {
+        set({ error: 'Could not sign out. Check your connection and try again.' });
+        throw err;
       }
+      set({ status: 'signedOut', user: null, pending: false, error: null });
     },
 
     /** Reads `?error=` left by a redirect-fallback sign-in and strips it from the address bar. */

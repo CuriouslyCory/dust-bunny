@@ -133,6 +133,10 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       lastSynced = res.progress;
       if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
       else schedule(debounceMs);
+    } else if (compareProgress(progressOf(meta.data), res.progress) > 0) {
+      // A Run ended while the refused request was in flight: local is ahead again, so send it.
+      lastSynced = res.progress;
+      schedule(debounceMs);
     } else {
       adopt(res.progress);
       setDirty(false);
@@ -245,12 +249,16 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       fn(status);
       return () => listeners.delete(fn);
     },
-    /** Uploads pending changes now (call before signing out). */
-    flush(): Promise<void> {
-      if (!connected) return chain;
+    /**
+     * Uploads pending changes now (call before signing out). Resolves true when the server has
+     * everything, false when local changes are still unsynced (offline, server error).
+     */
+    async flush(): Promise<boolean> {
+      if (!userId) return true;
       if (timer) clearTimeout(timer);
       timer = null;
-      return pushIfChanged();
+      await (connected ? pushIfChanged() : enqueue(() => connect(userId!)));
+      return connected && status === 'synced' && lastSynced !== null && sameProgress(progressOf(meta.data), lastSynced);
     },
     dispose(): void {
       offStore();

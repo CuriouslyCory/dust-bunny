@@ -33,18 +33,36 @@ export function registerAccountScreen(client: AccountClient = defaultAccount): v
       const signOut = button('Sign out', () => void doSignOut(), { variant: 'ghost', className: 'acct-signout' });
       const done = button('Back', () => game.go(back), { variant: 'primary' });
 
+      /** Set after a failed flush: the next Sign out press goes ahead anyway. */
+      let forceSignOut = false;
+
       async function doSignOut(): Promise<void> {
         signOut.disabled = true;
-        await getCloudSave()
-          ?.flush()
-          .catch(() => undefined);
-        await client.signOut().catch(() => undefined);
-        signOut.disabled = false;
+        try {
+          const synced = (await getCloudSave()?.flush().catch(() => false)) ?? true;
+          if (!synced && !forceSignOut) {
+            // Signing out now would strand these changes on this device (another account signing in here replaces them).
+            forceSignOut = true;
+            sync.className = 'acct-sync error';
+            sync.textContent = 'Your latest progress has not reached the server yet. Try again in a moment, or press Sign out again to sign out anyway.';
+            return;
+          }
+          await client.signOut().catch(() => undefined); // failure: stays signed in, error shown
+          forceSignOut = false;
+        } finally {
+          signOut.disabled = false;
+        }
       }
+
+      /** What the body currently shows; it is rebuilt only when this changes (keeps focus). */
+      let shown = '';
 
       function render(s: AccountState): void {
         msg.className = `acct-msg${s.error ? ' error' : ''}`;
         msg.textContent = s.error ?? (s.pending ? 'Finish signing in in the pop-up window…' : '');
+        const key = `${s.status}|${s.user?.id}|${s.user?.name}|${s.user?.image}`;
+        if (key === shown) return;
+        shown = key;
         if (s.status === 'signedIn' && s.user) {
           body.replaceChildren(
             h('div', { className: 'acct-who' }, avatar(s.user, 'lg'), h('div', {}, h('strong', { textContent: s.user.name || 'Signed in' }), h('span', { className: 'acct-verified', textContent: '✓ Your leaderboard scores are verified' }))),

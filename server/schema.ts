@@ -12,7 +12,7 @@
  * check whatever a schema change adds.
  */
 export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
-  AND to_regclass('public.verification_identifier_idx') IS NOT NULL
+  AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND EXISTS (SELECT 1 FROM information_schema.columns
               WHERE table_schema = 'public' AND table_name = 'leaderboard_scores' AND column_name = 'user_id') AS ready`;
 
@@ -63,6 +63,9 @@ export const SCHEMA: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session" ("userId")`,
   `CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account" ("userId")`,
   `CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification" ("identifier")`,
+  // One row per provider identity. Better Auth looks accounts up by this pair and fails if two
+  // rows match, which concurrent OAuth callbacks could otherwise create.
+  `CREATE UNIQUE INDEX IF NOT EXISTS "account_provider_account_idx" ON "account" ("providerId", "accountId")`,
 
   // --- Leaderboard ---
   `CREATE TABLE IF NOT EXISTS leaderboard_scores (
