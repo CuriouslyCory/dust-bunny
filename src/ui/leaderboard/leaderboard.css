@@ -150,19 +150,26 @@
   letter-spacing: 0.5px;
   color: var(--muted);
   text-align: left;
-  padding: 6px 8px;
+  padding: 6px 6px;
 }
 
 .lb-table td {
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-top: 1px solid rgba(58, 46, 40, 0.08);
   white-space: nowrap;
 }
 
 .lb-table td.lb-n {
-  max-width: 140px;
+  max-width: 150px;
+}
+
+/* The name truncates; the verified / anon mark after it stays visible. */
+.lb-name-text {
+  display: inline-block;
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .lb-table td.lb-score {

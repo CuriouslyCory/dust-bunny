@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
-import { defineConfig, type Plugin } from 'vite';
+import type { IncomingMessage } from 'node:http';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 /**
  * Social cards need absolute image URLs. On Vercel builds, prefix `/og.png` with the production
@@ -19,8 +20,58 @@ function absoluteSocialUrls(): Plugin {
   };
 }
 
+/** Function file in api/ for a request path (mirrors vercel.json's `/api/auth/*` rewrite). */
+function apiFunctionFor(path: string): string | null {
+  if (path === '/api/auth' || path.startsWith('/api/auth/')) return 'auth';
+  if (path === '/api/leaderboard' || path === '/api/progress') return path.slice('/api/'.length);
+  return null;
+}
+
+async function readBody(req: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks);
+}
+
+/**
+ * `pnpm dev` also serves the Vercel functions in api/ when `.env` sets DATABASE_URL (accounts also
+ * need BETTER_AUTH_SECRET). Without it /api 404s and the game uses its local leaderboard.
+ */
+function devApi(): Plugin {
+  return {
+    name: 'dev-api',
+    apply: 'serve',
+    configureServer(server) {
+      const env = loadEnv(server.config.mode, process.cwd(), '');
+      if (!env.DATABASE_URL) return;
+      for (const [k, v] of Object.entries(env)) process.env[k] ??= v;
+      server.middlewares.use(async (req, res, next) => {
+        const file = apiFunctionFor((req.url ?? '').split('?')[0]!);
+        if (!file) return next();
+        try {
+          const mod = (await server.ssrLoadModule(`/api/${file}.ts`)) as { default: { fetch(r: Request): Promise<Response> } };
+          const headers = new Headers();
+          for (const [k, v] of Object.entries(req.headers)) if (v !== undefined) headers.set(k, Array.isArray(v) ? v.join(', ') : v);
+          const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+          const request = new Request(new URL(req.url!, `http://${req.headers.host}`), { method: req.method, headers, body: hasBody ? new Uint8Array(await readBody(req)) : undefined });
+          const response = await mod.default.fetch(request);
+          res.statusCode = response.status;
+          response.headers.forEach((v, k) => {
+            if (k !== 'set-cookie') res.setHeader(k, v);
+          });
+          const cookies = response.headers.getSetCookie();
+          if (cookies.length) res.setHeader('set-cookie', cookies);
+          res.end(Buffer.from(await response.arrayBuffer()));
+        } catch (err) {
+          next(err);
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [absoluteSocialUrls()],
+  plugins: [absoluteSocialUrls(), devApi()],
   build: {
     outDir: 'dist',
     target: 'es2022',
@@ -40,7 +91,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
     environment: 'node',
   },
 });

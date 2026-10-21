@@ -1,10 +1,11 @@
 /**
  * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
  * Replace one by re-registering the same id before it is first shown. The title menu shows
- * Shop / Leaderboard buttons, and Play routes through 'characterSelect', only when those
- * screens are registered.
+ * Shop / Leaderboard buttons and the account chip (top right), and Play routes through
+ * 'characterSelect', only when those screens are registered.
  */
 import type { Game } from '../../game/game';
+import { accountChip } from '../account/screen';
 import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
@@ -68,10 +69,13 @@ export function registerBuiltinScreens(): void {
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'title' }), { icon: '?' });
       const set = button('Settings', () => game.go('settings', { back: 'title' }), { icon: '⚙' });
       const secondary = h('div', { className: 'menu-grid' }, shop, board, howTo, set);
+      const chip = accountChip(game);
+      const chipSlot = h('div', {}, chip);
       const el = h(
         'div',
         { className: 'title-screen' },
         dustMotes(28),
+        chipSlot,
         h(
           'div',
           { className: 'title-card' },
@@ -87,6 +91,7 @@ export function registerBuiltinScreens(): void {
         enter() {
           shop.hidden = !screenRegistry.has('shop');
           board.hidden = !screenRegistry.has('leaderboard');
+          chipSlot.hidden = !screenRegistry.has('account');
           focusFirst(el, play);
         },
         onKey(e) {

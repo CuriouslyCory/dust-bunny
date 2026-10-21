@@ -621,6 +621,8 @@
 
 .results-slot {
   display: grid;
+  /* Never wider than the slot: wide content (the leaderboard table) scrolls inside instead. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 

@@ -1,6 +1,8 @@
 /**
  * Self-contained leaderboard panel: optional name entry + submit for the Run just ended,
  * character filter, top-20 table (current Run highlighted) and an online/local indicator.
+ * Online names carry a ✓ (verified: posted while signed in) or an "anon" tag. Above the form, a
+ * line says whether the score will post verified or anonymous, with inline sign-in buttons.
  *
  *   const board = createLeaderboardPanel({ submit: true });
  *   parent.append(board.el);
@@ -11,9 +13,11 @@ import type { GameEvents } from '../../core/events';
 import { CHARACTERS, getCharacter } from '../../data/characters';
 import { getDifficulty, isDifficultyId } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
+import { account as defaultAccount, type AccountClient } from '../../net/account';
 import { leaderboard as defaultClient, LeaderboardError, submissionFromRun, type LeaderboardClient, type LeaderboardEntry } from '../../net/leaderboard';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../shared/difficulty';
-import { NAME_MAX_LENGTH } from '../../shared/leaderboard';
+import { cleanName, NAME_MAX_LENGTH } from '../../shared/leaderboard';
+import { anonymousMark, providerButtons, verifiedMark } from '../account/widgets';
 import { h } from '../screens';
 import './leaderboard.css';
 
@@ -21,6 +25,7 @@ export interface LeaderboardPanelOptions {
   /** Show the name entry form (results screen). */
   submit?: boolean;
   client?: LeaderboardClient;
+  account?: AccountClient;
 }
 
 export interface LeaderboardPanel {
@@ -50,6 +55,7 @@ function difficultyBadge(difficulty: unknown): HTMLElement | null {
 
 export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): LeaderboardPanel {
   const client = opts.client ?? defaultClient;
+  const account = opts.account ?? defaultAccount;
   let run: GameEvents['runEnded'] | null = null;
   let submitted: { entry: LeaderboardEntry; rank: number | null } | null = null;
   let filter = '';
@@ -69,6 +75,25 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
   form.hidden = true;
   const msg = h('p', { className: 'lb-msg' });
   msg.setAttribute('role', 'status');
+
+  // "Posting as …": verified when signed in, otherwise anonymous with sign-in buttons.
+  const postingAs = h('p', { className: 'lb-as' });
+  const signInButtons = providerButtons(account, { size: 'compact' });
+  let postingKey = '';
+  account.subscribe((s) => {
+    postingAs.hidden = s.status === 'unknown' || s.status === 'unavailable';
+    // Rebuild only when who is posting changes, so focus on the sign-in buttons survives.
+    const key = `${s.status}|${s.user?.id}|${s.user?.name}`;
+    if (key === postingKey) return;
+    postingKey = key;
+    if (s.status === 'signedIn') {
+      postingAs.replaceChildren(h('span', {}, 'Posting as ', h('strong', { textContent: '✓ verified' }), ` (${s.user?.name || 'signed in'})`));
+      // First visit after signing in: suggest the account's name.
+      if (!input.value && !input.disabled) input.value = cleanName(s.user?.name ?? '').name;
+    } else {
+      postingAs.replaceChildren(h('span', { textContent: 'Posting as anonymous. Sign in for a ✓:' }), signInButtons);
+    }
+  });
 
   const tabs = h('div', { className: 'lb-tabs' });
   tabs.setAttribute('role', 'tablist');
@@ -94,8 +119,11 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
   const empty = h('p', { className: 'lb-empty', textContent: 'No scores yet. Be the first!' });
   const wrap = h('div', { className: 'lb-table-wrap' }, table, empty);
 
-  const el = h('section', { className: 'leaderboard' }, head, form, msg, tabs, wrap);
-  if (!opts.submit) form.remove();
+  const el = h('section', { className: 'leaderboard' }, head, postingAs, form, msg, tabs, wrap);
+  if (!opts.submit) {
+    form.remove();
+    postingAs.remove();
+  }
 
   function setStatus(online: boolean | null): void {
     status.className = `lb-status ${online === null ? '' : online ? 'online' : 'offline'}`;
@@ -103,13 +131,17 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
     status.title = online === false ? 'Leaderboard server unavailable: scores are saved on this device.' : '';
   }
 
+  /** Local-only boards have no accounts, so their names get no mark. */
+  let marks = false;
+
   function row(e: LeaderboardEntry, rank: number | string, mine: boolean): HTMLTableRowElement {
     const badge = difficultyBadge(e.difficulty);
+    const mark = marks ? [e.verified ? verifiedMark() : anonymousMark()] : [];
     const tr = h(
       'tr',
       { className: mine ? 'lb-mine' : '' },
       h('td', { textContent: String(rank) }),
-      h('td', { className: 'lb-n', textContent: e.name }),
+      h('td', { className: 'lb-n' }, h('span', { className: 'lb-name-text', textContent: e.name }), ...mark),
       h('td', { className: 'lb-bunny' }, getCharacter(e.character).name, ...(badge ? [badge] : [])),
       h('td', { className: 'lb-score', textContent: e.score.toLocaleString() }),
       h('td', { textContent: e.victory ? '★' : String(e.tierReached), title: getTier(e.tierReached).name }),
@@ -140,6 +172,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       const { entries, online } = await client.getTop({ character: filter || undefined });
       if (token !== loadToken) return;
       setStatus(online);
+      marks = online;
       render(entries);
     } catch (err) {
       if (token !== loadToken) return;
@@ -161,7 +194,9 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       submitted = { entry: res.entry, rank: res.rank };
       input.value = res.entry.name;
       const where = res.online ? '' : ' on this device';
-      msg.textContent = `${res.rank ? `Rank #${res.rank}${where}` : `Saved${where}`} · ${res.entry.score.toLocaleString()} pts${res.nameCensored ? ' (name replaced)' : ''}`;
+      // What the server stored, not what the "Posting as" line expected (a failed session lookup posts anonymously).
+      const how = res.online ? (res.entry.verified ? ' · ✓ verified' : ' · anonymous') : '';
+      msg.textContent = `${res.rank ? `Rank #${res.rank}${where}` : `Saved${where}`} · ${res.entry.score.toLocaleString()} pts${how}${res.nameCensored ? ' (name replaced)' : ''}`;
       form.hidden = true;
       setStatus(res.online);
       await refresh();
@@ -178,7 +213,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       run = e;
       submitted = null;
       filter = '';
-      input.value = client.getPlayerName();
+      input.value = client.getPlayerName() || (account.state.status === 'signedIn' ? cleanName(account.state.user?.name ?? '').name : '');
       input.disabled = submitBtn.disabled = false;
       form.hidden = !opts.submit;
       msg.className = 'lb-msg';

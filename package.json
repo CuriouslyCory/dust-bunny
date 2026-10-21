@@ -12,11 +12,14 @@
     "sim": "tsx scripts/sim.ts"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^1.2.0",
+    "@vercel/functions": "^3.10.1",
+    "better-auth": "1.7.12",
+    "pg": "^8.23.1",
     "three": "^0.186.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "@types/three": "^0.186.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

@@ -15,7 +15,11 @@ import { showLoading } from './fx/loading';
 import { Game } from './game/game';
 import { installHazards } from './hazards/install';
 import { installTouchControls } from './input/touch';
+import { installCloudSave } from './meta/cloudSave';
 import { installRoguelike } from './meta/install';
+import { getMeta } from './meta/meta';
+import { account } from './net/account';
+import { registerAccountScreen } from './ui/account/screen';
 import { installAreaHud } from './ui/areaHud';
 import { installUi } from './ui/install';
 import { registerLeaderboardScreen } from './ui/leaderboard/screen';
@@ -29,6 +33,10 @@ async function boot(): Promise<void> {
 
   registerBuiltinScreens();
   registerLeaderboardScreen();
+  registerAccountScreen();
+  // Accounts load in the background; without a server everyone simply plays anonymously.
+  account.consumeRedirectError();
+  void account.refresh();
   const loading = showLoading(canvas.parentElement ?? document.body);
   await loadModelOverrides(8000, loading.progress);
   loading.done();
@@ -41,6 +49,7 @@ async function boot(): Promise<void> {
   const area = params.get('area');
   if (area === 'neighborhood' || area === 'city') game.nextRunConfig.area = area;
   installRoguelike(game);
+  installCloudSave(getMeta(), account);
   installUi(game);
   installTouchControls(game);
   installAudio(game);

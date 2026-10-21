@@ -1,0 +1,196 @@
+/**
+ * Integration tests for the Vercel functions (api/auth.ts, api/leaderboard.ts, api/progress.ts)
+ * against a real Postgres. Skipped unless TEST_DATABASE_URL is set; point it at a throwaway Neon
+ * branch, never production:
+ *
+ *   TEST_DATABASE_URL='postgresql://…' pnpm test server
+ *
+ * Sessions come from Better Auth's email + password sign-up, enabled only in these tests (the game
+ * itself offers social sign-in only). Rows created here are deleted afterwards.
+ */
+import { randomUUID } from 'node:crypto';
+import { getMigrations } from 'better-auth/db/migration';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import authApi from '../api/auth';
+import leaderboardApi from '../api/leaderboard';
+import progressApi from '../api/progress';
+import { computeScore, scoreTierForRadius } from '../src/shared/score';
+import type { Progress } from '../src/shared/progress';
+import { authOptions, resetAuthForTests } from './auth';
+import { query, resetDbForTests } from './db';
+
+const DB = process.env.TEST_DATABASE_URL;
+const ORIGIN = 'http://localhost:5173';
+const RUN = randomUUID().slice(0, 8);
+const EMAIL_DOMAIN = `test-${RUN}.dust-bunny.invalid`;
+/** A fresh fake client IP per test run, so the per-IP rate limit never trips across runs. */
+const IP = `198.51.100.${Math.floor(Math.random() * 250) + 1}-${RUN}`;
+
+type Handler = { fetch(r: Request): Promise<Response> };
+
+function call(handler: Handler, path: string, init: RequestInit & { cookie?: string } = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set('origin', ORIGIN);
+  headers.set('x-forwarded-for', IP);
+  if (init.cookie) headers.set('cookie', init.cookie);
+  if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  return handler.fetch(new Request(ORIGIN + path, { ...init, headers }));
+}
+
+/** Signs up a throwaway user and returns its session cookie. */
+async function signUp(name: string): Promise<string> {
+  const res = await call(authApi, '/api/auth/sign-up/email', {
+    method: 'POST',
+    body: JSON.stringify({ name, email: `${name.toLowerCase()}@${EMAIL_DOMAIN}`, password: `pw-${RUN}-${randomUUID()}` }),
+  });
+  expect(res.status).toBe(200);
+  const cookies = res.headers.getSetCookie().map((c) => c.split(';')[0]);
+  const cookie = cookies.find((c) => c.includes('session_token'));
+  expect(cookie).toBeTruthy();
+  return cookies.join('; ');
+}
+
+function submission(name: string) {
+  const fields = { maxRadius: 1.5, debrisAbsorbed: 40, tierReached: scoreTierForRadius(1.5), durationMs: 45_000, victory: false, difficulty: 'casual' as const };
+  return { name, character: 'lint', ...fields, score: computeScore(fields) };
+}
+
+const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}): Progress => ({
+  fluff,
+  upgrades,
+  stats: { runs, wins: 0, bestRadius: 2.5, bestTier: 2, totalFluffEarned },
+});
+
+describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
+  const saved = { ...process.env };
+
+  beforeAll(async () => {
+    process.env.DATABASE_URL = DB;
+    process.env.BETTER_AUTH_SECRET = `test-secret-${randomUUID()}`;
+    process.env.BETTER_AUTH_URL = ORIGIN;
+    process.env.GOOGLE_CLIENT_ID = 'test-google-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'test-google-secret';
+    process.env.DISCORD_CLIENT_ID = 'test-discord-id';
+    process.env.DISCORD_CLIENT_SECRET = 'test-discord-secret';
+    await resetDbForTests();
+    // Better Auth skips its origin checks under test by default; keep them on, as in production.
+    resetAuthForTests({ emailAndPassword: { enabled: true }, advanced: { disableOriginCheck: false } });
+  });
+
+  afterAll(async () => {
+    await query(`DELETE FROM leaderboard_scores WHERE name LIKE $1`, [`T${RUN}%`]);
+    await query(`DELETE FROM "user" WHERE email LIKE $1`, [`%@${EMAIL_DOMAIN}`]); // cascades to sessions, accounts, progress
+    await resetDbForTests();
+    process.env = saved;
+  });
+
+  it('reports the configured providers', async () => {
+    const res = await call(authApi, '/api/auth/providers');
+    expect(await res.json()).toEqual({ enabled: true, providers: ['google', 'discord'] });
+  });
+
+  it('creates every table Better Auth expects', async () => {
+    await call(authApi, '/api/auth/get-session'); // runs ensureSchema
+    const { toBeCreated, toBeAdded } = await getMigrations(authOptions());
+    expect(toBeCreated.map((t) => t.table)).toEqual([]);
+    expect(toBeAdded.map((t) => t.table)).toEqual([]);
+  });
+
+  it.each(['google', 'discord'])('starts %s sign-in with our callback URL', async (provider) => {
+    const res = await call(authApi, '/api/auth/sign-in/social', { method: 'POST', body: JSON.stringify({ provider, callbackURL: '/', disableRedirect: true }) });
+    expect(res.status).toBe(200);
+    const { url } = (await res.json()) as { url: string };
+    const auth = new URL(url);
+    expect(auth.host).toBe(provider === 'google' ? 'accounts.google.com' : 'discord.com');
+    expect(auth.searchParams.get('client_id')).toBe(`test-${provider}-id`);
+    expect(auth.searchParams.get('redirect_uri')).toBe(`${ORIGIN}/api/auth/callback/${provider}`);
+  });
+
+  it('rejects a callback URL on another origin', async () => {
+    const res = await call(authApi, '/api/auth/sign-in/social', { method: 'POST', body: JSON.stringify({ provider: 'discord', callbackURL: 'https://evil.example/' }) });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns the session for a signed-in cookie', async () => {
+    const cookie = await signUp(`Sess${RUN}`);
+    const res = await call(authApi, '/api/auth/get-session', { cookie });
+    const body = (await res.json()) as { user: { name: string } } | null;
+    expect(body?.user.name).toBe(`Sess${RUN}`);
+  });
+
+  it('marks leaderboard entries verified only for signed-in players', async () => {
+    const cookie = await signUp(`Lb${RUN}`);
+    const anon = await call(leaderboardApi, '/api/leaderboard', { method: 'POST', body: JSON.stringify(submission(`T${RUN}a`)) });
+    expect(anon.status).toBe(201);
+    expect(((await anon.json()) as { entry: { verified: boolean } }).entry.verified).toBe(false);
+
+    const signed = await call(leaderboardApi, '/api/leaderboard', { method: 'POST', cookie, body: JSON.stringify(submission(`T${RUN}v`)) });
+    expect(signed.status).toBe(201);
+    const { entry } = (await signed.json()) as { entry: { id: string; verified: boolean } };
+    expect(entry.verified).toBe(true);
+
+    // A garbage cookie is just anonymous, not an error.
+    const forged = await call(leaderboardApi, '/api/leaderboard', { method: 'POST', cookie: 'better-auth.session_token=forged.value', body: JSON.stringify(submission(`T${RUN}f`)) });
+    expect(((await forged.json()) as { entry: { verified: boolean } }).entry.verified).toBe(false);
+
+    const rows = await query<{ name: string; verified: boolean }>(`SELECT name, user_id IS NOT NULL AS verified FROM leaderboard_scores WHERE name LIKE $1 ORDER BY id`, [`T${RUN}%`]);
+    expect(rows).toEqual([
+      { name: `T${RUN}a`, verified: false },
+      { name: `T${RUN}v`, verified: true },
+      { name: `T${RUN}f`, verified: false },
+    ]);
+    const top = (await (await call(leaderboardApi, '/api/leaderboard')).json()) as { entries: Array<{ verified: unknown }> };
+    expect(top.entries.every((e) => typeof e.verified === 'boolean')).toBe(true);
+  });
+
+  it('requires a session for progress', async () => {
+    expect((await call(progressApi, '/api/progress')).status).toBe(401);
+    expect((await call(progressApi, '/api/progress', { method: 'PUT', body: JSON.stringify(progress(1, 1, 1)) })).status).toBe(401);
+  });
+
+  it('stores progress and refuses to overwrite it with less', async () => {
+    const cookie = await signUp(`Prog${RUN}`);
+    const get = async () => (await (await call(progressApi, '/api/progress', { cookie })).json()) as { progress: Progress | null };
+    const put = async (p: Progress) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };
+
+    expect((await get()).progress).toBeNull();
+
+    const first = progress(120, 150, 3, { fast_feet: 1 });
+    expect(await put(first)).toMatchObject({ accepted: true, progress: first });
+
+    // Another device with less lifetime progress: rejected, and it gets the stored copy back.
+    const stale = progress(500, 100, 9);
+    expect(await put(stale)).toMatchObject({ accepted: false, progress: first });
+
+    // Spending Fluff keeps the totals: accepted.
+    const spent = progress(40, 150, 3, { fast_feet: 2 });
+    expect(await put(spent)).toMatchObject({ accepted: true, progress: spent });
+    expect((await get()).progress).toEqual(spent);
+
+    const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...spent, fluff: -5 }) });
+    expect(bad.status).toBe(400);
+  });
+
+  it('keeps the leaderboard working, anonymous only, when accounts are not configured', async () => {
+    const cookie = await signUp(`Off${RUN}`);
+    const secret = process.env.BETTER_AUTH_SECRET;
+    delete process.env.BETTER_AUTH_SECRET;
+    try {
+      expect(await (await call(authApi, '/api/auth/providers')).json()).toEqual({ enabled: false, providers: [] });
+      expect((await call(authApi, '/api/auth/get-session', { cookie })).status).toBe(503);
+      const res = await call(leaderboardApi, '/api/leaderboard', { method: 'POST', cookie, body: JSON.stringify(submission(`T${RUN}o`)) });
+      expect(res.status).toBe(201);
+      expect(((await res.json()) as { entry: { verified: boolean } }).entry.verified).toBe(false);
+    } finally {
+      process.env.BETTER_AUTH_SECRET = secret;
+    }
+  });
+
+  it('signs out', async () => {
+    const cookie = await signUp(`Out${RUN}`);
+    const res = await call(authApi, '/api/auth/sign-out', { method: 'POST', cookie, body: '{}' });
+    expect(res.status).toBe(200);
+    const after = await call(authApi, '/api/auth/get-session', { cookie });
+    expect(await after.json()).toBeNull();
+  });
+});

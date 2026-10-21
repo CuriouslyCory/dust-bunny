@@ -22,22 +22,25 @@ pnpm build        # type-check (game + api) and build to dist/
 pnpm sim          # headless balance bot
 ```
 
-`pnpm dev` serves only the game. The leaderboard API isn't available there, so the game uses a local leaderboard stored in `localStorage` and labels it "Local only". To run the API locally, use `vercel dev` with `DATABASE_URL` set (see `.env.example`).
+Without a `.env`, `pnpm dev` serves only the game: there are no accounts and the game uses a local leaderboard stored in `localStorage`, labelled "Local only". Copy `.env.example` to `.env` and set `DATABASE_URL` (ideally a Neon branch, not production) and `BETTER_AUTH_SECRET`, and `pnpm dev` also serves the functions in `api/` (leaderboard, accounts, cloud save). Sign-in needs at least one provider's client id and secret, with `http://localhost:5173/api/auth/callback/<provider>` registered as a redirect URI. `TEST_DATABASE_URL=… pnpm test server` runs the API integration tests against a database; use a throwaway branch.
 
 Project structure, the game loop, events and extension points are documented in `docs/architecture.md`.
 
-## Leaderboard API
+## API
 
-`api/leaderboard.ts` is a Vercel function backed by Neon Postgres (`@neondatabase/serverless`):
+Vercel functions in `api/`, backed by Neon Postgres (`pg` with a pool, shared code in `server/`):
 
 - `GET /api/leaderboard[?character=lint|tumble|zap]` returns `{ entries }`, the top 20.
-- `POST /api/leaderboard` with `{ name, character, difficulty, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score }` returns `201 { entry, rank, nameCensored }`. The server validates the fields, recomputes the score (`src/shared/score.ts`, × the Difficulty's multiplier: Casual 1, Arcade 1.25, Hardcore 1.6; a missing `difficulty` counts as Casual), and rate-limits by hashed IP. All Difficulties share one board; each entry carries its `difficulty`. Errors come back as JSON `{ error, message, field? }`.
+- `POST /api/leaderboard` with `{ name, character, difficulty, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score }` returns `201 { entry, rank, nameCensored }`. The server validates the fields, recomputes the score (`src/shared/score.ts`, × the Difficulty's multiplier: Casual 1, Arcade 1.25, Hardcore 1.6; a missing `difficulty` counts as Casual), and rate-limits by hashed IP. All Difficulties share one board; each entry carries its `difficulty`, and `verified: true` when it was posted while signed in (otherwise it is anonymous). Errors come back as JSON `{ error, message, field? }`.
+- `/api/auth/*`: accounts, through [Better Auth](https://better-auth.com) with Google and Discord sign-in (self-hosted, because Neon's managed Auth has no Discord). `GET /api/auth/providers` says which providers are configured.
+- `GET /api/progress` / `PUT /api/progress`: the signed-in player's cloud save (Fluff, Upgrades, lifetime stats). A `PUT` with less lifetime Fluff than the stored copy is refused and the stored copy returned.
 
-The table is created on first request, and columns added since (`difficulty`) are added to an existing table the same way. `db/schema.sql` contains the same DDL if you want to apply it by hand.
+Tables are created on first request, and columns added since (`difficulty`, `user_id`) are added to an existing table the same way. `db/schema.sql` contains the same DDL if you want to apply it by hand.
 
 ## Deploying to Vercel
 
 1. Import the GitHub repo into Vercel (Add New → Project). `vercel.json` sets the framework (Vite), `pnpm build` and the `dist` output, so no other settings are needed.
 2. Add a database: in the project open **Storage → Marketplace → Neon → Connect**, create (or pick) a database and connect it to the project's environments. The integration sets `DATABASE_URL`. If you use an existing Neon project instead, add `DATABASE_URL` (the pooled connection string) under **Settings → Environment Variables**.
-3. Optionally set `LEADERBOARD_IP_SALT` to a random string, and `SITE_URL` (e.g. `https://dustbunny.example`) if the site is served from a custom domain. Social-card image URLs are made absolute at build time from `SITE_URL`, falling back to Vercel's production domain.
-4. Deploy (or redeploy after adding the env vars). If `DATABASE_URL` is missing, the API returns 503 and the game falls back to the local leaderboard.
+3. Accounts: set `BETTER_AUTH_SECRET` (`openssl rand -base64 32`), `BETTER_AUTH_URL` (the production origin, e.g. `https://dustbunny.example`) and the OAuth apps' `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`. Register `<origin>/api/auth/callback/google` and `<origin>/api/auth/callback/discord` as redirect URIs with each provider. A provider without both values is hidden; without the secret, accounts are off and everyone plays anonymously. See `.env.example`.
+4. Optionally set `LEADERBOARD_IP_SALT` to a random string, and `SITE_URL` (e.g. `https://dustbunny.example`) if the site is served from a custom domain. Social-card image URLs are made absolute at build time from `SITE_URL`, falling back to Vercel's production domain.
+5. Deploy (or redeploy after adding the env vars). If `DATABASE_URL` is missing, the API returns 503 and the game falls back to the local leaderboard.

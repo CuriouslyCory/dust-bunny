@@ -124,9 +124,10 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
       const parsed: unknown = raw ? JSON.parse(raw) : [];
       if (!Array.isArray(parsed)) return [];
       // Entries stored before Difficulty existed lack the field: they were casual Runs.
+      // Local entries are never verified (only the server can vouch for an account).
       return (parsed as LeaderboardEntry[])
         .filter((e) => e && typeof e.score === 'number')
-        .map((e) => (isDifficultyId(e.difficulty) ? e : { ...e, difficulty: DEFAULT_DIFFICULTY }));
+        .map((e) => ({ ...e, difficulty: isDifficultyId(e.difficulty) ? e.difficulty : DEFAULT_DIFFICULTY, verified: false }));
     } catch {
       return [];
     }
@@ -177,7 +178,7 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
       } catch (err) {
         if (!(err instanceof Unavailable)) throw err;
         const { nameCensored: _c, ...fields } = v.value;
-        const entry: LeaderboardEntry = { ...fields, id: `local-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, createdAt: new Date(now()).toISOString() };
+        const entry: LeaderboardEntry = { ...fields, id: `local-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, verified: false, createdAt: new Date(now()).toISOString() };
         const all = [...readLocal(), entry].sort(compareEntries);
         writeLocal(all);
         const idx = all.indexOf(entry);

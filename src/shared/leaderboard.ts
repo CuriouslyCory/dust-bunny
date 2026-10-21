@@ -54,6 +54,8 @@ export interface LeaderboardEntry {
   durationMs: number;
   victory: boolean;
   difficulty: DifficultyId;
+  /** Submitted by a signed-in player. False for anonymous entries and the local fallback board. */
+  verified: boolean;
   /** ISO timestamp. */
   createdAt: string;
 }

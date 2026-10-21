@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Dust Bunny · Sign in</title>
+    <style>
+      body { margin: 0; padding: 48px 24px; font: 16px/1.5 system-ui, sans-serif; text-align: center; color: #3a2e28; background: #f6efe6; }
+    </style>
+  </head>
+  <body>
+    <p id="msg">Signed in. You can close this window.</p>
+    <script>
+      // Landing page of the sign-in popup (src/net/account.ts): tell the game, then close.
+      (function () {
+        var error = new URLSearchParams(location.search).get('error');
+        var message = { type: 'dust-bunny:auth-complete', error: error };
+        try { new BroadcastChannel('dust-bunny-auth').postMessage(message); } catch (e) {}
+        try { if (window.opener && window.opener !== window) window.opener.postMessage(message, location.origin); } catch (e) {}
+        if (error) document.getElementById('msg').textContent = 'Sign-in did not finish. You can close this window.';
+        window.close();
+        // Not a script-opened window (close() was ignored): continue to the game instead.
+        setTimeout(function () { location.replace('/' + (error ? '?error=' + encodeURIComponent(error) : '')); }, 400);
+      })();
+    </script>
+  </body>
+</html>

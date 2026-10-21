@@ -4,6 +4,6 @@
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["api", "src/shared"],
-  "exclude": ["src/shared/**/*.test.ts"]
+  "include": ["api", "server", "src/shared"],
+  "exclude": ["src/shared/**/*.test.ts", "server/**/*.test.ts"]
 }
