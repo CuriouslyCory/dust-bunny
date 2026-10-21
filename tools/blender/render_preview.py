@@ -133,7 +133,7 @@ def main():
     global TILE_W, TILE_H
     only = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     scene = bpy.context.scene
-    with open(os.path.join(common.OUT_DIR, "manifest.json")) as f:
+    with open(os.path.join(common.OUT_DIR, "catalog.json")) as f:
         models = json.load(f)["models"]
     if only:  # debug: bigger tiles of just these models, written to /tmp
         models = [m for m in models if m["id"] in only]
