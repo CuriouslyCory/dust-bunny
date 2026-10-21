@@ -3,12 +3,12 @@ import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
 import { AREA_BOSSES, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
 import { getTier } from '../data/tiers';
+import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { NEIGHBORHOOD } from '../world/neighborhood';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { spawnWeights } from './director';
 import { hazardRegistry } from './index';
-import { installRunHazards } from './install';
 import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
@@ -75,7 +75,7 @@ describe('outdoor Hazards', () => {
 
   it('the director spawns outdoor Hazards (never house ones) and brings the Street Sweeper at Tier 7', () => {
     const { run, events } = makeRun('outdoor-director');
-    installRunHazards(run);
+    installGameplay(run);
     const spawned: string[] = [];
     const bosses: string[] = [];
     events.on('hazardSpawned', (e) => spawned.push(e.defId));

@@ -33,6 +33,44 @@ export function wallRadiusAt(house: HouseLayout, x: number, z: number, radius: n
   return out;
 }
 
+const contactNx: number[] = [];
+const contactNz: number[] = [];
+const contactD: number[] = [];
+
+/**
+ * Radius the Bunny collides with against walls and furniture when it is wedged in a gap narrower
+ * than itself (touching obstacles on roughly opposite sides): the fur squeezes to fit, down to
+ * TUNING.squeeze.min × radius, and the push-out centres it in the gap. A Bunny that outgrew the
+ * hallway, or the space between a console table and the wall, can still roll on. Head-on into a
+ * gap between two corners it only squeezes once the gap is ~1.4 × its radius, so small gaps stay
+ * closed. Returns `radius` when not wedged.
+ */
+export function gapRadiusAt(house: HouseLayout, x: number, z: number, radius: number): number {
+  const s = TUNING.squeeze;
+  contactNx.length = contactNz.length = contactD.length = 0;
+  for (const o of house.obstacles) {
+    if (passesUnder(radius, o)) continue;
+    const r = o.rect;
+    const dx = x - clamp(x, r.minX, r.maxX);
+    const dz = z - clamp(z, r.minZ, r.maxZ);
+    const d2 = dx * dx + dz * dz;
+    // Centre inside the box (no normal) or not touching.
+    if (d2 < 1e-6 || d2 >= radius * radius) continue;
+    const d = Math.sqrt(d2);
+    contactNx.push(dx / d);
+    contactNz.push(dz / d);
+    contactD.push(d);
+  }
+  let out = radius;
+  for (let i = 0; i < contactD.length; i++) {
+    for (let j = i + 1; j < contactD.length; j++) {
+      if (contactNx[i]! * contactNx[j]! + contactNz[i]! * contactNz[j]! > s.opposing) continue;
+      out = Math.min(out, (contactD[i]! + contactD[j]!) / 2 - 0.5);
+    }
+  }
+  return Math.max(TUNING.minRadius, radius * s.min, out);
+}
+
 function applyPush(b: Bunny, p: PushOut): void {
   b.x += p.x;
   b.z += p.z;
@@ -106,12 +144,13 @@ export const collisionSystem: System = {
   update(_dt, run) {
     const b = run.bunny;
     const ratio = b.stats.get('absorbRatio');
-    const wallR = wallRadiusAt(run.house, b.x, b.z, b.radius);
+    const gapR = gapRadiusAt(run.house, b.x, b.z, b.radius);
+    const wallR = Math.min(gapR, wallRadiusAt(run.house, b.x, b.z, b.radius));
     b.squeeze = wallR / b.radius;
     for (let iter = 0; iter < 2; iter++) {
       for (const o of run.house.obstacles) {
         if (passesUnder(b.radius, o)) continue;
-        const rr = o.kind === 'wall' ? wallR : b.radius;
+        const rr = o.kind === 'wall' ? wallR : gapR;
         const p = o.exitDir && rectContains(o.rect, b.x, b.z) ? ejectThrough(b, o) : circleVsRect(b.x, b.z, rr, o.rect);
         if (p) applyPush(b, p);
       }
@@ -126,8 +165,9 @@ export const collisionSystem: System = {
         applyPush(b, p);
       }
     }
+    // The outer walls sit on the bounds, so a Bunny squeezed along one may come closer to the edge.
     const bd = run.house.bounds;
-    b.x = clamp(b.x, bd.minX + b.radius, bd.maxX - b.radius);
-    b.z = clamp(b.z, bd.minZ + b.radius, bd.maxZ - b.radius);
+    b.x = clamp(b.x, bd.minX + wallR, bd.maxX - wallR);
+    b.z = clamp(b.z, bd.minZ + wallR, bd.maxZ - wallR);
   },
 };

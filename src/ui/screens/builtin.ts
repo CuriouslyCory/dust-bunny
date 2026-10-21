@@ -113,6 +113,8 @@ export function registerBuiltinScreens(): void {
             game.go('paused');
             return true;
           }
+          // Area cleared: skip the walk to the exit (same as the HUD's skip button).
+          if (!e.repeat && isKey(e, 'Enter', 'NumpadEnter') && game.run?.leaveArea()) return true;
           return false;
         },
       };

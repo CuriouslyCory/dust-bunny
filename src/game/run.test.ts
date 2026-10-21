@@ -66,4 +66,27 @@ describe('Run (headless)', () => {
     expect(ended).toBe('died');
     expect(run.getStats().debrisAbsorbed).toBe(0);
   });
+
+  it('can leave a cleared area from anywhere (the skip button), but not before', () => {
+    const { run, events } = makeRun('skip');
+    const entered: string[] = [];
+    events.on('areaEntered', (e) => entered.push(e.area));
+    expect(run.canLeaveArea).toBe(false);
+    expect(run.leaveArea()).toBe(false);
+    expect(run.area).toBe('house');
+
+    run.openExit(); // the Robo-Vac 9000 fell; the Bunny is nowhere near the front door
+    expect(run.canLeaveArea).toBe(true);
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('neighborhood');
+    expect(run.canLeaveArea).toBe(false); // the road barrier is still shut
+
+    run.openExit();
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('city');
+    run.openExit(); // no exit in the last area: the Garbage Truck wins the Run instead
+    expect(run.canLeaveArea).toBe(false);
+    expect(run.leaveArea()).toBe(false);
+    expect(entered).toEqual(['neighborhood', 'city']);
+  });
 });

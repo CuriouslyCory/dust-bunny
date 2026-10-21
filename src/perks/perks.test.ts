@@ -2,22 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
 import { TUNING } from '../data/tuning';
-import { Run } from '../game/run';
-import { installRunHooks } from '../meta/install';
+import { createRun, registerGameplayContent } from '../game/assembly';
 import { upgradeModifiers } from '../meta/upgrades';
 import { pickupRegistry } from '../pickups';
-import { registerPickups } from '../pickups/pickups';
 import { availablePerks, perkRegistry } from './index';
 import { draftForRun, draftPerks, rerollDraft, rerollsLeft } from './draft';
-import { registerPerks } from './perks';
 
-registerPerks();
-registerPickups();
+registerGameplayContent();
 
 const makeRun = (upgrades: Record<string, number> = {}, characterId = 'lint') => {
   const events = new EventBus();
-  const run = new Run(events, { seed: 'perks', characterId, modifiers: upgradeModifiers(upgrades) });
-  installRunHooks(run);
+  const run = createRun(events, { seed: 'perks', characterId, modifiers: upgradeModifiers(upgrades) });
   return { run, events };
 };
 
