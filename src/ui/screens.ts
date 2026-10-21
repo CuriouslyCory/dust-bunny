@@ -8,7 +8,7 @@ import { Registry } from '../core/registry';
 import type { Game } from '../game/game';
 
 export interface Screen {
-  /** Root element; the manager appends it to the UI layer and toggles visibility. */
+  /** Root element; the manager wraps it in a full-screen centred `.screen.screen-<id>` div. */
   el: HTMLElement;
   enter?(params?: unknown): void;
   exit?(): void;
@@ -34,25 +34,28 @@ export function registerScreen(def: ScreenDef): void {
 }
 
 export class ScreenManager {
-  private instances = new Map<string, Screen>();
+  private instances = new Map<string, { screen: Screen; wrapper: HTMLElement }>();
   current: ScreenDef | null = null;
   currentScreen: Screen | null = null;
+  private currentWrapper: HTMLElement | null = null;
 
   constructor(
     private readonly game: Game,
     private readonly layer: HTMLElement,
   ) {}
 
-  private instance(def: ScreenDef): Screen {
-    let s = this.instances.get(def.id);
-    if (!s) {
-      s = def.create(this.game);
-      s.el.classList.add('screen', `screen-${def.id}`);
-      s.el.hidden = true;
-      this.layer.appendChild(s.el);
-      this.instances.set(def.id, s);
+  private instance(def: ScreenDef): { screen: Screen; wrapper: HTMLElement } {
+    let inst = this.instances.get(def.id);
+    if (!inst) {
+      const screen = def.create(this.game);
+      // Full-viewport wrapper (centres content, holds per-screen backdrop via .screen-<id>).
+      const wrapper = h('div', { className: `screen screen-${def.id}` }, screen.el);
+      wrapper.hidden = true;
+      this.layer.appendChild(wrapper);
+      inst = { screen, wrapper };
+      this.instances.set(def.id, inst);
     }
-    return s;
+    return inst;
   }
 
   /** Switches screen; returns the previous def. */
@@ -61,13 +64,14 @@ export class ScreenManager {
     const prev = this.current;
     if (this.currentScreen) {
       this.currentScreen.exit?.();
-      this.currentScreen.el.hidden = true;
+      this.currentWrapper!.hidden = true;
     }
-    const s = this.instance(def);
+    const { screen, wrapper } = this.instance(def);
     this.current = def;
-    this.currentScreen = s;
-    s.el.hidden = false;
-    s.enter?.(params);
+    this.currentScreen = screen;
+    this.currentWrapper = wrapper;
+    wrapper.hidden = false;
+    screen.enter?.(params);
     return prev;
   }
 
