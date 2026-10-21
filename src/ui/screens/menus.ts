@@ -42,7 +42,7 @@ export function registerMenuScreens(): void {
         ],
         onChange: (v) => settings.update({ quality: v }),
       });
-      const motion = toggle({ label: 'Reduced motion', hint: 'Calmer camera and UI animation', value: s.reducedMotion, onChange: (v) => settings.update({ reducedMotion: v }) });
+      const motion = toggle({ label: 'Reduced motion', hint: 'Calmer UI animation', value: s.reducedMotion, onChange: (v) => settings.update({ reducedMotion: v }) });
       const fps = toggle({ label: 'Show FPS', value: s.showFps, onChange: (v) => settings.update({ showFps: v }) });
       const touch = segmented<TouchControlsMode>({
         label: 'Touch controls',

@@ -3,7 +3,7 @@
  * page-level UI behaviour. Called once from main.ts after the Game exists.
  */
 import { installPerfWatchdog } from '../fx/perfWatchdog';
-import { setQuality } from '../fx/quality';
+import { getQuality, onQualityChange, setQuality } from '../fx/quality';
 import type { Game } from '../game/game';
 import { settings, type GraphicsQuality } from './settings';
 
@@ -23,8 +23,10 @@ export function installUi(game: Game): void {
   settings.subscribe((s, prev) => {
     if (prev ? prev.quality !== s.quality : !urlOverride) applyGraphicsQuality(game, s.quality);
     root.classList.toggle('reduce-motion', s.reducedMotion);
-    root.dataset.quality = s.quality;
   });
+  // Effective render quality (the URL override or watchdog may differ from the saved setting).
+  root.dataset.quality = getQuality();
+  onQualityChange((q) => (root.dataset.quality = q));
   // Screen id on the root lets CSS react to game state (e.g. hide touch controls off-play).
   game.events.on('screenChanged', (e) => {
     root.dataset.screen = e.to;
@@ -34,9 +36,10 @@ export function installUi(game: Game): void {
 
   // Sustained low frame rate on High during play: drop to Low once (saved; Settings can undo).
   installPerfWatchdog({
-    active: () => game.simulating && settings.value.quality === 'high' && !document.hidden,
+    active: () => game.simulating && getQuality() === 'high' && !document.hidden,
     onSlow: () => {
       settings.update({ quality: 'low' });
+      setQuality('low');
       game.hud.toast('Graphics set to Low for smoother play', { key: 'auto-quality', tone: 'info' });
     },
   });
