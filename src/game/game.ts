@@ -5,9 +5,7 @@
 import {
   ACESFilmicToneMapping,
   Color,
-  DirectionalLight,
   Fog,
-  HemisphereLight,
   PCFShadowMap,
   PerspectiveCamera,
   Plane,
@@ -17,7 +15,11 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  type DirectionalLight,
 } from 'three';
+import { Lighting } from '../fx/lighting';
+import { getQuality, onQualityChange, type Quality } from '../fx/quality';
+import { installVignette } from '../fx/vignette';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
 import { FixedLoop } from '../core/loop';
@@ -48,6 +50,7 @@ export class Game {
   readonly input = new CompositeInput();
   readonly screens: ScreenManager;
   readonly hud: Hud;
+  readonly lighting: Lighting;
   readonly sun: DirectionalLight;
   readonly debug: boolean;
 
@@ -68,10 +71,9 @@ export class Game {
   ) {
     this.debug = !!opts.debug;
     this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.1;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = PCFShadowMap;
     setMaxAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
@@ -81,11 +83,11 @@ export class Game {
     this.camera = new PerspectiveCamera(TUNING.camera.fov, 1, 0.1, 1000);
     this.rig = new CameraRig(this.camera, this.fog, 1, 1);
 
-    this.scene.add(new HemisphereLight('#fff4e0', '#6b5a4a', 1.4));
-    this.sun = new DirectionalLight('#fff1d6', 2.2);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
-    this.scene.add(this.sun, this.sun.target);
+    this.lighting = new Lighting(this.scene);
+    this.sun = this.lighting.sun;
+    this.applyQuality(getQuality());
+    onQualityChange((q) => this.applyQuality(q));
+    if (canvas.parentElement) installVignette(canvas.parentElement);
 
     this.input.add(new KeyboardInput(window, () => TUNING.camera.yaw));
     this.input.add(
@@ -188,31 +190,18 @@ export class Game {
   private render(alpha: number, frameDt: number): void {
     this.screens.update(frameDt);
     if (this.view) {
-      this.view.render(this.simulating ? alpha : 1, frameDt, this.rig);
-      this.updateSun();
+      this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
+      this.lighting.update(this.rig.target, this.rig.distance);
     }
     this.hud.update(frameDt);
     this.renderer.render(this.scene, this.camera);
   }
 
-  private updateSun(): void {
-    const t = this.rig.target;
-    const d = this.rig.distance;
-    this.sun.position.set(t.x - d * 0.5, t.y + d * 1.2, t.z + d * 0.35);
-    this.sun.target.position.copy(t);
-    const cam = this.sun.shadow.camera;
-    const ext = d * 1.3;
-    if (Math.abs(cam.right - ext) > ext * 0.02) {
-      cam.left = -ext;
-      cam.right = ext;
-      cam.top = ext;
-      cam.bottom = -ext;
-      cam.near = d * 0.1;
-      cam.far = d * 4;
-      cam.updateProjectionMatrix();
-      this.sun.shadow.bias = -0.0005;
-      this.sun.shadow.normalBias = d * 0.002;
-    }
+  /** Render quality (see fx/quality.ts): shadows and pixel ratio. */
+  private applyQuality(q: Quality): void {
+    this.renderer.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.lighting.applyQuality(this.renderer, q);
+    this.resize();
   }
 
   resize(): void {

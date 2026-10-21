@@ -1,5 +1,5 @@
 /** Procedural canvas textures (floors, rugs, fur). Browser only. */
-import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
+import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type MeshStandardMaterial, type Texture } from 'three';
 import { Rng } from '../core/rng';
 import type { FloorMaterialId } from './types';
 
@@ -251,6 +251,66 @@ export function rugTexture(seed: number, w: number, d: number): Texture {
     ctx.fillRect(rng.range(0, W), rng.range(0, h), 1.5, 1.5);
   }
   return toTexture(c, false);
+}
+
+let detailCache: Texture | null = null;
+
+/** Tileable grey fibre/grain noise (mean ≈ 0.5, linear) used as a close-up detail layer. */
+function detailTexture(): Texture {
+  if (detailCache) return detailCache;
+  const S = 256;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('detail');
+  ctx.fillStyle = 'rgb(128,128,128)';
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 2600; i++) {
+    const v = Math.floor(rng.range(70, 190));
+    ctx.strokeStyle = `rgba(${v},${v},${v},0.5)`;
+    ctx.lineWidth = rng.range(0.6, 1.6);
+    const x = rng.range(0, S);
+    const y = rng.range(0, S);
+    const a = rng.range(0, Math.PI * 2);
+    const l = rng.range(3, 12);
+    for (const [ox, oy] of [
+      [0, 0],
+      [-S, 0],
+      [0, -S],
+      [-S, -S],
+    ] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x + ox, y + oy);
+      ctx.lineTo(x + ox + Math.cos(a) * l, y + oy + Math.sin(a) * l);
+      ctx.stroke();
+    }
+  }
+  const t = new CanvasTexture(c);
+  t.wrapS = t.wrapT = RepeatWrapping;
+  t.anisotropy = maxAnisotropy;
+  detailCache = t;
+  return t;
+}
+
+/**
+ * Multiplies a fine fibre/grain detail texture over `material.map` so floors and rugs stay crisp
+ * when the camera is a few centimetres away (Tier 1). `scale` = detail repeats per map repeat.
+ */
+export function addFloorDetail(material: MeshStandardMaterial, scale: number, strength = 0.35): void {
+  const tex = detailTexture();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.detailMap = { value: tex };
+    shader.uniforms.detailScale = { value: scale };
+    shader.uniforms.detailStrength = { value: strength };
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D detailMap;\nuniform float detailScale;\nuniform float detailStrength;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        #ifdef USE_MAP
+          diffuseColor.rgb *= mix(1.0, texture2D(detailMap, vMapUv * detailScale).r * 2.0, detailStrength);
+        #endif`,
+      );
+  };
+  material.customProgramCacheKey = () => `floor-detail`;
 }
 
 let furCache: { map: Texture; alpha: Texture } | null = null;

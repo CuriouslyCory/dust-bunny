@@ -27,7 +27,7 @@ import { damp } from '../core/math';
 import { ContactShadows } from '../fx/contactShadows';
 import { FURNITURE } from './furniture';
 import { HOUSE } from './house';
-import { floorTexture, rugTexture } from './materials';
+import { addFloorDetail, floorTexture, rugTexture } from './materials';
 import { createModel } from './models';
 import { StaticBatch } from './staticBatch';
 import type { FloorMaterialId, HouseLayout } from './types';
@@ -93,7 +93,9 @@ export class HouseView {
     }
     for (const [id, geos] of byFloor) {
       const info = floorTexture(id);
-      const mesh = new Mesh(mergeGeometries(geos, false)!, new MeshStandardMaterial({ map: info.texture, roughness: info.roughness, metalness: 0 }));
+      const mat = new MeshStandardMaterial({ map: info.texture, roughness: info.roughness, metalness: 0 });
+      addFloorDetail(mat, info.worldSize / (id === 'carpet' ? 3 : 7), id.startsWith('tile') ? 0.12 : 0.3);
+      const mesh = new Mesh(mergeGeometries(geos, false)!, mat);
       for (const g of geos) g.dispose();
       mesh.receiveShadow = true;
       mesh.name = `floor:${id}`;
@@ -103,7 +105,9 @@ export class HouseView {
     for (const rug of this.layout.rugs) {
       const w = rug.rect.maxX - rug.rect.minX;
       const d = rug.rect.maxZ - rug.rect.minZ;
-      const mesh = new Mesh(new PlaneGeometry(w, d), new MeshStandardMaterial({ map: rugTexture(rug.seed, w, d), roughness: 1 }));
+      const mat = new MeshStandardMaterial({ map: rugTexture(rug.seed, w, d), roughness: 1 });
+      addFloorDetail(mat, w / 3, 0.45);
+      const mesh = new Mesh(new PlaneGeometry(w, d), mat);
       mesh.rotation.x = -Math.PI / 2;
       mesh.position.set(rug.rect.minX + w / 2, 0.12, rug.rect.minZ + d / 2);
       mesh.receiveShadow = true;

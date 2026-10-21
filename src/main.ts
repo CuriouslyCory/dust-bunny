@@ -7,6 +7,7 @@
  */
 import './styles.css';
 import { installDebug } from './debug/debug';
+import { showLoading } from './fx/loading';
 import { Game } from './game/game';
 import { registerLeaderboardScreen } from './ui/leaderboard/screen';
 import { installRoguelike } from './meta/install';
@@ -20,7 +21,9 @@ async function boot(): Promise<void> {
 
   registerBuiltinScreens();
   registerLeaderboardScreen();
-  await loadModelOverrides();
+  const loading = showLoading(canvas.parentElement ?? document.body);
+  await loadModelOverrides(8000, loading.progress);
+  loading.done();
 
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
