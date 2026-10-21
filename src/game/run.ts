@@ -21,6 +21,7 @@ import { collisionSystem } from '../systems/collision';
 import { growthSystem } from '../systems/growth';
 import { movementSystem } from '../systems/movement';
 import { DebrisSpawner } from '../systems/spawner';
+import type { ViewInfo } from '../systems/camera';
 import { generateHouse } from '../world/house';
 import type { HouseLayout } from '../world/types';
 import type { RunEndReason, RunStats } from './runStats';
@@ -48,6 +49,8 @@ export class Run {
   readonly disposables = new Disposables();
 
   input: InputSource = { sample: () => NO_INPUT };
+  /** Live camera framing, refreshed by RunView each frame; null headless (spawners assume a default). */
+  viewInfo: ViewInfo | null = null;
   /** Current Tier (1-based); only increases. */
   tier: number;
   /** Simulated seconds. */

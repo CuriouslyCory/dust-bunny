@@ -50,9 +50,15 @@ export const TUNING = {
     maxPerPass: 24,
     /** Debris smaller than radius × this does not count as meaningful (and may be culled). */
     meaningfulRatio: 0.12,
-    /** Spawn annulus in multiples of the camera view radius. */
-    spawnInner: 1.0,
+    /**
+     * Spawn distance band in multiples of the camera view radius. Spawn points must also be off
+     * screen (camera footprint test), so the inner bound can sit inside the view radius: the
+     * floor behind the camera (bottom of the screen) is hidden from ~0.5 view radii.
+     */
+    spawnInner: 0.45,
     spawnOuter: 1.6,
+    /** Random spawn points tried per wanted spawn (most get rejected late in the Run). */
+    triesPerSpawn: 8,
     /** Fraction of spawns that may be slightly-too-big "next" Debris (Obstacles for now). */
     obstacleShare: 0.15,
     /** Out-of-view Debris smaller than radius × this is culled. */

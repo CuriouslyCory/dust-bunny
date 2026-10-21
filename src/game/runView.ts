@@ -77,6 +77,11 @@ export class RunView {
     const z = lerp(b.prevZ, b.z, alpha);
     const r = lerp(b.prevRadius, b.radius, alpha);
     rig.update(frameDt, x, z, r, this.run.tier);
+    const cam = rig.camera;
+    const vi = (this.run.viewInfo ??= { distance: rig.distance, aspect: cam.aspect, fovDeg: cam.fov });
+    vi.distance = rig.distance;
+    vi.aspect = cam.aspect;
+    vi.fovDeg = cam.fov;
     this.house.update(frameDt, rig.camera.position, x, r, z, r);
     const fov = TUNING.camera.fov;
     this.puffs.update(frameDt, viewportHeight, fov);

@@ -17,6 +17,51 @@ export function viewRadiusFor(radius: number, tier: number): number {
   return cameraDistanceFor(radius, tier) * TUNING.camera.viewRadiusFactor;
 }
 
+/** What the render camera currently frames; RunView refreshes it every frame (null headless). */
+export interface ViewInfo {
+  /** Camera distance from its target (cm). */
+  distance: number;
+  /** Viewport width / height. */
+  aspect: number;
+  /** Vertical field of view (degrees). */
+  fovDeg: number;
+}
+
+/** Assumed framing when no renderer reports one (tests, pnpm sim): a wide desktop window. */
+export const DEFAULT_VIEW_ASPECT = 16 / 9;
+
+/**
+ * True if the floor point at (dx, dz) from the camera target is on screen (fixed yaw/pitch
+ * chase camera). The visible floor is a trapezoid: short towards the camera (bottom of the
+ * screen, about 0.43 × distance) and wide away from it. `margin` (cm) grows the test so a
+ * Debris disc of that radius poking in at an edge counts as visible.
+ */
+export function floorPointVisible(dx: number, dz: number, view: ViewInfo, margin = 0): boolean {
+  if (margin > 0) {
+    return (
+      floorPointVisible(dx, dz, view) ||
+      floorPointVisible(dx + margin, dz, view) ||
+      floorPointVisible(dx - margin, dz, view) ||
+      floorPointVisible(dx, dz + margin, view) ||
+      floorPointVisible(dx, dz - margin, view)
+    );
+  }
+  const c = TUNING.camera;
+  const p = (c.pitchDeg * Math.PI) / 180;
+  const sy = Math.sin(c.yaw);
+  const cy = Math.cos(c.yaw);
+  const ahead = -(dx * sy + dz * cy);
+  const side = dx * cy - dz * sy;
+  const d = view.distance;
+  const h = ahead + d * Math.cos(p);
+  const height = d * Math.sin(p);
+  const depth = height * Math.sin(p) + h * Math.cos(p);
+  if (depth <= 0) return false;
+  const up = h * Math.sin(p) - height * Math.cos(p);
+  const t = Math.tan(((view.fovDeg * Math.PI) / 180) / 2);
+  return Math.abs(up) <= depth * t && Math.abs(side) <= depth * t * view.aspect;
+}
+
 export class CameraRig {
   distance: number;
   readonly target = new Vector3();

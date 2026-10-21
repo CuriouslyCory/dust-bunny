@@ -4,7 +4,7 @@
  * meaningful absorbable Debris around the Bunny near a target by spawning outside the
  * camera view, and culls far-away Debris that has become too small to matter.
  */
-import { len2, rectContains } from '../core/math';
+import { len2 } from '../core/math';
 import type { Rng } from '../core/rng';
 import { roomWeight, type DebrisType } from '../data/debris';
 import { tierForRadius } from '../data/tiers';
@@ -14,7 +14,8 @@ import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
-import { viewRadiusFor } from './camera';
+import { cameraDistanceFor, DEFAULT_VIEW_ASPECT, floorPointVisible, viewRadiusFor, type ViewInfo } from './camera';
+import { passesUnder } from './collision';
 
 /** True if a Debris disc of radius `size` can sit at (x, z): inside a room, clear of walls and solid furniture. */
 export function isFloorFree(house: HouseLayout, x: number, z: number, size: number): RoomType | null {
@@ -29,6 +30,27 @@ export function isFloorFree(house: HouseLayout, x: number, z: number, size: numb
     }
   }
   return room.type;
+}
+
+/**
+ * True if a Bunny of `radius` can touch a Debris disc of `size` at (x, z): the Debris is not
+ * tucked under furniture the Bunny is too big to roll under (e.g. lint under the bed once the
+ * Bunny outgrew the gap). Debris poking out past the furniture edge stays reachable.
+ */
+export function reachableBy(house: HouseLayout, x: number, z: number, size: number, radius: number): boolean {
+  for (const o of house.obstacles) {
+    if (o.kind !== 'furniture' || passesUnder(radius, o)) continue;
+    const r = o.rect;
+    if (x > r.minX + size && x < r.maxX - size && z > r.minZ + size && z < r.maxZ - size) return false;
+  }
+  return true;
+}
+
+/** Framing to keep spawns out of: the live camera (if rendering), never tighter than the Tier's target framing. */
+export function spawnView(run: Run): ViewInfo {
+  const target = cameraDistanceFor(run.bunny.radius, run.tier);
+  const v = run.viewInfo;
+  return v ? { ...v, distance: Math.max(v.distance, target) } : { distance: target, aspect: DEFAULT_VIEW_ASPECT, fovDeg: TUNING.camera.fov };
 }
 
 export class DebrisSpawner implements System {
@@ -115,25 +137,34 @@ export class DebrisSpawner implements System {
     const viewR = viewRadiusFor(r, run.tier);
     const outer = viewR * s.spawnOuter;
     const inner = viewR * s.spawnInner;
+    const view = spawnView(run);
 
     this.scratch.length = 0;
     debris.query(bunny.x, bunny.z, outer, this.scratch);
     let meaningful = 0;
-    for (const d of this.scratch) if (d.size >= r * s.meaningfulRatio && d.size <= r * ratio) meaningful++;
+    // Only count Debris the Bunny can actually get to (not stranded under the bed it outgrew).
+    for (const d of this.scratch) if (d.size >= r * s.meaningfulRatio && d.size <= r * ratio && reachableBy(house, d.x, d.z, d.size, r)) meaningful++;
     let want = Math.min(s.maxPerPass, s.targetCount - meaningful);
     if (want <= 0) return;
 
+    // Sample the part of the house within `outer` that is off screen. Late in the Run the view
+    // covers most of the house, so sample the clipped box rather than a ring (which would mostly
+    // land outside the walls) and keep whatever slivers are hidden (usually behind the camera).
+    const bd = house.bounds;
+    const x0 = Math.max(bd.minX, bunny.x - outer);
+    const x1 = Math.min(bd.maxX, bunny.x + outer);
+    const z0 = Math.max(bd.minZ, bunny.z - outer);
+    const z1 = Math.min(bd.maxZ, bunny.z + outer);
     const types = debris.types;
-    for (let tries = 0; want > 0 && tries < s.maxPerPass * 4 && !debris.full; tries++) {
-      const a = this.rng.range(0, Math.PI * 2);
-      const d = Math.sqrt(this.rng.range((inner / outer) ** 2, 1)) * outer;
-      const x = bunny.x + Math.cos(a) * d;
-      const z = bunny.z + Math.sin(a) * d;
-      if (!rectContains(house.bounds, x, z)) continue;
+    for (let tries = 0; want > 0 && tries < s.maxPerPass * s.triesPerSpawn && !debris.full; tries++) {
+      const x = this.rng.range(x0, x1);
+      const z = this.rng.range(z0, z1);
+      const dist = len2(x - bunny.x, z - bunny.z);
+      if (dist > outer || dist < inner) continue;
       const room = roomAt(house, x, z);
       if (!room) continue;
       const t = this.rng.weighted(types, (tt) => DebrisSpawner.spawnWeight(tt, r, ratio, tier, room.type));
-      if (!t || !isFloorFree(house, x, z, t.size)) continue;
+      if (!t || floorPointVisible(x - bunny.x, z - bunny.z, view, t.size * 1.2) || !isFloorFree(house, x, z, t.size) || !reachableBy(house, x, z, t.size, r)) continue;
       debris.spawn(this.typeIndex(run, t), x, z, this.rng);
       want--;
     }

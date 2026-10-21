@@ -26,6 +26,8 @@ export class Bunny {
   impulseZ = 0;
   radius: number;
   prevRadius: number;
+  /** Lateral squeeze while passing a doorway (wall collision radius / radius; 1 = none). */
+  squeeze = 1;
   maxRadius: number;
   health: number;
   /** Seconds of remaining invulnerability. */

@@ -155,6 +155,7 @@ export class BunnyView {
   private time = 0;
   private readonly stretch = new Spring(90, 9);
   private readonly squash = new Spring(110, 8);
+  private squeezeView = 1;
   private wasDashing = false;
   private readonly disposables = new Disposables();
 
@@ -400,10 +401,12 @@ export class BunnyView {
     this.wasDashing = b.dashing;
     const st = Math.max(-0.35, Math.min(0.5, this.stretch.step(dt) + speedN * 0.06));
     const sq = Math.max(-0.3, Math.min(0.35, this.squash.step(dt) + Math.sin(this.time * 2.4) * 0.012));
-    const sz = (1 + st) * (1 + sq * 0.5);
+    // Squeezing through a doorway: narrower across, longer along the heading (volume kept).
+    this.squeezeView = lerp(this.squeezeView, b.squeeze, Math.min(1, dt * 12));
+    const sz = ((1 + st) * (1 + sq * 0.5)) / this.squeezeView;
     const sxy = 1 / Math.sqrt(1 + st);
     const sy = sxy * (1 - sq);
-    const sx = sxy * (1 + sq * 0.5);
+    const sx = sxy * (1 + sq * 0.5) * this.squeezeView;
     this.body.scale.set(sx, sy, sz);
     this.body.rotation.y = this.heading;
     this.root.position.set(x, r * sy, z);
