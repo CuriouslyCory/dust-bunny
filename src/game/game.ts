@@ -1,0 +1,225 @@
+/**
+ * Game: owns the renderer, scene, loop, input, event bus, screens and the current Run.
+ * State machine = the active screen (see ui/screens.ts): title → playing ↔ paused → results.
+ */
+import {
+  ACESFilmicToneMapping,
+  Color,
+  DirectionalLight,
+  Fog,
+  HemisphereLight,
+  PCFShadowMap,
+  PerspectiveCamera,
+  Plane,
+  Raycaster,
+  Scene,
+  SRGBColorSpace,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
+import { EventBus } from '../core/events';
+import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
+import { FixedLoop } from '../core/loop';
+import { randomSeed } from '../core/rng';
+import { DEFAULT_CHARACTER_ID } from '../data/characters';
+import { TUNING } from '../data/tuning';
+import { CameraRig } from '../systems/camera';
+import { addDefaultHudWidgets, Hud } from '../ui/hud';
+import { ScreenManager } from '../ui/screens';
+import { setMaxAnisotropy } from '../world/materials';
+import { Run, type RunConfig } from './run';
+import { RunView } from './runView';
+
+export interface GameOptions {
+  debug?: boolean;
+}
+
+const BACKGROUND = '#3b2f2a';
+
+export class Game {
+  readonly events = new EventBus();
+  readonly renderer: WebGLRenderer;
+  readonly scene = new Scene();
+  readonly camera: PerspectiveCamera;
+  readonly fog = new Fog(BACKGROUND, 100, 300);
+  readonly rig: CameraRig;
+  readonly loop: FixedLoop;
+  readonly input = new CompositeInput();
+  readonly screens: ScreenManager;
+  readonly hud: Hud;
+  readonly sun: DirectionalLight;
+  readonly debug: boolean;
+
+  run: Run | null = null;
+  view: RunView | null = null;
+  /** Default config for the next Run (character select / shop write here). */
+  nextRunConfig: Partial<RunConfig> = {};
+
+  /** Screen that paused the Run, if it is paused mid-Run. */
+  private pausedBy: string | null = null;
+  private readonly raycaster = new Raycaster();
+  private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
+
+  constructor(
+    readonly canvas: HTMLCanvasElement,
+    readonly uiLayer: HTMLElement,
+    opts: GameOptions = {},
+  ) {
+    this.debug = !!opts.debug;
+    this.renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.outputColorSpace = SRGBColorSpace;
+    this.renderer.toneMapping = ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = PCFShadowMap;
+    setMaxAnisotropy(Math.min(8, this.renderer.capabilities.getMaxAnisotropy()));
+
+    this.scene.background = new Color(BACKGROUND);
+    this.scene.fog = this.fog;
+    this.camera = new PerspectiveCamera(TUNING.camera.fov, 1, 0.1, 1000);
+    this.rig = new CameraRig(this.camera, this.fog, 1, 1);
+
+    this.scene.add(new HemisphereLight('#fff4e0', '#6b5a4a', 1.4));
+    this.sun = new DirectionalLight('#fff1d6', 2.2);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.scene.add(this.sun, this.sun.target);
+
+    this.input.add(new KeyboardInput(window, () => TUNING.camera.yaw));
+    this.input.add(
+      new PointerSteerInput(canvas, (x, y) => this.pickFloor(x, y), () => (this.run ? { x: this.run.bunny.x, z: this.run.bunny.z, radius: this.run.bunny.radius } : null)),
+    );
+
+    this.hud = new Hud(this);
+    addDefaultHudWidgets(this.hud, this);
+    this.hud.visible = false;
+    this.uiLayer.append(this.hud.el);
+    this.screens = new ScreenManager(this, uiLayer);
+
+    window.addEventListener('keydown', (e) => {
+      if (this.screens.handleKey(e)) e.preventDefault();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.simulating) this.go('paused');
+    });
+    window.addEventListener('resize', () => this.resize());
+    this.resize();
+
+    this.events.on('runEnded', (e) => this.go('results', e));
+    this.loop = new FixedLoop({ update: (dt) => this.update(dt), render: (a, fdt) => this.render(a, fdt) });
+  }
+
+  /** True if the active screen lets the Run simulate. */
+  get simulating(): boolean {
+    return !!this.run && !this.run.ended && !!this.screens.current?.simulate;
+  }
+
+  start(initialScreen = 'title'): void {
+    this.go(initialScreen);
+    this.loop.start();
+  }
+
+  /** Switch screen. Emits paused/resumed when simulation stops/starts mid-Run. */
+  go(id: string, params?: unknown): void {
+    const wasSim = this.simulating;
+    const prev = this.screens.go(id, params);
+    const def = this.screens.current!;
+    this.hud.visible = !!def.hud && !!this.run;
+    this.events.emit('screenChanged', { from: prev?.id ?? null, to: id });
+    const nowSim = this.simulating;
+    if (this.run && !this.run.ended) {
+      if (wasSim && !nowSim) {
+        this.pausedBy = id;
+        this.events.emit('paused', { reason: id });
+      } else if (nowSim && this.pausedBy) {
+        this.events.emit('resumed', { reason: this.pausedBy });
+        this.pausedBy = null;
+      }
+    }
+  }
+
+  /** Creates a fresh Run (disposing the old one) and switches to the playing screen. */
+  startRun(config: Partial<RunConfig> = {}): Run {
+    this.disposeRun();
+    this.pausedBy = null;
+    const full: RunConfig = {
+      seed: config.seed ?? this.nextRunConfig.seed ?? randomSeed(),
+      characterId: config.characterId ?? this.nextRunConfig.characterId ?? DEFAULT_CHARACTER_ID,
+      modifiers: [...(this.nextRunConfig.modifiers ?? []), ...(config.modifiers ?? [])],
+      perks: config.perks ?? this.nextRunConfig.perks,
+    };
+    this.nextRunConfig.seed = undefined;
+    const run = new Run(this.events, full);
+    run.input = this.input;
+    this.run = run;
+    this.view = new RunView(run, this.scene);
+    this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
+    this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId });
+    this.go('playing');
+    return run;
+  }
+
+  /** Ends the current Run as quit (→ results). */
+  quitRun(): void {
+    this.run?.end('quit');
+  }
+
+  disposeRun(): void {
+    this.view?.dispose();
+    this.run?.dispose();
+    this.view = null;
+    this.run = null;
+  }
+
+  pickFloor(clientX: number, clientY: number): { x: number; z: number } | null {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const p = new Vector3();
+    return this.raycaster.ray.intersectPlane(this.floorPlane, p) ? { x: p.x, z: p.z } : null;
+  }
+
+  private update(dt: number): void {
+    if (this.simulating) this.run!.update(dt);
+  }
+
+  private render(alpha: number, frameDt: number): void {
+    this.screens.update(frameDt);
+    if (this.view) {
+      this.view.render(this.simulating ? alpha : 1, frameDt, this.rig);
+      this.updateSun();
+    }
+    this.hud.update(frameDt);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private updateSun(): void {
+    const t = this.rig.target;
+    const d = this.rig.distance;
+    this.sun.position.set(t.x - d * 0.5, t.y + d * 1.2, t.z + d * 0.35);
+    this.sun.target.position.copy(t);
+    const cam = this.sun.shadow.camera;
+    const ext = d * 1.3;
+    if (Math.abs(cam.right - ext) > ext * 0.02) {
+      cam.left = -ext;
+      cam.right = ext;
+      cam.top = ext;
+      cam.bottom = -ext;
+      cam.near = d * 0.1;
+      cam.far = d * 4;
+      cam.updateProjectionMatrix();
+      this.sun.shadow.bias = -0.0005;
+      this.sun.shadow.normalBias = d * 0.002;
+    }
+  }
+
+  resize(): void {
+    const w = this.canvas.clientWidth || window.innerWidth;
+    const h = this.canvas.clientHeight || window.innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+}
