@@ -497,7 +497,7 @@ function absorbToasts(hud: Hud, game: Game): void {
 function bossBanner(hud: Hud, game: Game): void {
   let shownFor = -1;
   const warn = (name?: unknown): void => {
-    hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Robo-Vac 9000', variant: 'boss', duration: 3.2 });
+    hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Area boss', variant: 'boss', duration: 3.2 });
     hud.el.classList.add('boss-alert');
     setTimeout(() => hud.el.classList.remove('boss-alert'), 3200);
   };

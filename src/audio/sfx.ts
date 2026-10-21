@@ -34,7 +34,7 @@ export class Sfx {
   tierUp(tier: number): void {
     if (!this.gate('fanfare', 1.2, 2)) return;
     const a = this.a;
-    const root = 60 + Math.min(4, tier - 1) * 2;
+    const root = 60 + Math.min(6, tier - 1) * 2;
     const steps = [0, 4, 7, 12, 16];
     steps.forEach((s, i) => {
       a.tone({ type: 'triangle', freq: N(root + s), delay: i * 0.085, decay: 0.45, gain: 0.16 });
