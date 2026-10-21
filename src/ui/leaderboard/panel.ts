@@ -9,8 +9,10 @@
  */
 import type { GameEvents } from '../../core/events';
 import { CHARACTERS, getCharacter } from '../../data/characters';
+import { getDifficulty, isDifficultyId } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import { leaderboard as defaultClient, LeaderboardError, submissionFromRun, type LeaderboardClient, type LeaderboardEntry } from '../../net/leaderboard';
+import { DIFFICULTY_SCORE_MULTIPLIER } from '../../shared/difficulty';
 import { NAME_MAX_LENGTH } from '../../shared/leaderboard';
 import { h } from '../screens';
 import './leaderboard.css';
@@ -34,6 +36,17 @@ const fmtTime = (ms: number) => {
   const s = Math.floor(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
+
+/** Small badge after the Bunny name for non-casual entries (casual and unknown show none). */
+function difficultyBadge(difficulty: unknown): HTMLElement | null {
+  if (!isDifficultyId(difficulty) || difficulty === 'casual') return null;
+  const label = getDifficulty(difficulty).name;
+  return h('span', {
+    className: `lb-diff lb-diff-${difficulty}`,
+    textContent: label,
+    title: `${label} difficulty (score ×${DIFFICULTY_SCORE_MULTIPLIER[difficulty]})`,
+  });
+}
 
 export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): LeaderboardPanel {
   const client = opts.client ?? defaultClient;
@@ -91,12 +104,13 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
   }
 
   function row(e: LeaderboardEntry, rank: number | string, mine: boolean): HTMLTableRowElement {
+    const badge = difficultyBadge(e.difficulty);
     const tr = h(
       'tr',
       { className: mine ? 'lb-mine' : '' },
       h('td', { textContent: String(rank) }),
       h('td', { className: 'lb-n', textContent: e.name }),
-      h('td', { textContent: getCharacter(e.character).name }),
+      h('td', { className: 'lb-bunny' }, getCharacter(e.character).name, ...(badge ? [badge] : [])),
       h('td', { className: 'lb-score', textContent: e.score.toLocaleString() }),
       h('td', { textContent: e.victory ? '★' : String(e.tierReached), title: getTier(e.tierReached).name }),
       h('td', { textContent: fmtTime(e.durationMs) }),

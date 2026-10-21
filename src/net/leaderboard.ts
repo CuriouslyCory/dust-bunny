@@ -8,6 +8,7 @@
  *   const { rank, entry, online } = await submitScore(submissionFromRun(stats, reason, name));
  */
 import type { RunEndReason, RunStats } from '../game/runStats';
+import { DEFAULT_DIFFICULTY, isDifficultyId } from '../shared/difficulty';
 import {
   cleanName,
   compareEntries,
@@ -121,7 +122,11 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
     try {
       const raw = storage?.getItem(LOCAL_KEY);
       const parsed: unknown = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? (parsed as LeaderboardEntry[]).filter((e) => e && typeof e.score === 'number') : [];
+      if (!Array.isArray(parsed)) return [];
+      // Entries stored before Difficulty existed lack the field: they were casual Runs.
+      return (parsed as LeaderboardEntry[])
+        .filter((e) => e && typeof e.score === 'number')
+        .map((e) => (isDifficultyId(e.difficulty) ? e : { ...e, difficulty: DEFAULT_DIFFICULTY }));
     } catch {
       return [];
     }
@@ -208,6 +213,7 @@ export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: s
     tierReached: stats.tierReached,
     durationMs: Math.round(stats.timeSec * 1000),
     victory: reason === 'victory',
+    difficulty: stats.difficulty ?? DEFAULT_DIFFICULTY,
   };
   return { name, character: stats.characterId, ...fields, score: computeScore(fields) };
 }

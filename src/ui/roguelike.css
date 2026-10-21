@@ -281,6 +281,29 @@
   color: var(--berry-700);
 }
 
+/* Difficulty picker, between the cards and the action row. */
+.char-diff-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 16px;
+  margin-top: 14px;
+}
+
+.char-diff.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.char-diff-desc {
+  margin: 0;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
 /* ── Perk draft ───────────────────────────────────────────── */
 .perk-draft {
   width: min(900px, 100%);
@@ -559,6 +582,21 @@
   .char-detail .char-traits li {
     break-inside: avoid;
   }
+  .char-diff-row {
+    margin-top: 8px;
+  }
+  .char-diff.field {
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .char-diff .segment {
+    padding: 6px 8px;
+    min-height: 30px;
+  }
+  .char-diff-desc {
+    font-size: var(--fs-xs);
+    text-align: center;
+  }
   .char-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -666,6 +704,10 @@
     min-width: 200px;
   }
   .char-select > .key-hint {
+    display: none;
+  }
+  /* No room for the Difficulty blurb here: each segment's tooltip carries it. */
+  .char-diff-desc {
     display: none;
   }
 

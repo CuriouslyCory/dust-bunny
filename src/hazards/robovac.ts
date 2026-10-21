@@ -87,43 +87,47 @@ export class RoboVac9000 extends BaseHazard {
     switch (this.state) {
       case 'intro':
         if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
-        if (this.timer <= 0) this.enter('hunt', randomIn(this.rng, c.huntTime));
+        if (this.timer <= 0) {
+          // First summon comes sooner than the rest (the constructor has no Run for the Difficulty).
+          this.summonTimer = this.attackTime(run, c.summonInterval * 0.6);
+          this.enter('hunt', randomIn(this.rng, c.huntTime));
+        }
         break;
       case 'hunt': {
         // Hidden Bunny (Dust Cloud): wander instead of chasing.
         if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
         else this.yaw += Math.sin(this.time * 0.7) * dt;
-        this.drive(run, c.huntSpeed * dt, radius);
+        this.drive(run, this.speed(run, c.huntSpeed) * dt, radius);
         if (!bunnySheltered(run, c.height)) {
           const reach = radius + suctionReachFor(c.suctionReach, b.stats.get('suctionMultiplier'));
           applySuction(run, this.x, this.z, c.suctionStrength, suctionFalloff(dist - b.radius, radius, reach), dt);
         }
         this.summonTimer -= dt;
         if (this.summonTimer <= 0) {
-          this.summonTimer = c.summonInterval;
+          this.summonTimer = this.attackTime(run, c.summonInterval);
           this.summon(run);
         }
         if (this.timer <= 0 && dist < c.chargeTrigger && canTarget(run) && onScreen(run, this.x, this.z)) {
-          this.enter('telegraph', c.telegraph);
+          this.enter('telegraph', this.attackTime(run, c.telegraph));
           this.yaw = yawOf(dx, dz);
           this.chargeDirX = Math.sin(this.yaw);
           this.chargeDirZ = Math.cos(this.yaw);
           this.lane.visible = true;
-          this.emitTelegraph(run, 'charge', c.telegraph);
+          this.emitTelegraph(run, 'charge', this.timer);
         }
         break;
       }
       case 'telegraph':
         this.lane.place(this.x, this.z, this.yaw);
         this.lane.root.scale.set(this.scale, 1, 1);
-        this.lane.pulse(this.time, 1 - this.timer / c.telegraph);
+        this.lane.pulse(this.time, 1 - this.timer / this.attackTime(run, c.telegraph));
         if (this.timer <= 0) {
           this.enter('charge', 99);
           this.charged = 0;
         }
         break;
       case 'charge': {
-        const step = c.chargeSpeed * dt;
+        const step = this.speed(run, c.chargeSpeed) * dt;
         const m = this.drive(run, step, radius, this.chargeDirX, this.chargeDirZ);
         this.charged += step;
         this.lane.setOpacity(0.25);

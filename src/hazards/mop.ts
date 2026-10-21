@@ -74,7 +74,7 @@ export class Mop extends BaseHazard {
     }
 
     // Enough puddles to cover the trail at the fastest patrol speed (the house Mop keeps 60 cm/s).
-    const fastest = Math.max(60, Math.max(...cfg.speed) * 1.2);
+    const fastest = Math.max(60, Math.max(...cfg.speed) * 1.2) * run.difficulty.hazardSpeed;
     this.maxPuddles = Math.ceil((cfg.trailLife * fastest) / cfg.trailSpacing) + 4;
     const geom = new CircleGeometry(1, 20);
     geom.rotateX(-Math.PI / 2);

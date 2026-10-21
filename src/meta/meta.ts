@@ -1,8 +1,9 @@
 /**
  * Meta-progression on top of SaveStore: Fluff wallet, Upgrade purchases, Run awards,
- * last Character and settings. `getMeta()` returns the browser singleton (localStorage).
+ * last Character and Difficulty, and settings. `getMeta()` returns the browser singleton (localStorage).
  */
 import type { GameEvents } from '../core/events';
+import type { DifficultyId } from '../data/difficulty';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
 import { fluffForRun } from './fluff';
@@ -96,6 +97,13 @@ export class MetaProgress {
     if (this.store.data.lastCharacterId === id) return;
     this.store.update((d) => {
       d.lastCharacterId = id;
+    });
+  }
+
+  setLastDifficulty(id: DifficultyId): void {
+    if (this.store.data.lastDifficulty === id) return;
+    this.store.update((d) => {
+      d.lastDifficulty = id;
     });
   }
 

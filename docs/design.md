@@ -96,6 +96,18 @@ A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absor
 
 Each Character has a distinct colour and fur look.
 
+## Difficulty
+
+Picked on Character select (↑/↓ or the Difficulty switch), remembered in the save; `?difficulty=casual|arcade|hardcore` overrides it. Tuning lives in `src/data/difficulty.ts`.
+
+| Difficulty | Hazard speed | Alive budget | Spawn interval | Grace period | Telegraphs, cooldowns, summons | Hearts | Pickups | Heal on new area | Fluff | Score |
+|------------|--------------|--------------|----------------|--------------|--------------------------------|--------|---------|------------------|-------|-------|
+| Casual (default) | ×1   | ×1    | ×1   | ×1    | ×1    | —  | ×1   | 1 | ×1    | ×1    |
+| Arcade           | ×1.2 | ×1.25 | ×0.8 | ×0.6  | ×0.85 | —  | ×1   | 1 | ×1.25 | ×1.25 |
+| Hardcore         | ×1.4 | ×1.6  | ×0.6 | ×0.35 | ×0.7  | −1 (min 1) | ×0.7 | 0 | ×1.6 | ×1.6 |
+
+Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweeps and spray droplets. Casual is the original balance.
+
 ## Upgrades
 
 **Pickups (temporary, timed, glowing on the floor):** Static Charge (magnet pull, 10 s), Sugar Rush (+50 % speed, 8 s), Bubble Wrap (blocks one hit; stacks up to 3 charges), Glue Dab (×2 growth, 10 s), Crumb Cake (heal 1), Dust Cloud (Hazards ignore you, 6 s).
@@ -104,11 +116,11 @@ Each Character has a distinct colour and fur look.
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(min(maxRadius, 300) × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was).
+Fluff earned per Run ≈ `floor(min(maxRadius, 300) × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×1.25, Hardcore ×1.6).
 
 ## Screens
 
-Title → Character select → Run (HUD) → Perk draft (modal on Tier-up) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, leaderboard name entry) → Shop → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion) and a How-to-Play panel.
+Title → Character select (and Difficulty) → Run (HUD) → Perk draft (modal on Tier-up) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, leaderboard name entry) → Shop → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion) and a How-to-Play panel.
 
 HUD: hearts, radius readout, progress bar to next Tier with Tier name, Dash cooldown, active Pickup icons with timers, Perk icons, small Tier-up/absorb toasts ("+ Sock!").
 

@@ -4,7 +4,8 @@
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
  * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
  * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
- * at Tier 9 in the city. Entering a new area resets the director (grace period, boss).
+ * at Tier 9 in the city. Entering a new area resets the director (grace period, boss). The Run's
+ * Difficulty scales the budget, spawn interval and grace period.
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -34,6 +35,7 @@ import {
   UPRIGHT_VACUUM,
   type TierSpawnTable,
 } from '../data/hazards';
+import { DIFFICULTIES, type DifficultyDef } from '../data/difficulty';
 import { tierProgress } from '../data/tiers';
 import type { AreaId } from '../world/types';
 import type { Run } from '../game/run';
@@ -69,10 +71,10 @@ export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable
   return t[Math.min(Math.max(tier - first + 1, 1), t.length) - 1]!;
 }
 
-/** Alive Hazard budget for a Tier at `progress` (0..1) through it. */
-export function hazardBudget(tier: number, progress: number, area: AreaId = 'house'): number {
+/** Alive Hazard budget for a Tier at `progress` (0..1) through it, × the Difficulty's `scale`. */
+export function hazardBudget(tier: number, progress: number, area: AreaId = 'house', scale = 1): number {
   const [a, b] = spawnTable(tier, area).budget;
-  return Math.round(lerp(a, b, Math.min(1, Math.max(0, progress))));
+  return Math.round(lerp(a, b, Math.min(1, Math.max(0, progress))) * scale);
 }
 
 /** Seconds between spawns for a Tier at `progress` through it. */
@@ -96,9 +98,10 @@ export function pickHazardType(
   rng: Rng,
   exclude: readonly string[] = DIRECTOR_EXCLUDE,
   area: AreaId = 'house',
+  budgetScale = 1,
 ): string | null {
   const total = Object.entries(alive).reduce((n, [id, c]) => (exclude.includes(id) ? n : n + c), 0);
-  if (total >= hazardBudget(tier, progress, area)) return null;
+  if (total >= hazardBudget(tier, progress, area, budgetScale)) return null;
   const weights = spawnWeights(tier, alive, area);
   const ids = Object.keys(weights).filter((id) => weights[id]! > 0);
   return rng.weighted(ids, (id) => weights[id]!) ?? null;
@@ -111,14 +114,19 @@ export function spawnRing(viewRadius: number, hazardRadius: number): [number, nu
 }
 
 export class HazardDirector {
-  private spawnTimer = DIRECTOR.graceSeconds;
+  private spawnTimer: number;
   private farTime = new Map<number, number>();
   bossSpawned = false;
   private bossTimer = -1;
   bossId: number | null = null;
   private area: AreaId = 'house';
 
-  constructor(private readonly rng: Rng) {}
+  constructor(
+    private readonly rng: Rng,
+    private readonly difficulty: DifficultyDef = DIFFICULTIES.casual,
+  ) {
+    this.spawnTimer = DIRECTOR.graceSeconds * difficulty.graceSeconds;
+  }
 
   update(dt: number, run: Run, mgr: HazardManager): void {
     if (run.area !== this.area) this.enterArea(run.area);
@@ -136,10 +144,11 @@ export class HazardDirector {
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
     const progress = tierProgress(b.radius);
-    this.spawnTimer = spawnInterval(run.tier, progress, run.area);
+    const d = this.difficulty;
+    this.spawnTimer = spawnInterval(run.tier, progress, run.area) * d.spawnInterval;
     const alive: Record<string, number> = {};
     for (const h of mgr.hazards) if (!h.dead) alive[h.def.id] = (alive[h.def.id] ?? 0) + 1;
-    const id = pickHazardType(run.tier, progress, alive, this.rng, DIRECTOR_EXCLUDE, run.area);
+    const id = pickHazardType(run.tier, progress, alive, this.rng, DIRECTOR_EXCLUDE, run.area, d.hazardBudget);
     if (!id) return;
     const fp = SPAWN_FOOTPRINT[id] ?? { radius: 15, height: 20 };
     const spot = this.findSpot(run, fp.radius, fp.height, ...spawnRing(viewR, fp.radius));
@@ -149,7 +158,7 @@ export class HazardDirector {
   /** New area: fresh grace period and the new area's boss still to come. */
   private enterArea(area: AreaId): void {
     this.area = area;
-    this.spawnTimer = AREA_DIRECTORS[area].graceSeconds;
+    this.spawnTimer = AREA_DIRECTORS[area].graceSeconds * this.difficulty.graceSeconds;
     this.farTime.clear();
     this.bossSpawned = false;
     this.bossTimer = -1;

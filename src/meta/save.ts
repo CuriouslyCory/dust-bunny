@@ -5,8 +5,10 @@
  * defaults field by field, and an unversioned legacy object is migrated. When the stored value
  * is corrupt, SaveStore copies it to `<key>:corrupt` before overwriting it on the next save.
  *
- * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate().
+ * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
+ * fields with a sanitised default (like `lastDifficulty`) don't need a bump.
  */
+import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
 export const SAVE_VERSION = 1;
@@ -36,6 +38,8 @@ export interface SaveData {
   /** Upgrade id → owned level. */
   upgrades: Record<string, number>;
   lastCharacterId: string | null;
+  /** Difficulty picked on character select (unknown values read as casual). */
+  lastDifficulty: DifficultyId;
   settings: SaveSettings;
   stats: SaveStats;
 }
@@ -48,6 +52,7 @@ export function defaultSave(): SaveData {
     fluff: 0,
     upgrades: {},
     lastCharacterId: null,
+    lastDifficulty: DEFAULT_DIFFICULTY,
     settings: {},
     stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0 },
   };
@@ -71,6 +76,7 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
   d.fluff = int(o.fluff);
   if (isObj(o.upgrades)) for (const [k, v] of Object.entries(o.upgrades)) if (int(v) > 0) d.upgrades[k] = int(v);
   d.lastCharacterId = typeof o.lastCharacterId === 'string' ? o.lastCharacterId : null;
+  d.lastDifficulty = isDifficultyId(o.lastDifficulty) ? o.lastDifficulty : DEFAULT_DIFFICULTY;
   d.settings = sanitizeSettings(o.settings);
   const s = isObj(o.stats) ? o.stats : {};
   d.stats = {

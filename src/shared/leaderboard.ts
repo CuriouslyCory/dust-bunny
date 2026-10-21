@@ -3,6 +3,7 @@
  * function (`api/leaderboard.ts`): types, name sanitising and submission validation.
  * Pure and dependency-free (see the note in `./score.ts` about imports).
  */
+import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
 import { computeScore, SCORE_MAX_TIER, scoreTierForRadius } from './score.js';
 
 /** Character ids accepted by the API, mirrored from `src/data/characters.ts` (test-synced). */
@@ -36,6 +37,8 @@ export interface ScoreSubmission {
   tierReached: number;
   durationMs: number;
   victory: boolean;
+  /** Difficulty id; optional for older clients (missing counts as casual). */
+  difficulty?: string;
   score: number;
 }
 
@@ -50,12 +53,14 @@ export interface LeaderboardEntry {
   tierReached: number;
   durationMs: number;
   victory: boolean;
+  difficulty: DifficultyId;
   /** ISO timestamp. */
   createdAt: string;
 }
 
-export interface ValidSubmission extends Omit<ScoreSubmission, 'character'> {
+export interface ValidSubmission extends Omit<ScoreSubmission, 'character' | 'difficulty'> {
   character: LeaderboardCharacter;
+  difficulty: DifficultyId;
   /** True if the name was replaced by the profanity filter. */
   nameCensored: boolean;
 }
@@ -131,6 +136,9 @@ export function validateSubmission(body: unknown): ValidationResult {
 
   if (!isLeaderboardCharacter(b.character)) return fail('character', `Unknown character; expected one of ${LEADERBOARD_CHARACTERS.join(', ')}.`);
 
+  const difficulty = b.difficulty === undefined ? DEFAULT_DIFFICULTY : b.difficulty;
+  if (!isDifficultyId(difficulty)) return fail('difficulty', `Unknown difficulty; expected one of ${DIFFICULTY_IDS.join(', ')}.`);
+
   const { maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score } = b;
   if (!isFiniteNumber(maxRadius) || maxRadius < BOUNDS.maxRadius.min || maxRadius > BOUNDS.maxRadius.max)
     return fail('maxRadius', `maxRadius must be between ${BOUNDS.maxRadius.min} and ${BOUNDS.maxRadius.max}.`);
@@ -156,12 +164,12 @@ export function validateSubmission(body: unknown): ValidationResult {
   if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec)
     return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the run duration.');
 
-  const expected = computeScore({ maxRadius, debrisAbsorbed, tierReached, durationMs, victory });
+  const expected = computeScore({ maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty });
   if (Math.abs(expected - score) > 1) return fail('score', 'score does not match the run stats.');
 
   return {
     ok: true,
-    value: { name, nameCensored: censored, character: b.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score: expected },
+    value: { name, nameCensored: censored, character: b.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected },
   };
 }
 
