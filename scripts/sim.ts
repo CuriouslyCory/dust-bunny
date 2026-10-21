@@ -7,6 +7,8 @@
  *
  * When an area boss falls (Robo-Vac 9000, Street Sweeper) the bot does not walk to the exit:
  * the Run moves straight to the next area (logged), so outdoor and city pacing are measured too.
+ * With --no-hazards a Run stops at the top Tier of the house / neighborhood (no boss to clear),
+ * but keeps rolling in the city until --minutes so growth towards the boss size is measured.
  *
  * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
  *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
@@ -504,7 +506,7 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < (run.area === 'house' ? 5 : run.area === 'neighborhood' ? 7 : 9)); i++) {
+    for (let i = 0; i < steps && !run.ended && (withHazards || run.area === 'city' || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
       run.update(dt);
       if (leaveArea) {
         leaveArea = false;

@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { rectContains, rectsOverlap } from '../core/math';
+import { AREAS } from '../data/areas';
+import { DEBRIS_TYPES, getDebrisType } from '../data/debris';
+import { TIERS } from '../data/tiers';
+import { BASE_BUNNY_STATS } from '../entities/stats';
 import { Run } from '../game/run';
-import { isFloorFree } from '../systems/spawner';
+import { DebrisSpawner, isFloorFree } from '../systems/spawner';
 import { CITY, generateCity } from './city';
 import { roomAt } from './house';
 import { generateNeighborhood } from './neighborhood';
-import { isCityZone } from './types';
+import { CITY_ZONE_TYPES, isCityZone } from './types';
 
 describe('city generation', () => {
   it('is deterministic per seed', () => {
@@ -34,7 +38,13 @@ describe('city generation', () => {
       // The Bunny arrives on free road, big enough for a Street-Sweeper-sized Bunny.
       expect(isFloorFree(c, c.spawn.x, c.spawn.z, CITY.debugStartRadius)).not.toBeNull();
       expect(rectContains(c.bounds, c.spawn.x, c.spawn.z)).toBe(true);
-      for (const p of c.debrisPlacements) expect(roomAt(c, p.x, p.z)).toBeDefined();
+      // Fixed Debris refers to real city types (plus the neighborhood's cars and benches) and lands in the map.
+      for (const p of c.debrisPlacements) {
+        const t = getDebrisType(p.typeId);
+        expect(t, p.typeId).toBeDefined();
+        if (p.typeId !== 'car' && p.typeId !== 'park_bench') expect(t!.area, p.typeId).toBe('city');
+        expect(roomAt(c, p.x, p.z)).toBeDefined();
+      }
       expect(c.exit).toBeUndefined();
     });
   }
@@ -60,6 +70,39 @@ describe('road to the city', () => {
     expect(run.neighborhoodCleared).toBe(true);
     expect(run.bunny.radius).toBeGreaterThanOrEqual(CITY.debugStartRadius);
     expect(run.tier).toBe(7);
-    expect(run.debris.count).toBeGreaterThan(0);
+    expect(run.debris.count).toBeGreaterThan(500);
   });
+});
+
+describe('city Debris catalogue', () => {
+  const city = DEBRIS_TYPES.filter((t) => t.area === 'city');
+  const ratio = BASE_BUNNY_STATS.absorbRatio;
+
+  it('only uses city zones and the city Tier band', () => {
+    const [lo, hi] = AREAS.city.tiers;
+    for (const t of city) {
+      expect(t.tiers[0], t.id).toBeGreaterThanOrEqual(lo);
+      expect(t.tiers[1], t.id).toBeLessThanOrEqual(hi);
+      for (const room of Object.keys(t.rooms)) expect(room === 'any' || isCityZone(room as never), `${t.id}.${room}`).toBe(true);
+    }
+  });
+
+  // Start, middle and end of each city Tier (Tier 7 from the arrival size, Tier 9 up to the boss size).
+  const bands: Array<[number, number[]]> = [
+    [7, [CITY.debugStartRadius, 275, TIERS[7]!.minRadius - 1]],
+    [8, [TIERS[7]!.minRadius, 460, TIERS[8]!.minRadius - 1]],
+    [9, [TIERS[8]!.minRadius, 700, 800]],
+  ];
+  for (const [tier, radii] of bands) {
+    for (const r of radii) {
+      it(`spawns absorbable, meaningful Debris for a Tier ${tier} Bunny at r=${r}`, () => {
+        const ids = new Set<string>();
+        for (const t of city) {
+          if (t.size > r * ratio) continue;
+          if (CITY_ZONE_TYPES.some((room) => DebrisSpawner.spawnWeight(t, r, ratio, tier, room) > 0)) ids.add(t.id);
+        }
+        expect(ids.size, [...ids].join(',')).toBeGreaterThanOrEqual(4);
+      });
+    }
+  }
 });

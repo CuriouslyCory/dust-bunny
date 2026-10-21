@@ -7,6 +7,7 @@
  * To add a type: append to DEBRIS_TYPES (or call registerDebrisType() before a Run starts).
  */
 import { zoneArea, type AreaId, type RoomType } from '../world/types';
+import { CITY_DEBRIS } from './cityDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 
 export type V3 = [number, number, number];
@@ -399,6 +400,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
     rooms: { kitchen: 3, living: 0.5 },
   },
   ...OUTDOOR_DEBRIS,
+  ...CITY_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */
