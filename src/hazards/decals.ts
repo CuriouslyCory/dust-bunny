@@ -11,6 +11,8 @@ export const DECAL_COLORS = {
   danger: '#ff3b30',
   warn: '#ffb020',
   suction: '#6fd3ff',
+  /** Leaf Blower blast. */
+  air: '#e6f6ff',
   wet: '#4aa3ff',
   absorbable: '#5cff8a',
 } as const;

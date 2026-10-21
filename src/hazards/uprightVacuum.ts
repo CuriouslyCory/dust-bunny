@@ -1,13 +1,20 @@
 /**
  * Upright Vacuum: slow, turns towards the Bunny, and cycles a strong suction cone out of its
  * intake. The cone is drawn on the floor: blinking amber while warming up, blue while on.
- * Contact: 2 damage, knockback, and it sucks some mass off the Bunny.
+ * Contact: 1 damage, knockback, and it sucks some mass off the Bunny.
+ *
+ * The Leaf Blower (outdoors) is the same Hazard in reverse (LEAF_BLOWER tuning, mode 'blow'):
+ * after the amber warm-up the cone blasts the Bunny away from the nozzle (stronger up close)
+ * and blows small Debris along. It only starts a blast while on screen.
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, UPRIGHT_VACUUM } from '../data/hazards';
+import { HAZARD_RECOIL, LEAF_BLOWER, UPRIGHT_VACUUM, type AirConeTuning } from '../data/hazards';
 import type { Run } from '../game/run';
+import { onScreen } from '../systems/camera';
+import { isFloorFree } from '../systems/spawner';
+import type { Debris } from '../entities/debris';
 import { BaseHazard } from './base';
-import { applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
+import { applyPush, applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 import { shedMass } from './shed';
@@ -26,6 +33,8 @@ export function inCone(ox: number, oz: number, yaw: number, halfAngle: number, r
   return Math.abs(wrapAngle(yawOf(dx, dz) - yaw)) <= halfAngle + slack;
 }
 
+const _debris: Debris[] = [];
+
 export class UprightVacuum extends BaseHazard {
   state: VacuumState = 'off';
   private timer: number;
@@ -37,23 +46,28 @@ export class UprightVacuum extends BaseHazard {
     x: number,
     z: number,
     private readonly rng: Rng,
+    private readonly cfg: AirConeTuning = UPRIGHT_VACUUM,
   ) {
-    super(id, def, x, z, UPRIGHT_VACUUM.size, 'upright_vacuum');
-    this.recoilHeight = UPRIGHT_VACUUM.height;
+    super(id, def, x, z, cfg.size, cfg.modelId);
+    this.recoilHeight = cfg.height;
     this.yaw = rng.range(-Math.PI, Math.PI);
-    this.timer = rng.range(0.5, UPRIGHT_VACUUM.off);
-    const c = UPRIGHT_VACUUM;
-    this.cone = this.addDecal(sectorDecal(0, c.coneRange, c.coneHalfAngle * 2, DECAL_COLORS.warn, 0.35));
+    this.timer = rng.range(0.5, cfg.off);
+    this.cone = this.addDecal(sectorDecal(0, cfg.coneRange, cfg.coneHalfAngle * 2, DECAL_COLORS.warn, 0.35));
     this.cone.visible = false;
   }
 
-  /** Intake point at the front of the base. */
+  get blows(): boolean {
+    return this.cfg.mode === 'blow';
+  }
+
+  /** Intake (or nozzle) point at the front. */
   private intake(): { x: number; z: number } {
-    return { x: this.x + Math.sin(this.yaw) * this.size * 0.7, z: this.z + Math.cos(this.yaw) * this.size * 0.7 };
+    const o = this.size * this.cfg.nozzleOffset;
+    return { x: this.x + Math.sin(this.yaw) * o, z: this.z + Math.cos(this.yaw) * o };
   }
 
   protected tick(dt: number, run: Run): void {
-    const c = UPRIGHT_VACUUM;
+    const c = this.cfg;
     const b = run.bunny;
     this.timer -= dt;
     if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(b.x - this.x, b.z - this.z), c.turnRate * dt);
@@ -64,14 +78,19 @@ export class UprightVacuum extends BaseHazard {
 
     if (this.timer <= 0) {
       if (this.state === 'off') {
-        this.state = 'warmup';
-        this.timer = c.warmup;
-        this.cone.setColor(DECAL_COLORS.warn);
-        this.emitTelegraph(run, 'suction', c.warmup);
+        // A blast is a ranged attack: only start it where the player can see the telegraph.
+        if (this.blows && !onScreen(run, this.x, this.z)) {
+          this.timer = 0.3;
+        } else {
+          this.state = 'warmup';
+          this.timer = c.warmup;
+          this.cone.setColor(DECAL_COLORS.warn);
+          this.emitTelegraph(run, this.blows ? 'blow' : 'suction', c.warmup);
+        }
       } else if (this.state === 'warmup') {
         this.state = 'on';
         this.timer = c.on;
-        this.cone.setColor(DECAL_COLORS.suction);
+        this.cone.setColor(this.blows ? DECAL_COLORS.air : DECAL_COLORS.suction);
       } else {
         this.state = 'off';
         this.timer = c.off * this.rng.range(0.8, 1.2);
@@ -86,25 +105,42 @@ export class UprightVacuum extends BaseHazard {
     if (this.state === 'warmup') this.cone.pulse(this.time, 1 - this.timer / c.warmup);
     else if (this.state === 'on') this.cone.setOpacity(0.28 + 0.1 * Math.sin(this.time * 14));
 
-    if (this.state === 'on' && !bunnySheltered(run, c.height)) {
-      if (inCone(it.x, it.z, this.yaw, c.coneHalfAngle, range, b.x, b.z, b.radius)) {
-        const d = Math.hypot(b.x - it.x, b.z - it.z) - b.radius;
-        applySuction(run, it.x, it.z, c.suctionStrength, suctionFalloff(d, 0, range), dt);
-      }
+    if (this.state !== 'on') return;
+    if (this.blows) this.blowDebris(dt, run, it.x, it.z, range);
+    if (bunnySheltered(run, c.height) || !inCone(it.x, it.z, this.yaw, c.coneHalfAngle, range, b.x, b.z, b.radius)) return;
+    const d = Math.hypot(b.x - it.x, b.z - it.z) - b.radius;
+    const falloff = suctionFalloff(d, 0, range);
+    if (this.blows) applyPush(run, it.x, it.z, c.suctionStrength, falloff, dt);
+    else applySuction(run, it.x, it.z, c.suctionStrength, falloff, dt);
+  }
+
+  /** Blows loose small Debris in the cone away from the nozzle (stronger up close). */
+  private blowDebris(dt: number, run: Run, ox: number, oz: number, range: number): void {
+    const c = this.cfg;
+    _debris.length = 0;
+    for (const d of run.debris.query(ox, oz, range, _debris)) {
+      if (!d.alive || d.size > c.blowDebrisSize || !inCone(ox, oz, this.yaw, c.coneHalfAngle, range, d.x, d.z)) continue;
+      const dx = d.x - ox;
+      const dz = d.z - oz;
+      const dist = Math.hypot(dx, dz) || 1;
+      const step = c.debrisSpeed * suctionFalloff(dist, 0, range) * dt;
+      const nx = d.x + (dx / dist) * step;
+      const nz = d.z + (dz / dist) * step;
+      if (step > 0 && isFloorFree(run.house, nx, nz, d.size)) run.debris.move(d, nx, nz);
     }
   }
 
   onContact(run: Run): void {
-    const c = UPRIGHT_VACUUM;
+    const c = this.cfg;
     if (bunnySheltered(run, c.height)) return;
     if (!this.stunned && this.recoilFor <= 0 && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii })) {
-      // It chokes on the Bunny and cuts out, so the suction can't drag it straight back in
-      // for a second 2-damage hit as soon as the i-frames end.
+      // It chokes on the Bunny and cuts out, so the air can't drag (or shove) it straight back
+      // for a second hit as soon as the i-frames end.
       this.state = 'off';
       this.timer = c.off;
       this.cone.visible = false;
       this.recoilFor = HAZARD_RECOIL;
-      if (run.bunny.alive) shedMass(run, this.rng, c.shedFraction, this.def.id);
+      if (run.bunny.alive && c.shedFraction > 0) shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
     pushBunnyOut(run, this.x, this.z, this.size);
   }
@@ -118,6 +154,18 @@ export const uprightVacuumDef = hazardRegistry.register({
   mass: UPRIGHT_VACUUM.mass,
   modelId: 'upright_vacuum',
   create(_run, x, z, id, rng) {
-    return new UprightVacuum(id, this, x, z, rng);
+    return new UprightVacuum(id, this, x, z, rng, UPRIGHT_VACUUM);
+  },
+});
+
+export const leafBlowerDef = hazardRegistry.register({
+  id: 'leaf_blower',
+  name: 'Leaf Blower',
+  minTier: 5,
+  spawnWeight: 1,
+  mass: LEAF_BLOWER.mass,
+  modelId: LEAF_BLOWER.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, LEAF_BLOWER);
   },
 });

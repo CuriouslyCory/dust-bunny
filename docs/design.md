@@ -54,9 +54,19 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Spray Bottle   | 2         | 8                 | stationary turret, fires mist droplets at the Bunny | 1 per droplet |
 | Mop            | 3         | 15                | follows a path, leaves a wet trail that slows | 1 on contact; trail slows |
 | Upright Vacuum | 4         | 30                | slow, strong suction cone in front | 1, sheds mass |
-| Robo-Vac 9000  | 5 (boss)  | 30                | hunts the Bunny, telegraphed charge attacks | 1, sheds mass |
+| Robo-Vac 9000  | 5 (boss)  | 36                | hunts the Bunny, telegraphed charge attacks | 1, sheds mass |
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 wins the Run.
+**Outdoors (the neighborhood, after the Robo-Vac 9000):**
+
+| Hazard         | From Tier | Size (cm, radius) | Absorbable at r | Behaviour | Damage |
+|----------------|-----------|-------------------|-----------------|-----------|--------|
+| Robotic Mower  | 5         | 55                | ≈ 79            | Roomba behaviour on a lawn scale, weak blade pull | 1 + knockback |
+| Sprinkler      | 5         | 45                | ≈ 64            | turret: head sweeps, aims a lane, fires a burst of water | 1 per droplet, brief slow |
+| Leaf Blower    | 5         | 45                | ≈ 64            | amber cone warm-up, then a blast that pushes the Bunny away and blows small Debris | 1 on contact |
+| Lawn Mower     | 6         | 65                | ≈ 93            | unmanned push mower patrolling a lane | 1 + knockback, sheds mass |
+| Street Sweeper | 7 (boss)  | 150               | ≈ 214 (≈ 155 after two chips) | hunts with suction, telegraphed charges, stunned by houses / trees, summons mini mowers | 1, sheds mass |
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood; absorbing the Street Sweeper wins the Run.
 
 ## Characters
 

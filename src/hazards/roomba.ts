@@ -1,17 +1,16 @@
 /**
  * Roomba: wanders, bounces off walls and furniture, turns at random, and pulls the Bunny in
  * with suction (a faint ring on the floor shows the reach). Contact: 1 damage + knockback.
- * The boss's mini Roombas reuse this with MINI_ROOMBA tuning.
+ * The boss's mini Roombas reuse this with MINI_ROOMBA tuning; outdoors the Robotic Mower
+ * (ROBO_MOWER, weak blade pull) and the Street Sweeper's mini mowers (MINI_MOWER) do too.
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MINI_ROOMBA, ROOMBA } from '../data/hazards';
+import { HAZARD_RECOIL, MINI_MOWER, MINI_ROOMBA, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, ringDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
-
-type RoombaTuning = typeof ROOMBA;
 
 export class Roomba extends BaseHazard {
   private turnTimer: number;
@@ -25,10 +24,9 @@ export class Roomba extends BaseHazard {
     private readonly rng: Rng,
     private readonly cfg: RoombaTuning,
   ) {
-    super(id, def, x, z, cfg.size, 'roomba');
+    super(id, def, x, z, cfg.size, cfg.modelId);
     this.recoilHeight = this.cfg.height;
-    const s = cfg.size / ROOMBA.size;
-    this.model.scale.setScalar(s);
+    this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.turnTimer = randomIn(rng, cfg.turnInterval);
     this.suctionRing = this.addDecal(ringDecal(0.97, 1, DECAL_COLORS.suction, 0.35, 64));
@@ -64,7 +62,7 @@ export class Roomba extends BaseHazard {
       this.yaw = wrapAngle(Math.atan2(dx, dz) + this.rng.range(-0.5, 0.5));
       this.turnTimer = randomIn(this.rng, this.cfg.turnInterval);
     }
-    this.spin('side_brush', dt * 14);
+    this.spin(this.cfg.spinNode, dt * this.cfg.spinRate);
 
     // Suction towards the Roomba centre.
     const b = run.bunny;
@@ -110,5 +108,29 @@ export const miniRoombaDef = hazardRegistry.register({
   modelId: 'roomba',
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_ROOMBA);
+  },
+});
+
+export const roboMowerDef = hazardRegistry.register({
+  id: 'robo_mower',
+  name: 'Robotic Mower',
+  minTier: 5,
+  spawnWeight: 1,
+  mass: ROBO_MOWER.mass,
+  modelId: ROBO_MOWER.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, ROBO_MOWER);
+  },
+});
+
+export const miniMowerDef = hazardRegistry.register({
+  id: 'mini_mower',
+  name: 'Mini Mower',
+  minTier: 7,
+  spawnWeight: 0,
+  mass: MINI_MOWER.mass,
+  modelId: MINI_MOWER.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, MINI_MOWER);
   },
 });

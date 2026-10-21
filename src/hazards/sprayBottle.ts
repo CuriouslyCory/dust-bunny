@@ -2,16 +2,21 @@
  * Spray Bottle: a stationary turret. When the Bunny is in range it turns to aim, telegraphs
  * with a red aim lane on the floor, then fires a burst of mist droplets that travel and
  * deal 1 damage each. Droplets stop at walls and tall furniture.
+ *
+ * The Sprinkler (outdoors) reuses it with SPRINKLER tuning: only its `head` node turns, it
+ * sweeps idly while the Bunny is out of range, and a water hit also soaks the Bunny (a brief
+ * `hazard:wet` slow, like the Mop's trail).
  */
-import { Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
+import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { SPRAY_BOTTLE, tierValue } from '../data/hazards';
+import { SPRAY_BOTTLE, SPRINKLER, tierValue, type TurretTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
 import { bunnySheltered, canTarget, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
+import { WET_SOURCE } from './mop';
 
 const dropletGeometry = new SphereGeometry(1, 10, 8);
 const dropletMaterial = new MeshStandardMaterial({ color: '#9fe3ff', emissive: '#3aa8ff', emissiveIntensity: 0.6, roughness: 0.1, transparent: true, opacity: 0.85 });
@@ -34,6 +39,9 @@ export class SprayBottle extends BaseHazard {
   private shotsLeft = 0;
   readonly droplets: Droplet[] = [];
   private readonly aimDecal;
+  /** Body facing when only `cfg.aimNode` turns. */
+  private readonly baseYaw: number;
+  private readonly aimNode: Object3D | null;
 
   constructor(
     id: number,
@@ -41,21 +49,24 @@ export class SprayBottle extends BaseHazard {
     x: number,
     z: number,
     private readonly rng: Rng,
+    private readonly cfg: TurretTuning = SPRAY_BOTTLE,
   ) {
-    super(id, def, x, z, SPRAY_BOTTLE.size, 'spray_bottle');
+    super(id, def, x, z, cfg.size, cfg.modelId);
     this.yaw = rng.range(-Math.PI, Math.PI);
-    this.aimDecal = this.addDecal(laneDecal(1, SPRAY_BOTTLE.dropletRadius * 4, DECAL_COLORS.danger, 0.5));
+    this.baseYaw = this.yaw;
+    this.aimNode = cfg.aimNode ? (this.model.getObjectByName(cfg.aimNode) ?? null) : null;
+    this.aimDecal = this.addDecal(laneDecal(1, cfg.dropletRadius * 4, DECAL_COLORS.danger, 0.5));
     this.aimDecal.visible = false;
   }
 
   protected tick(dt: number, run: Run): void {
-    const c = SPRAY_BOTTLE;
+    const c = this.cfg;
     const b = run.bunny;
     const dx = b.x - this.x;
     const dz = b.z - this.z;
     const dist = Math.hypot(dx, dz);
     const range = tierValue(c.range, run.tier);
-    // Only shoot from on screen, so the player can always see the bottle and its aim lane.
+    // Only shoot from on screen, so the player can always see the turret and its aim lane.
     const inRange = canTarget(run) && dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight) && onScreen(run, this.x, this.z);
     this.timer -= dt;
 
@@ -64,7 +75,9 @@ export class SprayBottle extends BaseHazard {
       this.state = 'idle';
       this.aimDecal.visible = false;
     }
-    if (canTarget(run) && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+    const sweeping = c.idleSpin > 0 && !inRange;
+    if (this.state === 'idle' && sweeping) this.yaw = wrapAngle(this.yaw + c.idleSpin * dt);
+    else if (canTarget(run) && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
     if (this.state === 'idle' && inRange && Math.abs(wrapAngle(yawOf(dx, dz) - this.yaw)) < 0.25) {
       this.state = 'telegraph';
       this.timer = tierValue(c.telegraph, run.tier);
@@ -99,7 +112,7 @@ export class SprayBottle extends BaseHazard {
   }
 
   private fire(run: Run, range: number): void {
-    const c = SPRAY_BOTTLE;
+    const c = this.cfg;
     const a = this.yaw + this.rng.range(-c.spread, c.spread);
     const speed = tierValue(c.dropletSpeed, run.tier);
     const mesh = new Mesh(dropletGeometry, dropletMaterial);
@@ -111,7 +124,7 @@ export class SprayBottle extends BaseHazard {
   }
 
   private updateDroplets(dt: number, run: Run): void {
-    const c = SPRAY_BOTTLE;
+    const c = this.cfg;
     const b = run.bunny;
     for (let i = this.droplets.length - 1; i >= 0; i--) {
       const d = this.droplets[i]!;
@@ -120,7 +133,11 @@ export class SprayBottle extends BaseHazard {
       d.traveled += Math.hypot(d.vx, d.vz) * dt;
       let gone = d.traveled >= d.max || !hazardFloorFree(run.house, d.x, d.z, c.dropletRadius, c.nozzleHeight);
       if (!gone && Math.hypot(b.x - d.x, b.z - d.z) < b.radius + c.dropletRadius && !bunnySheltered(run, c.nozzleHeight)) {
-        hitBunny(run, d.x, d.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii, dirX: d.vx, dirZ: d.vz });
+        const hit = hitBunny(run, d.x, d.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii, dirX: d.vx, dirZ: d.vz });
+        if (hit && c.wetSeconds > 0 && b.alive) {
+          b.stats.removeSource(WET_SOURCE);
+          b.stats.add({ stat: 'speed', op: 'mul', value: c.wetMultiplier, source: WET_SOURCE, duration: c.wetSeconds });
+        }
         gone = true;
       }
       if (gone) {
@@ -133,6 +150,14 @@ export class SprayBottle extends BaseHazard {
       const y = c.nozzleHeight * (1 - k) + Math.min(b.radius, c.nozzleHeight) * k;
       d.mesh.position.set(d.x, Math.max(c.dropletRadius, y), d.z);
     }
+  }
+
+  protected override sync(run: Run): void {
+    super.sync(run);
+    if (!this.cfg.aimNode) return;
+    // The base stays put; only the head turns to aim.
+    this.body.rotation.y = this.baseYaw;
+    if (this.aimNode) this.aimNode.rotation.y = wrapAngle(this.yaw - this.baseYaw);
   }
 
   onContact(run: Run): void {
@@ -154,6 +179,18 @@ export const sprayBottleDef = hazardRegistry.register({
   mass: SPRAY_BOTTLE.mass,
   modelId: 'spray_bottle',
   create(_run, x, z, id, rng) {
-    return new SprayBottle(id, this, x, z, rng);
+    return new SprayBottle(id, this, x, z, rng, SPRAY_BOTTLE);
+  },
+});
+
+export const sprinklerDef = hazardRegistry.register({
+  id: 'sprinkler',
+  name: 'Sprinkler',
+  minTier: 5,
+  spawnWeight: 1,
+  mass: SPRINKLER.mass,
+  modelId: SPRINKLER.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, SPRINKLER);
   },
 });

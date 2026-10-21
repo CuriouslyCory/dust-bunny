@@ -8,7 +8,7 @@
 - **Absorb ratio** — the largest Debris size the Bunny can absorb, as a fraction of its radius (default 0.7).
 - **Obstacle** — Debris or furniture too big to absorb; it blocks movement.
 - **Tier** — a growth stage (Speck, Fluff, Tumbleweed, Dust Devil, Dust Titan). Crossing a Tier threshold widens the camera view, unlocks new areas of the floor, and offers a Perk draft.
-- **Hazard** — a roaming cleaning device or supply (Roomba, Lint Roller, Broom, Spray Bottle, Mop, Upright Vacuum, Robo-Vac 9000 boss) that damages the Bunny. Hazards small enough relative to the Bunny can be absorbed.
+- **Hazard** — a roaming cleaning device or supply (Roomba, Lint Roller, Broom, Spray Bottle, Mop, Upright Vacuum, Robo-Vac 9000 boss; outdoors: Robotic Mower, Lawn Mower, Leaf Blower, Sprinkler, Street Sweeper boss) that damages the Bunny. Hazards small enough relative to the Bunny can be absorbed.
 - **Health** — whole hit points shown as hearts. Reaching zero ends the Run.
 - **Pickup** — a temporary, timed power-up found on the floor during a Run (Static Charge, Sugar Rush, Bubble Wrap, Glue Dab, Crumb Cake, Dust Cloud).
 - **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends.

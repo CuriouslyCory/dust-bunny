@@ -2,13 +2,16 @@
  * Lint Roller: rolls back and forth along a straight lane (shown faintly on the floor).
  * Contact: 1 damage, the Bunny sticks to the drum for ~1 s (carried along), sheds mass
  * onto the floor, then is flung off to the side of the lane.
+ *
+ * The Lawn Mower (outdoors) reuses the lane patrol with LAWN_MOWER tuning: no sticking; a hit
+ * knocks the Bunny off the lane, mows some fluff off (sheds mass) and the mower stops briefly.
  */
 import type { Rng } from '../core/rng';
-import { LINT_ROLLER } from '../data/hazards';
+import { LAWN_MOWER, LINT_ROLLER, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import type { HouseLayout } from '../world/types';
 import { BaseHazard } from './base';
-import { bunnySheltered, freeDistance, knockbackCm, knockbackDistance, pushBunnyOut, yawOf } from './common';
+import { bunnySheltered, freeDistance, hitBunny, knockbackCm, knockbackDistance, pushBunnyOut, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 import { shedMass } from './shed';
@@ -21,14 +24,17 @@ export interface Lane {
   length: number;
 }
 
+type LaneShape = Pick<LaneTuning, 'size' | 'height' | 'laneMin' | 'laneMax'>;
+
 /** Longest axis-aligned lane through (x, z), capped at laneMax; null if shorter than laneMin. */
-export function planLane(house: HouseLayout, x: number, z: number, rng: Rng): Lane | null {
-  const c = LINT_ROLLER;
+export function planLane(house: HouseLayout, x: number, z: number, rng: Rng, c: LaneShape = LINT_ROLLER): Lane | null {
   const axes: Array<[number, number]> = rng.chance(0.5) ? [[1, 0], [0, 1]] : [[0, 1], [1, 0]];
+  // Probe step: 4 cm indoors, coarser for big outdoor lanes.
+  const step = Math.max(4, c.size / 4);
   let best: Lane | null = null;
   for (const [dx, dz] of axes) {
-    const fwd = freeDistance(house, x, z, dx, dz, c.size, c.height, c.laneMax / 2);
-    const back = freeDistance(house, x, z, -dx, -dz, c.size, c.height, c.laneMax / 2);
+    const fwd = freeDistance(house, x, z, dx, dz, c.size, c.height, c.laneMax / 2, step);
+    const back = freeDistance(house, x, z, -dx, -dz, c.size, c.height, c.laneMax / 2, step);
     const length = fwd + back;
     if (length >= c.laneMin && (!best || length > best.length)) {
       best = { ax: x - dx * back, az: z - dz * back, bx: x + dx * fwd, bz: z + dz * fwd, length };
@@ -54,9 +60,10 @@ export class LintRoller extends BaseHazard {
     x: number,
     z: number,
     private readonly rng: Rng,
+    private readonly cfg: LaneTuning = LINT_ROLLER,
   ) {
-    super(id, def, x, z, LINT_ROLLER.size, 'lint_roller');
-    this.lane = planLane(run.house, x, z, rng);
+    super(id, def, x, z, cfg.size, cfg.modelId);
+    this.lane = planLane(run.house, x, z, rng, cfg);
     this.dir = rng.chance(0.5) ? 1 : -1;
     if (!this.lane) {
       this.dead = true;
@@ -73,7 +80,7 @@ export class LintRoller extends BaseHazard {
   protected tick(dt: number, run: Run): void {
     const l = this.lane;
     if (!l) return;
-    const c = LINT_ROLLER;
+    const c = this.cfg;
     if (this.pause > 0) {
       this.pause -= dt;
     } else {
@@ -84,7 +91,7 @@ export class LintRoller extends BaseHazard {
         this.dir = this.dir === 1 ? -1 : 1;
         this.pause = c.endPause;
       }
-      this.spin('drum', ((step * l.length) / 3) * this.dir, 'x');
+      if (c.spinNode) this.spin(c.spinNode, ((step * l.length) / 3) * this.dir, 'x');
     }
     this.x = l.ax + (l.bx - l.ax) * this.t;
     this.z = l.az + (l.bz - l.az) * this.t;
@@ -101,40 +108,52 @@ export class LintRoller extends BaseHazard {
     }
   }
 
-  private release(run: Run): void {
+  /** Unit vector perpendicular to the lane, on the side of (dx, dz) (random side if on the lane). */
+  private sideOf(dx: number, dz: number): { x: number; z: number } {
     const l = this.lane!;
-    const b = run.bunny;
-    // Fling perpendicular to the lane, on the side the Bunny was stuck.
     let px = -(l.bz - l.az);
     let pz = l.bx - l.ax;
-    if (px * this.offX + pz * this.offZ < 0) {
+    if (px * dx + pz * dz < 0) {
       px = -px;
       pz = -pz;
     }
-    if (Math.abs(px * this.offX + pz * this.offZ) < 1e-3 && this.rng.chance(0.5)) {
+    if (Math.abs(px * dx + pz * dz) < 1e-3 && this.rng.chance(0.5)) {
       px = -px;
       pz = -pz;
     }
     const n = Math.hypot(px, pz) || 1;
+    return { x: px / n, z: pz / n };
+  }
+
+  private release(run: Run): void {
+    const c = this.cfg;
+    const b = run.bunny;
+    // Fling perpendicular to the lane, on the side the Bunny was stuck.
+    const side = this.sideOf(this.offX, this.offZ);
     b.rooted = 0;
-    b.invulnerable = Math.max(b.invulnerable, LINT_ROLLER.releaseInvulnerability);
-    b.x = this.x + (px / n) * (this.size + b.radius + 0.5);
-    b.z = this.z + (pz / n) * (this.size + b.radius + 0.5);
-    knockbackCm(b, px, pz, knockbackDistance(b.radius, LINT_ROLLER.releaseCm, LINT_ROLLER.releaseRadii));
+    b.invulnerable = Math.max(b.invulnerable, c.releaseInvulnerability);
+    b.x = this.x + side.x * (this.size + b.radius + 0.5);
+    b.z = this.z + side.z * (this.size + b.radius + 0.5);
+    knockbackCm(b, side.x, side.z, knockbackDistance(b.radius, c.releaseCm, c.releaseRadii));
   }
 
   onContact(run: Run): void {
-    if (this.stuck > 0 || bunnySheltered(run, LINT_ROLLER.height)) return;
+    const c = this.cfg;
+    if (this.stuck > 0 || bunnySheltered(run, c.height)) return;
+    if (c.stickSeconds <= 0) {
+      this.mow(run);
+      return;
+    }
     const b = run.bunny;
-    if (this.stunned || !b.damage(LINT_ROLLER.damage, this.def.id)) {
+    if (this.stunned || !b.damage(c.damage, this.def.id)) {
       pushBunnyOut(run, this.x, this.z, this.size);
       return;
     }
     if (!b.alive) return;
-    this.stuck = LINT_ROLLER.stickSeconds;
-    b.rooted = LINT_ROLLER.stickSeconds;
-    b.invulnerable = Math.max(b.invulnerable, LINT_ROLLER.stickSeconds + 0.05);
-    shedMass(run, this.rng, LINT_ROLLER.shedFraction, this.def.id);
+    this.stuck = c.stickSeconds;
+    b.rooted = c.stickSeconds;
+    b.invulnerable = Math.max(b.invulnerable, c.stickSeconds + 0.05);
+    shedMass(run, this.rng, c.shedFraction, this.def.id);
     // Stick to the drum surface.
     const dx = b.x - this.x;
     const dz = b.z - this.z;
@@ -142,6 +161,19 @@ export class LintRoller extends BaseHazard {
     const r = Math.max(this.size * 0.6, d);
     this.offX = (dx / d) * r;
     this.offZ = (dz / d) * r;
+  }
+
+  /** Non-sticking hit (Lawn Mower): damage, knock off the lane, shed mass, stop for a moment. */
+  private mow(run: Run): void {
+    const c = this.cfg;
+    const b = run.bunny;
+    const side = this.sideOf(b.x - this.x, b.z - this.z);
+    const hit = !this.stunned && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.releaseCm, knockbackRadii: c.releaseRadii, dirX: side.x, dirZ: side.z });
+    if (hit) {
+      this.pause = Math.max(this.pause, c.hitPause);
+      if (b.alive && c.shedFraction > 0) shedMass(run, this.rng, c.shedFraction, this.def.id);
+    }
+    pushBunnyOut(run, this.x, this.z, this.size);
   }
 }
 
@@ -153,6 +185,18 @@ export const lintRollerDef = hazardRegistry.register({
   mass: LINT_ROLLER.mass,
   modelId: 'lint_roller',
   create(run, x, z, id, rng) {
-    return new LintRoller(id, this, run, x, z, rng);
+    return new LintRoller(id, this, run, x, z, rng, LINT_ROLLER);
+  },
+});
+
+export const lawnMowerDef = hazardRegistry.register({
+  id: 'lawn_mower',
+  name: 'Lawn Mower',
+  minTier: 6,
+  spawnWeight: 1,
+  mass: LAWN_MOWER.mass,
+  modelId: LAWN_MOWER.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, LAWN_MOWER);
   },
 });
