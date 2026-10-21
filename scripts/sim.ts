@@ -30,6 +30,7 @@ import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import type { Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
+import { fluffForRun } from '../src/meta/fluff';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { canAbsorb } from '../src/systems/absorb';
 import { viewRadiusFor } from '../src/systems/camera';
@@ -452,11 +453,11 @@ class Bot implements InputSource {
 }
 
 const fmt = (s: number | undefined) => (s === undefined ? '  -  ' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
-const summary: Record<string, { tiers: number[][]; ends: number[]; wins: number; deaths: number; n: number }> = {};
+const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number }> = {};
 const modifiers = upgradeModifiers(upgrades);
 
 for (const characterId of chars) {
-  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], wins: 0, deaths: 0, n: 0 });
+  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
@@ -523,6 +524,8 @@ for (const characterId of chars) {
     const ms = performance.now() - t0;
     for (const t of TIERS) if (run.tierTimes[t.index] !== undefined) sum.tiers[t.index - 1]!.push(run.tierTimes[t.index]!);
     sum.n++;
+    const fluff = fluffForRun(run.endReason ?? 'quit', run.getStats());
+    sum.fluff.push(fluff);
     if (run.endReason === 'victory') {
       sum.wins++;
       sum.ends.push(run.time);
@@ -531,7 +534,7 @@ for (const characterId of chars) {
     if (quiet) continue;
     const tiers = TIERS.map((t) => `${t.name} ${fmt(run.tierTimes[t.index])}`).join(' | ');
     console.log(
-      `${characterId} seed=${seed} end=${run.endReason ?? 'timeout'}@${fmt(run.time)} r=${run.bunny.radius.toFixed(1)}cm hits=${hits} absorbed=${run.debrisAbsorbed}+${run.hazardsAbsorbed}h debris=${run.debris.count} starved=${bot.starved.toFixed(0)}s sim=${(ms / 1000).toFixed(1)}s\n  ${tiers}\n  supply (r / reachable absorbables in view): ${supply.join(' ')}`,
+      `${characterId} seed=${seed} end=${run.endReason ?? 'timeout'}@${fmt(run.time)} r=${run.bunny.radius.toFixed(1)}cm hits=${hits} absorbed=${run.debrisAbsorbed}+${run.hazardsAbsorbed}h debris=${run.debris.count} starved=${bot.starved.toFixed(0)}s fluff=${fluff} sim=${(ms / 1000).toFixed(1)}s\n  ${tiers}\n  supply (r / reachable absorbables in view): ${supply.join(' ')}`,
     );
     if (log.length) console.log(`  ${log.join('\n  ')}`);
   }
@@ -541,6 +544,6 @@ const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.fl
 console.log(`\nMedian Tier times (runs reaching it), ${difficulty}:`);
 for (const [id, s] of Object.entries(summary)) {
   console.log(
-    `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
+    `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  fluff ${Math.min(...s.fluff)}–${med(s.fluff)}–${Math.max(...s.fluff)}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
   );
 }

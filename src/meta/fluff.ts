@@ -9,16 +9,17 @@ export const HOUSE_CLEARED_FLUFF_MULTIPLIER = 1.25;
 export const NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER = 1.35;
 
 /**
- * floor((maxRadius × 2 + debrisAbsorbed / 20 + tierReached × 10) × multiplier × difficulty):
+ * floor((tierReached × 4 + min(maxRadius, 300) / 30 + debrisAbsorbed / 1000) × multiplier × difficulty):
  * multiplier 1.5 on victory, 1.35 if the neighborhood was cleared, 1.25 if the house was cleared;
- * difficulty 1 on Casual, 1.25 on Arcade, 1.6 on Hardcore (`DifficultyDef.fluff`). The radius
- * term is capped at 300 cm so the city's giant radii don't swamp the economy.
+ * difficulty 1 on Casual, 2 on Arcade, 5 on Hardcore (`DifficultyDef.fluff`). Tier reached is
+ * the main term, so a Casual win pays about 75 (one base-level Upgrade) and a Hardcore win about
+ * 375. The radius term is capped at 300 cm so the city's giant radii don't swamp the economy.
  */
 export function fluffForRun(
   reason: RunEndReason,
   stats: Pick<RunStats, 'maxRadius' | 'debrisAbsorbed' | 'tierReached' | 'difficulty'> & { houseCleared?: boolean; neighborhoodCleared?: boolean },
 ): number {
-  const base = Math.min(stats.maxRadius, 300) * 2 + stats.debrisAbsorbed / 20 + stats.tierReached * 10;
+  const base = stats.tierReached * 4 + Math.min(stats.maxRadius, 300) / 30 + stats.debrisAbsorbed / 1000;
   const mult =
     reason === 'victory'
       ? VICTORY_FLUFF_MULTIPLIER
