@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Run } from './run';
+import type { Debris } from '../entities/debris';
 
 const makeRun = (seed = 'test') => {
   const events = new EventBus();
@@ -14,6 +15,14 @@ describe('Run (headless)', () => {
     const b = makeRun('same').run;
     expect(a.debris.count).toBeGreaterThan(500);
     expect(a.debris.count).toBe(b.debris.count);
+    const snapshot = (run: Run) => {
+      const instances: Debris[] = [];
+      run.debris.forEach((d) => instances.push({ ...d }));
+      return instances;
+    };
+    expect(snapshot(a)).toEqual(snapshot(b));
+    a.dispose();
+    b.dispose();
   });
 
   it('absorbing Debris grows the Bunny and emits events', () => {

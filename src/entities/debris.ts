@@ -17,16 +17,25 @@ export interface Debris {
   size: number;
   rotY: number;
   colorIndex: number;
-  /** Index inside buckets[typeIndex] (= instance index). */
+  /** Dense per-type instance index; may change when another Debris is removed. */
   slot: number;
   alive: boolean;
+}
+
+/** Current per-type state, borrowed until the next field mutation. */
+export interface DebrisChanges {
+  readonly typeIndex: number;
+  readonly instances: readonly Readonly<Debris>[];
+  /** Unique, valid indexes into instances. Empty for count-only changes. */
+  readonly changedSlots: readonly number[];
 }
 
 export class DebrisField {
   hash: SpatialHash<Debris>;
   /** Per type: live Debris, densely packed; index = InstancedMesh instance id. */
-  readonly buckets: Debris[][];
-  private dirty: Debris[] = [];
+  private readonly buckets: Debris[][];
+  private readonly dirtySlots: Set<number>[];
+  private readonly changedTypes = new Set<number>();
   private nextId = 1;
   private maxSizeCache = -1;
   readonly cap: number;
@@ -37,6 +46,7 @@ export class DebrisField {
   ) {
     this.hash = new SpatialHash<Debris>(TUNING.debris.cellSize);
     this.buckets = types.map(() => []);
+    this.dirtySlots = types.map(() => new Set<number>());
     this.cap = cap;
   }
 
@@ -46,6 +56,14 @@ export class DebrisField {
 
   get full(): boolean {
     return this.count >= this.cap;
+  }
+
+  /** Retained bookkeeping: at most cap slots and types.length type markers. No entity references. */
+  get pendingChanges(): { readonly slots: number; readonly types: number } {
+    return {
+      slots: this.dirtySlots.reduce((n, slots) => n + slots.size, 0),
+      types: this.changedTypes.size,
+    };
   }
 
   /** Largest live Debris radius, used to widen proximity queries. */
@@ -80,30 +98,42 @@ export class DebrisField {
     };
     bucket.push(d);
     this.hash.insert(d);
-    this.dirty.push(d);
+    this.markChanged(d);
     if (this.maxSizeCache >= 0 && size > this.maxSizeCache) this.maxSizeCache = size;
     return d;
   }
 
   remove(d: Debris): void {
-    if (!d.alive) return;
+    if (!this.contains(d)) return;
     d.alive = false;
     this.hash.remove(d);
     const bucket = this.buckets[d.typeIndex]!;
     const last = bucket.pop()!;
+    this.dirtySlots[d.typeIndex]!.delete(bucket.length);
+    this.changedTypes.add(d.typeIndex);
     if (last !== d) {
       bucket[d.slot] = last;
       last.slot = d.slot;
-      this.dirty.push(last);
+      this.markChanged(last);
     }
     if (d.size >= this.maxSizeCache) this.maxSizeCache = -1;
   }
 
   move(d: Debris, x: number, z: number): void {
+    if (!this.contains(d)) return;
     d.x = x;
     d.z = z;
     this.hash.update(d);
-    this.dirty.push(d);
+    this.markChanged(d);
+  }
+
+  private contains(d: Debris): boolean {
+    return d.alive && this.buckets[d.typeIndex]?.[d.slot] === d;
+  }
+
+  private markChanged(d: Debris): void {
+    this.dirtySlots[d.typeIndex]!.add(d.slot);
+    this.changedTypes.add(d.typeIndex);
   }
 
   /** Debris whose centre is within `radius` of (x, z). */
@@ -127,11 +157,22 @@ export class DebrisField {
     for (const b of this.buckets) for (const d of b) fn(d);
   }
 
-  /** Debris whose instance data changed since the last call (renderer uses this). */
-  drainDirty(): Debris[] {
-    const out = this.dirty;
-    this.dirty = [];
-    return out;
+  /**
+   * Destructive, single-consumer synchronization. Process borrowed views synchronously,
+   * before mutating the field. Includes empty changed types; instances.length is authoritative.
+   * Request full state on attachment, even if earlier changes have already been consumed.
+   */
+  consumeChanges({ full = false }: { full?: boolean } = {}): readonly DebrisChanges[] {
+    const indexes = full ? this.types.map((_, i) => i) : [...this.changedTypes];
+    const changes = indexes.map((typeIndex): DebrisChanges => {
+      const instances = this.buckets[typeIndex]!;
+      const slots = this.dirtySlots[typeIndex]!;
+      const changedSlots = full ? instances.map((_, i) => i) : [...slots];
+      slots.clear();
+      return { typeIndex, instances, changedSlots };
+    });
+    this.changedTypes.clear();
+    return changes;
   }
 
   /** Removes every Debris and switches the spatial hash cell size (bigger cells for bigger areas). */
@@ -141,12 +182,13 @@ export class DebrisField {
   }
 
   clear(): void {
-    for (const b of this.buckets) {
+    this.buckets.forEach((b, i) => {
+      if (b.length > 0) this.changedTypes.add(i);
       for (const d of b) d.alive = false;
       b.length = 0;
-    }
+      this.dirtySlots[i]!.clear();
+    });
     this.hash.clear();
-    this.dirty = [];
     this.maxSizeCache = -1;
   }
 }
