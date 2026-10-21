@@ -1,6 +1,6 @@
 /**
  * Pickup extension point. The six design Pickups are registered in ./pickups.ts and spawned
- * by ./director.ts (installed per Run from src/meta/install.ts).
+ * by ./director.ts (installed per Run by src/game/assembly.ts).
  *
  * PickupManager (a System) holds Pickups lying on the floor and active timed effects.
  * Touching a floor Pickup calls def.apply(run, duration); if the def has a duration and apply

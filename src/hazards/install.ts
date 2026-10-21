@@ -1,40 +1,14 @@
 /**
- * Hazard wiring. Importing this module registers every Hazard (and its procedural model): each
- * behaviour file registers its house, neighborhood and city variants (e.g. roomba.ts: Roomba,
- * Robotic Mower, Floor Scrubber and the boss minis; robovac.ts: all three area bosses).
- *   - installRunHazards(run): spawn director + absorb effect for one Run (headless-safe).
- *   - installHazards(game): does that for every Run, adds the boss HUD, and (with ?debug)
- *     adds debugTools.spawnHazard(id) / spawnBoss() / clearHazards().
+ * Browser-side Hazard wiring: the boss HUD and (with ?debug) debugTools.spawnHazard(id) /
+ * spawnBoss() / clearHazards(). Hazard content and per-Run spawning are installed headless by
+ * the Run assembly (src/game/assembly.ts) before runStarted.
  */
-import { Rng } from '../core/rng';
+import { getHazardDirector } from '../game/assembly';
 import type { Game } from '../game/game';
-import type { Run } from '../game/run';
-import './broom';
 import { hazardFloorFree } from './common';
-import { HazardDirector, SPAWN_FOOTPRINT } from './director';
-import { HazardFx } from './fx';
+import { SPAWN_FOOTPRINT } from './director';
 import { installHazardHud } from './hud';
 import { hazardRegistry, type Hazard } from './index';
-import './lintRoller';
-import './mop';
-import './robovac';
-import './roomba';
-import './sprayBottle';
-import './uprightVacuum';
-
-const directors = new WeakMap<Run, HazardDirector>();
-
-export function installRunHazards(run: Run): HazardDirector {
-  const director = new HazardDirector(new Rng(`${run.config.seed}:hazard-director`), run.difficulty);
-  run.hazards.director = (dt, r, mgr) => director.update(dt, r, mgr);
-  run.addSystem(new HazardFx());
-  directors.set(run, director);
-  return director;
-}
-
-export function getHazardDirector(run: Run): HazardDirector | undefined {
-  return directors.get(run);
-}
 
 export interface HazardDebugTools {
   spawnHazard(defId: string): Hazard | null;
@@ -43,16 +17,13 @@ export interface HazardDebugTools {
 }
 
 export function installHazards(game: Game): void {
-  game.events.on('runStarted', () => {
-    if (game.run) installRunHazards(game.run);
-  });
   installHazardHud(game);
 
   if (!game.debug) return;
   const tools: HazardDebugTools = {
     spawnHazard(defId) {
       const run = game.run;
-      const director = run && directors.get(run);
+      const director = run && getHazardDirector(run);
       if (!run || !director || !hazardRegistry.has(defId)) return null;
       if (hazardRegistry.get(defId)?.boss) return director.spawnBoss(run, run.hazards);
       const fp = SPAWN_FOOTPRINT[defId] ?? { radius: 15, height: 20 };
@@ -72,7 +43,7 @@ export function installHazards(game: Game): void {
     },
     spawnBoss() {
       const run = game.run;
-      const director = run && directors.get(run);
+      const director = run && getHazardDirector(run);
       return run && director ? director.spawnBoss(run, run.hazards) : null;
     },
     clearHazards() {
