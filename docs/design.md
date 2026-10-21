@@ -70,7 +70,17 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Lawn Mower     | 6         | 65                | ≈ 93            | unmanned push mower patrolling a lane | 1 + knockback, sheds mass |
 | Street Sweeper | 7 (boss)  | 150               | ≈ 214 (≈ 155 after two chips) | hunts with suction, telegraphed charges, stunned by houses / trees, summons mini mowers | 1, sheds mass |
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood; absorbing the Street Sweeper wins the Run.
+**The city (after the Street Sweeper, Bunny r ≈ 230 on arrival):**
+
+| Hazard          | From Tier | Size (cm, radius) | Absorbable at r | Behaviour | Damage |
+|-----------------|-----------|-------------------|-----------------|-----------|--------|
+| Pressure Washer | 7         | 170               | ≈ 243           | turret: head turns, aims a lane, fires a burst of fast water jets | 1 per jet, brief slow |
+| Floor Scrubber  | 7         | 190               | ≈ 271           | ride-on scrubber, Roomba behaviour, weak scrub-brush pull | 1 + knockback |
+| Litter Vacuum   | 7         | 220               | ≈ 314           | amber cone warm-up, then a suction cone that pulls the Bunny in | 1, sheds mass |
+| Street Flusher  | 8         | 300               | ≈ 429           | water truck patrolling a street, wide wet trail that slows | 1 + knockback; trail slows |
+| Garbage Truck   | 9 (boss)  | 560               | ≈ 800 (≈ 578 after two chips) | hunts with compactor suction, telegraphed charges, stunned by buildings / the barrier, summons mini scrubbers | 1, sheds mass |
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, and absorbing the Garbage Truck wins the Run.
 
 ## Characters
 

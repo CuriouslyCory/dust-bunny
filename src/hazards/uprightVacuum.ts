@@ -6,9 +6,11 @@
  * The Leaf Blower (outdoors) is the same Hazard in reverse (LEAF_BLOWER tuning, mode 'blow'):
  * after the amber warm-up the cone blasts the Bunny away from the nozzle (stronger up close)
  * and blows small Debris along. It only starts a blast while on screen.
+ *
+ * The Litter Vacuum (city, LITTER_VACUUM) is a street-scale Upright Vacuum in suction mode.
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, LEAF_BLOWER, UPRIGHT_VACUUM, type AirConeTuning } from '../data/hazards';
+import { HAZARD_RECOIL, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, type AirConeTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { isFloorFree } from '../systems/spawner';
@@ -46,9 +48,10 @@ export class UprightVacuum extends BaseHazard {
     x: number,
     z: number,
     private readonly rng: Rng,
-    private readonly cfg: AirConeTuning = UPRIGHT_VACUUM,
+    readonly cfg: AirConeTuning = UPRIGHT_VACUUM,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
+    this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.recoilHeight = cfg.height;
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.timer = rng.range(0.5, cfg.off);
@@ -167,5 +170,17 @@ export const leafBlowerDef = hazardRegistry.register({
   modelId: LEAF_BLOWER.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, LEAF_BLOWER);
+  },
+});
+
+export const litterVacuumDef = hazardRegistry.register({
+  id: 'litter_vacuum',
+  name: 'Litter Vacuum',
+  minTier: 7,
+  spawnWeight: 1,
+  mass: LITTER_VACUUM.mass,
+  modelId: LITTER_VACUUM.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, LITTER_VACUUM);
   },
 });

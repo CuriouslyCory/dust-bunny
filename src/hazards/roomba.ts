@@ -2,10 +2,12 @@
  * Roomba: wanders, bounces off walls and furniture, turns at random, and pulls the Bunny in
  * with suction (a faint ring on the floor shows the reach). Contact: 1 damage + knockback.
  * The boss's mini Roombas reuse this with MINI_ROOMBA tuning; outdoors the Robotic Mower
- * (ROBO_MOWER, weak blade pull) and the Street Sweeper's mini mowers (MINI_MOWER) do too.
+ * (ROBO_MOWER, weak blade pull) and the Street Sweeper's mini mowers (MINI_MOWER) do too, and in
+ * the city the Floor Scrubber (FLOOR_SCRUBBER, weak scrub-brush pull, spins `brush`) and the
+ * Garbage Truck's mini scrubbers (MINI_SCRUBBER).
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MINI_MOWER, MINI_ROOMBA, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
+import { FLOOR_SCRUBBER, HAZARD_RECOIL, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle, yawOf } from './common';
@@ -132,5 +134,29 @@ export const miniMowerDef = hazardRegistry.register({
   modelId: MINI_MOWER.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_MOWER);
+  },
+});
+
+export const floorScrubberDef = hazardRegistry.register({
+  id: 'floor_scrubber',
+  name: 'Floor Scrubber',
+  minTier: 7,
+  spawnWeight: 1,
+  mass: FLOOR_SCRUBBER.mass,
+  modelId: FLOOR_SCRUBBER.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, FLOOR_SCRUBBER);
+  },
+});
+
+export const miniScrubberDef = hazardRegistry.register({
+  id: 'mini_scrubber',
+  name: 'Mini Scrubber',
+  minTier: 9,
+  spawnWeight: 0,
+  mass: MINI_SCRUBBER.mass,
+  modelId: MINI_SCRUBBER.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, MINI_SCRUBBER);
   },
 });

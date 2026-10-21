@@ -25,7 +25,7 @@ import type { RoboVac9000 } from '../src/hazards/robovac';
 import type { SprayBottle } from '../src/hazards/sprayBottle';
 import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import type { Broom } from '../src/hazards/broom';
-import { BROOM, UPRIGHT_VACUUM } from '../src/data/hazards';
+import { BROOM, tierValue } from '../src/data/hazards';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { installCombatHooks } from '../src/perks/combat';
 import { draftForRun } from '../src/perks/draft';
@@ -265,8 +265,9 @@ class Bot implements InputSource {
         }
         continue;
       }
-      const spray = h.def.id === 'spray_bottle' ? (h as SprayBottle) : null;
-      if (spray && d < 300 && (spray.state === 'telegraph' || spray.state === 'firing' || spray.droplets.length > 0)) {
+      const spray = h.def.id === 'spray_bottle' || h.def.id === 'pressure_washer' ? (h as SprayBottle) : null;
+      const sprayReach = spray?.def.id === 'pressure_washer' ? tierValue(spray.cfg.range, this.run.tier) + r : 300;
+      if (spray && d < sprayReach && (spray.state === 'telegraph' || spray.state === 'firing' || spray.droplets.length > 0)) {
         // Sidestep the aim lane (a player sees the red lane).
         const fx = Math.sin(spray.yaw);
         const fz = Math.cos(spray.yaw);
@@ -274,11 +275,12 @@ class Bot implements InputSource {
         x += -fz * side * 2;
         z += fx * side * 2;
       }
-      const vac = h.def.id === 'upright_vacuum' ? (h as UprightVacuum) : null;
+      const vac = h.def.id === 'upright_vacuum' || h.def.id === 'litter_vacuum' ? (h as UprightVacuum) : null;
       if (vac && vac.state !== 'off') {
         // Step out of the (telegraphed) suction cone sideways and back.
-        const it = { x: vac.x + Math.sin(vac.yaw) * vac.size * 0.7, z: vac.z + Math.cos(vac.yaw) * vac.size * 0.7 };
-        if (inCone(it.x, it.z, vac.yaw, UPRIGHT_VACUUM.coneHalfAngle + 0.25, UPRIGHT_VACUUM.coneRange * 1.3, bunny.x, bunny.z, r)) {
+        const c = vac.cfg;
+        const it = { x: vac.x + Math.sin(vac.yaw) * vac.size * c.nozzleOffset, z: vac.z + Math.cos(vac.yaw) * vac.size * c.nozzleOffset };
+        if (inCone(it.x, it.z, vac.yaw, c.coneHalfAngle + 0.25, c.coneRange * 1.3, bunny.x, bunny.z, r)) {
           const fx = Math.sin(vac.yaw);
           const fz = Math.cos(vac.yaw);
           const side = fx * dz - fz * dx >= 0 ? 1 : -1;
