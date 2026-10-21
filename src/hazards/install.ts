@@ -25,7 +25,7 @@ import './uprightVacuum';
 const directors = new WeakMap<Run, HazardDirector>();
 
 export function installRunHazards(run: Run): HazardDirector {
-  const director = new HazardDirector(new Rng(`${run.config.seed}:hazard-director`));
+  const director = new HazardDirector(new Rng(`${run.config.seed}:hazard-director`), run.difficulty);
   run.hazards.director = (dt, r, mgr) => director.update(dt, r, mgr);
   run.addSystem(new HazardFx());
   directors.set(run, director);

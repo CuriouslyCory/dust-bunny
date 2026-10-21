@@ -57,6 +57,11 @@ export class Broom extends BaseHazard {
     this.model.position.set(-c.x, -box.min.y, BROOM.sweepRadius + 5 - box.max.z);
   }
 
+  /** Seconds a sweep takes (quicker when the Difficulty speeds Hazards up). */
+  private sweepTime(run: Run): number {
+    return BROOM.sweepTime / run.difficulty.hazardSpeed;
+  }
+
   private placeHead(): void {
     this.x = this.pivotX + Math.sin(this.angle) * BROOM.sweepRadius;
     this.z = this.pivotZ + Math.cos(this.angle) * BROOM.sweepRadius;
@@ -75,24 +80,24 @@ export class Broom extends BaseHazard {
       this.from = centre - (this.side * BROOM.arc) / 2;
       this.to = centre + (this.side * BROOM.arc) / 2;
       this.state = 'telegraph';
-      this.timer = tierValue(BROOM.telegraph, run.tier);
+      this.timer = this.attackTime(run, tierValue(BROOM.telegraph, run.tier));
       this.arcDecal.place(this.pivotX, this.pivotZ, centre);
       this.arcDecal.visible = true;
       this.emitTelegraph(run, 'sweep', this.timer);
     }
     if (this.state === 'telegraph') {
-      const total = tierValue(BROOM.telegraph, run.tier);
+      const total = this.attackTime(run, tierValue(BROOM.telegraph, run.tier));
       // Swing the head back to the start of the arc while telegraphing.
       const k = Math.min(1, 1 - this.timer / total);
       this.angle = this.angle + wrapAngle(this.from - this.angle) * Math.min(1, dt * 8);
       this.arcDecal.pulse(this.time, k);
       if (this.timer <= 0) {
         this.state = 'sweep';
-        this.timer = BROOM.sweepTime;
+        this.timer = this.sweepTime(run);
         this.angle = this.from;
       }
     } else if (this.state === 'sweep') {
-      const k = 1 - Math.max(0, this.timer) / BROOM.sweepTime;
+      const k = 1 - Math.max(0, this.timer) / this.sweepTime(run);
       const e = k * k * (3 - 2 * k);
       this.angle = this.from + (this.to - this.from) * e;
       this.arcDecal.setOpacity(0.55 * (1 - k * 0.6));

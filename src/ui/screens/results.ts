@@ -14,6 +14,7 @@
  */
 import type { GameEvents } from '../../core/events';
 import { CHARACTERS } from '../../data/characters';
+import { getDifficulty } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
@@ -36,12 +37,14 @@ export interface ResultsSection {
 
 const sections = new Map<string, ResultsSection>();
 
-/** "Victory ×1.5 · " etc.: the Fluff multiplier the Run earned (see meta/fluff.ts). */
+/** "Victory ×1.5 · Hardcore ×1.6 · " etc.: the Fluff multipliers the Run earned (see meta/fluff.ts). */
 function fluffBonusLabel(e: RunResult): string {
-  if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · `;
-  if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · `;
-  if (e.stats.houseCleared) return `House cleared ×${HOUSE_CLEARED_FLUFF_MULTIPLIER} · `;
-  return '';
+  const difficulty = getDifficulty(e.stats.difficulty);
+  const diff = difficulty.fluff !== 1 ? `${difficulty.name} ×${difficulty.fluff} · ` : '';
+  if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · ${diff}`;
+  if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
+  if (e.stats.houseCleared) return `House cleared ×${HOUSE_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
+  return diff;
 }
 
 export function registerResultsSection(section: ResultsSection): void {
@@ -165,7 +168,7 @@ export function registerResultsScreen(): void {
             }),
           );
           const character = CHARACTERS.find((c) => c.id === s.characterId)?.name ?? s.characterId;
-          seed.textContent = `${character} · seed ${s.seed}`;
+          seed.textContent = `${character} · ${getDifficulty(s.difficulty).name} · seed ${s.seed}`;
 
           for (const slot of [fluffSlot, lbSlot, extraSlot]) slot.replaceChildren();
           const sorted = [...sections.values()].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

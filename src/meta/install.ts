@@ -1,8 +1,8 @@
 /**
  * Wires the roguelike layer into a Game (call once at boot, after URL params are applied):
  * registers Pickups, Perks and the characterSelect / perkDraft / shop screens; feeds owned
- * Upgrades and the last Character into game.nextRunConfig; installs per-Run hooks (combat
- * filter + system, Pickup director) on runStarted; queues a Perk draft per tierUp; awards
+ * Upgrades and the last Character and Difficulty into game.nextRunConfig; installs per-Run hooks
+ * (combat filter + system, Pickup director) on runStarted; queues a Perk draft per tierUp; awards
  * Fluff on runEnded; adds HUD widgets.
  */
 import { CHARACTERS } from '../data/characters';
@@ -36,6 +36,7 @@ export function installRoguelike(game: Game): void {
   if (!game.nextRunConfig.characterId && last && CHARACTERS.some((c) => c.id === last)) {
     game.nextRunConfig.characterId = last;
   }
+  game.nextRunConfig.difficulty ??= meta.data.lastDifficulty;
   const syncUpgrades = () => {
     game.nextRunConfig.modifiers = meta.runModifiers();
   };

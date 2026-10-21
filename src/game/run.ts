@@ -8,6 +8,7 @@ import { NO_INPUT, type InputSource } from '../core/input';
 import { Rng } from '../core/rng';
 import { AREAS } from '../data/areas';
 import { getCharacter } from '../data/characters';
+import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
 import { tierForRadius } from '../data/tiers';
 import { Bunny } from '../entities/bunny';
@@ -33,6 +34,8 @@ import { SYSTEM_ORDER, type System } from './system';
 export interface RunConfig {
   seed: string;
   characterId: string;
+  /** Difficulty (missing: casual). */
+  difficulty?: DifficultyId;
   /** Start in this area (debug / testing; 'neighborhood' skips the house, 'city' skips both). */
   area?: AreaId;
   /** Extra stat modifiers applied at start (permanent Upgrades from the Shop). */
@@ -70,6 +73,8 @@ const exitSystem: System = {
 
 export class Run {
   readonly rng: Rng;
+  /** Difficulty tuning for this Run (Hazards, director, start stats, area heal, Fluff). */
+  readonly difficulty: DifficultyDef;
   /** Current area's layout: the house floor, then the neighborhood, then the city (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
@@ -111,11 +116,12 @@ export class Run {
     readonly config: RunConfig,
   ) {
     this.rng = new Rng(config.seed);
+    this.difficulty = getDifficulty(config.difficulty);
     this.house = generateHouse(config.seed);
 
     const character = getCharacter(config.characterId);
     const stats = new StatBlock({ ...BASE_BUNNY_STATS, ...character.stats });
-    for (const m of config.modifiers ?? []) stats.add(m);
+    for (const m of [...difficultyModifiers(this.difficulty), ...(config.modifiers ?? [])]) stats.add(m);
     this.bunny = new Bunny(events, stats, this.house.spawn.x, this.house.spawn.z);
     this.tier = tierForRadius(this.bunny.radius).index;
     for (let t = 2; t <= this.tier; t++) this.tierTimes[t] = 0;
@@ -168,9 +174,9 @@ export class Run {
 
   /**
    * Moves the Run to a later area: swaps in its layout, clears Debris, Hazards and floor
-   * Pickups, puts the Bunny at the area's spawn (healing 1 heart) and repopulates. The Bunny keeps
-   * its size, health, Perks and active Pickups. Every earlier area counts as cleared. Emits
-   * areaEntered (RunView rebuilds the world view).
+   * Pickups, puts the Bunny at the area's spawn (healing `difficulty.areaHeal` hearts: 1, none on
+   * Hardcore) and repopulates. The Bunny keeps its size, health, Perks and active Pickups. Every
+   * earlier area counts as cleared. Emits areaEntered (RunView rebuilds the world view).
    */
   enterArea(area: AreaId): void {
     if (AREA_ORDER.indexOf(area) <= AREA_ORDER.indexOf(this.area)) return;
@@ -185,8 +191,8 @@ export class Run {
     this.hazards.clear();
     this.pickups.clearFloor();
     this.bunny.teleport(this.house.spawn.x, this.house.spawn.z);
-    // Fresh air: arriving in a new area restores a heart.
-    this.bunny.heal(1);
+    // Fresh air: arriving in a new area restores a heart (not on Hardcore).
+    this.bunny.heal(this.difficulty.areaHeal);
     this.spawner.populate(this);
     this.events.emit('areaEntered', { area: this.area, timeSec: this.time });
   }
@@ -244,6 +250,7 @@ export class Run {
     return {
       seed: this.config.seed,
       characterId: this.config.characterId,
+      difficulty: this.difficulty.id,
       timeSec: this.time,
       maxRadius: this.bunny.maxRadius,
       finalRadius: this.bunny.radius,

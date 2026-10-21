@@ -1,10 +1,13 @@
 /** Results of a Run, passed with runEnded and shown on the results screen. */
+import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 export type RunEndReason = 'died' | 'victory' | 'quit';
 
 export interface RunStats {
   seed: string;
   characterId: string;
+  /** Difficulty the Run was played on (missing: casual). */
+  difficulty?: DifficultyId;
   /** Simulated seconds (pauses excluded). */
   timeSec: number;
   maxRadius: number;

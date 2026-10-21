@@ -12,10 +12,15 @@ CREATE TABLE IF NOT EXISTS leaderboard_scores (
   tier_reached    smallint    NOT NULL,
   duration_ms     integer     NOT NULL,
   victory         boolean     NOT NULL DEFAULT false,
+  -- Difficulty id (casual | arcade | hardcore); the score already includes its multiplier.
+  difficulty      text        NOT NULL DEFAULT 'casual',
   -- SHA-256 of the client IP (salted with LEADERBOARD_IP_SALT); used only for rate limiting.
   ip_hash         text,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Tables created before Difficulty existed.
+ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS difficulty text NOT NULL DEFAULT 'casual';
 
 CREATE INDEX IF NOT EXISTS leaderboard_scores_score_idx ON leaderboard_scores (score DESC, id);
 CREATE INDEX IF NOT EXISTS leaderboard_scores_character_idx ON leaderboard_scores (character, score DESC, id);

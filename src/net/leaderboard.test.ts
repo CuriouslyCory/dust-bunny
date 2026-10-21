@@ -60,6 +60,25 @@ describe('leaderboard client', () => {
     await expect(client.submitScore(submissionFromRun(stats, 'died', '   '))).rejects.toBeInstanceOf(LeaderboardError);
   });
 
+  it('carries the Run difficulty into the submission and score', () => {
+    const casual = submissionFromRun(stats, 'died', 'Alice');
+    expect(casual.difficulty).toBe('casual');
+    const hard = submissionFromRun({ ...stats, difficulty: 'hardcore' }, 'died', 'Alice');
+    expect(hard.difficulty).toBe('hardcore');
+    expect(hard.score).toBe(Math.round(casual.score * 1.6));
+  });
+
+  it('stores the difficulty locally and reads old local entries as casual', async () => {
+    const storage = memoryStorage();
+    const old = { id: 'old', name: 'Oldie', character: 'zap', score: 10, maxRadius: 1, debrisAbsorbed: 1, tierReached: 1, durationMs: 5000, victory: false, createdAt: '2025-01-01T00:00:00.000Z' };
+    storage.setItem('dustbunny.leaderboard.local.v1', JSON.stringify([old]));
+    const client = createLeaderboardClient({ storage, fetch: async () => new Response('not found', { status: 404 }) });
+    const res = await client.submitScore(submissionFromRun({ ...stats, difficulty: 'arcade' }, 'died', 'Alice'));
+    expect(res.entry.difficulty).toBe('arcade');
+    const top = await client.getTop();
+    expect(top.entries.map((e) => [e.name, e.difficulty])).toEqual([['Alice', 'arcade'], ['Oldie', 'casual']]);
+  });
+
   it('remembers a sanitised player name', () => {
     const client = createLeaderboardClient({ storage: memoryStorage() });
     client.setPlayerName('  Dusty   ');

@@ -114,10 +114,20 @@ export abstract class BaseHazard implements Hazard {
     if (node) node.rotation[axis] += radians;
   }
 
-  /** Speed for the current Tier, ramped up within the Tier. */
+  /** Speed for the current Tier, ramped up within the Tier and scaled by the Difficulty. */
   protected tierSpeed(run: Run, speeds: PerTier): number {
     const [a, b] = DIRECTOR.speedRamp;
-    return tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.radius));
+    return this.speed(run, tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.radius)));
+  }
+
+  /** A movement speed (cm/s) scaled by the Run's Difficulty (faster on Arcade and Hardcore). */
+  protected speed(run: Run, cmPerSec: number): number {
+    return cmPerSec * run.difficulty.hazardSpeed;
+  }
+
+  /** An attack wind-up or cooldown (s) scaled by the Run's Difficulty (shorter on Arcade and Hardcore). */
+  protected attackTime(run: Run, seconds: number): number {
+    return seconds * run.difficulty.attackTiming;
   }
 
   protected emitTelegraph(run: Run, attack: string, duration: number): void {

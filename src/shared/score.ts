@@ -6,6 +6,7 @@
  * keep them free of runtime imports from the rest of `src/`, and use `.js` extensions on
  * relative imports.
  */
+import { DEFAULT_DIFFICULTY, DIFFICULTY_SCORE_MULTIPLIER, type DifficultyId } from './difficulty.js';
 
 /** Tier start radii (cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
 export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600];
@@ -29,11 +30,14 @@ export interface ScoreInput {
   tierReached: number;
   durationMs: number;
   victory: boolean;
+  /** Missing counts as casual (multiplier 1). */
+  difficulty?: DifficultyId;
 }
 
 /**
- * score = round(maxRadius × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
- *         + victory ? 5000 + max(0, 2100 − seconds) × 10 : 0
+ * base  = round(maxRadius × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
+ *         + victory ? 5000 + round(max(0, 2100 − seconds) × 10) : 0
+ * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])   (casual 1, arcade 1.25, hardcore 1.6)
  */
 export function computeScore(s: ScoreInput): number {
   const radius = Math.max(0, s.maxRadius);
@@ -44,7 +48,8 @@ export function computeScore(s: ScoreInput): number {
     const sec = Math.max(0, s.durationMs) / 1000;
     score += SCORE.victoryBonus + Math.round(Math.max(0, SCORE.victoryParSec - sec) * SCORE.victoryPerSecUnderPar);
   }
-  return score;
+  const mult = DIFFICULTY_SCORE_MULTIPLIER[s.difficulty ?? DEFAULT_DIFFICULTY] ?? 1;
+  return Math.round(score * mult);
 }
 
 /** Tier index (1-based) for a radius; below the first threshold counts as Tier 1. */

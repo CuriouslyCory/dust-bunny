@@ -13,6 +13,7 @@
  * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
  *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
+ *                 [--difficulty=casual|arcade|hardcore]
  */
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
@@ -27,6 +28,7 @@ import type { RoboVac9000 } from '../src/hazards/robovac';
 import type { SprayBottle } from '../src/hazards/sprayBottle';
 import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import type { Broom } from '../src/hazards/broom';
+import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { installCombatHooks } from '../src/perks/combat';
@@ -52,6 +54,7 @@ const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
 const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
 const startArea = opt('area') === 'neighborhood' || opt('area') === 'city' ? (opt('area') as 'neighborhood' | 'city') : undefined;
+const difficulty = getDifficulty(opt('difficulty')).id;
 const seeds = args.filter((a) => !a.startsWith('--'));
 if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo');
 
@@ -464,7 +467,7 @@ for (const characterId of chars) {
   const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], wins: 0, deaths: 0, n: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
-    const run = new Run(events, { seed, characterId, modifiers, perks: fixedPerks, area: startArea });
+    const run = new Run(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea });
     let leaveArea = false;
     events.on('exitOpened', (e) => {
       log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
@@ -548,7 +551,7 @@ for (const characterId of chars) {
 }
 
 const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : undefined);
-console.log('\nMedian Tier times (runs reaching it):');
+console.log(`\nMedian Tier times (runs reaching it), ${difficulty}:`);
 for (const [id, s] of Object.entries(summary)) {
   console.log(
     `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHARACTERS } from '../data/characters';
+import { isDifficultyId } from './difficulty';
 import {
   cleanName,
   containsProfanity,
@@ -13,7 +14,7 @@ import { computeScore } from './score';
 
 function submission(over: Partial<ScoreSubmission> = {}): ScoreSubmission {
   const s = { name: 'Fluffy', character: 'lint', maxRadius: 12.5, debrisAbsorbed: 340, tierReached: 3, durationMs: 240_000, victory: false, score: 0, ...over };
-  return { ...s, score: over.score ?? computeScore(s) };
+  return { ...s, score: over.score ?? computeScore({ ...s, difficulty: isDifficultyId(s.difficulty) ? s.difficulty : undefined }) };
 }
 
 /** Field that failed validation, or null if it passed. */
@@ -117,6 +118,35 @@ describe('validateSubmission', () => {
 
   it('allows the Tier to lag the radius by one tick', () => {
     expect(err(submission({ maxRadius: 45.2, tierReached: 4, debrisAbsorbed: 3000, durationMs: 500_000 }))).toBeNull();
+  });
+
+  it('defaults a missing difficulty to casual', () => {
+    const r = validateSubmission(submission());
+    expect(r.ok && r.value.difficulty).toBe('casual');
+  });
+
+  it('accepts known difficulties and scores them with the multiplier', () => {
+    const r = validateSubmission(submission({ difficulty: 'hardcore' }));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.difficulty).toBe('hardcore');
+      expect(r.value.score).toBe(Math.round(computeScore({ ...submission(), difficulty: 'casual' }) * 1.6));
+    }
+    expect(err(submission({ difficulty: 'arcade' }))).toBeNull();
+  });
+
+  it('rejects unknown difficulties', () => {
+    expect(err(submission({ difficulty: 'nightmare' }))).toBe('difficulty');
+    expect(err({ ...submission(), difficulty: 2 })).toBe('difficulty');
+    expect(err({ ...submission(), difficulty: null })).toBe('difficulty');
+  });
+
+  it('rejects a score computed for a different difficulty', () => {
+    const casual = submission();
+    expect(err({ ...casual, difficulty: 'hardcore' })).toBe('score');
+    const hard = submission({ difficulty: 'hardcore' });
+    expect(err({ ...hard, difficulty: 'casual' })).toBe('score');
+    expect(err({ ...hard, difficulty: undefined })).toBe('score');
   });
 
   it('rejects a score that does not match the stats', () => {
