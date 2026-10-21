@@ -10,11 +10,13 @@ export interface AreaTuning {
   startCluster: number;
   /** Start cluster radius (cm). */
   startClusterRadius: number;
+  /** Multiplies growth from everything absorbed here (pacing knob per area; 1 = neutral). */
+  growth: number;
 }
 
 export const AREAS: Record<AreaId, AreaTuning> = {
-  house: { name: 'The House', tiers: [1, 5], initialScatter: 1400, startCluster: 260, startClusterRadius: 45 },
-  neighborhood: { name: 'The Neighborhood', tiers: [5, 7], initialScatter: 1500, startCluster: 120, startClusterRadius: 700 },
+  house: { name: 'The House', tiers: [1, 5], initialScatter: 1400, startCluster: 260, startClusterRadius: 45, growth: 1 },
+  neighborhood: { name: 'The Neighborhood', tiers: [5, 7], initialScatter: 1500, startCluster: 120, startClusterRadius: 700, growth: 0.24 },
 };
 
 /** The Tier the spawner uses for a Bunny Tier in an area. */

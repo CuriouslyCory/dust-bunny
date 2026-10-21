@@ -89,7 +89,7 @@ export const OUTDOOR_DEBRIS: DebrisType[] = [
       { shape: 'cone', radius: 0.6, height: 2.6, segments: 14, pos: [0, 1.4, 0] },
       { shape: 'cylinder', radiusTop: 0.36, radiusBottom: 0.42, height: 0.3, segments: 14, pos: [0, 1.2, 0], color: '#f4f4f4' },
     ],
-    rooms: { street: 3, sidewalk: 1 },
+    rooms: { street: 0.8, sidewalk: 0.5, driveway: 0.5 },
   },
   {
     id: 'lawn_flamingo', name: 'Lawn Flamingo', size: 20, mass: 0.8, tiers: [5, 5], area: 'neighborhood',
@@ -123,7 +123,7 @@ export const OUTDOOR_DEBRIS: DebrisType[] = [
     colors: ['#2b2b2b'],
     recipe: [{ shape: 'torus', radius: 0.72, tube: 0.28, rot: [H, 0, 0], pos: [0, 0.28, 0] }],
     material: { roughness: 0.9 },
-    rooms: { driveway: 2, street: 1, yard: 0.5 },
+    rooms: { driveway: 1.2, street: 0.3, yard: 0.4 },
   },
   {
     id: 'fire_hydrant', name: 'Fire Hydrant', size: 30, mass: 3.0, tiers: [5, 6], area: 'neighborhood',
@@ -135,7 +135,7 @@ export const OUTDOOR_DEBRIS: DebrisType[] = [
       { shape: 'cylinder', radiusTop: 0.6, height: 0.15, segments: 14, pos: [0, 0.08, 0] },
     ],
     material: { roughness: 0.5, metalness: 0.2 },
-    rooms: { sidewalk: 3 },
+    rooms: { sidewalk: 1.2 },
   },
   // ── Tier 6: Dust Storm (r 75–160) ─────────────────────────────
   {

@@ -5,8 +5,12 @@
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
  * while stunned. Prints when each Tier is reached, plus how the Run ended.
  *
+ * When the Robo-Vac 9000 falls the bot does not walk to the front door: the Run moves
+ * straight to the neighborhood (logged), so outdoor pacing is measured too.
+ *
  * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
  *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
+ *                 [--area=neighborhood]   start outside (as after the house boss)
  */
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
@@ -45,6 +49,7 @@ const god = args.includes('--god');
 const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
 const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
+const startArea = opt('area') === 'neighborhood' ? 'neighborhood' : undefined;
 const seeds = args.filter((a) => !a.startsWith('--'));
 if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo');
 
@@ -54,6 +59,7 @@ registerPerks();
 /** Occupancy grid for a Bunny of a given radius, with BFS path distances from the Bunny. */
 class Planner {
   cell = 4;
+  private builtLayout: unknown = null;
   cols = 0;
   rows = 0;
   private blocked = new Uint8Array(0);
@@ -67,12 +73,13 @@ class Planner {
   /** Rebuilds occupancy when the Bunny has grown noticeably (or every few seconds for Debris). */
   ensure(): void {
     const r = this.run.bunny.radius;
-    if (this.builtFor > 0 && r < this.builtFor * 1.08 && r > this.builtFor * 0.92 && this.run.time - this.builtAt < 4) return;
+    const house = this.run.house;
+    if (this.builtLayout === house && this.builtFor > 0 && r < this.builtFor * 1.08 && r > this.builtFor * 0.92 && this.run.time - this.builtAt < 4) return;
     this.builtFor = r;
     this.builtAt = this.run.time;
-    const house = this.run.house;
+    this.builtLayout = house;
     const bd = house.bounds;
-    this.cell = Math.min(8, Math.max(2, r * 0.6));
+    this.cell = Math.min(house.area === 'house' ? 8 : 60, Math.max(2, r * 0.6));
     this.cols = Math.ceil((bd.maxX - bd.minX) / this.cell);
     this.rows = Math.ceil((bd.maxZ - bd.minZ) / this.cell);
     const n = this.cols * this.rows;
@@ -249,7 +256,7 @@ class Bot implements InputSource {
       const dx = bunny.x - h.x;
       const dz = bunny.z - h.z;
       const d = Math.hypot(dx, dz) || 1;
-      const boss = h.def.id === 'robovac_9000' ? (h as RoboVac9000) : null;
+      const boss = h.def.boss ? (h as RoboVac9000) : null;
       const reach = (h.shape.kind === 'circle' ? h.shape.radius : Math.max(h.shape.halfW, h.shape.halfD)) + r;
       if (canAbsorb(r, ratio, h.size) || boss?.state === 'stunned') {
         if (d < chaseD && d < viewRadiusFor(r, this.run.tier)) {
@@ -453,7 +460,12 @@ for (const characterId of chars) {
   const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], wins: 0, deaths: 0, n: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
-    const run = new Run(events, { seed, characterId, modifiers, perks: fixedPerks });
+    const run = new Run(events, { seed, characterId, modifiers, perks: fixedPerks, area: startArea });
+    let leaveHouse = false;
+    events.on('exitOpened', () => {
+      log.push(`${fmt(run.time)} house cleared r=${run.bunny.radius.toFixed(1)} → neighborhood`);
+      leaveHouse = true;
+    });
     const bot = new Bot(run);
     run.input = bot;
     const log: string[] = [];
@@ -492,8 +504,12 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < 5); i++) {
+    for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
       run.update(dt);
+      if (leaveHouse) {
+        leaveHouse = false;
+        run.enterNeighborhood();
+      }
       if (traceAt !== undefined && run.time > traceAt && run.time < traceAt + 6 && i % 15 === 0) {
         const b = run.bunny;
         const hz = run.hazards.hazards.map((h) => `${h.def.id}${'state' in h ? `:${(h as { state: string }).state}` : ''}@(${h.x.toFixed(0)},${h.z.toFixed(0)}) d=${Math.hypot(h.x - b.x, h.z - b.z).toFixed(0)}`);

@@ -86,6 +86,7 @@ describe('fluffForRun', () => {
 
   it('multiplies by 1.5 on victory before flooring', () => {
     expect(fluffForRun('victory', stats({ maxRadius: 50.3, debrisAbsorbed: 3001, tierReached: 5 }))).toBe(Math.floor((100.6 + 150.05 + 50) * 1.5));
+    expect(fluffForRun('died', stats({ maxRadius: 80, debrisAbsorbed: 2000, tierReached: 6, houseCleared: true }))).toBe(Math.floor((160 + 100 + 60) * 1.25));
   });
 });
 

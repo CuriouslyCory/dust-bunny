@@ -238,10 +238,10 @@ export class HouseView {
 
     // Daylight shaft through the open door: shown once the door opens.
     const beam = new Mesh(
-      new CylinderGeometry(width * 0.55, width * 0.75, 600, 20, 1, true),
+      new CylinderGeometry(width * 0.35, width * 0.6, 200, 20, 1, true),
       new MeshBasicMaterial({ color: '#fff1c4', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }),
     );
-    beam.position.set((r.minX + r.maxX) / 2 - exit.dir.x * width * 0.6, 300, (r.minZ + r.maxZ) / 2 - exit.dir.z * width * 0.6);
+    beam.position.set((r.minX + r.maxX) / 2 - exit.dir.x * width * 0.5, 100, (r.minZ + r.maxZ) / 2 - exit.dir.z * width * 0.5);
     beam.visible = false;
     beam.name = 'exitBeacon';
     this.root.add(beam);
@@ -259,7 +259,7 @@ export class HouseView {
     this.door.rotation.y = sign * ease * Math.PI * 0.55;
     const beam = this.beacon!;
     beam.visible = true;
-    (beam.material as MeshBasicMaterial).opacity = ease * (0.22 + 0.08 * Math.sin(this.time * 3));
+    (beam.material as MeshBasicMaterial).opacity = ease * (0.16 + 0.07 * Math.sin(this.time * 3));
   }
 
   private buildFurniture(): void {

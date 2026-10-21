@@ -6,6 +6,7 @@ import { Group } from 'three';
 import { Disposables, type EventBus, type Vec3Like } from '../core/events';
 import { NO_INPUT, type InputSource } from '../core/input';
 import { Rng } from '../core/rng';
+import { AREAS } from '../data/areas';
 import { getCharacter } from '../data/characters';
 import { DEBRIS_TYPES } from '../data/debris';
 import { tierForRadius } from '../data/tiers';
@@ -177,7 +178,7 @@ export class Run {
   /** Grows the Bunny by an absorbed object and emits debrisAbsorbed. */
   absorbMass(size: number, mass: number, typeId: string, position: Vec3Like, kind: 'debris' | 'hazard'): void {
     const b = this.bunny;
-    b.setRadius(growRadius(b.radius, size, mass, b.stats.get('growthMultiplier'), growthFactorAt(b.radius)));
+    b.setRadius(growRadius(b.radius, size, mass, b.stats.get('growthMultiplier'), growthFactorAt(b.radius) * AREAS[this.area].growth));
     this.events.emit('debrisAbsorbed', { typeId, size, position, radius: b.radius, kind });
   }
 

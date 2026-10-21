@@ -76,7 +76,7 @@ Each Character has a distinct colour and fur look.
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(maxRadius × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory.
+Fluff earned per Run ≈ `floor(maxRadius × 2 + debrisAbsorbed / 20 + tierReached × 10)`, ×1.5 on victory (×1.25 if the house was cleared but the Run ended outside).
 
 ## Screens
 

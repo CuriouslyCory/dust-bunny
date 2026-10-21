@@ -93,7 +93,7 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
  * and rests on y = 0. For ids listed here the largest material is replaced by the per-instance
  * colour (other parts keep their authored colours); other GLB types ignore instance colours.
  */
-const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book']);
+const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle']);
 
 /** Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute. */
 export function modelDebrisGeometry(id: string, template: Object3D): BufferGeometry | null {

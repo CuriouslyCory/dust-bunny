@@ -136,7 +136,10 @@ export class HazardManager implements System {
 
   /** Removes every Hazard without absorbing it (area change). */
   clear(): void {
-    for (const h of [...this.hazards]) this.removeHazard(h, false);
+    for (const h of [...this.hazards]) {
+      h.dead = true;
+      this.removeHazard(h, false);
+    }
   }
 
   dispose(): void {
