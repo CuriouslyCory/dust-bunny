@@ -125,6 +125,24 @@ export function applySuction(run: Run, sx: number, sz: number, strength: number,
   return speed;
 }
 
+/**
+ * Displaces the Bunny away from (sx, sz) for one tick (Leaf Blower): strength × falloff ×
+ * suctionMultiplier of the Bunny's max speed. Unlike suction it is not weakened during i-frames:
+ * escaping a push only means leaving the cone. Returns the push speed applied.
+ */
+export function applyPush(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
+  const b = run.bunny;
+  if (falloff <= 0 || b.hiddenFromHazards) return 0;
+  const dx = b.x - sx;
+  const dz = b.z - sz;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-3) return 0;
+  const speed = suctionSpeed(maxSpeedFor(b), strength, falloff, b.stats.get('suctionMultiplier'), false);
+  b.x += (dx / d) * speed * dt;
+  b.z += (dz / d) * speed * dt;
+  return speed;
+}
+
 /** Knockback distance (cm) for a hit: max(cm, radii × Bunny radius). */
 export function knockbackDistance(bunnyRadius: number, cm: number, radii: number): number {
   return Math.max(cm, radii * bunnyRadius);

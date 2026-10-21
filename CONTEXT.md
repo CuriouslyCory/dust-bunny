@@ -9,7 +9,7 @@
 - **Obstacle** — Debris or furniture too big to absorb; it blocks movement.
 - **Area** — the world a Run is in: first **the House**, then **the Neighborhood** (the street outside, reached through the **front door** once the Robo-Vac 9000 is absorbed). Outdoors, **zones** (yard, street, sidewalk, driveway, park) take the place of rooms.
 - **Tier** — a growth stage (Speck, Fluff, Tumbleweed, Dust Devil, Dust Titan in the House; Dust Storm, Dust Cyclone in the Neighborhood). Crossing a Tier threshold widens the camera view, unlocks new areas of the floor, and offers a Perk draft.
-- **Hazard** — a roaming cleaning device or supply (Roomba, Lint Roller, Broom, Spray Bottle, Mop, Upright Vacuum, Robo-Vac 9000 boss) that damages the Bunny. Hazards small enough relative to the Bunny can be absorbed.
+- **Hazard** — a roaming cleaning device or supply (Roomba, Lint Roller, Broom, Spray Bottle, Mop, Upright Vacuum, Robo-Vac 9000 boss; outdoors: Robotic Mower, Lawn Mower, Leaf Blower, Sprinkler, Street Sweeper boss) that damages the Bunny. Hazards small enough relative to the Bunny can be absorbed.
 - **Health** — whole hit points shown as hearts. Reaching zero ends the Run.
 - **Pickup** — a temporary, timed power-up found on the floor during a Run (Static Charge, Sugar Rush, Bubble Wrap, Glue Dab, Crumb Cake, Dust Cloud).
 - **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends.

@@ -8,7 +8,26 @@
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
-import { AREA_BOSSES, BROOM, DIRECTOR, DIRECTOR_EXCLUDE, LINT_ROLLER, MOP, NEIGHBORHOOD_DIRECTOR, ROBOVAC_9000, ROOMBA, SPRAY_BOTTLE, UPRIGHT_VACUUM, type TierSpawnTable } from '../data/hazards';
+import {
+  AREA_BOSSES,
+  BROOM,
+  DIRECTOR,
+  DIRECTOR_EXCLUDE,
+  LAWN_MOWER,
+  LEAF_BLOWER,
+  LINT_ROLLER,
+  MINI_MOWER,
+  MOP,
+  NEIGHBORHOOD_DIRECTOR,
+  ROBO_MOWER,
+  ROBOVAC_9000,
+  ROOMBA,
+  SPRAY_BOTTLE,
+  SPRINKLER,
+  STREET_SWEEPER,
+  UPRIGHT_VACUUM,
+  type TierSpawnTable,
+} from '../data/hazards';
 import { tierProgress } from '../data/tiers';
 import type { AreaId } from '../world/types';
 import type { Run } from '../game/run';
@@ -25,6 +44,12 @@ export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: 
   mop: { radius: MOP.size, height: MOP.height },
   upright_vacuum: { radius: UPRIGHT_VACUUM.size, height: UPRIGHT_VACUUM.height },
   robovac_9000: { radius: ROBOVAC_9000.contactRadius, height: ROBOVAC_9000.height },
+  robo_mower: { radius: ROBO_MOWER.size, height: ROBO_MOWER.height },
+  mini_mower: { radius: MINI_MOWER.size, height: MINI_MOWER.height },
+  lawn_mower: { radius: LAWN_MOWER.size, height: LAWN_MOWER.height },
+  leaf_blower: { radius: LEAF_BLOWER.size, height: LEAF_BLOWER.height },
+  sprinkler: { radius: SPRINKLER.size, height: SPRINKLER.height },
+  street_sweeper: { radius: STREET_SWEEPER.contactRadius, height: STREET_SWEEPER.height },
 };
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
