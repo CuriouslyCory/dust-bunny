@@ -16,6 +16,7 @@ import { DebrisField, type Debris } from '../entities/debris';
 import { BASE_BUNNY_STATS, StatBlock, type StatModifier } from '../entities/stats';
 import { HazardManager } from '../hazards';
 import { perkRegistry } from '../perks';
+import { PerkDraft } from '../perks/draft';
 import { PickupManager } from '../pickups';
 import { absorbSystem, growRadius, growthFactorAt, magnetSystem } from '../systems/absorb';
 import { collisionSystem } from '../systems/collision';
@@ -91,6 +92,8 @@ export class Run {
   readonly hazards: HazardManager;
   readonly pickups: PickupManager;
   readonly spawner: DebrisSpawner;
+  /** Pending Perk drafts, the current offer and rerolls (one draft per Tier crossed). */
+  readonly perkDraft: PerkDraft;
   /** Visuals owned by simulation entities (Hazards, Pickups). RunView adds it to the scene. */
   readonly entityRoot = new Group();
   readonly disposables = new Disposables();
@@ -130,6 +133,7 @@ export class Run {
     this.hazards = new HazardManager(this, this.rng.fork('hazards'));
     this.pickups = new PickupManager(this, this.rng.fork('pickups'));
     this.spawner = new DebrisSpawner(this.rng.fork('debris'));
+    this.perkDraft = new PerkDraft(this);
 
     for (const s of [movementSystem, magnetSystem, this.hazards, absorbSystem, collisionSystem, this.pickups, growthSystem, exitSystem, this.spawner]) {
       this.addSystem(s);

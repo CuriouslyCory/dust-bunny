@@ -1,7 +1,7 @@
 /**
  * Wires the browser side of the roguelike layer into a Game (call once at boot, after URL params
  * are applied): registers the characterSelect / perkDraft / shop screens; feeds owned Upgrades and
- * the last Character and Difficulty into game.nextRunConfig; queues a Perk draft per tierUp;
+ * the last Character and Difficulty into game.nextRunConfig; opens the Perk draft modal on tierUp;
  * awards Fluff on runEnded; adds HUD widgets. Pickup / Perk content and the per-Run combat hooks
  * and Pickup director are the Run assembly's job (src/game/assembly.ts).
  */
@@ -10,7 +10,7 @@ import { registerGameplayContent } from '../game/assembly';
 import type { Game } from '../game/game';
 import { installRoguelikeHud } from '../ui/roguelikeHud';
 import { registerCharacterSelectScreen } from '../ui/screens/characterSelect';
-import { queuePerkDraft, registerPerkDraftScreen, resetPerkDrafts } from '../ui/screens/perkDraft';
+import { openPerkDraft, registerPerkDraftScreen } from '../ui/screens/perkDraft';
 import { registerShopScreen } from '../ui/screens/shop';
 import { getMeta } from './meta';
 
@@ -32,8 +32,8 @@ export function installRoguelike(game: Game): void {
   syncUpgrades();
   meta.store.onChange(syncUpgrades);
 
-  game.events.on('runStarted', () => resetPerkDrafts());
-  game.events.on('tierUp', () => queuePerkDraft(game));
+  // The Run queues the draft itself (run.perkDraft); this only opens the modal.
+  game.events.on('tierUp', () => openPerkDraft(game));
   game.events.on('runEnded', (e) => {
     const award = meta.awardRun(e);
     game.events.emit('fluffAwarded', { amount: award.fluff, total: award.total, reason: e.reason });
