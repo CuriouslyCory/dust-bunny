@@ -2,8 +2,9 @@
  * Procedural fallbacks for the Hazard models (used when no .glb override is loaded).
  * They follow docs/models.md: cm units, +Z forward, origin at the floor contact point
  * (the broom's origin is the top of the handle), and the same named animatable nodes
- * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper `brush_l` /
- * `brush_r`, robo_mower `blade`, sprinkler `head`; all spin about Y).
+ * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper / garbage_truck
+ * `brush_l` / `brush_r`, robo_mower `blade`, floor_scrubber `brush`, sprinkler and
+ * pressure_washer `head`; all spin about Y).
  * If another module already registered a factory for an id, it is kept.
  */
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
@@ -24,6 +25,13 @@ export const HAZARD_MODEL_SIZES = {
   leaf_blower: { w: 41, d: 87.7, h: 40 },
   sprinkler: { w: 77.7, d: 68, h: 69.5 },
   street_sweeper: { w: 223, d: 309.7, h: 228.5 },
+  // City (measured from the real-size Blender GLBs; the Hazards scale them up to their size,
+  // see modelSize in src/data/hazards.ts).
+  floor_scrubber: { w: 95, d: 154, h: 139 },
+  pressure_washer: { w: 69.8, d: 89.3, h: 106.8 },
+  street_flusher: { w: 263, d: 691.7, h: 286 },
+  litter_vacuum: { w: 87.8, d: 174.6, h: 160.5 },
+  garbage_truck: { w: 273, d: 924.4, h: 381 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -338,6 +346,161 @@ function streetSweeper(): Object3D {
   return g;
 }
 
+// ── City Hazards (real size; front +Z, origin bottom-centre) ──
+
+function floorScrubber(): Object3D {
+  // Ride-on scrubber: scrub disc `brush` under the front, seat and recovery tank behind.
+  const g = new Group();
+  const yellow = mat('#f2b705', 0.5, 0.1);
+  const dark = mat('#2b2d31', 0.5, 0.3);
+  const tyre = mat('#1b1b1b', 0.85);
+  addBox(g, 88, 70, 130, 0, 14, -8, yellow);
+  addBox(g, 84, 8, 120, 0, 84, -8, dark);
+  // Seat, backrest and steering column.
+  addBox(g, 44, 10, 36, 0, 92, -30, mat('#1d1f24', 0.7));
+  addBox(g, 44, 34, 8, 0, 102, -50, mat('#1d1f24', 0.7));
+  rod(g, new Vector3(0, 92, 30), new Vector3(0, 128, 18), 2.5, dark);
+  addCylinder(g, 16, 16, 3, 0, 128, 18, mat('#111111', 0.6), 18);
+  // Warning beacon and headlights.
+  addCylinder(g, 5, 5, 10, 30, 92, 40, glow('#ff8a00', 2), 12);
+  for (const x of [-28, 28]) addBox(g, 12, 6, 2, x, 60, 57, glow('#fff3b0', 1.8));
+  // Squeegee at the back, wheels.
+  addBox(g, 95, 6, 8, 0, 2, -76, mat('#3a3a3a', 0.9));
+  for (const x of [-44, 44]) wheel(g, x, 16, -40, 16, 10, tyre);
+  wheel(g, 0, 12, 52, 12, 10, tyre);
+  // Scrub disc (pad driver with bristle tufts).
+  const brush = new Group();
+  brush.name = 'brush';
+  brush.position.set(0, 5, 38);
+  addCylinder(brush, 38, 38, 6, 0, 0, 0, mat('#3d6fb6', 0.5, 0.2), 24);
+  const bristles = mat('#e8e2d0', 0.95);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const tuft = addBox(brush, 6, 3, 28, Math.sin(a) * 20, -2, Math.cos(a) * 20, bristles);
+    tuft.rotation.y = a;
+  }
+  g.add(brush);
+  return g;
+}
+
+function pressureWasher(): Object3D {
+  // Wheeled cart with an engine; the lance `head` turns about Y at (0, 90, 0), nozzle +Z.
+  const g = new Group();
+  const yellow = mat('#f5c400', 0.45, 0.1);
+  const black = mat('#1d1f24', 0.6, 0.2);
+  addBox(g, 56, 10, 70, 0, 18, -5, black);
+  addBox(g, 50, 40, 46, 0, 28, -8, yellow);
+  addCylinder(g, 12, 12, 30, 0, 68, -12, mat('#c9ced6', 0.3, 0.8), 16);
+  for (const x of [-32, 32]) wheel(g, x, 18, -26, 18, 8, mat('#1b1b1b', 0.85));
+  addBox(g, 8, 18, 8, 0, 0, 28, black);
+  // Hose reel and the post that carries the head.
+  addCylinder(g, 14, 14, 8, 26, 36, 10, mat('#2e7d32', 0.6), 18).rotation.z = Math.PI / 2;
+  addCylinder(g, 4, 4, 30, 0, 60, 18, black, 10);
+  rod(g, new Vector3(-22, 40, -34), new Vector3(-22, 108, -44), 2, black);
+  rod(g, new Vector3(22, 40, -34), new Vector3(22, 108, -44), 2, black);
+  rod(g, new Vector3(-23, 108, -44), new Vector3(23, 108, -44), 2.2, black);
+  const head = new Group();
+  head.name = 'head';
+  head.position.set(0, 90, 0);
+  addCylinder(head, 7, 7, 8, 0, -4, 0, black, 14);
+  addBox(head, 8, 14, 12, 0, 0, 4, yellow);
+  rod(head, new Vector3(0, 8, 8), new Vector3(0, 4, 44), 1.8, mat('#c9ced6', 0.3, 0.8));
+  addCylinder(head, 3, 2, 6, 0, 3, 44, mat('#e63946', 0.5), 10).rotation.x = Math.PI / 2;
+  g.add(head);
+  return g;
+}
+
+function streetFlusher(): Object3D {
+  // Water truck: cab at the front (+Z), big tank behind, spray bar across the front bumper.
+  const g = new Group();
+  const white = mat('#f1efe8', 0.5, 0.1);
+  const orange = mat('#f07f1a', 0.5);
+  const tyre = mat('#1b1b1b', 0.85);
+  addBox(g, 230, 40, 660, 0, 30, -10, mat('#2b2d31', 0.5, 0.4));
+  for (const x of [-112, 112]) {
+    wheel(g, x, 50, 230, 50, 30, tyre);
+    wheel(g, x, 50, -180, 50, 30, tyre);
+    wheel(g, x, 50, -290, 50, 30, tyre);
+  }
+  // Cab with windscreen, headlights and a beacon bar.
+  addBox(g, 240, 190, 130, 0, 70, 270, white);
+  addBox(g, 220, 70, 4, 0, 175, 336, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 244, 14, 6, 0, 70, 337, orange);
+  for (const x of [-95, 95]) addBox(g, 24, 14, 2, x, 100, 337, glow('#fff3b0', 1.8));
+  addBox(g, 150, 14, 30, 0, 260, 270, mat('#2b2d31', 0.5));
+  for (const x of [-50, 50]) addCylinder(g, 10, 10, 18, x, 274, 270, glow('#ff8a00', 2), 14);
+  // Water tank lying along Z, with orange bands.
+  const tank = shadow(new Mesh(new CylinderGeometry(110, 110, 440, 24), mat('#cfd6dc', 0.35, 0.5)));
+  tank.rotation.x = Math.PI / 2;
+  tank.position.set(0, 180, -100);
+  g.add(tank);
+  for (const z of [-280, -100, 80]) {
+    const band = shadow(new Mesh(new CylinderGeometry(112, 112, 16, 24), orange));
+    band.rotation.x = Math.PI / 2;
+    band.position.set(0, 180, z);
+    g.add(band);
+  }
+  // Spray bar with glowing nozzles in front of the bumper.
+  addBox(g, 250, 10, 12, 0, 22, 346, mat('#9aa0a6', 0.3, 0.7));
+  for (let i = 0; i < 6; i++) addCylinder(g, 5, 5, 6, -100 + i * 40, 16, 350, glow('#3aa8ff', 1.6), 10);
+  return g;
+}
+
+function litterVacuum(): Object3D {
+  // Electric street litter vacuum: bin body, handle at the back, intake nozzle at the front (+Z).
+  const g = new Group();
+  const green = mat('#2e8b57', 0.5, 0.1);
+  const grey = mat('#3d4047', 0.5, 0.3);
+  addBox(g, 90, 100, 110, 0, 20, -20, green);
+  addBox(g, 84, 10, 104, 0, 120, -20, grey);
+  for (const x of [-44, 44]) wheel(g, x, 20, -50, 20, 10, mat('#1b1b1b', 0.85));
+  wheel(g, 0, 12, 22, 12, 10, mat('#1b1b1b', 0.85));
+  rod(g, new Vector3(-30, 120, -70), new Vector3(-30, 158, -85), 2.2, grey);
+  rod(g, new Vector3(30, 120, -70), new Vector3(30, 158, -85), 2.2, grey);
+  rod(g, new Vector3(-31, 158, -85), new Vector3(31, 158, -85), 2.4, mat('#111111', 0.7));
+  addCylinder(g, 3.2, 3.2, 3, 0, 130, 20, glow('#4dff7a', 1.6), 10);
+  // Hose arching forward to a wide intake mouth on the ground.
+  const hose = mat('#1d1f24', 0.7);
+  rod(g, new Vector3(0, 110, 30), new Vector3(0, 90, 62), 9, hose);
+  rod(g, new Vector3(0, 90, 62), new Vector3(0, 20, 74), 9, hose);
+  addBox(g, 70, 18, 22, 0, 0, 74, mat('#f2b705', 0.5));
+  addBox(g, 62, 4, 2, 0, 3, 85.5, mat('#111111', 0.9));
+  return g;
+}
+
+function garbageTruck(): Object3D {
+  // Cab at the front (+Z), compactor body behind, rear loader at the back (−Z);
+  // street brushes `brush_l` / `brush_r` under the front bumper corners.
+  const g = new Group();
+  const green = mat('#2f7d32', 0.5, 0.1);
+  const white = mat('#f1efe8', 0.5, 0.1);
+  const yellow = mat('#f2b705', 0.5);
+  const tyre = mat('#1b1b1b', 0.85);
+  addBox(g, 240, 50, 860, 0, 30, -10, mat('#2b2d31', 0.5, 0.4));
+  for (const x of [-118, 118]) {
+    wheel(g, x, 55, 300, 55, 34, tyre);
+    wheel(g, x, 55, -150, 55, 34, tyre);
+    wheel(g, x, 55, -270, 55, 34, tyre);
+  }
+  // Cab.
+  addBox(g, 250, 230, 150, 0, 70, 360, white);
+  addBox(g, 230, 80, 4, 0, 205, 436, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 254, 20, 10, 0, 60, 440, mat('#9aa0a6', 0.3, 0.7));
+  for (const x of [-95, 95]) addBox(g, 26, 16, 2, x, 110, 436, glow('#fff3b0', 1.8));
+  addBox(g, 160, 14, 30, 0, 300, 360, mat('#2b2d31', 0.5));
+  for (const x of [-55, 55]) addCylinder(g, 11, 11, 20, x, 314, 360, glow('#ff8a00', 2), 14);
+  // Compactor body with hazard stripes.
+  addBox(g, 260, 300, 560, 0, 80, -10, green);
+  addBox(g, 230, 10, 520, 0, 380, -10, mat('#256628', 0.6));
+  for (let i = 0; i < 6; i++) addBox(g, 262, 14, 30, 0, 250, -240 + i * 92, yellow);
+  // Rear loader with the dark hopper mouth.
+  addBox(g, 250, 280, 140, 0, 60, -360, white);
+  addBox(g, 200, 110, 6, 0, 90, -432, mat('#111111', 0.9));
+  for (const x of [-110, 110]) addBox(g, 14, 120, 8, x, 80, -434, yellow);
+  g.add(discBrush('brush_l', -100, 5, 428, 46), discBrush('brush_r', 100, 5, 428, 46));
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -351,6 +514,11 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   leaf_blower: leafBlower,
   sprinkler,
   street_sweeper: streetSweeper,
+  floor_scrubber: floorScrubber,
+  pressure_washer: pressureWasher,
+  street_flusher: streetFlusher,
+  litter_vacuum: litterVacuum,
+  garbage_truck: garbageTruck,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

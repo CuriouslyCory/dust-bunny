@@ -4,8 +4,7 @@
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
  * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
  * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
- * at Tier 9 in the city. Entering a new
- * area resets the director (grace period, boss).
+ * at Tier 9 in the city. Entering a new area resets the director (grace period, boss).
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -15,16 +14,22 @@ import {
   BROOM,
   DIRECTOR,
   DIRECTOR_EXCLUDE,
+  FLOOR_SCRUBBER,
+  GARBAGE_TRUCK,
   LAWN_MOWER,
   LEAF_BLOWER,
   LINT_ROLLER,
+  LITTER_VACUUM,
   MINI_MOWER,
+  MINI_SCRUBBER,
   MOP,
+  PRESSURE_WASHER,
   ROBO_MOWER,
   ROBOVAC_9000,
   ROOMBA,
   SPRAY_BOTTLE,
   SPRINKLER,
+  STREET_FLUSHER,
   STREET_SWEEPER,
   UPRIGHT_VACUUM,
   type TierSpawnTable,
@@ -51,6 +56,12 @@ export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: 
   leaf_blower: { radius: LEAF_BLOWER.size, height: LEAF_BLOWER.height },
   sprinkler: { radius: SPRINKLER.size, height: SPRINKLER.height },
   street_sweeper: { radius: STREET_SWEEPER.contactRadius, height: STREET_SWEEPER.height },
+  floor_scrubber: { radius: FLOOR_SCRUBBER.size, height: FLOOR_SCRUBBER.height },
+  mini_scrubber: { radius: MINI_SCRUBBER.size, height: MINI_SCRUBBER.height },
+  pressure_washer: { radius: PRESSURE_WASHER.size, height: PRESSURE_WASHER.height },
+  litter_vacuum: { radius: LITTER_VACUUM.size, height: LITTER_VACUUM.height },
+  street_flusher: { radius: STREET_FLUSHER.size, height: STREET_FLUSHER.height },
+  garbage_truck: { radius: GARBAGE_TRUCK.contactRadius, height: GARBAGE_TRUCK.height },
 };
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {

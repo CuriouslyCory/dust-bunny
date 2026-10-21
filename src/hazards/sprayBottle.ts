@@ -5,11 +5,12 @@
  *
  * The Sprinkler (outdoors) reuses it with SPRINKLER tuning: only its `head` node turns, it
  * sweeps idly while the Bunny is out of range, and a water hit also soaks the Bunny (a brief
- * `hazard:wet` slow, like the Mop's trail).
+ * `hazard:wet` slow, like the Mop's trail). The Pressure Washer (city, PRESSURE_WASHER) works the
+ * same way with fast, wide water jets.
  */
 import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { SPRAY_BOTTLE, SPRINKLER, tierValue, type TurretTuning } from '../data/hazards';
+import { PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, type TurretTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -49,9 +50,10 @@ export class SprayBottle extends BaseHazard {
     x: number,
     z: number,
     private readonly rng: Rng,
-    private readonly cfg: TurretTuning = SPRAY_BOTTLE,
+    readonly cfg: TurretTuning = SPRAY_BOTTLE,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
+    this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.baseYaw = this.yaw;
     this.aimNode = cfg.aimNode ? (this.model.getObjectByName(cfg.aimNode) ?? null) : null;
@@ -192,5 +194,17 @@ export const sprinklerDef = hazardRegistry.register({
   modelId: SPRINKLER.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, SPRINKLER);
+  },
+});
+
+export const pressureWasherDef = hazardRegistry.register({
+  id: 'pressure_washer',
+  name: 'Pressure Washer',
+  minTier: 7,
+  spawnWeight: 1,
+  mass: PRESSURE_WASHER.mass,
+  modelId: PRESSURE_WASHER.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, PRESSURE_WASHER);
   },
 });

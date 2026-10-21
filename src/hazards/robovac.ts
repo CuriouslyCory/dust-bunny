@@ -7,11 +7,14 @@
  *
  * Street Sweeper (neighborhood, Tier 7): the same state machine with STREET_SWEEPER tuning. Its
  * charges are stunned by houses, trees and the hedge, it summons mini mowers, and absorbing it
- * opens the road barrier to the city. The city boss (onDefeat 'victory') wins the Run
- * (bossDefeated → victory → runEnded 'victory').
+ * opens the road barrier to the city.
+ *
+ * Garbage Truck (city, Tier 9, GARBAGE_TRUCK): its compactor sucks the Bunny in while it hunts,
+ * buildings and the concrete barrier stun its charges, and it summons mini scrubbers. Absorbing
+ * it (onDefeat 'victory') wins the Run (bossDefeated → victory → runEnded 'victory').
  */
 import type { Rng } from '../core/rng';
-import { ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -50,6 +53,8 @@ export class RoboVac9000 extends BaseHazard {
     readonly cfg: BossTuning = ROBOVAC_9000,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
+    // Full-size model scale; chips shrink `body` on top of it (see sync).
+    this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.timer = cfg.introTime;
     this.summonTimer = cfg.summonInterval * 0.6;
     this.shape = { kind: 'circle', radius: cfg.contactRadius };
@@ -254,5 +259,19 @@ export const streetSweeperDef = hazardRegistry.register({
   modelId: STREET_SWEEPER.modelId,
   create(_run, x, z, id, rng: Rng) {
     return new RoboVac9000(id, this, x, z, rng, STREET_SWEEPER);
+  },
+});
+
+export const garbageTruckDef = hazardRegistry.register({
+  id: 'garbage_truck',
+  name: 'Garbage Truck',
+  minTier: 9,
+  spawnWeight: 0,
+  maxAlive: 1,
+  boss: true,
+  mass: GARBAGE_TRUCK.mass,
+  modelId: GARBAGE_TRUCK.modelId,
+  create(_run, x, z, id, rng: Rng) {
+    return new RoboVac9000(id, this, x, z, rng, GARBAGE_TRUCK);
   },
 });
