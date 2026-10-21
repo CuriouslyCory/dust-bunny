@@ -7,7 +7,7 @@ import type { Rng } from '../core/rng';
 import { UPRIGHT_VACUUM } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
+import { applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 import { shedMass } from './shed';
@@ -55,7 +55,7 @@ export class UprightVacuum extends BaseHazard {
     const c = UPRIGHT_VACUUM;
     const b = run.bunny;
     this.timer -= dt;
-    this.yaw = turnTowards(this.yaw, yawOf(b.x - this.x, b.z - this.z), c.turnRate * dt);
+    if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(b.x - this.x, b.z - this.z), c.turnRate * dt);
     const speed = this.tierSpeed(run, c.speed) * (this.state === 'on' ? 0.5 : 1);
     const m = moveCircle(run.house, this.x, this.z, this.size, c.height, Math.sin(this.yaw) * speed * dt, Math.cos(this.yaw) * speed * dt);
     this.x = m.x;
@@ -96,7 +96,7 @@ export class UprightVacuum extends BaseHazard {
   onContact(run: Run): void {
     const c = UPRIGHT_VACUUM;
     if (bunnySheltered(run, c.height)) return;
-    if (hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii }) && run.bunny.alive) {
+    if (!this.stunned && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii }) && run.bunny.alive) {
       shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
     pushBunnyOut(run, this.x, this.z, this.size);

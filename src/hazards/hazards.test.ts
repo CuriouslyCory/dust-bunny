@@ -14,6 +14,7 @@ import { puddleScale } from './mop';
 import { bossSizeAfterHits } from './robovac';
 import { planShed } from './shed';
 import { inCone } from './uprightVacuum';
+import { installRunHooks } from '../meta/install';
 
 const makeRun = (seed = 'hazards') => {
   const events = new EventBus();
@@ -189,6 +190,54 @@ describe('mass shedding and wet trail', () => {
     expect(puddleScale(0, 7, 0.4)).toBe(1);
     expect(puddleScale(5.6, 7, 0.4)).toBeCloseTo(0.5);
     expect(puddleScale(7, 7, 0.4)).toBe(0);
+  });
+});
+
+describe('roguelike hooks', () => {
+  it('does not pull a hidden Bunny (Dust Cloud)', () => {
+    const { run } = makeRun();
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(3);
+    run.hazards.spawn('roomba', b.x + ROOMBA.size + b.radius + 4, b.z);
+    b.hiddenFromHazards = true;
+    const x0 = b.x;
+    run.hazards.update(1 / 60, run);
+    expect(b.x).toBe(x0);
+    b.hiddenFromHazards = false;
+    run.hazards.update(1 / 60, run);
+    expect(b.x).toBeGreaterThan(x0);
+  });
+
+  it('a stunned Hazard neither moves nor hurts', () => {
+    const { run } = makeRun();
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(5);
+    const h = run.hazards.spawn('roomba', b.x + 200, b.z);
+    h.stunnedFor = 1;
+    const [x0, z0] = [h.x, h.z];
+    run.hazards.update(1 / 60, run);
+    expect([h.x, h.z]).toEqual([x0, z0]);
+    h.x = b.x + b.radius + ROOMBA.size - 1;
+    run.hazards.update(1 / 60, run);
+    expect(b.health).toBe(b.maxHealth);
+  });
+
+  it('a blocked hit (Bubble Wrap) does not stick or shed', () => {
+    const { run, events } = makeRun();
+    installRunHooks(run);
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(4);
+    b.shield = 1;
+    let shed = 0;
+    events.on('bunnyShed', () => shed++);
+    run.hazards.spawn('lint_roller', b.x + b.radius + 5, b.z);
+    run.hazards.update(1 / 60, run);
+    expect(b.health).toBe(b.maxHealth);
+    expect(b.rooted).toBe(0);
+    expect(shed).toBe(0);
   });
 });
 

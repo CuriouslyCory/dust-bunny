@@ -26,6 +26,15 @@ export abstract class BaseHazard implements Hazard {
   yaw = 0;
   /** Seconds alive. */
   time = 0;
+  /** Spiky Dash stun (set and counted down by the combat System): no movement or attacks. */
+  stunnedFor = 0;
+
+  get stunned(): boolean {
+    return this.stunnedFor > 0;
+  }
+
+  /** Called by the combat System when stunned; the wobble is driven by `stunnedFor` in sync(). */
+  stun(_seconds: number): void {}
   protected readonly decals: Decal[] = [];
   private readonly absorbMarker: Decal;
 
@@ -50,7 +59,7 @@ export abstract class BaseHazard implements Hazard {
 
   update(dt: number, run: Run): void {
     this.time += dt;
-    this.tick(dt, run);
+    if (!this.stunned) this.tick(dt, run);
     this.sync(run);
   }
 
@@ -58,6 +67,7 @@ export abstract class BaseHazard implements Hazard {
   protected sync(run: Run): void {
     this.body.position.set(this.x, 0, this.z);
     this.body.rotation.y = this.yaw;
+    this.body.rotation.z = this.stunned ? Math.sin(this.time * 30) * 0.08 : 0;
     const absorbable = bunnyCanAbsorb(run, this.size);
     this.absorbMarker.visible = absorbable;
     if (absorbable) {

@@ -79,7 +79,7 @@ export class Roomba extends BaseHazard {
 
   onContact(run: Run): void {
     if (bunnySheltered(run, this.cfg.height)) return;
-    hitBunny(run, this.x, this.z, { damage: this.cfg.damage, source: this.def.id, knockbackCm: this.cfg.knockbackCm, knockbackRadii: this.cfg.knockbackRadii });
+    if (!this.stunned) hitBunny(run, this.x, this.z, { damage: this.cfg.damage, source: this.def.id, knockbackCm: this.cfg.knockbackCm, knockbackRadii: this.cfg.knockbackRadii });
     pushBunnyOut(run, this.x, this.z, this.size);
   }
 }

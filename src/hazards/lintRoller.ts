@@ -126,7 +126,7 @@ export class LintRoller extends BaseHazard {
   onContact(run: Run): void {
     if (this.stuck > 0 || bunnySheltered(run, LINT_ROLLER.height)) return;
     const b = run.bunny;
-    if (!b.damage(LINT_ROLLER.damage, this.def.id)) {
+    if (this.stunned || !b.damage(LINT_ROLLER.damage, this.def.id)) {
       pushBunnyOut(run, this.x, this.z, this.size);
       return;
     }

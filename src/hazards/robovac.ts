@@ -8,7 +8,7 @@ import type { Rng } from '../core/rng';
 import { ROBOVAC_9000 } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { absorbRadiusFor, applySuction, bunnySheltered, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
+import { absorbRadiusFor, applySuction, bunnySheltered, canTarget, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
 import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 import { scatterDebris, shedMass } from './shed';
@@ -71,11 +71,13 @@ export class RoboVac9000 extends BaseHazard {
 
     switch (this.state) {
       case 'intro':
-        this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+        if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
         if (this.timer <= 0) this.enter('hunt', randomIn(this.rng, c.huntTime));
         break;
       case 'hunt': {
-        this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+        // Hidden Bunny (Dust Cloud): wander instead of chasing.
+        if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+        else this.yaw += Math.sin(this.time * 0.7) * dt;
         this.drive(run, c.huntSpeed * dt, radius);
         if (!bunnySheltered(run, c.height)) {
           const reach = radius + suctionReachFor(c.suctionReach, b.stats.get('suctionMultiplier'));
@@ -86,7 +88,7 @@ export class RoboVac9000 extends BaseHazard {
           this.summonTimer = c.summonInterval;
           this.summon(run);
         }
-        if (this.timer <= 0 && dist < c.chargeTrigger) {
+        if (this.timer <= 0 && dist < c.chargeTrigger && canTarget(run)) {
           this.enter('telegraph', c.telegraph);
           this.yaw = yawOf(dx, dz);
           this.chargeDirX = Math.sin(this.yaw);
@@ -138,6 +140,11 @@ export class RoboVac9000 extends BaseHazard {
     }
   }
 
+  /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
+  override stun(_seconds: number): void {
+    this.hitThisStun = false;
+  }
+
   private enter(state: BossState, time: number): void {
     this.state = state;
     this.timer = time;
@@ -177,7 +184,7 @@ export class RoboVac9000 extends BaseHazard {
     const b = run.bunny;
     if (bunnySheltered(run, c.height)) return;
     const radius = c.contactRadius * this.scale;
-    if (this.state === 'stunned') {
+    if (this.state === 'stunned' || this.stunned) {
       if (!this.hitThisStun) {
         this.hitThisStun = true;
         this.hits++;
@@ -185,7 +192,7 @@ export class RoboVac9000 extends BaseHazard {
         // Parts knocked loose: absorbable Debris around the boss.
         scatterDebris(run, this.rng, this.x, this.z, c.chipPieces, b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
         run.events.emit('bossHit', { hazardId: this.id, size: this.size, absorbRadius: this.absorbRadius(run) });
-        this.timer = Math.min(this.timer, 0.6);
+        if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6);
       }
       knockbackCm(b, b.x - this.x, b.z - this.z, b.radius * 2);
       pushBunnyOut(run, this.x, this.z, radius);

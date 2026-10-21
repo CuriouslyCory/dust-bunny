@@ -1,10 +1,12 @@
 /**
- * Pickup extension point. No Pickups are defined yet; register PickupDefs here.
+ * Pickup extension point. The six design Pickups are registered in ./pickups.ts and spawned
+ * by ./director.ts (installed per Run from src/meta/install.ts).
  *
  * PickupManager (a System) holds Pickups lying on the floor and active timed effects.
- * Touching a floor Pickup calls def.apply(run); if the def has a duration and apply returns
- * an undo function, it is called when the effect expires. Typical apply: add a timed stat
- * modifier with source `pickup:<id>` (then no undo is needed), or push a Bunny damage filter.
+ * Touching a floor Pickup calls def.apply(run, duration); if the def has a duration and apply
+ * returns an undo function, it is called when the effect expires. Collecting a timed Pickup
+ * that is already active undoes and re-applies it with a fresh timer (no double stacking).
+ * Durations are scaled by `durationScale × bunny.stats.pickupDuration` (Hoarder).
  */
 import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import { Registry } from '../core/registry';
@@ -17,6 +19,8 @@ export interface PickupDef {
   name: string;
   description: string;
   color: string;
+  /** Emoji / short glyph for HUD and floor visuals. */
+  icon?: string;
   /** Seconds the effect lasts (omit for instant effects). Scaled by manager.durationScale. */
   duration?: number;
   spawnWeight: number;
@@ -35,6 +39,8 @@ export interface FloorPickup {
   z: number;
   radius: number;
   object3d: Object3D;
+  /** Run time (s) when spawned. */
+  spawnedAt: number;
 }
 
 export interface ActiveEffect {
@@ -49,7 +55,7 @@ export class PickupManager implements System {
   readonly order = SYSTEM_ORDER.pickups;
   readonly floor: FloorPickup[] = [];
   readonly active: ActiveEffect[] = [];
-  /** Multiplies effect durations (Hoarder Perk). */
+  /** Extra multiplier on effect durations (the Hoarder Perk uses the pickupDuration stat). */
   durationScale = 1;
   /** Pluggable spawn policy (Pickup spawning is not implemented in core). */
   director: ((dt: number, run: Run, manager: PickupManager) => void) | null = null;
@@ -68,17 +74,33 @@ export class PickupManager implements System {
       new Mesh(new SphereGeometry(r, 16, 12), new MeshStandardMaterial({ color: def.color, emissive: def.color, emissiveIntensity: 0.8 }));
     object3d.position.set(x, r, z);
     this.run.entityRoot.add(object3d);
-    const p: FloorPickup = { id: this.nextId++, def, x, z, radius: r, object3d };
+    const p: FloorPickup = { id: this.nextId++, def, x, z, radius: r, object3d, spawnedAt: this.run.time };
     this.floor.push(p);
     this.run.events.emit('pickupSpawned', { pickupId: p.id, defId });
     return p;
   }
 
-  /** Applies a Pickup effect directly (also used when collecting). */
+  /** Removes a floor Pickup without collecting it (despawn). */
+  despawn(p: FloorPickup): void {
+    const i = this.floor.indexOf(p);
+    if (i < 0) return;
+    this.floor.splice(i, 1);
+    p.object3d.removeFromParent();
+  }
+
+  /** Effective duration for a def after Hoarder / durationScale. */
+  durationFor(def: PickupDef): number {
+    return (def.duration ?? 0) * this.durationScale * this.run.bunny.stats.get('pickupDuration');
+  }
+
+  /** Applies a Pickup effect directly (also used when collecting). Re-activating refreshes the timer. */
   activate(def: PickupDef): void {
-    const duration = (def.duration ?? 0) * this.durationScale;
+    const duration = this.durationFor(def);
+    const existing = duration > 0 ? this.active.find((e) => e.def.id === def.id) : undefined;
+    existing?.undo?.();
     const undo = def.apply(this.run, duration) ?? undefined;
-    if (duration > 0) this.active.push({ def, remaining: duration, duration, undo });
+    if (existing) Object.assign(existing, { remaining: duration, duration, undo });
+    else if (duration > 0) this.active.push({ def, remaining: duration, duration, undo });
   }
 
   update(dt: number, run: Run): void {

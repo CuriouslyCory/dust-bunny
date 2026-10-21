@@ -8,7 +8,7 @@ import type { Rng } from '../core/rng';
 import { SPRAY_BOTTLE, tierValue } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { bunnySheltered, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
+import { bunnySheltered, canTarget, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 
@@ -54,10 +54,15 @@ export class SprayBottle extends BaseHazard {
     const dz = b.z - this.z;
     const dist = Math.hypot(dx, dz);
     const range = tierValue(c.range, run.tier);
-    const inRange = dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight);
+    const inRange = canTarget(run) && dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight);
     this.timer -= dt;
 
-    if (this.state === 'idle' || this.state === 'telegraph') this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+    if (this.state === 'telegraph' && !canTarget(run)) {
+      // Lost sight of the Bunny (Dust Cloud): cancel the shot.
+      this.state = 'idle';
+      this.aimDecal.visible = false;
+    }
+    if (canTarget(run) && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
     if (this.state === 'idle' && inRange && Math.abs(wrapAngle(yawOf(dx, dz) - this.yaw)) < 0.25) {
       this.state = 'telegraph';
       this.timer = tierValue(c.telegraph, run.tier);

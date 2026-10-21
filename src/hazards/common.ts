@@ -112,8 +112,8 @@ export function suctionSpeed(bunnyMaxSpeed: number, strength: number, falloff: n
 
 /** Displaces the Bunny towards (sx, sz) for one tick. Returns the pull speed applied. */
 export function applySuction(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
-  if (falloff <= 0) return 0;
   const b = run.bunny;
+  if (falloff <= 0 || b.hiddenFromHazards) return 0;
   const dx = sx - b.x;
   const dz = sz - b.z;
   const d = Math.hypot(dx, dz);
@@ -163,6 +163,11 @@ export function hitBunny(run: Run, fromX: number, fromZ: number, hit: HitSpec): 
   const dz = hit.dirZ ?? b.z - fromZ;
   knockbackCm(b, dx, dz, knockbackDistance(b.radius, hit.knockbackCm, hit.knockbackRadii));
   return true;
+}
+
+/** False while the Bunny is hidden (Dust Cloud): Hazards must not target, chase, aim or pull. */
+export function canTarget(run: Run): boolean {
+  return !run.bunny.hiddenFromHazards;
 }
 
 export function bunnyCanAbsorb(run: Run, size: number): boolean {

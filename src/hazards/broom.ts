@@ -8,7 +8,7 @@ import type { Rng } from '../core/rng';
 import { BROOM, tierValue } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { bunnySheltered, hitBunny, pushBunnyOut, randomIn, wrapAngle, yawOf } from './common';
+import { bunnySheltered, canTarget, hitBunny, pushBunnyOut, randomIn, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 
@@ -69,7 +69,7 @@ export class Broom extends BaseHazard {
       // Aim the arc centre at the Bunny when it is in range, otherwise sweep somewhere nearby.
       const dx = b.x - this.pivotX;
       const dz = b.z - this.pivotZ;
-      const near = Math.hypot(dx, dz) < BROOM.aggroRange + b.radius;
+      const near = canTarget(run) && Math.hypot(dx, dz) < BROOM.aggroRange + b.radius;
       const centre = near ? yawOf(dx, dz) : this.angle + this.side * (BROOM.arc / 2);
       this.side = this.rng.chance(0.5) ? 1 : -1;
       this.from = centre - (this.side * BROOM.arc) / 2;
@@ -114,7 +114,7 @@ export class Broom extends BaseHazard {
 
   onContact(run: Run): void {
     if (bunnySheltered(run, HEAD_HEIGHT)) return;
-    if (this.state === 'sweep') {
+    if (this.state === 'sweep' && !this.stunned) {
       const b = run.bunny;
       const s = Math.sign(this.to - this.from) || 1;
       // Tangent of the sweep plus a little outward push.
