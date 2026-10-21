@@ -8,6 +8,7 @@
 import './styles.css';
 import { installDebug } from './debug/debug';
 import { Game } from './game/game';
+import { installHazards } from './hazards/install';
 import { registerBuiltinScreens } from './ui/screens/builtin';
 import { loadModelOverrides } from './world/models';
 
@@ -23,6 +24,7 @@ async function boot(): Promise<void> {
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
   if (game.debug) installDebug(game);
+  installHazards(game);
 
   game.start('title');
   if (params.has('autostart')) game.startRun();
