@@ -55,6 +55,40 @@ export function panel(opts: PanelOptions, ...children: Array<Node | string>): HT
   return el;
 }
 
+/**
+ * The scrolling middle of a panel: header above and actions below stay put while this scrolls
+ * (when it has to). Edges fade while there is more content that way (`data-more="up|down|both"`).
+ */
+export function scrollArea(className: string, ...children: Array<Node | string>): HTMLElement {
+  const el = h('div', { className: `panel-body ${className}`.trim() }, ...children);
+  const sync = (): void => {
+    const up = el.scrollTop > 2;
+    const down = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    const more = up && down ? 'both' : up ? 'up' : down ? 'down' : '';
+    if ((el.dataset.more ?? '') !== more) {
+      if (more) el.dataset.more = more;
+      else delete el.dataset.more;
+    }
+  };
+  el.addEventListener('scroll', sync, { passive: true });
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    // Content changes (screen re-renders) resize the children, not the scroller.
+    new MutationObserver(() => {
+      for (const c of el.children) ro.observe(c);
+      sync();
+    }).observe(el, { childList: true, subtree: true });
+    for (const c of el.children) ro.observe(c);
+  }
+  return el;
+}
+
+/** Media query for phone-sized viewports, where menus switch to their compact layouts. */
+export const COMPACT_QUERY = '(max-width: 720px), (max-height: 560px)';
+
+export const isCompact = (): boolean => typeof matchMedia === 'function' && matchMedia(COMPACT_QUERY).matches;
+
 /** A vertical stack of buttons. */
 export function menu(...buttons: HTMLElement[]): HTMLElement {
   return h('nav', { className: 'menu' }, ...buttons);

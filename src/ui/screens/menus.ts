@@ -4,7 +4,7 @@
  * mid-Run, else title).
  */
 import type { Game } from '../../game/game';
-import { button, focusFirst, handleMenuKeys, isKey, panel, segmented, slider, toggle } from '../components';
+import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
 import { h, registerScreen } from '../screens';
 import { settings, type GraphicsQuality, type TouchControlsMode } from '../settings';
 
@@ -33,6 +33,7 @@ export function registerMenuScreens(): void {
       const music = slider({ label: 'Music', value: s.musicVolume, onInput: (v) => settings.update({ musicVolume: v }) });
       const sfx = slider({ label: 'Sound effects', value: s.sfxVolume, onInput: (v) => settings.update({ sfxVolume: v }) });
       const mute = toggle({ label: 'Mute all', hint: 'M', value: s.muted, onChange: (v) => settings.update({ muted: v }) });
+      mute.el.querySelector('.field-hint')?.classList.add('key-hint');
       const quality = segmented<GraphicsQuality>({
         label: 'Graphics',
         value: s.quality,
@@ -69,7 +70,7 @@ export function registerMenuScreens(): void {
       const reset = button('Reset to defaults', () => settings.reset(), { variant: 'ghost', size: 'sm' });
       const el = panel(
         { title: 'Settings', className: 'settings-panel' },
-        h('div', { className: 'settings-body' }, section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el)),
+        scrollArea('settings-body', section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el)),
         h('div', { className: 'panel-actions' }, reset, done),
       );
       return {
@@ -98,19 +99,19 @@ export function registerMenuScreens(): void {
         h('li', {}, h('span', { className: 'keys' }, ...keys.map((k) => h('kbd', { textContent: k }))), h('span', { textContent: what }));
       const rule = (icon: string, title: string, text: string): HTMLElement =>
         h('li', { className: 'rule' }, h('span', { className: 'rule-icon', textContent: icon }), h('div', {}, h('strong', { textContent: title }), h('p', { textContent: text })));
+      const touchRow = (icon: string, what: string): HTMLElement => h('li', {}, h('span', { className: 'keys touch-key', textContent: icon }), h('span', { textContent: what }));
       const done = button('Got it!', () => game.go(back), { variant: 'primary' });
       const el = panel(
         { title: 'How to play', className: 'howto-panel' },
-        h(
-          'div',
-          { className: 'howto-body' },
+        scrollArea(
+          'howto-body',
           h(
             'section',
-            {},
+            { className: 'howto-controls' },
             h('h3', { textContent: 'Controls' }),
             h(
               'ul',
-              { className: 'controls-list' },
+              { className: 'controls-list controls-keys' },
               keyRow(['W', 'A', 'S', 'D'], 'Roll (or arrow keys)'),
               keyRow(['Click'], 'Hold to roll toward the cursor'),
               keyRow(['Space'], 'Dash (Shift works too)'),
@@ -118,6 +119,14 @@ export function registerMenuScreens(): void {
               keyRow(['M'], 'Mute sound'),
             ),
             h('p', { className: 'touch-note' }, h('strong', { textContent: 'On touch: ' }), 'put your thumb anywhere on the left half to steer, tap the dash button on the right.'),
+            // Shown instead of the keys on touch devices (.touch on the root).
+            h(
+              'ul',
+              { className: 'controls-list controls-touch' },
+              touchRow('👍', 'Drag anywhere on the left half to roll'),
+              touchRow('💨', 'Tap the dash button on the right'),
+              touchRow('⏸️', 'Pause button, top right'),
+            ),
           ),
           h(
             'section',

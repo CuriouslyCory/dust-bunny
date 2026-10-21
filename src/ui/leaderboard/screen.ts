@@ -10,10 +10,10 @@ export function registerLeaderboardScreen(): void {
       const back = h('button', { className: 'btn', textContent: 'Back' });
       back.onclick = () => game.go('title');
       return {
-        el: h('div', { className: 'panel' }, board.el, back),
+        el: h('div', { className: 'panel leaderboard-panel' }, board.el, back),
         enter() {
           void board.refresh();
-          back.focus();
+          back.focus({ preventScroll: true });
         },
         onKey(e) {
           if (!e.repeat && (e.code === 'Escape' || e.code === 'Backspace')) {

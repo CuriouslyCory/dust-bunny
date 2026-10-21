@@ -16,7 +16,7 @@ import type { GameEvents } from '../../core/events';
 import { CHARACTERS } from '../../data/characters';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
-import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel } from '../components';
+import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { getMeta } from '../../meta/meta';
 import { HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
@@ -111,9 +111,15 @@ export function registerResultsScreen(): void {
         game.disposeRun();
         game.go('title');
       }, { variant: 'ghost' });
+      // "Change " drops out on phones so the three small actions fit on one row.
+      charSelect.querySelector('.btn-label')!.replaceChildren(h('span', { className: 'wide-only', textContent: 'Change ' }), 'Bunny');
       const actions = h('div', { className: 'results-actions' }, again, charSelect, shop, toTitle);
 
-      const card = panel({ className: 'results-panel' }, badge, title, sub, stats, fluffSlot, lbSlot, extraSlot, actions, seed);
+      // Header (badge, title, line) · scrolling body (stats + Fluff | leaderboard) · pinned actions.
+      const head = h('div', { className: 'results-head' }, badge, h('div', { className: 'results-heading' }, title, sub));
+      const main = h('div', { className: 'results-main' }, stats, fluffSlot, extraSlot, seed);
+      const body = scrollArea('results-body', main, lbSlot);
+      const card = panel({ className: 'results-panel' }, head, body, actions);
       card.setAttribute('aria-labelledby', 'results-title');
       const cleanups: Array<() => void> = [];
 
@@ -175,6 +181,7 @@ export function registerResultsScreen(): void {
             }
           }
           for (const slot of [fluffSlot, lbSlot, extraSlot]) slot.hidden = slot.childElementCount === 0;
+          body.scrollTop = 0;
 
           charSelect.hidden = !screenRegistry.has('characterSelect');
           shop.hidden = !screenRegistry.has('shop');

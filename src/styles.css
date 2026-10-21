@@ -39,7 +39,7 @@
   --fs-md: 16px;
   --fs-lg: 20px;
   --fs-xl: 28px;
-  --fs-2xl: clamp(28px, 6vw, 40px);
+  --fs-2xl: clamp(24px, min(6vw, 7vh), 40px);
   --fs-logo: clamp(52px, 13vw, 104px);
 
   /* Shape & depth */
@@ -152,6 +152,41 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Panel layout: title / sub stay at the top, .panel-body scrolls, action rows stay at the
+   bottom. Only the body shrinks (min-height: 0), so the actions never scroll out of view. */
+.panel > * {
+  flex: none;
+}
+
+.panel-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  /* Room for focus rings and card shadows; pulled back so content lines up with the panel. */
+  margin: -6px calc(-1 * var(--body-bleed, 8px));
+  padding: 6px var(--body-bleed, 8px);
+  scrollbar-width: thin;
+  scrollbar-color: var(--paper-3) transparent;
+}
+
+.panel-body[data-more='down'] {
+  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+}
+
+.panel-body[data-more='up'] {
+  mask-image: linear-gradient(0deg, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(0deg, #000 calc(100% - 28px), transparent);
+}
+
+.panel-body[data-more='both'] {
+  mask-image: linear-gradient(180deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
 }
 
 .panel h1,
@@ -511,6 +546,11 @@ kbd {
 }
 
 /* ── Misc ─────────────────────────────────────────────────── */
+/* Keyboard shortcut hints: hidden on touch devices. */
+.touch .key-hint {
+  display: none;
+}
+
 .debug-readout {
   font: 12px ui-monospace, monospace;
   background: rgba(0, 0, 0, 0.45);

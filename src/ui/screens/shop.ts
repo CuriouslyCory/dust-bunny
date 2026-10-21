@@ -6,6 +6,7 @@
 import { UPGRADES } from '../../data/upgrades';
 import type { Game } from '../../game/game';
 import { getMeta } from '../../meta/meta';
+import { scrollArea } from '../components';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
 
@@ -20,7 +21,7 @@ export function registerShopScreen(): void {
       const meta = getMeta();
       const wallet = h('div', { className: 'rl-wallet' });
       const list = h('div', { className: 'shop-list' });
-      const done = h('button', { className: 'btn primary', type: 'button' });
+      const done = h('button', { className: 'btn primary shop-done', type: 'button' });
       let back = 'title';
 
       const render = () => {
@@ -59,12 +60,12 @@ export function registerShopScreen(): void {
       done.onclick = () => game.go(back);
 
       return {
-        el: h('div', { className: 'panel rl-panel shop' }, h('h2', { textContent: 'Shop' }), wallet, list, done),
+        el: h('div', { className: 'panel rl-panel shop' }, h('div', { className: 'shop-head' }, h('h2', { textContent: 'Shop' }), wallet), scrollArea('shop-body', list), done),
         enter(params) {
           back = (params as ShopParams | undefined)?.back ?? 'title';
           done.textContent = back === 'characterSelect' ? 'Continue' : 'Back';
           render();
-          done.focus();
+          done.focus({ preventScroll: true });
         },
         onKey(e) {
           if (!e.repeat && e.code === 'Escape') {

@@ -6,6 +6,7 @@
 import type { Game } from '../../game/game';
 import type { PerkDef } from '../../perks';
 import { draftForRun, rerollDraft, rerollsLeft } from '../../perks/draft';
+import { scrollArea } from '../components';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
 
@@ -105,7 +106,7 @@ export function registerPerkDraftScreen(): void {
       };
 
       return {
-        el: h('div', { className: 'panel rl-panel perk-draft' }, title, sub, cards, footer),
+        el: h('div', { className: 'panel rl-panel perk-draft' }, title, sub, scrollArea('perk-body', cards), footer),
         enter() {
           armed = ARM_DELAY;
           next();

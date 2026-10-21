@@ -397,6 +397,9 @@
   .howto-body {
     grid-template-columns: 1fr 1.15fr;
   }
+  .touch .howto-body {
+    grid-template-columns: 0.8fr 1.2fr;
+  }
 }
 
 .controls-list,
@@ -419,6 +422,22 @@
   display: inline-flex;
   gap: 4px;
   min-width: 128px;
+}
+
+.controls-touch,
+.touch .controls-keys,
+.touch .touch-note {
+  display: none;
+}
+
+.touch .controls-touch {
+  display: grid;
+}
+
+.controls-list .touch-key {
+  justify-content: center;
+  min-width: 40px;
+  font-size: 20px;
 }
 
 .touch-note {
@@ -484,22 +503,39 @@
   animation: badge-pop 0.7s var(--ease-bounce) both 0.1s;
 }
 
+.results-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.results-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.results-heading .panel-sub {
+  margin: 0;
+}
+
+.results-body,
+.results-main {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
 /* Wide screens: leaderboard beside the stats. */
-@media (min-width: 900px) {
+@media (min-width: 900px) and (min-height: 561px) {
   .results-panel:has(.results-slot[data-slot='leaderboard']:not([hidden])) {
     width: min(920px, 100%);
-    display: grid;
+  }
+  .results-body:has(.results-slot[data-slot='leaderboard']:not([hidden])) {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 28px;
-    row-gap: 14px;
-    align-content: start;
   }
-  .results-panel > * {
-    grid-column: 1;
-  }
-  .results-panel > .results-slot[data-slot='leaderboard'] {
-    grid-column: 2;
-    grid-row: 1 / span 9;
+  .results-body > .results-slot[data-slot='leaderboard'] {
     align-self: stretch;
     padding: 16px;
     border-radius: var(--radius-md);
@@ -606,7 +642,7 @@
 }
 
 .results-seed {
-  margin: -4px 0 0;
+  margin: 0;
   font-size: var(--fs-xs);
   font-weight: 700;
   color: var(--muted);
@@ -683,7 +719,270 @@
   }
 }
 
-@media (max-width: 420px) {
+/* ── Phones (see COMPACT_QUERY in components.ts) ─────────────── */
+@media (max-width: 720px), (max-height: 560px) {
+  .screen .panel {
+    padding: 18px 16px 14px;
+    gap: 12px;
+    border-radius: 22px;
+  }
+  .wide-only {
+    display: none;
+  }
+  .field {
+    padding: 6px 0;
+  }
+  .field-slider {
+    grid-template-columns: minmax(64px, auto) minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .field-value {
+    min-width: 2.6em;
+  }
+  .panel-actions {
+    flex-wrap: nowrap;
+  }
+  .panel-actions > .btn-primary {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .settings-body {
+    gap: 10px;
+  }
+  .settings-group {
+    padding: 2px 12px 4px;
+  }
+  .rule-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 17px;
+    border-radius: 10px;
+  }
+  .howto-panel .panel-body {
+    gap: 14px;
+  }
+  .controls-list .keys {
+    min-width: 0;
+  }
+  .controls-keys .keys {
+    min-width: 112px;
+  }
+
+  /* Results: badge beside the heading, compact stats, actions in two rows. */
+  .results-head {
+    flex-direction: row;
+    gap: 14px;
+    text-align: left;
+  }
+  .results-badge {
+    width: 56px;
+    height: 56px;
+    margin: 0;
+    font-size: 28px;
+    border-width: 3px;
+    box-shadow: var(--shadow-sm), 0 0 0 4px rgba(255, 236, 214, 0.6);
+  }
+  .results-heading {
+    gap: 2px;
+  }
+  .results-body,
+  .results-main {
+    gap: 10px;
+  }
+  .stat {
+    padding: 7px 10px;
+  }
+  .stat-icon {
+    font-size: 18px;
+  }
+  .stat-value {
+    font-size: var(--fs-md);
+  }
+  .stat-label {
+    font-size: 11px;
+  }
+  .fluff-earned {
+    font-size: var(--fs-lg);
+  }
+  /* The reward is the headline: Fluff above the stats. */
+  .results-main > .results-slot[data-slot='fluff'] {
+    order: -1;
+  }
+  .results-slot[data-slot='fluff'] .results-section {
+    padding: 8px 12px;
+  }
+  .results-slot[data-slot='leaderboard'] .lb-table-wrap {
+    max-height: none;
+  }
+  .results-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .results-actions > .btn-primary {
+    grid-column: 1 / -1;
+    font-size: 24px;
+    min-height: 54px;
+    padding: 13px 24px 14px;
+  }
+  .results-actions > .btn-ghost {
+    grid-column: auto;
+  }
+  .results-actions > .btn:not(.btn-primary) {
+    padding: 10px 8px 11px;
+    min-height: 44px;
+    --press: 3px;
+    gap: 6px;
+  }
+}
+
+/* Short landscape (phones on their side): side-by-side layouts instead of tall stacks. */
+@media (max-height: 560px) {
+  .screen {
+    padding-top: calc(8px + var(--safe-top));
+    padding-bottom: calc(8px + var(--safe-bottom));
+  }
+  .screen .panel {
+    padding: 12px 20px 10px;
+    gap: 8px;
+  }
+  .panel-sub {
+    margin: 0;
+  }
+  .btn:where(:not(.btn-lg, .btn-sm)) {
+    min-height: 44px;
+    padding: 10px 20px 11px;
+    font-size: 18px;
+    --press: 4px;
+  }
+  .btn-lg {
+    font-size: 22px;
+    min-height: 50px;
+    padding: 11px 24px 12px;
+    --press: 5px;
+  }
+  .menu-grid > .btn {
+    min-height: 42px;
+    padding: 9px 12px 10px;
+  }
+}
+
+@media (max-height: 560px) and (min-width: 600px) {
+  .pause-panel {
+    width: min(520px, 100%);
+  }
+  .pause-panel .menu {
+    gap: 8px;
+  }
+  .pause-panel .menu-grid {
+    gap: 8px;
+  }
+
+  .settings-panel {
+    width: min(880px, 100%);
+  }
+  .settings-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  /* Title and actions share the top row; the body gets the rest of the height. */
+  .settings-panel > .panel-title,
+  .howto-panel > .panel-title {
+    text-align: left;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .settings-panel > .panel-actions,
+  .howto-panel > .panel-actions {
+    position: absolute;
+    top: 12px;
+    right: 20px;
+    margin: 0;
+  }
+  .settings-panel > .panel-actions > .btn-primary,
+  .howto-panel > .panel-actions > .btn-primary {
+    min-width: 120px;
+  }
+
+  .howto-panel {
+    width: min(900px, 100%);
+  }
+  .howto-body,
+  .touch .howto-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .howto-panel h3 {
+    margin-bottom: 6px;
+    font-size: var(--fs-md);
+  }
+  .controls-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+  }
+  .touch .controls-touch {
+    display: flex;
+  }
+  .rules-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 18px;
+  }
+  .rule p {
+    margin: 0;
+  }
+
+  /* Results: stats | leaderboard, each column scrolls on its own. */
+  .results-panel {
+    width: min(900px, 100%);
+  }
+  .results-panel:has(.results-slot[data-slot='leaderboard']:not([hidden])) .results-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    column-gap: 18px;
+    overflow: hidden;
+  }
+  .results-panel:has(.results-slot[data-slot='leaderboard']:not([hidden])) .results-main {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+  .results-body > .results-slot[data-slot='leaderboard'] {
+    display: flex;
+    min-height: 0;
+  }
+  .results-slot[data-slot='leaderboard'] .results-section,
+  .results-slot[data-slot='leaderboard'] .leaderboard {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    width: 100%;
+    margin: 0;
+  }
+  .results-slot[data-slot='leaderboard'] .leaderboard > * {
+    flex: none;
+  }
+  .results-slot[data-slot='leaderboard'] .lb-table-wrap {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+  .results-stats {
+    gap: 8px;
+  }
+  .results-actions {
+    grid-template-columns: 1.6fr repeat(3, minmax(0, 1fr));
+  }
+  .results-actions > .btn-primary {
+    grid-column: auto;
+    font-size: 20px;
+    min-height: 44px;
+    padding: 10px 16px 11px;
+  }
+}
+
+@media (max-width: 330px) {
   .field-slider {
     grid-template-columns: 1fr auto;
   }
@@ -729,6 +1028,10 @@
 
 .results-slot[data-slot='leaderboard'] .results-section {
   text-align: left;
+}
+
+.results-slot[data-slot='leaderboard'] .leaderboard {
+  width: 100%;
 }
 
 /* ── Leaderboard panel (src/ui/leaderboard) on the design tokens ── */

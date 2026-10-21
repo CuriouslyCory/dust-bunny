@@ -190,3 +190,31 @@
 .screen-leaderboard {
   background: rgba(30, 22, 18, 0.45);
 }
+
+/* Leaderboard screen: the table scrolls inside the panel, Back stays visible. */
+.leaderboard-panel {
+  width: min(520px, 100%);
+}
+
+.leaderboard-panel > .leaderboard {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.leaderboard-panel .leaderboard > * {
+  flex: none;
+}
+
+.leaderboard-panel .lb-table-wrap {
+  flex: 0 1 auto;
+  min-height: 80px;
+  max-height: none;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.leaderboard-panel > .btn {
+  align-self: center;
+  min-width: 140px;
+}
