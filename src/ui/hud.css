@@ -720,3 +720,19 @@
     top: 32%;
   }
 }
+
+.hud-pickups,
+.hud-perk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hud-perk-list {
+  justify-content: flex-end;
+}
+
+.hud-pickups:empty,
+.hud-perk-list:empty {
+  display: none;
+}

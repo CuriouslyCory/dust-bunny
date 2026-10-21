@@ -66,7 +66,6 @@ export class TouchControls implements InputSource {
     canvas.addEventListener('pointermove', this.onMove);
     canvas.addEventListener('pointerup', this.onUp);
     canvas.addEventListener('pointercancel', this.onUp);
-    canvas.addEventListener('lostpointercapture', this.onUp);
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
     game.events.on('screenChanged', (e) => {
@@ -96,7 +95,11 @@ export class TouchControls implements InputSource {
     }
     if (this.stickId !== null) return;
     this.stickId = e.pointerId;
-    this.game.canvas.setPointerCapture?.(e.pointerId);
+    try {
+      this.game.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Synthetic or already-released pointer: moves still arrive on the full-screen canvas.
+    }
     this.originX = e.clientX;
     this.originY = e.clientY;
     this.vx = 0;
