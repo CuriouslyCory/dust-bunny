@@ -2,7 +2,8 @@
  * Perk extension point. The twelve design Perks are registered in ./perks.ts.
  * run.applyPerk(id) tracks stacks, calls def.apply(run, stacks) and emits perkApplied.
  * Typical apply: run.bunny.stats.add({ stat: 'speed', op: 'mul', value: 1.1, source: `perk:${id}` }).
- * Drafting (pick 1 of perkChoices on tierUp) is ./draft.ts + src/ui/screens/perkDraft.ts.
+ * Drafting (pick 1 of perkChoices per Tier crossed) is run.perkDraft (./draft.ts), shown by
+ * src/ui/screens/perkDraft.ts.
  */
 import { Registry } from '../core/registry';
 import type { Run } from '../game/run';

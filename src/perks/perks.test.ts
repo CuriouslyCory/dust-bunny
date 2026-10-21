@@ -6,7 +6,7 @@ import { createRun, registerGameplayContent } from '../game/assembly';
 import { upgradeModifiers } from '../meta/upgrades';
 import { pickupRegistry } from '../pickups';
 import { availablePerks, perkRegistry } from './index';
-import { draftForRun, draftPerks, rerollDraft, rerollsLeft } from './draft';
+import { draftPerks } from './draft';
 
 registerGameplayContent();
 
@@ -23,13 +23,15 @@ describe('Perk draft', () => {
 
   it('offers 3 distinct Perks, or 4 with Wide Choice', () => {
     for (let i = 0; i < 20; i++) {
-      const { run } = makeRun();
-      const a = draftForRun(run);
+      const run = createRun(new EventBus(), { seed: `perks-${i}`, characterId: 'lint' });
+      run.perkDraft.queue();
+      const a = run.perkDraft.offer.perks;
       expect(a).toHaveLength(3);
       expect(new Set(a.map((p) => p.id)).size).toBe(3);
     }
     const { run } = makeRun({ wide_choice: 1 });
-    expect(draftForRun(run)).toHaveLength(4);
+    run.perkDraft.queue();
+    expect(run.perkDraft.offer.perks).toHaveLength(4);
   });
 
   it('never offers an owned unique or a maxed Perk', () => {
@@ -41,10 +43,18 @@ describe('Perk draft', () => {
     expect(ids).not.toContain('second_wind');
     expect(ids).not.toContain('spiky_dash');
     expect(ids).not.toContain('quick_dash');
+    const rng = new Rng('never');
     for (let i = 0; i < 50; i++) {
-      const offer = draftForRun(run).map((p) => p.id);
+      const offer = draftPerks(availablePerks(run), 3, rng).map((p) => p.id);
       expect(offer).not.toContain('second_wind');
       expect(offer).not.toContain('quick_dash');
+    }
+    run.perkDraft.queue(20);
+    while (run.perkDraft.active) {
+      const offer = run.perkDraft.offer.perks.map((p) => p.id);
+      expect(offer).not.toContain('second_wind');
+      expect(offer).not.toContain('quick_dash');
+      run.perkDraft.choose(offer[0]!);
     }
   });
 
@@ -56,16 +66,171 @@ describe('Perk draft', () => {
 
   it('rerolls only when the Reroll Upgrade is owned, avoiding the current offer', () => {
     const plain = makeRun().run;
-    expect(rerollDraft(plain, draftForRun(plain))).toBeNull();
+    plain.perkDraft.queue();
+    expect(plain.perkDraft.reroll()).toBe(false);
 
     const { run } = makeRun({ reroll: 1 });
-    expect(rerollsLeft(run)).toBe(1);
-    const first = draftForRun(run);
-    const second = rerollDraft(run, first)!;
-    expect(second).toHaveLength(3);
-    for (const p of second) expect(first.map((f) => f.id)).not.toContain(p.id);
-    expect(rerollsLeft(run)).toBe(0);
-    expect(rerollDraft(run, second)).toBeNull();
+    const draft = run.perkDraft;
+    expect(draft.rerollsLeft).toBe(1);
+    expect(draft.reroll()).toBe(false); // nothing on offer yet
+    draft.queue();
+    const first = draft.offer;
+    expect(draft.reroll()).toBe(true);
+    const second = draft.offer;
+    expect(second.perks).toHaveLength(3);
+    expect(second.serial).not.toBe(first.serial);
+    for (const p of second.perks) expect(first.perks.map((f) => f.id)).not.toContain(p.id);
+    expect(draft.rerollsLeft).toBe(0);
+    expect(draft.pending).toBe(1); // a reroll is not a pick
+    expect(draft.reroll()).toBe(false);
+    expect(draft.offer).toBe(second);
+  });
+});
+
+describe('Perk draft workflow', () => {
+  const perkCount = (run: ReturnType<typeof makeRun>['run']) => run.getStats().perks.length;
+
+  it('queues one draft per Tier crossed, including several in one update', () => {
+    const { run, events } = makeRun();
+    const seen: number[] = [];
+    // Listeners see the draft already queued for the Tier they are told about.
+    events.on('tierUp', () => seen.push(run.perkDraft.pending));
+    run.bunny.setRadius(25);
+    run.update(1 / 60);
+    expect(run.tier).toBe(4);
+    expect(seen).toEqual([1, 2, 3]);
+    expect(run.perkDraft.pending).toBe(3);
+    expect(run.perkDraft.active).toBe(true);
+    expect(run.perkDraft.offer.perks).toHaveLength(3);
+  });
+
+  it('picks sequentially: each valid choice applies once and prepares the next offer', () => {
+    const { run, events } = makeRun();
+    const applied: string[] = [];
+    events.on('perkApplied', (e) => applied.push(e.perkId));
+    run.bunny.setRadius(25);
+    run.update(1 / 60);
+    const draft = run.perkDraft;
+    const serials = new Set<number>();
+    for (let left = 3; left > 0; left--) {
+      expect(draft.pending).toBe(left);
+      const { serial, perks } = draft.offer;
+      expect(serials.has(serial)).toBe(false);
+      serials.add(serial);
+      expect(draft.choose(perks[1]!.id, serial)).toBe(true);
+      expect(applied.at(-1)).toBe(perks[1]!.id);
+    }
+    expect(applied).toHaveLength(3);
+    expect(draft.pending).toBe(0);
+    expect(draft.active).toBe(false);
+    expect(draft.offer.perks).toEqual([]);
+  });
+
+  it('rejects stale, invalid and already-consumed choices', () => {
+    const { run } = makeRun();
+    const draft = run.perkDraft;
+    expect(draft.choose('quick_dash')).toBe(false); // nothing pending
+    draft.queue(2);
+    const first = draft.offer;
+    const notOffered = perkRegistry.all().find((p) => !first.perks.includes(p))!;
+    expect(draft.choose(notOffered.id)).toBe(false);
+    expect(draft.choose('no_such_perk')).toBe(false);
+    expect(draft.choose(first.perks[0]!.id, first.serial + 1)).toBe(false);
+    expect(draft.pending).toBe(2);
+    expect(perkCount(run)).toBe(0);
+
+    expect(draft.choose(first.perks[0]!.id, first.serial)).toBe(true);
+    // A second click on the old card (same Perk, old offer) does nothing.
+    expect(draft.choose(first.perks[0]!.id, first.serial)).toBe(false);
+    expect(draft.pending).toBe(1);
+    expect(perkCount(run)).toBe(1);
+
+    const last = draft.offer;
+    expect(draft.choose(last.perks[0]!.id, last.serial)).toBe(true);
+    expect(draft.choose(last.perks[0]!.id, last.serial)).toBe(false);
+    expect(draft.pending).toBe(0);
+    expect(perkCount(run)).toBe(2);
+  });
+
+  it('rejects choices once the Run has ended', () => {
+    const { run } = makeRun();
+    run.perkDraft.queue();
+    const { perks } = run.perkDraft.offer;
+    run.end('quit');
+    expect(run.perkDraft.active).toBe(false);
+    expect(run.perkDraft.choose(perks[0]!.id)).toBe(false);
+    expect(perkCount(run)).toBe(0);
+    run.perkDraft.queue();
+    expect(run.perkDraft.pending).toBe(1);
+  });
+
+  it('drops the remaining drafts once every Perk is owned or maxed', () => {
+    const { run } = makeRun({ wide_choice: 1 });
+    const draft = run.perkDraft;
+    draft.queue(100);
+    let picks = 0;
+    while (draft.active) {
+      expect(draft.choose(draft.offer.perks[0]!.id)).toBe(true);
+      picks++;
+    }
+    expect(availablePerks(run)).toEqual([]);
+    expect(draft.pending).toBe(0);
+    expect(picks).toBe(perkCount(run));
+    expect(picks).toBeLessThan(100);
+    draft.queue();
+    expect(draft.pending).toBe(0);
+    expect(draft.active).toBe(false);
+  });
+
+  it('offers the last Perks left when the pool is smaller than the card count', () => {
+    const { run } = makeRun();
+    const keep = ['second_wind', 'spiky_dash'];
+    for (const p of perkRegistry.all()) {
+      if (keep.includes(p.id)) continue;
+      for (let i = 0; i < (p.maxStacks ?? 1); i++) run.applyPerk(p.id);
+    }
+    expect(availablePerks(run).map((p) => p.id).sort()).toEqual(keep);
+    run.perkDraft.queue(3);
+    expect(run.perkDraft.offer.perks.map((p) => p.id).sort()).toEqual(keep);
+    expect(run.perkDraft.choose('second_wind')).toBe(true);
+    expect(run.perkDraft.offer.perks.map((p) => p.id)).toEqual(['spiky_dash']);
+    expect(run.perkDraft.choose('spiky_dash')).toBe(true);
+    expect(run.perkDraft.pending).toBe(0); // the third draft had nothing left to offer
+  });
+
+  it('is seeded: the same seed drafts the same offers', () => {
+    const offers = () => {
+      const { run } = makeRun({ reroll: 1 });
+      run.perkDraft.queue(3);
+      const out: string[][] = [];
+      run.perkDraft.reroll();
+      while (run.perkDraft.active) {
+        out.push(run.perkDraft.offer.perks.map((p) => p.id));
+        run.perkDraft.choose(run.perkDraft.offer.perks[0]!.id);
+      }
+      return out;
+    };
+    expect(offers()).toEqual(offers());
+  });
+
+  it('belongs to its Run: a fresh Run on the same events inherits no picks', () => {
+    const events = new EventBus();
+    const old = createRun(events, { seed: 'replace', characterId: 'lint', modifiers: upgradeModifiers({ reroll: 1 }) });
+    old.bunny.setRadius(25);
+    old.update(1 / 60);
+    old.perkDraft.reroll();
+    expect(old.perkDraft.pending).toBe(3);
+    old.dispose();
+
+    const run = createRun(events, { seed: 'replace', characterId: 'lint', modifiers: upgradeModifiers({ reroll: 1 }) });
+    expect(run.perkDraft.pending).toBe(0);
+    expect(run.perkDraft.active).toBe(false);
+    expect(run.perkDraft.rerollsLeft).toBe(1);
+    // Tier-ups of the new Run do not touch the old one.
+    run.bunny.setRadius(25);
+    run.update(1 / 60);
+    expect(run.perkDraft.pending).toBe(3);
+    expect(old.perkDraft.pending).toBe(3);
   });
 });
 
