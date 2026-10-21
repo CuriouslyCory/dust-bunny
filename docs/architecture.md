@@ -15,6 +15,10 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/game/` | `run.ts` (`Run`: one session, headless), `runView.ts` (rendering for a Run), `game.ts` (`Game`: renderer, scene, loop, screens, current Run), `system.ts` (`System`, `SYSTEM_ORDER`), `runStats.ts`. |
 | `src/hazards/`, `src/pickups/`, `src/perks/` | Extension points: interfaces, registries and managers. **No content yet.** |
 | `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `screens/builtin.ts` (title/playing/paused/results), `hud.ts` (widget HUD). Plain DOM + CSS (`src/styles.css`) over the canvas. |
+| `src/ui/leaderboard/` | Leaderboard panel (`createLeaderboardPanel`, mounted in the results screen) and the `leaderboard` screen (from the title). Own CSS. |
+| `src/net/leaderboard.ts` | Leaderboard client: `getTop`, `submitScore`, `isOnline`. Falls back to a localStorage board when `/api/leaderboard` is unavailable (404, non-JSON, 5xx, network, timeout). |
+| `src/shared/` | Code shared with the Vercel function: `score.ts` (score formula), `leaderboard.ts` (types, name sanitising, submission validation). No runtime imports from the rest of `src/`; relative imports use `.js`. |
+| `api/leaderboard.ts` | Vercel Node function (Neon via `DATABASE_URL`). Type-checked by `tsconfig.api.json`, not bundled by Vite. Schema: `db/schema.sql`. |
 | `src/debug/debug.ts` | `?debug` hooks. |
 | `scripts/sim.ts` | Headless balance bot (`pnpm sim [seeds…] [--minutes=N]`). |
 
@@ -159,7 +163,7 @@ For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugToo
 
 ## Known gaps
 
-- Hazards, Pickups, Perks, character select, Shop, Perk draft, audio, touch joystick, leaderboard: hooks only.
+- Hazards, Pickups, Perks, character select, Shop, Perk draft, audio, touch joystick: hooks only.
 - Furniture is many small meshes (~500 draw calls at Tier 5 including shadows); merge per material if mid-range GPUs struggle.
 - At Tier 5 the view covers the whole house, so the spawner has no off-screen room left to spawn into. Late-game Debris supply relies on the initial scatter.
 - Debris has no GLB override path (recipes only).
