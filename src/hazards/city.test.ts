@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { AREA_BOSSES, BROOM, CITY_DIRECTOR, DIRECTOR, DIRECTOR_EXCLUDE, GARBAGE_TRUCK, LEAF_BLOWER, MINI_SCRUBBER, NEIGHBORHOOD_DIRECTOR, STREET_FLUSHER, tierValue } from '../data/hazards';
 import { getTier } from '../data/tiers';
+import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { CITY } from '../world/city';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { spawnWeights } from './director';
 import { hazardRegistry } from './index';
-import { installRunHazards } from './install';
 import type { Mop } from './mop';
 import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
@@ -87,7 +87,7 @@ describe('city Hazards', () => {
 
   it('the director spawns city Hazards (never house or outdoor ones) and brings the Garbage Truck at Tier 9', () => {
     const { run, events } = makeRun('city-director');
-    installRunHazards(run);
+    installGameplay(run);
     const spawned: string[] = [];
     const bosses: string[] = [];
     events.on('hazardSpawned', (e) => spawned.push(e.defId));

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
+import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { hazardFloorFree } from '../hazards/common';
 import { hazardBudget, pickHazardType } from '../hazards/director';
-import { installRunHazards } from '../hazards/install';
 import { Rng } from '../core/rng';
 import { fluffForRun } from '../meta/fluff';
 import { DIFFICULTIES, DIFFICULTY_IDS, difficultyModifiers, getDifficulty, type DifficultyId } from './difficulty';
@@ -29,7 +29,7 @@ function moveToOpenFloor(run: Run): void {
 /** Simulated second of the first Hazard spawn (Infinity if none within `seconds`). */
 function firstSpawnAt(difficulty: DifficultyId, seconds = 30): number {
   const run = makeRun(difficulty, 'lint', 'grace');
-  installRunHazards(run);
+  installGameplay(run);
   let at = Infinity;
   run.events.on('hazardSpawned', () => (at = Math.min(at, run.time)));
   run.bunny.health = 999;

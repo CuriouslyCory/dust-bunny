@@ -31,7 +31,8 @@ import { addDefaultHudWidgets, Hud } from '../ui/hud';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
 import type { AreaId } from '../world/types';
-import { Run, type RunConfig } from './run';
+import { createRun } from './assembly';
+import type { Run, RunConfig } from './run';
 import { RunView } from './runView';
 
 export interface GameOptions {
@@ -152,7 +153,10 @@ export class Game {
     }
   }
 
-  /** Creates a fresh Run (disposing the old one) and switches to the playing screen. */
+  /**
+   * Creates a fresh Run (disposing the old one) with its gameplay rules installed (see
+   * ./assembly.ts), emits runStarted and switches to the playing screen.
+   */
   startRun(config: Partial<RunConfig> = {}): Run {
     this.disposeRun();
     this.pausedBy = null;
@@ -165,7 +169,7 @@ export class Game {
       area: config.area ?? this.nextRunConfig.area,
     };
     this.nextRunConfig.seed = undefined;
-    const run = new Run(this.events, full);
+    const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
     this.view = new RunView(run, this.scene);

@@ -1,6 +1,7 @@
 /**
  * Absorb effect: an absorbed Hazard's model shrinks and flies into the Bunny over a short
- * time instead of vanishing. Runs as a System (sim time), installed per Run by installRunHazards.
+ * time instead of vanishing. Runs as a System (sim time), installed per Run by the Run assembly
+ * (src/game/assembly.ts).
  */
 import type { Object3D } from 'three';
 import { lerp } from '../core/math';
