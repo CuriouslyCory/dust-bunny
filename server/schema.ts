@@ -13,8 +13,8 @@
  */
 export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
-  AND EXISTS (SELECT 1 FROM information_schema.columns
-              WHERE table_schema = 'public' AND table_name = 'leaderboard_scores' AND column_name = 'user_id') AS ready`;
+  AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
+  AND to_regclass('public.area_scores_user_idx') IS NOT NULL AS ready`;
 
 export const SCHEMA: readonly string[] = [
   // --- Better Auth (accounts and sessions) ---
@@ -89,6 +89,33 @@ export const SCHEMA: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_score_idx ON leaderboard_scores (score DESC, id)`,
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_character_idx ON leaderboard_scores (character, score DESC, id)`,
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_ip_idx ON leaderboard_scores (ip_hash, created_at)`,
+  // Client-generated Run id: posting the same Run twice (a retry, auto-post plus manual) returns the first entry.
+  `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS run_id text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS leaderboard_scores_run_idx ON leaderboard_scores (run_id) WHERE run_id IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS leaderboard_scores_user_idx ON leaderboard_scores (user_id, score DESC) WHERE user_id IS NOT NULL`,
+
+  // --- Area boards: one row per Area a Run cleared ---
+  `CREATE TABLE IF NOT EXISTS area_scores (
+    id bigserial PRIMARY KEY,
+    area text NOT NULL,
+    name text NOT NULL CHECK (char_length(name) BETWEEN 1 AND 16),
+    character text NOT NULL,
+    score integer NOT NULL CHECK (score >= 0),
+    radius_in real NOT NULL,
+    max_radius real NOT NULL,
+    debris_absorbed integer NOT NULL,
+    duration_ms integer NOT NULL,
+    difficulty text NOT NULL DEFAULT 'casual',
+    run_id text,
+    ip_hash text,
+    user_id text REFERENCES "user" ("id") ON DELETE SET NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS area_scores_score_idx ON area_scores (area, score DESC, id)`,
+  `CREATE INDEX IF NOT EXISTS area_scores_character_idx ON area_scores (area, character, score DESC, id)`,
+  `CREATE INDEX IF NOT EXISTS area_scores_ip_idx ON area_scores (ip_hash, created_at)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS area_scores_run_idx ON area_scores (run_id, area) WHERE run_id IS NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, score DESC) WHERE user_id IS NOT NULL`,
 
   // --- Cloud save (Fluff, Upgrades, stats) for signed-in players ---
   `CREATE TABLE IF NOT EXISTS player_progress (

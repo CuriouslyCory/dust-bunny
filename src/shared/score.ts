@@ -60,3 +60,56 @@ export function scoreTierForRadius(radius: number): number {
   });
   return t;
 }
+
+// ---------------------------------------------------------------------------------------
+// Area boards: one entry per Area a Run clears (see docs/architecture.md, Leaderboard).
+
+/** Area ids, in Run order, mirrored from `AREA_ORDER` in `src/world/types.ts` (test-synced). */
+export const SCORE_AREAS = ['house', 'neighborhood', 'city'] as const;
+export type ScoreArea = (typeof SCORE_AREAS)[number];
+
+export function isScoreArea(v: unknown): v is ScoreArea {
+  return typeof v === 'string' && (SCORE_AREAS as readonly string[]).includes(v);
+}
+
+/** Tier at which each Area's boss arrives, mirrored from `AREA_BOSSES` (test-synced): a clear needs it. */
+export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9 };
+
+export const AREA_SCORE = {
+  /** Points per cm the Bunny grew in the Area. */
+  perRadiusCm: 100,
+  perDebris: 2,
+  clearBonus: 3000,
+  /** Points per second under the Area's par. */
+  perSecUnderPar: 10,
+  parSec: { house: 720, neighborhood: 600, city: 900 } as Readonly<Record<ScoreArea, number>>,
+} as const;
+
+export interface AreaScoreInput {
+  area: ScoreArea;
+  /** Radius on entering the Area. */
+  radiusIn: number;
+  /** Largest radius reached by the time the Run left the Area. */
+  maxRadius: number;
+  /** Debris absorbed in the Area. */
+  debrisAbsorbed: number;
+  /** Time spent in the Area. */
+  durationMs: number;
+  difficulty?: DifficultyId;
+}
+
+/**
+ * base  = round((maxRadius − radiusIn) × 100) + debrisAbsorbed × 2 + 3000
+ *         + round(max(0, par − seconds) × 10)          (par: house 720 s, neighborhood 600 s, city 900 s)
+ * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])
+ */
+export function computeAreaScore(s: AreaScoreInput): number {
+  const growth = Math.max(0, s.maxRadius - Math.max(0, s.radiusIn));
+  const debris = Math.max(0, Math.floor(s.debrisAbsorbed));
+  const sec = Math.max(0, s.durationMs) / 1000;
+  const par = AREA_SCORE.parSec[s.area] ?? 0;
+  const score =
+    Math.round(growth * AREA_SCORE.perRadiusCm) + debris * AREA_SCORE.perDebris + AREA_SCORE.clearBonus + Math.round(Math.max(0, par - sec) * AREA_SCORE.perSecUnderPar);
+  const mult = DIFFICULTY_SCORE_MULTIPLIER[s.difficulty ?? DEFAULT_DIFFICULTY] ?? 1;
+  return Math.round(score * mult);
+}

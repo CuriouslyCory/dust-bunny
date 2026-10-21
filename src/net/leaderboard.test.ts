@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RunStats } from '../game/runStats';
-import { createLeaderboardClient, LeaderboardError, submissionFromRun } from './leaderboard';
+import { areaSubmission, createLeaderboardClient, LeaderboardError, submissionFromRun } from './leaderboard';
 
 function memoryStorage() {
   const m = new Map<string, string>();
@@ -83,5 +83,34 @@ describe('leaderboard client', () => {
     const client = createLeaderboardClient({ storage: memoryStorage() });
     client.setPlayerName('  Dusty   ');
     expect(client.getPlayerName()).toBe('Dusty');
+  });
+
+  it('keeps Area boards apart in the local fallback', async () => {
+    const client = createLeaderboardClient({ storage: memoryStorage(), fetch: async () => new Response('not found', { status: 404 }) });
+    const house = { area: 'house' as const, startSec: 0, timeSec: 400, radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, cleared: true };
+    const a = await client.submitAreaScore(areaSubmission(house, 'lint', 'casual', 'Alice', 'run-aaaaaaaa'));
+    const b = await client.submitAreaScore(areaSubmission({ ...house, timeSec: 300 }, 'zap', 'casual', 'Bob'));
+    await client.submitAreaScore(areaSubmission({ ...house, area: 'neighborhood', radiusIn: 52, maxRadius: 180, timeSec: 500 }, 'lint', 'casual', 'Cleo'));
+    expect([a.online, a.rank, b.rank]).toEqual([false, 1, 1]);
+    expect('runId' in a.entry).toBe(false);
+    expect((await client.getAreaTop({ area: 'house' })).entries.map((e) => e.name)).toEqual(['Bob', 'Alice']);
+    expect((await client.getAreaTop({ area: 'house', character: 'lint' })).entries.map((e) => e.name)).toEqual(['Alice']);
+    expect((await client.getAreaTop({ area: 'neighborhood' })).entries.map((e) => [e.name, e.area])).toEqual([['Cleo', 'neighborhood']]);
+    expect((await client.getAreaTop({ area: 'city' })).entries).toEqual([]);
+  });
+
+  it('asks the API for an Area board', async () => {
+    const urls: string[] = [];
+    const client = createLeaderboardClient({
+      storage: memoryStorage(),
+      fetch: async (url, init) => {
+        urls.push(`${init?.method ?? 'GET'} ${String(url)}`);
+        return init?.method === 'POST' ? jsonResponse(201, { entry: { id: '9' }, rank: 2 }) : jsonResponse(200, { entries: [] });
+      },
+    });
+    await client.getAreaTop({ area: 'city', character: 'zap' });
+    const house = { area: 'house' as const, startSec: 0, timeSec: 400, radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, cleared: true };
+    expect((await client.submitAreaScore(areaSubmission(house, 'lint', 'casual', 'Alice'))).rank).toBe(2);
+    expect(urls).toEqual(['GET /api/leaderboard?board=city&character=zap', 'POST /api/leaderboard?board=house']);
   });
 });

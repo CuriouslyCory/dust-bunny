@@ -22,6 +22,7 @@ import { account } from './net/account';
 import { registerAccountScreen } from './ui/account/screen';
 import { installAreaHud } from './ui/areaHud';
 import { installUi } from './ui/install';
+import { installLeaderboardPosting } from './ui/leaderboard/posting';
 import { registerLeaderboardScreen } from './ui/leaderboard/screen';
 import { registerBuiltinScreens } from './ui/screens/builtin';
 import { loadModelOverrides } from './world/models';
@@ -50,6 +51,7 @@ async function boot(): Promise<void> {
   if (area === 'neighborhood' || area === 'city') game.nextRunConfig.area = area;
   installRoguelike(game);
   installCloudSave(getMeta(), account);
+  installLeaderboardPosting(game);
   installUi(game);
   installTouchControls(game);
   installAudio(game);

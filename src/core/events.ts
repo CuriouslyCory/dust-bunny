@@ -8,7 +8,8 @@
  *     interface GameEvents { hazardStunned: { hazardId: number } }
  *   }
  */
-import type { RunEndReason, RunStats } from '../game/runStats';
+import type { AreaStats, RunEndReason, RunStats } from '../game/runStats';
+import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 
 export interface Vec3Like {
@@ -51,6 +52,8 @@ export interface GameEvents {
   perkApplied: { perkId: string; stacks: number };
   /** The house's front door opened (after the Robo-Vac 9000). Position = centre of the doorway. */
   exitOpened: { area: AreaId; x: number; z: number };
+  /** The Bunny left a cleared Area for the next one (emitted just before areaEntered). */
+  areaCompleted: { stats: AreaStats; characterId: string; difficulty: DifficultyId };
   /** The Bunny left for another area; the Run has swapped `run.house` and repopulated Debris. */
   areaEntered: { area: AreaId; timeSec: number };
 }

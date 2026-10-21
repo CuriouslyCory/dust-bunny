@@ -7,10 +7,11 @@ import {
   FALLBACK_NAME,
   LEADERBOARD_CHARACTERS,
   sanitizeName,
+  validateAreaSubmission,
   validateSubmission,
   type ScoreSubmission,
 } from './leaderboard';
-import { computeScore } from './score';
+import { computeAreaScore, computeScore } from './score';
 
 function submission(over: Partial<ScoreSubmission> = {}): ScoreSubmission {
   const s = { name: 'Fluffy', character: 'lint', maxRadius: 12.5, debrisAbsorbed: 340, tierReached: 3, durationMs: 240_000, victory: false, score: 0, ...over };
@@ -153,5 +154,45 @@ describe('validateSubmission', () => {
     const s = submission();
     expect(err({ ...s, score: s.score + 1000 })).toBe('score');
     expect(err({ ...s, score: s.score + 1 })).toBeNull();
+  });
+});
+
+describe('validateAreaSubmission', () => {
+  const area = (o: Record<string, unknown> = {}) => {
+    const f = { area: 'house', radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, durationMs: 400_000, difficulty: 'casual', ...o } as Parameters<typeof computeAreaScore>[0] & Record<string, unknown>;
+    return { name: 'Lint', character: 'lint', ...f, score: computeAreaScore(f), runId: 'run-12345678' };
+  };
+  const areaErr = (b: unknown) => {
+    const r = validateAreaSubmission(b);
+    return r.ok ? null : r.field;
+  };
+
+  it('accepts a plausible clear of each Area', () => {
+    expect(areaErr(area())).toBeNull();
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBeNull();
+    expect(areaErr(area({ area: 'city', radiusIn: 190, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBeNull();
+    const r = validateAreaSubmission(area());
+    expect(r.ok && r.value.runId).toBe('run-12345678');
+  });
+
+  it('rejects unknown Areas and bad Run ids', () => {
+    expect(areaErr(area({ area: 'moon' }))).toBe('area');
+    expect(areaErr({ ...area(), runId: 'x' })).toBe('runId');
+    expect(areaErr({ ...area(), runId: 'a b c d e f g h' })).toBe('runId');
+  });
+
+  it('needs the boss Tier and plausible growth', () => {
+    expect(areaErr(area({ maxRadius: 30 }))).toBe('maxRadius'); // Tier 4: the Robo-Vac 9000 never came
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 150 }))).toBe('maxRadius');
+    expect(areaErr(area({ radiusIn: 30 }))).toBe('radiusIn'); // a Run starts small
+    expect(areaErr(area({ maxRadius: 0.5 }))).toBe('maxRadius'); // below radiusIn
+    expect(areaErr(area({ durationMs: 10_000 }))).toBe('maxRadius'); // too fast
+    expect(areaErr(area({ debrisAbsorbed: 100_000 }))).toBe('debrisAbsorbed');
+  });
+
+  it('checks the score', () => {
+    const s = area();
+    expect(areaErr({ ...s, score: s.score + 50 })).toBe('score');
+    expect(areaErr({ ...s, difficulty: 'hardcore' })).toBe('score');
   });
 });

@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import authApi from '../api/auth';
 import leaderboardApi from '../api/leaderboard';
 import progressApi from '../api/progress';
-import { computeScore, scoreTierForRadius } from '../src/shared/score';
+import { computeAreaScore, computeScore, scoreTierForRadius } from '../src/shared/score';
 import type { Progress } from '../src/shared/progress';
 import { authOptions, resetAuthForTests } from './auth';
 import { query, resetDbForTests } from './db';
@@ -31,7 +31,7 @@ type Handler = { fetch(r: Request): Promise<Response> };
 function call(handler: Handler, path: string, init: RequestInit & { cookie?: string } = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('origin', ORIGIN);
-  headers.set('x-forwarded-for', IP);
+  if (!headers.has('x-forwarded-for')) headers.set('x-forwarded-for', IP);
   if (init.cookie) headers.set('cookie', init.cookie);
   if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
   return handler.fetch(new Request(ORIGIN + path, { ...init, headers }));
@@ -50,10 +50,22 @@ async function signUp(name: string): Promise<string> {
   return cookies.join('; ');
 }
 
-function submission(name: string) {
-  const fields = { maxRadius: 1.5, debrisAbsorbed: 40, tierReached: scoreTierForRadius(1.5), durationMs: 45_000, victory: false, difficulty: 'casual' as const };
-  return { name, character: 'lint', ...fields, score: computeScore(fields) };
+function submission(name: string, extra: { maxRadius?: number; runId?: string } = {}) {
+  const maxRadius = extra.maxRadius ?? 1.5;
+  const fields = { maxRadius, debrisAbsorbed: 40, tierReached: scoreTierForRadius(maxRadius), durationMs: 45_000, victory: false, difficulty: 'casual' as const };
+  return { name, character: 'lint', ...fields, score: computeScore(fields), ...(extra.runId ? { runId: extra.runId } : {}) };
 }
+
+/** An Area clear over 400 s (plausible up to ~810 cm from the house, ~1110 cm from the City's 190 cm). */
+function areaSub(name: string, extra: { maxRadius?: number; runId?: string; area?: 'house' | 'city' } = {}) {
+  const area = extra.area ?? 'house';
+  const fields = { area, radiusIn: area === 'house' ? 1 : 190, maxRadius: extra.maxRadius ?? 50, debrisAbsorbed: 900, durationMs: 400_000, difficulty: 'casual' as const };
+  return { name, character: 'zap', ...fields, score: computeAreaScore(fields), ...(extra.runId ? { runId: extra.runId } : {}) };
+}
+
+/** Posts from a second fake IP, so these tests stay clear of the per-IP limits the others use up. */
+const post = (path: string, body: unknown, cookie?: string) =>
+  call(leaderboardApi, path, { method: 'POST', cookie, body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-boards` } });
 
 const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}): Progress => ({
   fluff,
@@ -79,6 +91,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
 
   afterAll(async () => {
     await query(`DELETE FROM leaderboard_scores WHERE name LIKE $1`, [`T${RUN}%`]);
+    await query(`DELETE FROM area_scores WHERE name LIKE $1`, [`T${RUN}%`]);
     await query(`DELETE FROM "user" WHERE email LIKE $1`, [`%@${EMAIL_DOMAIN}`]); // cascades to sessions, accounts, progress
     await resetDbForTests();
     process.env = saved;
@@ -141,6 +154,57 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     ]);
     const top = (await (await call(leaderboardApi, '/api/leaderboard')).json()) as { entries: Array<{ verified: unknown }> };
     expect(top.entries.every((e) => typeof e.verified === 'boolean')).toBe(true);
+  });
+
+  it('keeps Area boards separate from the Run board and from each other', async () => {
+    const res = await post('/api/leaderboard?board=house', areaSub(`T${RUN}h`, { maxRadius: 777 }));
+    expect(res.status).toBe(201);
+    const { entry, rank } = (await res.json()) as { entry: { id: string; area: string; radiusIn: number; maxRadius: number; verified: boolean }; rank: number };
+    expect(entry).toMatchObject({ area: 'house', radiusIn: 1, maxRadius: 777, verified: false });
+    expect(rank).toBe(1);
+
+    const house = (await (await call(leaderboardApi, '/api/leaderboard?board=house')).json()) as { entries: Array<{ id: string }> };
+    expect(house.entries[0]?.id).toBe(entry.id);
+    // Ids come from separate sequences per table, so compare names.
+    const city = (await (await call(leaderboardApi, '/api/leaderboard?board=city')).json()) as { entries: Array<{ name: string }> };
+    expect(city.entries.some((e) => e.name === `T${RUN}h`)).toBe(false);
+    const run = (await (await call(leaderboardApi, '/api/leaderboard')).json()) as { entries: Array<{ name: string }> };
+    expect(run.entries.some((e) => e.name === `T${RUN}h`)).toBe(false);
+
+    // The body's Area must match the board it is posted to.
+    expect((await post('/api/leaderboard?board=city', areaSub(`T${RUN}x`))).status).toBe(400);
+    expect((await call(leaderboardApi, '/api/leaderboard?board=moon')).status).toBe(400);
+  });
+
+  it('returns the stored entry when the same Run posts again', async () => {
+    const runId = `run-${RUN}-dupe`;
+    const first = await post('/api/leaderboard', submission(`T${RUN}d`, { runId }));
+    expect(first.status).toBe(201);
+    const again = await post('/api/leaderboard', submission(`T${RUN}d`, { runId }));
+    expect(again.status).toBe(200);
+    const a = (await first.json()) as { entry: { id: string } };
+    const b = (await again.json()) as { entry: { id: string } };
+    expect(b.entry.id).toBe(a.entry.id);
+    // Same Run id on an Area board is a different entry.
+    expect((await post('/api/leaderboard?board=house', areaSub(`T${RUN}d`, { runId }))).status).toBe(201);
+    expect((await post('/api/leaderboard?board=house', areaSub(`T${RUN}d`, { runId }))).status).toBe(200);
+    const rows = await query<{ n: number }>(`SELECT count(*)::int AS n FROM area_scores WHERE run_id = $1`, [runId]);
+    expect(rows[0]?.n).toBe(1);
+  });
+
+  it('lists a signed-in player once, with their best entry', async () => {
+    const cookie = await signUp(`Best${RUN}`);
+    const huge = 1100; // near the plausibility bound for 400 s in the City, so these lead its Zap board
+    const lo = (await (await post('/api/leaderboard?board=city', areaSub(`T${RUN}b1`, { area: 'city', maxRadius: huge - 1 }), cookie)).json()) as { entry: { id: string }; rank: number };
+    const hi = (await (await post('/api/leaderboard?board=city', areaSub(`T${RUN}b2`, { area: 'city', maxRadius: huge }), cookie)).json()) as { entry: { id: string }; rank: number };
+    const anon = (await (await post('/api/leaderboard?board=city', areaSub(`T${RUN}b3`, { area: 'city', maxRadius: huge - 0.5 }))).json()) as { entry: { id: string }; rank: number };
+    const top = (await (await call(leaderboardApi, '/api/leaderboard?board=city&character=zap')).json()) as { entries: Array<{ id: string }> };
+    const ids = top.entries.map((e) => e.id);
+    expect(ids.slice(0, 2)).toEqual([hi.entry.id, anon.entry.id]);
+    expect(ids).not.toContain(lo.entry.id);
+    // Ranks compare against everyone else's best: the player's own better entry doesn't push this one down.
+    expect(hi.rank).toBe(1);
+    expect(anon.rank).toBe(2);
   });
 
   it('requires a session for progress', async () => {

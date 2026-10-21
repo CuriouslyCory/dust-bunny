@@ -3,6 +3,23 @@ import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 export type RunEndReason = 'died' | 'victory' | 'quit';
 
+/** One Area of a Run: from entering it to leaving it (or the Run ending there). */
+export interface AreaStats {
+  area: AreaId;
+  /** Run second the Area was entered. */
+  startSec: number;
+  /** Simulated seconds spent in the Area. */
+  timeSec: number;
+  /** Radius on entering the Area. */
+  radiusIn: number;
+  /** Largest radius reached by the time the Run left the Area. */
+  maxRadius: number;
+  /** Debris absorbed in the Area. */
+  debrisAbsorbed: number;
+  /** The Area's boss was absorbed (in the City: the Run was won). */
+  cleared: boolean;
+}
+
 export interface RunStats {
   seed: string;
   characterId: string;
@@ -24,4 +41,6 @@ export interface RunStats {
   houseCleared: boolean;
   /** True once the Street Sweeper was absorbed (the road to the city opened). */
   neighborhoodCleared?: boolean;
+  /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
+  areas?: AreaStats[];
 }

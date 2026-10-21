@@ -18,4 +18,5 @@
 - **Fluff** — the meta currency earned at the end of each Run.
 - **Account** — optional sign-in with Google or Discord. A signed-in player's Fluff, Upgrades and stats follow them between devices (the **cloud save**).
 - **Verified score** — a leaderboard entry posted while signed in, shown with a ✓. Entries posted without an account are **anonymous**.
+- **Run board** / **Area board** — the leaderboards. The Run board ranks whole Runs; each Area has an Area board that takes an entry whenever a Run clears that Area. Signed-in players' entries post automatically; anonymous players choose to submit them on the results screen.
 - **Dash** — a short speed burst on a cooldown.

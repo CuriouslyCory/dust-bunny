@@ -89,4 +89,37 @@ describe('Run (headless)', () => {
     expect(run.leaveArea()).toBe(false);
     expect(entered).toEqual(['neighborhood', 'city']);
   });
+
+  it('records each Area it plays and emits areaCompleted on leaving a cleared one', () => {
+    const { run, events } = makeRun('areas');
+    const completed: Array<{ area: string; cleared: boolean; characterId: string }> = [];
+    events.on('areaCompleted', (e) => completed.push({ area: e.stats.area, cleared: e.stats.cleared, characterId: e.characterId }));
+
+    run.debrisAbsorbed = 40;
+    run.bunny.setRadius(50);
+    run.time = 300;
+    run.openExit();
+    run.leaveArea();
+    const house = run.getStats().areas![0]!;
+    expect(house).toMatchObject({ area: 'house', startSec: 0, timeSec: 300, maxRadius: 50, debrisAbsorbed: 40, cleared: true });
+    expect(completed).toEqual([{ area: 'house', cleared: true, characterId: 'lint' }]);
+
+    run.debrisAbsorbed = 100;
+    run.bunny.setRadius(120);
+    run.time = 420;
+    const now = run.getStats().areas!;
+    expect(now).toHaveLength(2);
+    expect(now[1]).toMatchObject({ area: 'neighborhood', startSec: 300, timeSec: 120, radiusIn: 50, maxRadius: 120, debrisAbsorbed: 60, cleared: false });
+
+    run.end('died');
+    expect(completed).toHaveLength(1); // dying mid-Area completes nothing
+  });
+
+  it('counts the City as cleared only on victory', () => {
+    const events = new EventBus();
+    const run = new Run(events, { seed: 'city', characterId: 'zap', area: 'city' });
+    expect(run.getStats().areas!.map((a) => a.area)).toEqual(['city']); // a debug start skips the earlier Areas
+    run.end('victory');
+    expect(run.getStats().areas![0]!.cleared).toBe(true);
+  });
 });

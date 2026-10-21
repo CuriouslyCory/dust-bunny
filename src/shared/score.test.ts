@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { AREA_BOSSES } from '../data/hazards';
 import { TIERS, tierForRadius } from '../data/tiers';
-import { computeScore, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREA_ORDER } from '../world/types';
+import { AREA_BOSS_TIER, computeAreaScore, computeScore, SCORE_AREAS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
 
 const base = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 3, durationMs: 300_000, victory: false };
 
@@ -54,5 +56,28 @@ describe('score tiers', () => {
 
   it('match tierForRadius', () => {
     for (const r of [0.5, 1, 2.9, 3, 7.99, 8, 20, 44, 45, 300]) expect(scoreTierForRadius(r)).toBe(tierForRadius(r).index);
+  });
+});
+
+describe('computeAreaScore', () => {
+  const clear = { area: 'house' as const, radiusIn: 1, maxRadius: 51, debrisAbsorbed: 500, durationMs: 600_000 };
+
+  it('scores growth, Debris, the clear and time under par', () => {
+    // 5000 growth + 1000 Debris + 3000 clear + (720 − 600) × 10.
+    expect(computeAreaScore(clear)).toBe(5000 + 1000 + 3000 + 1200);
+    expect(computeAreaScore({ ...clear, durationMs: 900_000 })).toBe(9000);
+    expect(computeAreaScore({ ...clear, difficulty: 'hardcore' })).toBe(Math.round(10_200 * 1.6));
+  });
+
+  it('uses each Area\'s par', () => {
+    const at = (area: 'neighborhood' | 'city') => computeAreaScore({ ...clear, area, durationMs: 0 });
+    expect(at('city') - at('neighborhood')).toBe((900 - 600) * 10);
+  });
+});
+
+describe('score areas', () => {
+  it('mirror AREA_ORDER and the boss Tiers', () => {
+    expect([...SCORE_AREAS]).toEqual([...AREA_ORDER]);
+    for (const a of SCORE_AREAS) expect(AREA_BOSS_TIER[a]).toBe(AREA_BOSSES[a].tier);
   });
 });

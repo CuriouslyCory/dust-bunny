@@ -2,9 +2,30 @@
  * Leaderboard contract shared by the client (`src/net/leaderboard.ts`) and the Vercel
  * function (`api/leaderboard.ts`): types, name sanitising and submission validation.
  * Pure and dependency-free (see the note in `./score.ts` about imports).
+ *
+ * Boards: the Run board ('run', whole Runs) and one Area board per Area ('house',
+ * 'neighborhood', 'city'), which takes an entry each time a Run clears that Area.
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
-import { computeScore, SCORE_MAX_TIER, scoreTierForRadius } from './score.js';
+import {
+  AREA_BOSS_TIER,
+  computeAreaScore,
+  computeScore,
+  isScoreArea,
+  SCORE_AREAS,
+  SCORE_MAX_TIER,
+  scoreTierForRadius,
+  type ScoreArea,
+} from './score.js';
+
+export const BOARD_IDS = ['run', ...SCORE_AREAS] as const;
+export type BoardId = (typeof BOARD_IDS)[number];
+export type AreaBoardId = ScoreArea;
+
+export function isBoardId(v: unknown): v is BoardId {
+  return typeof v === 'string' && (BOARD_IDS as readonly string[]).includes(v);
+}
+export const isAreaBoardId = isScoreArea;
 
 /** Character ids accepted by the API, mirrored from `src/data/characters.ts` (test-synced). */
 export const LEADERBOARD_CHARACTERS = ['lint', 'tumble', 'zap'] as const;
@@ -26,6 +47,8 @@ export const BOUNDS = {
   maxGrowthPerSec: 2,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
+  /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
+  areaEntryGrowth: 1.6,
 } as const;
 
 /** What the client POSTs to `/api/leaderboard`. */
@@ -40,6 +63,22 @@ export interface ScoreSubmission {
   /** Difficulty id; optional for older clients (missing counts as casual). */
   difficulty?: string;
   score: number;
+  /** Client-generated id of the Run; a second post with the same id returns the first entry. */
+  runId?: string;
+}
+
+/** What the client POSTs to `/api/leaderboard?board=<area>` when a Run clears an Area. */
+export interface AreaScoreSubmission {
+  name: string;
+  character: string;
+  area: string;
+  radiusIn: number;
+  maxRadius: number;
+  debrisAbsorbed: number;
+  durationMs: number;
+  difficulty?: string;
+  score: number;
+  runId?: string;
 }
 
 /** A row as returned by `GET /api/leaderboard` (and stored by the local fallback). */
@@ -60,6 +99,24 @@ export interface LeaderboardEntry {
   createdAt: string;
 }
 
+/** A row on an Area board. `durationMs` is the time spent in the Area. */
+export interface AreaLeaderboardEntry {
+  id: string;
+  name: string;
+  character: LeaderboardCharacter;
+  area: AreaBoardId;
+  score: number;
+  radiusIn: number;
+  maxRadius: number;
+  debrisAbsorbed: number;
+  durationMs: number;
+  difficulty: DifficultyId;
+  verified: boolean;
+  createdAt: string;
+}
+
+export type AnyLeaderboardEntry = LeaderboardEntry | AreaLeaderboardEntry;
+
 export interface ValidSubmission extends Omit<ScoreSubmission, 'character' | 'difficulty'> {
   character: LeaderboardCharacter;
   difficulty: DifficultyId;
@@ -67,7 +124,18 @@ export interface ValidSubmission extends Omit<ScoreSubmission, 'character' | 'di
   nameCensored: boolean;
 }
 
-export type ValidationResult = { ok: true; value: ValidSubmission } | { ok: false; field: string; message: string };
+export interface ValidAreaSubmission extends Omit<AreaScoreSubmission, 'character' | 'difficulty' | 'area'> {
+  character: LeaderboardCharacter;
+  area: AreaBoardId;
+  difficulty: DifficultyId;
+  nameCensored: boolean;
+}
+
+export type Validation<T> = { ok: true; value: T } | { ok: false; field: string; message: string };
+export type ValidationResult = Validation<ValidSubmission>;
+export type AreaValidationResult = Validation<ValidAreaSubmission>;
+
+const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 export function isLeaderboardCharacter(id: unknown): id is LeaderboardCharacter {
   return typeof id === 'string' && (LEADERBOARD_CHARACTERS as readonly string[]).includes(id);
@@ -123,12 +191,12 @@ export function cleanName(raw: string): { name: string; censored: boolean } {
 // ---------------------------------------------------------------------------------------
 // Submissions
 
-const fail = (field: string, message: string): ValidationResult => ({ ok: false, field, message });
+const fail = (field: string, message: string): { ok: false; field: string; message: string } => ({ ok: false, field, message });
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isInt = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v);
 
-/** Validates an untrusted submission body. Checks types, bounds, cross-field plausibility and the score. */
-export function validateSubmission(body: unknown): ValidationResult {
+/** Checks shared by every board: body shape, name, Character, Difficulty and the optional Run id. */
+function validateCommon(body: unknown) {
   if (typeof body !== 'object' || body === null || Array.isArray(body)) return fail('body', 'Expected a JSON object.');
   const b = body as Record<string, unknown>;
 
@@ -140,6 +208,18 @@ export function validateSubmission(body: unknown): ValidationResult {
 
   const difficulty = b.difficulty === undefined ? DEFAULT_DIFFICULTY : b.difficulty;
   if (!isDifficultyId(difficulty)) return fail('difficulty', `Unknown difficulty; expected one of ${DIFFICULTY_IDS.join(', ')}.`);
+
+  if (b.runId !== undefined && (typeof b.runId !== 'string' || !RUN_ID.test(b.runId))) return fail('runId', 'runId must be 8–64 letters, digits, - or _.');
+  const runId = b.runId as string | undefined;
+
+  return { ok: true as const, b, name, censored, character: b.character, difficulty, ...(runId ? { runId } : {}) };
+}
+
+/** Validates an untrusted Run board submission. Checks types, bounds, cross-field plausibility and the score. */
+export function validateSubmission(body: unknown): ValidationResult {
+  const c = validateCommon(body);
+  if (!c.ok) return c;
+  const { b, name, censored, difficulty } = c;
 
   const { maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score } = b;
   if (!isFiniteNumber(maxRadius) || maxRadius < BOUNDS.maxRadius.min || maxRadius > BOUNDS.maxRadius.max)
@@ -171,11 +251,45 @@ export function validateSubmission(body: unknown): ValidationResult {
 
   return {
     ok: true,
-    value: { name, nameCensored: censored, character: b.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected },
+    value: { name, nameCensored: censored, character: c.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}) },
+  };
+}
+
+/** Validates an untrusted Area board submission (a Run clearing one Area). */
+export function validateAreaSubmission(body: unknown): AreaValidationResult {
+  const c = validateCommon(body);
+  if (!c.ok) return c;
+  const { b, name, censored, difficulty } = c;
+
+  if (!isScoreArea(b.area)) return fail('area', `Unknown area; expected one of ${SCORE_AREAS.join(', ')}.`);
+  const area = b.area;
+  const { radiusIn, maxRadius, debrisAbsorbed, durationMs, score } = b;
+  const r = BOUNDS.maxRadius;
+  if (!isFiniteNumber(radiusIn) || radiusIn < r.min || radiusIn > r.max) return fail('radiusIn', `radiusIn must be between ${r.min} and ${r.max}.`);
+  if (!isFiniteNumber(maxRadius) || maxRadius < radiusIn || maxRadius > r.max) return fail('maxRadius', `maxRadius must be between radiusIn and ${r.max}.`);
+  if (!isInt(debrisAbsorbed) || debrisAbsorbed < BOUNDS.debrisAbsorbed.min || debrisAbsorbed > BOUNDS.debrisAbsorbed.max)
+    return fail('debrisAbsorbed', `debrisAbsorbed must be an integer between 0 and ${BOUNDS.debrisAbsorbed.max}.`);
+  if (!isInt(durationMs) || durationMs < BOUNDS.durationMs.min || durationMs > BOUNDS.durationMs.max)
+    return fail('durationMs', `durationMs must be an integer between ${BOUNDS.durationMs.min} and ${BOUNDS.durationMs.max}.`);
+  if (!isInt(score) || score < 0) return fail('score', 'score must be a non-negative integer.');
+
+  // A Run starts in the house, and an Area is cleared by absorbing its boss, which arrives at a set Tier.
+  if (area === 'house' && radiusIn > BOUNDS.maxStartRadius) return fail('radiusIn', 'radiusIn is too large for the start of a Run.');
+  if (scoreTierForRadius(maxRadius) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
+  const sec = durationMs / 1000;
+  if (maxRadius > radiusIn * BOUNDS.areaEntryGrowth + 10 + BOUNDS.maxGrowthPerSec * sec) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');
+  if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec) return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the time spent in the area.');
+
+  const expected = computeAreaScore({ area, radiusIn, maxRadius, debrisAbsorbed, durationMs, difficulty });
+  if (Math.abs(expected - score) > 1) return fail('score', 'score does not match the area stats.');
+
+  return {
+    ok: true,
+    value: { name, nameCensored: censored, character: c.character, area, radiusIn, maxRadius, debrisAbsorbed, durationMs, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}) },
   };
 }
 
 /** Sort order for leaderboards: score desc, then earlier submission first. */
-export function compareEntries(a: LeaderboardEntry, b: LeaderboardEntry): number {
+export function compareEntries(a: { score: number; createdAt: string }, b: { score: number; createdAt: string }): number {
   return b.score - a.score || a.createdAt.localeCompare(b.createdAt);
 }

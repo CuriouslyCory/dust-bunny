@@ -29,7 +29,7 @@ import { generateHouse, openExit } from '../world/house';
 import { CITY, generateCity } from '../world/city';
 import { generateNeighborhood, NEIGHBORHOOD } from '../world/neighborhood';
 import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/types';
-import type { RunEndReason, RunStats } from './runStats';
+import type { AreaStats, RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
 
 export interface RunConfig {
@@ -113,6 +113,9 @@ export class Run {
 
   private systems: System[] = [];
   private perks = new Map<string, number>();
+  /** Areas already left, and where the current one started (null only during a debug-area start). */
+  private areasDone: AreaStats[] = [];
+  private areaStart: { area: AreaId; startSec: number; radiusIn: number; maxRadiusIn: number; debris: number } | null = null;
 
   constructor(
     readonly events: EventBus,
@@ -142,6 +145,7 @@ export class Run {
     this.spawner.populate(this);
     this.disposables.add(events.on('bunnyDied', () => this.end('died')));
     for (const id of config.perks ?? []) this.applyPerk(id);
+    if (!config.area || config.area === 'house') this.beginArea();
     if (config.area && config.area !== 'house') {
       // Debug / testing start: a Bunny the size it would be after the previous area's boss.
       this.bunny.setRadius(Math.max(this.bunny.radius, areaStartRadius(config.area)));
@@ -200,6 +204,11 @@ export class Run {
    */
   enterArea(area: AreaId): void {
     if (AREA_ORDER.indexOf(area) <= AREA_ORDER.indexOf(this.area)) return;
+    if (this.areaStart) {
+      const done = this.currentAreaStats(true);
+      this.areasDone.push(done);
+      this.events.emit('areaCompleted', { stats: done, characterId: this.config.characterId, difficulty: this.difficulty.id });
+    }
     this.houseCleared = true;
     if (area === 'city') this.neighborhoodCleared = true;
     this.area = area;
@@ -214,7 +223,35 @@ export class Run {
     // Fresh air: arriving in a new area restores a heart (not on Hardcore).
     this.bunny.heal(this.difficulty.areaHeal);
     this.spawner.populate(this);
+    this.beginArea();
     this.events.emit('areaEntered', { area: this.area, timeSec: this.time });
+  }
+
+  private beginArea(): void {
+    const b = this.bunny;
+    this.areaStart = { area: this.area, startSec: this.time, radiusIn: b.radius, maxRadiusIn: b.maxRadius, debris: this.debrisAbsorbed };
+  }
+
+  /** Stats of the Area the Run is in, as if it were left now. */
+  private currentAreaStats(cleared: boolean): AreaStats {
+    const a = this.areaStart!;
+    return {
+      area: a.area,
+      startSec: a.startSec,
+      timeSec: this.time - a.startSec,
+      radiusIn: a.radiusIn,
+      // bunny.maxRadius is Run-wide: if it rose here it is this Area's peak, otherwise take the larger of entry and now.
+      maxRadius: this.bunny.maxRadius > a.maxRadiusIn ? this.bunny.maxRadius : Math.max(a.radiusIn, this.bunny.radius),
+      debrisAbsorbed: this.debrisAbsorbed - a.debris,
+      cleared,
+    };
+  }
+
+  /** The current Area's boss has been absorbed (in the City: the Run was won). */
+  private get areaCleared(): boolean {
+    if (this.area === 'house') return this.houseCleared;
+    if (this.area === 'neighborhood') return this.neighborhoodCleared;
+    return this.endReason === 'victory';
   }
 
   addSystem(system: System): void {
@@ -282,6 +319,7 @@ export class Run {
       area: this.area,
       houseCleared: this.houseCleared,
       neighborhoodCleared: this.neighborhoodCleared,
+      areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
     };
   }
 
