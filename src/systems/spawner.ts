@@ -9,7 +9,8 @@ import type { Rng } from '../core/rng';
 import { roomWeight, type DebrisType } from '../data/debris';
 import { tierForRadius } from '../data/tiers';
 import { TUNING } from '../data/tuning';
-import type { Debris } from '../entities/debris';
+import type { Debris, DebrisField } from '../entities/debris';
+import { BASE_BUNNY_STATS } from '../entities/stats';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { roomAt } from '../world/house';
@@ -42,6 +43,32 @@ export function reachableBy(house: HouseLayout, x: number, z: number, size: numb
     if (o.kind !== 'furniture' || passesUnder(radius, o)) continue;
     const r = o.rect;
     if (x > r.minX + size && x < r.maxX - size && z > r.minZ + size && z < r.maxZ - size) return false;
+  }
+  return true;
+}
+
+/**
+ * Minimum centre distance between two Debris so that any Bunny too small to absorb the smaller
+ * one or shove the bigger one (see TUNING.push) still fits between them. Keeps big clutter
+ * from boxing the Bunny in.
+ */
+export function clutterSpacing(a: number, b: number, absorbRatio = BASE_BUNNY_STATS.absorbRatio): number {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  return 0.85 * (a + b) + 2 * Math.min(lo / absorbRatio, hi / TUNING.push.ratio);
+}
+
+const clutterScratch: Debris[] = [];
+
+/** True if a Debris of `size` at (x, z) keeps clutterSpacing from every other non-tiny Debris. */
+export function clutterFree(field: DebrisField, x: number, z: number, size: number): boolean {
+  const s = size * (1 + TUNING.debris.sizeJitter);
+  if (s < TUNING.debris.clutterMinSize) return true;
+  clutterScratch.length = 0;
+  field.query(x, z, clutterSpacing(s, Math.max(s, field.maxSize)), clutterScratch);
+  for (const d of clutterScratch) {
+    if (d.size < TUNING.debris.clutterMinSize) continue;
+    if (len2(d.x - x, d.z - z) < clutterSpacing(s, d.size)) return false;
   }
   return true;
 }
@@ -104,7 +131,7 @@ export class DebrisSpawner implements System {
       const dn = len2(x - house.spawn.x, z - house.spawn.z) / maxDist;
       const tier = Math.min(5, Math.max(1, Math.round(1 + dn * 5 + rng.range(-1, 1))));
       const t = rng.weighted(types, (tt) => (tier >= tt.tiers[0] && tier <= tt.tiers[1] ? roomWeight(tt, room.type) : 0));
-      if (!t || !isFloorFree(house, x, z, t.size)) continue;
+      if (!t || !isFloorFree(house, x, z, t.size) || !clutterFree(debris, x, z, t.size)) continue;
       debris.spawn(this.typeIndex(run, t), x, z, rng);
       n++;
     }
@@ -165,7 +192,7 @@ export class DebrisSpawner implements System {
       const room = roomAt(house, x, z);
       if (!room) continue;
       const t = this.rng.weighted(types, (tt) => DebrisSpawner.spawnWeight(tt, r, ratio, tier, room.type));
-      if (!t || floorPointVisible(x - bunny.x, z - bunny.z, view, t.size * 1.2) || !isFloorFree(house, x, z, t.size) || !reachableBy(house, x, z, t.size, r)) continue;
+      if (!t || floorPointVisible(x - bunny.x, z - bunny.z, view, t.size * 1.2) || !isFloorFree(house, x, z, t.size) || !reachableBy(house, x, z, t.size, r) || !clutterFree(debris, x, z, t.size)) continue;
       debris.spawn(this.typeIndex(run, t), x, z, this.rng);
       want--;
     }

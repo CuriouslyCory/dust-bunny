@@ -12,6 +12,7 @@ import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
 import { TIERS } from '../src/data/tiers';
+import { TUNING } from '../src/data/tuning';
 import type { Debris } from '../src/entities/debris';
 import { Run } from '../src/game/run';
 import type { Hazard } from '../src/hazards';
@@ -90,7 +91,7 @@ class Planner {
     pad = r * 0.95;
     const ratio = this.run.bunny.stats.get('absorbRatio');
     this.run.debris.forEach((d) => {
-      if (canAbsorb(r, ratio, d.size)) return;
+      if (canAbsorb(r, ratio, d.size) || d.size <= r * TUNING.push.ratio) return;
       const s = d.size * 0.6;
       mark(d.x - s, d.z - s, d.x + s, d.z + s);
     });

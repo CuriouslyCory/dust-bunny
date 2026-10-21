@@ -22,6 +22,16 @@ export const TUNING = {
   /** Magnet: absorbable Debris within radius × (1 + magnetRadius) is pulled in at this many radii/s. */
   magnetPullSpeed: 5,
 
+  /** Shoving Obstacle Debris that is almost absorbable (see pushDebris in systems/collision.ts). */
+  push: {
+    /** Debris up to radius × ratio can be pushed (absorbable from radius × absorbRatio). */
+    ratio: 1.1,
+    /** Fraction of the overlap the Debris takes (the rest pushes the Bunny back). */
+    share: 0.8,
+    /** Fraction of the velocity into the Debris removed per contact tick. */
+    drag: 0.08,
+  },
+
   /** Absorbed Debris rendered on the Bunny surface. */
   stuckCap: 150,
   /** Stuck Debris smaller than radius × this is considered buried in the fur and removed. */
@@ -39,6 +49,8 @@ export const TUNING = {
     /** Debris placed around the spawn point at Run start. */
     startCluster: 260,
     startClusterRadius: 45,
+    /** Debris at least this big (cm) keeps clutterSpacing from its neighbours (spawner.ts) so it can't box the Bunny in. */
+    clutterMinSize: 2,
   },
 
   spawner: {

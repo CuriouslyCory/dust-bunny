@@ -3,6 +3,7 @@ import { circleVsCircle, circleVsRect, clamp, rectContains, type PushOut } from 
 import type { Debris } from '../entities/debris';
 import type { Bunny } from '../entities/bunny';
 import { TUNING } from '../data/tuning';
+import type { Run } from '../game/run';
 import type { HouseLayout, Obstacle } from '../world/types';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from './absorb';
@@ -59,6 +60,46 @@ function ejectThrough(b: Bunny, o: Obstacle): PushOut {
 
 const scratch: Debris[] = [];
 
+/** How deep a Debris disc at (x, z) sits in walls, furniture it can't slide under, or the house edge (0 = fits). */
+function debrisPenetration(house: HouseLayout, x: number, z: number, size: number): number {
+  const bd = house.bounds;
+  let pen = Math.max(0, bd.minX - (x - size), x + size - bd.maxX, bd.minZ - (z - size), z + size - bd.maxZ);
+  for (const o of house.obstacles) {
+    if (o.kind === 'furniture' && o.clearance > size * 2) continue;
+    const p = circleVsRect(x, z, size, o.rect);
+    if (p && p.depth > pen) pen = p.depth;
+  }
+  return pen;
+}
+
+/**
+ * Almost-absorbable Obstacle Debris (size ≤ radius × pushRatio) gets shoved: it takes most of
+ * the overlap and the Bunny is slowed rather than stopped. Reads as "nearly big enough" and
+ * keeps the Bunny from being boxed in by clutter it can't absorb yet. Returns false (no push)
+ * when the Debris is too big or would be shoved into a wall or furniture.
+ */
+export function pushDebris(run: Run, d: Debris, p: PushOut): boolean {
+  const b = run.bunny;
+  const c = TUNING.push;
+  if (d.size > b.radius * c.ratio) return false;
+  const nx = d.x - p.x * c.share;
+  const nz = d.z - p.z * c.share;
+  // Template Debris (chairs at a table) may start touching furniture: allow any shove that
+  // doesn't push it deeper in.
+  const ds = d.size * 0.85;
+  if (debrisPenetration(run.house, nx, nz, ds) > debrisPenetration(run.house, d.x, d.z, ds) + 1e-3) return false;
+  run.debris.move(d, nx, nz);
+  b.x += p.x * (1 - c.share);
+  b.z += p.z * (1 - c.share);
+  // Pushing is heavy work: bleed off part of the velocity going into the Debris.
+  const vn = b.vx * p.nx + b.vz * p.nz;
+  if (vn < 0) {
+    b.vx -= vn * p.nx * c.drag;
+    b.vz -= vn * p.nz * c.drag;
+  }
+  return true;
+}
+
 export const collisionSystem: System = {
   id: 'collision',
   order: SYSTEM_ORDER.collision,
@@ -80,7 +121,9 @@ export const collisionSystem: System = {
         if (canAbsorb(b.radius, ratio, d.size)) continue;
         // Debris collides with a slightly smaller disc so things feel less sticky.
         const p = circleVsCircle(b.x, b.z, b.radius, d.x, d.z, d.size * 0.85);
-        if (p) applyPush(b, p);
+        if (!p) continue;
+        if (pushDebris(run, d, p)) continue;
+        applyPush(b, p);
       }
     }
     const bd = run.house.bounds;

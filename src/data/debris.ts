@@ -273,7 +273,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
       { shape: 'torus', radius: 0.35, tube: 0.04, arc: 3.5, rot: [H, 0, 0], pos: [-1.0, 0.05, 0] },
     ],
     material: { roughness: 1 },
-    rooms: { living: 2, hallway: 1, bedroom: 1 },
+    rooms: { living: 2, hallway: 1, bedroom: 1, kitchen: 1 },
   },
   {
     id: 'sock', name: 'Sock', size: 10, mass: 0.8, tiers: [3, 4],
@@ -283,7 +283,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
       { shape: 'capsule', radius: 0.28, length: 0.4, rot: [H, 0, 0], pos: [0.7, 0.22, 0.25] },
     ],
     material: { roughness: 1 },
-    rooms: { bedroom: 4, bathroom: 2, hallway: 1.5, living: 1 },
+    rooms: { bedroom: 4, bathroom: 2, hallway: 1.5, living: 1, kitchen: 0.5 },
   },
   {
     id: 'tv_remote', name: 'TV Remote', size: 10, mass: 1.6, tiers: [3, 4],
@@ -304,7 +304,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
       { shape: 'sphere', radius: 0.5, scale: [1.2, 0.6, 0.8], pos: [0.45, 0.2, 0] },
     ],
     material: { roughness: 1 },
-    rooms: { bedroom: 3, hallway: 2, bathroom: 1 },
+    rooms: { bedroom: 3, hallway: 2, bathroom: 1, kitchen: 1 },
   },
   {
     id: 'book', name: 'Book', size: 14, mass: 1.8, tiers: [4, 4],
@@ -314,7 +314,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
       { shape: 'box', size: [1.5, 0.27, 1.08], pos: [0.06, 0.175, 0], color: '#fff6dc' },
     ],
     material: { roughness: 0.8 },
-    rooms: { living: 2, bedroom: 3 },
+    rooms: { living: 2, bedroom: 3, kitchen: 1 },
   },
   {
     id: 'shoe', name: 'Shoe', size: 15, mass: 1.6, tiers: [4, 4],
@@ -363,7 +363,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
       { shape: 'blob', radius: 0.9, noise: 0.25, detail: 1, pos: [0, 1.7, 0], color: '#3a7d44' },
     ],
     material: { roughness: 0.8 },
-    rooms: { living: 3, hallway: 2, bedroom: 1 },
+    rooms: { living: 3, hallway: 2, bedroom: 1, kitchen: 1 },
   },
   {
     id: 'laundry_basket', name: 'Laundry Basket', size: 28, mass: 1.2, tiers: [4, 5],
