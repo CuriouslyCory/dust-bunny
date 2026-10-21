@@ -162,6 +162,22 @@ export class Run {
     if (next) this.enterArea(next);
   }
 
+  /** True once the area's exit is open and another area follows (the HUD's skip button shows). */
+  get canLeaveArea(): boolean {
+    return !this.ended && !!this.house.exit?.open && nextArea(this.area) !== null;
+  }
+
+  /**
+   * Moves on to the next area once its exit is open, wherever the Bunny is: the HUD's skip
+   * button, so a Bunny too big to reach the exit is never stuck. Returns false while the exit
+   * is still shut.
+   */
+  leaveArea(): boolean {
+    if (!this.canLeaveArea) return false;
+    this.enterNextArea();
+    return true;
+  }
+
   /** Leaves the house for the neighborhood (debug / tests; same as enterArea('neighborhood')). */
   enterNeighborhood(): void {
     this.enterArea('neighborhood');

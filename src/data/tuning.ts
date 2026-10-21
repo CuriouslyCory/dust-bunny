@@ -32,6 +32,14 @@ export const TUNING = {
     drag: 0.08,
   },
 
+  /** Squeezing into gaps narrower than the Bunny (see gapRadiusAt in systems/collision.ts). */
+  squeeze: {
+    /** The fur squashes down to radius × min; narrower gaps stay closed. */
+    min: 0.4,
+    /** Two contacts count as opposite sides of a gap when their normals' dot product is at most this. */
+    opposing: -0.2,
+  },
+
   /** Absorbed Debris rendered on the Bunny surface. */
   stuckCap: 150,
   /** Stuck Debris smaller than radius × this is considered buried in the fur and removed. */

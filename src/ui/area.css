@@ -10,6 +10,18 @@
   animation: door-compass-pulse 1.6s ease-in-out infinite;
 }
 
+.door-compass-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Skip the walk to the exit (a Bunny too big for the hallway must never be stuck). */
+.door-skip {
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
 .door-compass-icon {
   font-size: 18px;
 }
@@ -50,6 +62,14 @@
   }
   100% {
     opacity: 0;
+  }
+}
+
+/* Small screens: the skip button wraps under the compass instead of running off screen. */
+@media (max-width: 600px) {
+  .door-compass {
+    flex-wrap: wrap;
+    max-width: min(260px, 64vw);
   }
 }
 
