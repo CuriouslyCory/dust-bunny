@@ -31,7 +31,6 @@ import type { Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
 import { upgradeModifiers } from '../src/meta/upgrades';
-import { draftForRun } from '../src/perks/draft';
 import { canAbsorb } from '../src/systems/absorb';
 import { viewRadiusFor } from '../src/systems/camera';
 import { passesUnder } from '../src/systems/collision';
@@ -479,13 +478,11 @@ for (const characterId of chars) {
           return Math.min(amount, run.bunny.health - 1);
         });
       }
+      // Picks immediately (the Run is never paused): the draft queued for this Tier, at random.
       events.on('tierUp', () => {
-        const offer = draftForRun(run);
-        const pick = offer[Math.floor(perkRng.next() * offer.length)];
-        if (pick) {
-          run.applyPerk(pick.id);
-          log.push(`${fmt(run.time)} T${run.tier} perk ${pick.id}`);
-        }
+        const { perks } = run.perkDraft.offer;
+        const pick = perks[Math.floor(perkRng.next() * perks.length)];
+        if (pick && run.perkDraft.choose(pick.id)) log.push(`${fmt(run.time)} T${run.tier} perk ${pick.id}`);
       });
       events.on('bunnyDamaged', (e) => {
         hits++;

@@ -1,7 +1,11 @@
 /**
- * Perk draft logic (pure + per-Run state). The modal is src/ui/screens/perkDraft.ts.
- * Offers `perkChoices` (3, 4 with Wide Choice) distinct Perks, weighted, never a unique or
- * maxed Perk the Run already has. Rerolls per Run come from the perkRerolls stat.
+ * Perk draft: the weighted sampler plus the per-Run draft workflow (`run.perkDraft`). The modal
+ * that renders it is src/ui/screens/perkDraft.ts; the balance bot (scripts/sim.ts) picks headless.
+ *
+ * One pending draft per Tier crossed (growthSystem calls queue() before emitting tierUp). An offer
+ * is `perkChoices` (3, 4 with Wide Choice) distinct Perks, weighted, never a unique or maxed Perk
+ * the Run already has. Choosing applies the Perk, consumes one pending draft and prepares the next
+ * offer; an exhausted pool drops the remaining drafts. Rerolls per Run come from the perkRerolls stat.
  */
 import type { Rng } from '../core/rng';
 import type { Run } from '../game/run';
@@ -21,35 +25,85 @@ export function draftPerks(pool: readonly PerkDef[], count: number, rng: Rng, ex
   return out;
 }
 
-export interface DraftState {
-  rerollsUsed: number;
-  rng: Rng;
+/** The Perks currently on offer. `serial` changes with every new offer (pick, reroll). */
+export interface PerkOffer {
+  readonly serial: number;
+  readonly perks: readonly PerkDef[];
 }
 
-const states = new WeakMap<Run, DraftState>();
+const NO_OFFER: PerkOffer = { serial: 0, perks: [] };
 
-export function draftState(run: Run): DraftState {
-  let s = states.get(run);
-  if (!s) {
-    s = { rerollsUsed: 0, rng: run.rng.fork('perk-draft') };
-    states.set(run, s);
+/** A Run's Perk draft workflow: pending drafts, the current offer and reroll progression. */
+export class PerkDraft {
+  /** Drafts still to pick (the current offer included). */
+  pending = 0;
+  rerollsUsed = 0;
+  private current: PerkOffer = NO_OFFER;
+  private serial = 0;
+  private readonly rng: Rng;
+
+  constructor(private readonly run: Run) {
+    this.rng = run.rng.fork('perk-draft');
   }
-  return s;
-}
 
-export function rerollsLeft(run: Run): number {
-  return Math.max(0, Math.round(run.bunny.stats.get('perkRerolls')) - draftState(run).rerollsUsed);
-}
+  /** The offer to pick from; no Perks when nothing is pending. */
+  get offer(): PerkOffer {
+    return this.current;
+  }
 
-/** A fresh draft for the Run. Pass the current offer as `exclude` when rerolling. */
-export function draftForRun(run: Run, exclude: readonly string[] = []): PerkDef[] {
-  const count = Math.round(run.bunny.stats.get('perkChoices'));
-  return draftPerks(availablePerks(run), count, draftState(run).rng, exclude);
-}
+  /** A draft is waiting for a pick. */
+  get active(): boolean {
+    return !this.run.ended && this.pending > 0 && this.current.perks.length > 0;
+  }
 
-/** Consumes a reroll and returns a new draft, or null when none are left. */
-export function rerollDraft(run: Run, current: readonly PerkDef[]): PerkDef[] | null {
-  if (rerollsLeft(run) <= 0) return null;
-  draftState(run).rerollsUsed++;
-  return draftForRun(run, current.map((p) => p.id));
+  /** Rerolls this Run gets in total (the Reroll Upgrade). */
+  get rerolls(): number {
+    return Math.max(0, Math.round(this.run.bunny.stats.get('perkRerolls')));
+  }
+
+  get rerollsLeft(): number {
+    return Math.max(0, this.rerolls - this.rerollsUsed);
+  }
+
+  /** Adds `count` pending drafts (one per Tier crossed) and prepares an offer if none is up. */
+  queue(count = 1): void {
+    if (this.run.ended || count <= 0) return;
+    this.pending += count;
+    if (this.current.perks.length === 0) this.prepare();
+  }
+
+  /**
+   * Picks `perkId` from the current offer: applies it once, consumes one pending draft and
+   * prepares the next offer (or completes). Returns false, changing nothing, for a Perk not on
+   * the offer, a stale `serial`, an ended Run or when nothing is pending.
+   */
+  choose(perkId: string, serial = this.current.serial): boolean {
+    if (!this.active || serial !== this.current.serial) return false;
+    if (!this.current.perks.some((p) => p.id === perkId)) return false;
+    this.pending--;
+    this.current = NO_OFFER;
+    this.run.applyPerk(perkId);
+    if (this.pending > 0) this.prepare();
+    return true;
+  }
+
+  /** Spends a reroll on a new offer that avoids the current one. False when none are left. */
+  reroll(): boolean {
+    if (!this.active || this.rerollsLeft <= 0) return false;
+    this.rerollsUsed++;
+    this.prepare(this.current.perks.map((p) => p.id));
+    return true;
+  }
+
+  private prepare(exclude: readonly string[] = []): void {
+    const count = Math.round(this.run.bunny.stats.get('perkChoices'));
+    const perks = draftPerks(availablePerks(this.run), count, this.rng, exclude);
+    if (perks.length === 0) {
+      // Everything is owned or maxed: no later draft could offer anything either.
+      this.pending = 0;
+      this.current = NO_OFFER;
+      return;
+    }
+    this.current = { serial: ++this.serial, perks };
+  }
 }
