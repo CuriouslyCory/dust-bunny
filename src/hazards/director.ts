@@ -9,62 +9,14 @@
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
-import {
-  AREA_BOSSES,
-  AREA_DIRECTORS,
-  BROOM,
-  DIRECTOR,
-  DIRECTOR_EXCLUDE,
-  FLOOR_SCRUBBER,
-  GARBAGE_TRUCK,
-  LAWN_MOWER,
-  LEAF_BLOWER,
-  LINT_ROLLER,
-  LITTER_VACUUM,
-  MINI_MOWER,
-  MINI_SCRUBBER,
-  MOP,
-  PRESSURE_WASHER,
-  ROBO_MOWER,
-  ROBOVAC_9000,
-  ROOMBA,
-  SPRAY_BOTTLE,
-  SPRINKLER,
-  STREET_FLUSHER,
-  STREET_SWEEPER,
-  UPRIGHT_VACUUM,
-  type TierSpawnTable,
-} from '../data/hazards';
+import { AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, type TierSpawnTable } from '../data/hazards';
 import { DIFFICULTIES, type DifficultyDef } from '../data/difficulty';
 import { tierProgress } from '../data/tiers';
 import type { AreaId } from '../world/types';
 import type { Run } from '../game/run';
 import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
-import { hazardRegistry, type Hazard, type HazardManager } from './index';
-
-/** Footprint used to validate spawn spots. */
-export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: number }>> = {
-  roomba: { radius: ROOMBA.size, height: ROOMBA.height },
-  lint_roller: { radius: LINT_ROLLER.size, height: LINT_ROLLER.height },
-  broom: { radius: BROOM.sweepRadius * 0.5, height: 10 },
-  spray_bottle: { radius: SPRAY_BOTTLE.size, height: SPRAY_BOTTLE.height },
-  mop: { radius: MOP.size, height: MOP.height },
-  upright_vacuum: { radius: UPRIGHT_VACUUM.size, height: UPRIGHT_VACUUM.height },
-  robovac_9000: { radius: ROBOVAC_9000.contactRadius, height: ROBOVAC_9000.height },
-  robo_mower: { radius: ROBO_MOWER.size, height: ROBO_MOWER.height },
-  mini_mower: { radius: MINI_MOWER.size, height: MINI_MOWER.height },
-  lawn_mower: { radius: LAWN_MOWER.size, height: LAWN_MOWER.height },
-  leaf_blower: { radius: LEAF_BLOWER.size, height: LEAF_BLOWER.height },
-  sprinkler: { radius: SPRINKLER.size, height: SPRINKLER.height },
-  street_sweeper: { radius: STREET_SWEEPER.contactRadius, height: STREET_SWEEPER.height },
-  floor_scrubber: { radius: FLOOR_SCRUBBER.size, height: FLOOR_SCRUBBER.height },
-  mini_scrubber: { radius: MINI_SCRUBBER.size, height: MINI_SCRUBBER.height },
-  pressure_washer: { radius: PRESSURE_WASHER.size, height: PRESSURE_WASHER.height },
-  litter_vacuum: { radius: LITTER_VACUUM.size, height: LITTER_VACUUM.height },
-  street_flusher: { radius: STREET_FLUSHER.size, height: STREET_FLUSHER.height },
-  garbage_truck: { radius: GARBAGE_TRUCK.contactRadius, height: GARBAGE_TRUCK.height },
-};
+import { HazardManager, hazardRegistry, type Hazard } from './index';
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
   const { tiers: t, firstTier: first } = AREA_DIRECTORS[area];
@@ -150,7 +102,7 @@ export class HazardDirector {
     for (const h of mgr.hazards) if (!h.dead) alive[h.def.id] = (alive[h.def.id] ?? 0) + 1;
     const id = pickHazardType(run.tier, progress, alive, this.rng, DIRECTOR_EXCLUDE, run.area, d.hazardBudget);
     if (!id) return;
-    const fp = SPAWN_FOOTPRINT[id] ?? { radius: 15, height: 20 };
+    const fp = HazardManager.footprint(id);
     const spot = this.findSpot(run, fp.radius, fp.height, ...spawnRing(viewR, fp.radius));
     if (spot) mgr.spawn(id, spot.x, spot.z);
   }
@@ -170,7 +122,7 @@ export class HazardDirector {
     if (run.area !== this.area) this.enterArea(run.area);
     const bossId = AREA_BOSSES[run.area].id;
     if (this.bossSpawned || !hazardRegistry.has(bossId)) return null;
-    const fp = SPAWN_FOOTPRINT[bossId] ?? { radius: 100, height: 100 };
+    const fp = HazardManager.footprint(bossId);
     const viewR = viewRadiusFor(run.bunny.radius, run.tier);
     const [inner, outer] = spawnRing(viewR * 0.6, fp.radius);
     const spot = this.findSpot(run, fp.radius, fp.height, inner, outer) ?? this.findSpot(run, fp.radius, fp.height, fp.radius + run.bunny.radius + 80, 1e5);
@@ -180,6 +132,29 @@ export class HazardDirector {
     this.bossId = h.id;
     run.events.emit('bossSpawned', { hazardId: h.id, absorbRadius: absorbRadiusFor(h.size, run.bunny.stats.get('absorbRatio')), name: h.def.name });
     return h;
+  }
+
+  /**
+   * Spawns `defId` close to the Bunny and in view (debug tools; director spawns stay off screen).
+   * A boss goes through spawnBoss (the current area's boss, once). Null if no spot fits.
+   */
+  spawnNear(run: Run, mgr: HazardManager, defId: string): Hazard | null {
+    const def = hazardRegistry.get(defId);
+    if (!def) return null;
+    if (def.boss) return this.spawnBoss(run, mgr);
+    const fp = def.footprint;
+    const b = run.bunny;
+    const inner = b.radius + fp.radius + 20;
+    let spot: { x: number; z: number } | null = null;
+    for (let i = 0; i < 48 && !spot; i++) {
+      const a = (i / 48) * Math.PI * 2 * 7;
+      const d = inner + (i % 4) * Math.max(40, fp.radius);
+      const x = b.x + Math.cos(a) * d;
+      const z = b.z + Math.sin(a) * d;
+      if (hazardFloorFree(run.house, x, z, fp.radius, fp.height)) spot = { x, z };
+    }
+    spot ??= this.findSpot(run, fp.radius, fp.height, inner, inner + 100);
+    return spot ? mgr.spawn(defId, spot.x, spot.z) : null;
   }
 
   /** Random valid spot in the ring around the Bunny; falls back to the farthest valid spot in the house. */

@@ -9,14 +9,13 @@ import { stepBunnyMovement } from '../systems/movement';
 import { NO_INPUT } from '../core/input';
 import { absorbRadiusFor, hazardFloorFree, suctionFalloff, suctionReachFor, suctionSpeed } from './common';
 import { hazardBudget, pickHazardType, spawnInterval, spawnRing, spawnWeights } from './director';
-import { installRunHazards } from './install';
 import { puddleScale } from './mop';
 import { bossSizeAfterHits } from './robovac';
 import { planShed } from './shed';
 import { inCone, type UprightVacuum } from './uprightVacuum';
 import type { SprayBottle } from './sprayBottle';
 import { onScreen, spawnView } from '../systems/camera';
-import { installRunHooks } from '../meta/install';
+import { installGameplay } from '../game/assembly';
 
 const makeRun = (seed = 'hazards') => {
   const events = new EventBus();
@@ -47,7 +46,7 @@ describe('spawn director tables', () => {
     for (let t = 1; t < MAX_TIER; t++) expect(hazardBudget(t + 1, 0)).toBeGreaterThanOrEqual(hazardBudget(t, 0));
   });
 
-  it('only spawns Hazards whose minTier has been reached', () => {
+  it('house spawn tables bring Hazards in at their Tier and never pick the boss', () => {
     expect(Object.keys(spawnWeights(1, {})).sort()).toEqual(['lint_roller', 'roomba']);
     expect(Object.keys(spawnWeights(2, {}))).toContain('broom');
     expect(Object.keys(spawnWeights(3, {}))).toContain('mop');
@@ -297,7 +296,7 @@ describe('roguelike hooks', () => {
 
   it('a blocked hit (Bubble Wrap) does not stick or shed', () => {
     const { run, events } = makeRun();
-    installRunHooks(run);
+    installGameplay(run);
     moveToOpenFloor(run);
     const b = run.bunny;
     b.setRadius(4);
@@ -315,7 +314,7 @@ describe('roguelike hooks', () => {
 describe('director in a headless Run', () => {
   it('spawns Hazards after the grace period and brings the boss at Tier 5', () => {
     const { run, events } = makeRun('director');
-    installRunHazards(run);
+    installGameplay(run);
     let spawned = 0;
     let boss = 0;
     events.on('hazardSpawned', () => spawned++);

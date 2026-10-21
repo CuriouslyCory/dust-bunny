@@ -6,20 +6,24 @@
  *     slots: top-left | top-right | bottom-left | bottom-right | center | top-center | bottom-center
  *            | status (row under the Tier card: active Pickup timers live here)
  *            | perks  (icon row under the top-right counters: taken Perks live here)
- *   toast(text, { key, tone })          small batched toast near the Bunny ("+ Sock!")
+ *   toast(text, { key, tone, swatch, short })   small batched toast near the Bunny ("+ Sock!");
+ *                                       on phones a one-line ticker under the Tier pill ("Sock ×3")
  *   banner(title, { subtitle, variant, duration })   big centred banner (tier | boss | good | info)
  *   flash(widgetId)                     plays the highlight animation on a widget
+ *   onCompactChange(fn)                 runs fn(compact) now and whenever the phone layout toggles
  *
  * Built-in widgets already render active Pickups (`run.pickups.active`) and taken Perks
  * (`perkApplied`) generically. To give them proper icons call
  *   registerHudIcon('pickup', 'sugar_rush', { glyph: '🍬', color: '#ff8fb1' })
  */
+import { getDebrisType } from '../data/debris';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
 import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
 import { pickupRegistry } from '../pickups';
+import { COMPACT_QUERY } from './components';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
 import { h } from './screens';
 import { settings } from './settings';
@@ -60,6 +64,10 @@ export interface ToastOptions {
   /** Toasts with the same key merge into "text ×N". Defaults to the text. */
   key?: string;
   tone?: 'absorb' | 'good' | 'bad' | 'info' | 'hazard';
+  /** CSS colour of a small dot before the text (e.g. the Debris colour). */
+  swatch?: string;
+  /** Shorter text for the phone ticker ("Sock" for "+ Sock!"). Defaults to the text. */
+  short?: string;
 }
 
 const icons = { pickup: new Map<string, HudIcon>(), perk: new Map<string, HudIcon>() };
@@ -135,6 +143,10 @@ export class Hud {
   private toastEls = new Map<number, HTMLElement>();
   private clock = 0;
   private toasts: ToastBatcher;
+  /** Swatch / short text per toast key (the batcher only carries the text). */
+  private toastMeta = new Map<string, Pick<ToastOptions, 'swatch' | 'short'>>();
+  private compactQuery = typeof matchMedia === 'function' ? matchMedia(COMPACT_QUERY) : undefined;
+  private compactListeners: Array<(compact: boolean) => void> = [];
 
   constructor(private readonly game: Game) {
     for (const s of ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center', 'top-center', 'bottom-center']) {
@@ -153,7 +165,18 @@ export class Hud {
     this.el.append(this.toastLayer);
     this.toasts = new ToastBatcher({
       show: (t) => {
-        const el = h('div', { className: `hud-toast tone-${t.tone}` }, h('span', { className: 'hud-toast-text', textContent: t.text }), h('span', { className: 'hud-toast-count' }));
+        const meta = this.toastMeta.get(t.key);
+        const swatch = h('span', { className: 'hud-toast-swatch' });
+        if (meta?.swatch) swatch.style.setProperty('--swatch', meta.swatch);
+        else swatch.hidden = true;
+        const el = h(
+          'div',
+          { className: `hud-toast tone-${t.tone}` },
+          swatch,
+          h('span', { className: 'hud-toast-text', textContent: t.text }),
+          h('span', { className: 'hud-toast-short', textContent: meta?.short ?? t.text }),
+          h('span', { className: 'hud-toast-count', textContent: t.count > 1 ? `×${t.count}` : '' }),
+        );
         el.style.setProperty('--x', `${(Math.random() * 2 - 1) * 28}px`);
         this.toastEls.set(t.id, el);
         this.toastLayer.prepend(el);
@@ -174,6 +197,26 @@ export class Hud {
         setTimeout(() => el.remove(), 300);
       },
     });
+    // Phones: the toasts become a one-line ticker under the Tier pill in the top-centre slot.
+    this.onCompactChange((compact) => {
+      this.el.classList.toggle('hud-compact', compact);
+      if (compact) this.slots.get('top-center')!.append(this.toastLayer);
+      else this.el.append(this.toastLayer);
+    });
+    this.compactQuery?.addEventListener('change', (e) => {
+      for (const fn of this.compactListeners) fn(e.matches);
+    });
+  }
+
+  /** True on phone-sized viewports (`COMPACT_QUERY`), where the HUD uses its compact layout. */
+  get compact(): boolean {
+    return this.compactQuery?.matches ?? false;
+  }
+
+  /** Calls `fn(compact)` now and every time the viewport enters or leaves the phone layout. */
+  onCompactChange(fn: (compact: boolean) => void): void {
+    this.compactListeners.push(fn);
+    fn(this.compact);
   }
 
   /** The container element of a slot (for advanced layouts). */
@@ -205,7 +248,10 @@ export class Hud {
   }
 
   toast(text: string, opts: ToastOptions = {}): void {
-    this.toasts.push(opts.key ?? text, text, this.clock, opts.tone ?? 'absorb');
+    const key = opts.key ?? text;
+    if (opts.swatch || opts.short) this.toastMeta.set(key, { swatch: opts.swatch, short: opts.short });
+    else this.toastMeta.delete(key);
+    this.toasts.push(key, text, this.clock, opts.tone ?? 'absorb');
   }
 
   clearToasts(): void {
@@ -303,8 +349,17 @@ function tierWidget(hud: Hud, game: Game): void {
   bar.setAttribute('aria-valuemin', '0');
   bar.setAttribute('aria-valuemax', '100');
   const radius = h('span', { className: 'radius' });
+  // Phone pill only: "1.47 / 3 cm → Fluff" instead of "1.47 cm … Fluff at 3 cm".
+  const goal = h('span', { className: 'tier-goal' });
   const next = h('span', { className: 'tier-next' });
-  const el = h('div', { className: 'hud-card tier-card' }, h('div', { className: 'tier-head' }, badge, name), bar, h('div', { className: 'tier-foot' }, radius, next));
+  const nextShort = h('span', { className: 'tier-next-short' });
+  const el = h(
+    'div',
+    { className: 'hud-card tier-card' },
+    h('div', { className: 'tier-head' }, badge, name),
+    bar,
+    h('div', { className: 'tier-foot' }, h('span', { className: 'tier-size' }, radius, goal), next, nextShort),
+  );
   let lastTier = -1;
   let lastPct = -1;
   hud.addWidget({
@@ -322,6 +377,8 @@ function tierWidget(hud: Hud, game: Game): void {
         el.dataset.tier = String(t.index);
         const n = t.index < MAX_TIER ? getTier(t.index + 1) : null;
         next.textContent = n ? `${n.name} at ${n.minRadius} cm` : 'Max size!';
+        goal.textContent = n ? ` / ${n.minRadius} cm` : ' cm';
+        nextShort.textContent = n ? `→ ${n.name}` : 'Max size!';
       }
       const pct = Math.round(tierProgress(r) * 1000) / 10;
       if (pct !== lastPct) {
@@ -329,8 +386,20 @@ function tierWidget(hud: Hud, game: Game): void {
         fill.style.width = `${pct}%`;
         bar.setAttribute('aria-valuenow', String(Math.round(pct)));
       }
-      radius.textContent = `${r.toFixed(r < 10 ? 2 : 1)} cm`;
+      const size = r.toFixed(r < 10 ? 2 : 1);
+      radius.textContent = hud.compact ? size : `${size} cm`;
     },
+  });
+  // Phones: a one-line pill at the top centre instead of the card under the hearts.
+  hud.onCompactChange((compact) => {
+    if (compact) {
+      hud.slot('top-center').prepend(el);
+      return;
+    }
+    const topLeft = hud.slot('top-left');
+    const status = hud.slot('status');
+    if (status.parentElement === topLeft) topLeft.insertBefore(el, status);
+    else topLeft.append(el);
   });
   game.events.on('tierUp', (e) => {
     hud.flash('tier');
@@ -414,6 +483,7 @@ function counterWidgets(hud: Hud, game: Game): void {
     if (game.screens.current?.id === 'playing') game.go('paused');
   });
   hud.addWidget({ id: 'pause', slot: 'top-right', el: pause });
+  fullscreenWidget(hud);
 
   const value = h('span', { className: 'count-value' });
   const count = h('div', { className: 'hud-card hud-counter' }, h('span', { className: 'count-icon', textContent: '✦' }), value);
@@ -445,6 +515,45 @@ function counterWidgets(hud: Hud, game: Game): void {
   });
   // Perk row sits below the counters.
   hud.slot('top-right').append(hud.slot('perks'));
+}
+
+const ENTER_FULLSCREEN_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5a1 1 0 0 1 1-1h4v2.2H6.2V9zm11-5h4a1 1 0 0 1 1 1v4h-2.2V6.2H15zm5 11v4a1 1 0 0 1-1 1h-4v-2.2h2.8V15zM9 20H5a1 1 0 0 1-1-1v-4h2.2v2.8H9z"/></svg>';
+const EXIT_FULLSCREEN_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 4H10v5a1 1 0 0 1-1 1H4V7.8h3.8zM14 4h2.2v3.8H20V10h-5a1 1 0 0 1-1-1zm1 10h5v2.2h-3.8V20H14v-5a1 1 0 0 1 1-1zM4 14h5a1 1 0 0 1 1 1v5H7.8v-3.8H4z"/></svg>';
+
+type FullscreenDocument = Document & { webkitFullscreenEnabled?: boolean; webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void };
+type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => void };
+
+/** Touch HUD: enters / leaves browser fullscreen (hidden where the Fullscreen API is missing, e.g. iPhone Safari). */
+function fullscreenWidget(hud: Hud): void {
+  const doc = document as FullscreenDocument;
+  const btn = h('button', { type: 'button', className: 'hud-icon-btn hud-fullscreen' });
+  btn.hidden = !(doc.fullscreenEnabled || doc.webkitFullscreenEnabled);
+  const active = (): boolean => !!(doc.fullscreenElement ?? doc.webkitFullscreenElement);
+  const sync = (): void => {
+    const on = active();
+    btn.innerHTML = on ? EXIT_FULLSCREEN_SVG : ENTER_FULLSCREEN_SVG;
+    btn.title = on ? 'Exit full screen' : 'Full screen';
+    btn.setAttribute('aria-label', btn.title);
+  };
+  btn.addEventListener('click', () => {
+    btn.blur(); // Space dashes; it must not press this again
+    const root = document.documentElement as FullscreenElement;
+    try {
+      if (active()) {
+        if (doc.exitFullscreen) void doc.exitFullscreen().catch(() => undefined);
+        else doc.webkitExitFullscreen?.();
+      } else if (root.requestFullscreen) void root.requestFullscreen({ navigationUI: 'hide' }).catch(() => undefined);
+      else root.webkitRequestFullscreen?.();
+    } catch {
+      // Refused (not a user gesture, iframe without allowfullscreen): stay windowed.
+    }
+  });
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+  sync();
+  hud.addWidget({ id: 'fullscreen', slot: 'top-right', el: btn });
 }
 
 function dashWidget(hud: Hud): void {
@@ -487,11 +596,13 @@ function absorbToasts(hud: Hud, game: Game): void {
     const big = e.size >= e.radius * 0.22;
     if (e.kind !== 'hazard' && !big && !(first && e.size >= e.radius * 0.08)) return;
     const name = absorbedName(e.typeId);
-    hud.toast(`+ ${name}!`, { key: e.typeId, tone: e.kind === 'hazard' ? 'hazard' : first ? 'good' : 'absorb' });
+    const swatch = e.kind === 'hazard' ? undefined : getDebrisType(e.typeId)?.colors[0];
+    hud.toast(`+ ${name}!`, { key: e.typeId, tone: e.kind === 'hazard' ? 'hazard' : first ? 'good' : 'absorb', swatch, short: name });
   });
   game.events.on('pickupCollected', (e) => {
     const def = pickupRegistry.get(e.defId);
-    hud.toast(`${def?.icon ? `${def.icon} ` : ''}${def?.name ?? absorbedName(e.defId)}!`, { key: `pickup:${e.defId}`, tone: 'good' });
+    const name = def?.name ?? absorbedName(e.defId);
+    hud.toast(`${def?.icon ? `${def.icon} ` : ''}${name}!`, { key: `pickup:${e.defId}`, tone: 'good', short: `${def?.icon ? `${def.icon} ` : ''}${name}` });
   });
 }
 

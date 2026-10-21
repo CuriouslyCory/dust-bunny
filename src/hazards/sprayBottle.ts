@@ -16,7 +16,7 @@ import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
 import { bunnySheltered, canTarget, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 import { WET_SOURCE } from './mop';
 
 const dropletGeometry = new SphereGeometry(1, 10, 8);
@@ -176,8 +176,7 @@ export class SprayBottle extends BaseHazard {
 export const sprayBottleDef = hazardRegistry.register({
   id: 'spray_bottle',
   name: 'Spray Bottle',
-  minTier: 2,
-  spawnWeight: 1,
+  footprint: tuningFootprint(SPRAY_BOTTLE),
   mass: SPRAY_BOTTLE.mass,
   modelId: 'spray_bottle',
   create(_run, x, z, id, rng) {
@@ -188,8 +187,7 @@ export const sprayBottleDef = hazardRegistry.register({
 export const sprinklerDef = hazardRegistry.register({
   id: 'sprinkler',
   name: 'Sprinkler',
-  minTier: 5,
-  spawnWeight: 1,
+  footprint: tuningFootprint(SPRINKLER),
   mass: SPRINKLER.mass,
   modelId: SPRINKLER.modelId,
   create(_run, x, z, id, rng) {
@@ -200,8 +198,7 @@ export const sprinklerDef = hazardRegistry.register({
 export const pressureWasherDef = hazardRegistry.register({
   id: 'pressure_washer',
   name: 'Pressure Washer',
-  minTier: 7,
-  spawnWeight: 1,
+  footprint: tuningFootprint(PRESSURE_WASHER),
   mass: PRESSURE_WASHER.mass,
   modelId: PRESSURE_WASHER.modelId,
   create(_run, x, z, id, rng) {

@@ -1,25 +1,17 @@
 /**
- * Perk draft modal (shown on tierUp, Run paused). Pick 1 of `perkChoices` with keys 1–4,
- * mouse or touch; R or the Reroll button rerolls if the Reroll Upgrade is owned.
- * Several Tier-ups at once queue several drafts.
+ * Perk draft modal (shown on tierUp, Run paused). Renders the Run's draft workflow
+ * (run.perkDraft, src/perks/draft.ts) and turns input into choose / reroll: pick 1 of
+ * `perkChoices` with keys 1–4, mouse or touch; R or the Reroll button rerolls if the Reroll
+ * Upgrade is owned. Several Tier-ups queue several drafts; the modal closes once none are left.
  */
 import type { Game } from '../../game/game';
-import type { PerkDef } from '../../perks';
-import { draftForRun, rerollDraft, rerollsLeft } from '../../perks/draft';
 import { scrollArea } from '../components';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
 
-let pending = 0;
-
-export function resetPerkDrafts(): void {
-  pending = 0;
-}
-
-/** Called per tierUp: opens the draft (or queues another one if it is already open). */
-export function queuePerkDraft(game: Game): void {
-  if (!game.run || game.run.ended) return;
-  pending++;
+/** Called per tierUp: opens the draft modal if the Run has a pick waiting and it isn't open yet. */
+export function openPerkDraft(game: Game): void {
+  if (!game.run?.perkDraft.active) return;
   if (game.screens.current?.id !== 'perkDraft') game.go('perkDraft');
 }
 
@@ -37,19 +29,23 @@ export function registerPerkDraftScreen(): void {
       const cards = h('div', { className: 'perk-cards' });
       const reroll = h('button', { className: 'btn', type: 'button' });
       const footer = h('div', { className: 'rl-row' }, reroll);
-      let offer: PerkDef[] = [];
+      /** Serial of the offer on screen (0: none rendered yet). */
+      let shown = 0;
       let armed = 0;
 
-      const close = () => {
-        pending = 0;
-        if (game.run && !game.run.ended) game.go('playing');
-      };
-
-      const render = () => {
+      /** Shows the current offer, or resumes play once the workflow is complete. */
+      const sync = () => {
         const run = game.run;
-        if (!run) return;
+        const draft = run?.perkDraft;
+        if (!run || !draft?.active) {
+          if (run && !run.ended) game.go('playing');
+          return;
+        }
+        const { serial, perks } = draft.offer;
+        if (serial === shown) return;
+        shown = serial;
         cards.replaceChildren(
-          ...offer.map((p, i) => {
+          ...perks.map((p, i) => {
             const stacks = run.perkStacks(p.id);
             const tag = p.unique ? 'Unique' : stacks > 0 ? `Owned ×${stacks}` : p.maxStacks ? `Stacks ×${p.maxStacks}` : 'Stackable';
             const card = h(
@@ -62,44 +58,27 @@ export function registerPerkDraftScreen(): void {
               h('span', { className: 'perk-tag', textContent: tag }),
             );
             card.onclick = () => {
-              if (armed <= 0) choose(i);
+              // The serial and Run check make a stale card (older offer, replaced Run) a no-op.
+              if (armed <= 0 && game.run?.perkDraft === draft && draft.choose(p.id, serial)) sync();
             };
             return card;
           }),
         );
-        const left = rerollsLeft(run);
-        reroll.hidden = Math.round(run.bunny.stats.get('perkRerolls')) <= 0;
-        reroll.disabled = left <= 0;
-        reroll.textContent = `🎲 Reroll (${left}) · R`;
+        reroll.hidden = draft.rerolls <= 0;
+        reroll.disabled = draft.rerollsLeft <= 0;
+        reroll.textContent = `🎲 Reroll (${draft.rerollsLeft}) · R`;
         // No autofocus: Space (Dash) held through the Tier-up would "click" a focused card.
         (document.activeElement as HTMLElement | null)?.blur?.();
       };
 
-      const next = () => {
-        const run = game.run;
-        if (!run || run.ended || pending <= 0) return close();
-        offer = draftForRun(run);
-        if (offer.length === 0) return close(); // everything maxed
-        render();
-      };
-
-      const choose = (i: number) => {
-        const run = game.run;
-        const p = offer[i];
-        if (!run || !p) return;
-        run.applyPerk(p.id);
-        pending--;
-        next();
+      const chooseAt = (i: number) => {
+        const draft = game.run?.perkDraft;
+        const p = draft?.offer.perks[i];
+        if (draft && p && draft.choose(p.id, draft.offer.serial)) sync();
       };
 
       const doReroll = () => {
-        const run = game.run;
-        if (!run) return;
-        const fresh = rerollDraft(run, offer);
-        if (fresh) {
-          offer = fresh;
-          render();
-        }
+        if (game.run?.perkDraft.reroll()) sync();
       };
       reroll.onclick = () => {
         if (armed <= 0) doReroll();
@@ -109,10 +88,12 @@ export function registerPerkDraftScreen(): void {
         el: h('div', { className: 'panel rl-panel perk-draft' }, title, sub, scrollArea('perk-body', cards), footer),
         enter() {
           armed = ARM_DELAY;
-          next();
+          shown = 0;
+          sync();
         },
         update(dt) {
           armed = Math.max(0, armed - dt);
+          const pending = game.run?.perkDraft.pending ?? 0;
           const text = pending > 1 ? `${pending} picks waiting` : 'Lasts for the rest of this Run';
           if (sub.textContent !== text) sub.textContent = text;
         },
@@ -120,7 +101,7 @@ export function registerPerkDraftScreen(): void {
           if (e.repeat) return false;
           const n = /^Digit([1-9])$/.exec(e.code) ?? /^Numpad([1-9])$/.exec(e.code);
           if (n) {
-            choose(Number(n[1]) - 1);
+            chooseAt(Number(n[1]) - 1);
             return true;
           }
           if (e.code === 'KeyR') {

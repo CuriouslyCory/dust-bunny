@@ -44,14 +44,32 @@ export interface Hazard {
   dispose?(): void;
 }
 
+/**
+ * Disc (cm) a Hazard needs clear of walls and of furniture no higher than `height` to be placed
+ * (`hazardFloorFree`). Every placement path reads it from the def: director spawns, boss arrivals,
+ * boss summons and debug spawns. It may be a deliberate envelope rather than the model size
+ * (the Broom reserves room for its sweep, bosses their full-size contact radius).
+ */
+export interface HazardFootprint {
+  readonly radius: number;
+  readonly height: number;
+}
+
+/** The usual footprint: the tuning's absorb `size` as radius and its `height`. */
+export function tuningFootprint(cfg: { readonly size: number; readonly height: number }): HazardFootprint {
+  return { radius: cfg.size, height: cfg.height };
+}
+
+/**
+ * A registered Hazard: how to build it and where it fits. Which Hazards spawn when (budgets,
+ * intervals, weights, caps, boss / summon exclusions) is not here: that is the per-Area Tier
+ * tables in src/data/hazards.ts (AREA_DIRECTORS, AREA_BOSSES, DIRECTOR_EXCLUDE).
+ */
 export interface HazardDef {
   id: string;
   name: string;
-  /** First Tier in which the director may spawn it. */
-  minTier: number;
-  /** Relative spawn weight among eligible Hazards. */
-  spawnWeight: number;
-  maxAlive?: number;
+  /** Placement footprint used by every spawn path. */
+  footprint: HazardFootprint;
   /** Growth multiplier when absorbed (like Debris mass). */
   mass: number;
   /** Model id for createModel() (procedural fallback + optional GLB). */
@@ -85,6 +103,11 @@ export class HazardManager implements System {
     if (h.object3d) this.run.entityRoot.add(h.object3d);
     this.run.events.emit('hazardSpawned', { hazardId: h.id, defId });
     return h;
+  }
+
+  /** Placement footprint of a registered Hazard (throws for an unknown id). */
+  static footprint(defId: string): HazardFootprint {
+    return hazardRegistry.require(defId).footprint;
   }
 
   count(defId?: string): number {

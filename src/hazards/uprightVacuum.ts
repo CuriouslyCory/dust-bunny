@@ -18,7 +18,7 @@ import type { Debris } from '../entities/debris';
 import { BaseHazard } from './base';
 import { applyPush, applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 import { shedMass } from './shed';
 
 type VacuumState = 'off' | 'warmup' | 'on';
@@ -152,8 +152,7 @@ export class UprightVacuum extends BaseHazard {
 export const uprightVacuumDef = hazardRegistry.register({
   id: 'upright_vacuum',
   name: 'Upright Vacuum',
-  minTier: 4,
-  spawnWeight: 1,
+  footprint: tuningFootprint(UPRIGHT_VACUUM),
   mass: UPRIGHT_VACUUM.mass,
   modelId: 'upright_vacuum',
   create(_run, x, z, id, rng) {
@@ -164,8 +163,7 @@ export const uprightVacuumDef = hazardRegistry.register({
 export const leafBlowerDef = hazardRegistry.register({
   id: 'leaf_blower',
   name: 'Leaf Blower',
-  minTier: 5,
-  spawnWeight: 1,
+  footprint: tuningFootprint(LEAF_BLOWER),
   mass: LEAF_BLOWER.mass,
   modelId: LEAF_BLOWER.modelId,
   create(_run, x, z, id, rng) {
@@ -176,8 +174,7 @@ export const leafBlowerDef = hazardRegistry.register({
 export const litterVacuumDef = hazardRegistry.register({
   id: 'litter_vacuum',
   name: 'Litter Vacuum',
-  minTier: 7,
-  spawnWeight: 1,
+  footprint: tuningFootprint(LITTER_VACUUM),
   mass: LITTER_VACUUM.mass,
   modelId: LITTER_VACUUM.modelId,
   create(_run, x, z, id, rng) {

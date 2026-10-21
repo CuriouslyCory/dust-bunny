@@ -21,9 +21,9 @@ import { Rng } from '../src/core/rng';
 import { TIERS } from '../src/data/tiers';
 import { TUNING } from '../src/data/tuning';
 import type { Debris } from '../src/entities/debris';
-import { Run } from '../src/game/run';
+import { createRun } from '../src/game/assembly';
+import type { Run } from '../src/game/run';
 import type { Hazard } from '../src/hazards';
-import { installRunHazards } from '../src/hazards/install';
 import type { RoboVac9000 } from '../src/hazards/robovac';
 import type { SprayBottle } from '../src/hazards/sprayBottle';
 import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
@@ -31,11 +31,6 @@ import type { Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
 import { upgradeModifiers } from '../src/meta/upgrades';
-import { installCombatHooks } from '../src/perks/combat';
-import { draftForRun } from '../src/perks/draft';
-import { registerPerks } from '../src/perks/perks';
-import { createPickupDirector } from '../src/pickups/director';
-import { registerPickups } from '../src/pickups/pickups';
 import { canAbsorb } from '../src/systems/absorb';
 import { viewRadiusFor } from '../src/systems/camera';
 import { passesUnder } from '../src/systems/collision';
@@ -57,9 +52,6 @@ const startArea = opt('area') === 'neighborhood' || opt('area') === 'city' ? (op
 const difficulty = getDifficulty(opt('difficulty')).id;
 const seeds = args.filter((a) => !a.startsWith('--'));
 if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo');
-
-registerPickups();
-registerPerks();
 
 /** Occupancy grid for a Bunny of a given radius, with BFS path distances from the Bunny. */
 class Planner {
@@ -467,7 +459,8 @@ for (const characterId of chars) {
   const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], wins: 0, deaths: 0, n: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
-    const run = new Run(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea });
+    // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
+    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards });
     let leaveArea = false;
     events.on('exitOpened', (e) => {
       log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
@@ -479,23 +472,17 @@ for (const characterId of chars) {
     const perkRng = new Rng(`${seed}:perks`);
     let hits = 0;
     if (withHazards) {
-      installRunHazards(run);
-      // Same as installRunHooks (src/meta/install.ts), which also pulls in UI/CSS.
-      installCombatHooks(run);
       if (god) {
         run.bunny.damageFilters.push((amount) => {
           if (run.bunny.health - amount <= 0) run.bunny.heal(run.bunny.maxHealth);
           return Math.min(amount, run.bunny.health - 1);
         });
       }
-      run.pickups.director ??= createPickupDirector();
+      // Picks immediately (the Run is never paused): the draft queued for this Tier, at random.
       events.on('tierUp', () => {
-        const offer = draftForRun(run);
-        const pick = offer[Math.floor(perkRng.next() * offer.length)];
-        if (pick) {
-          run.applyPerk(pick.id);
-          log.push(`${fmt(run.time)} T${run.tier} perk ${pick.id}`);
-        }
+        const { perks } = run.perkDraft.offer;
+        const pick = perks[Math.floor(perkRng.next() * perks.length)];
+        if (pick && run.perkDraft.choose(pick.id)) log.push(`${fmt(run.time)} T${run.tier} perk ${pick.id}`);
       });
       events.on('bunnyDamaged', (e) => {
         hits++;
