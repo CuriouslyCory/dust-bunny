@@ -9,7 +9,7 @@ const _e = new Euler();
 const _p = new Vector3();
 const _s = new Vector3();
 
-export function debrisMatrix(d: Debris, out: Matrix4): Matrix4 {
+export function debrisMatrix(d: Readonly<Debris>, out: Matrix4): Matrix4 {
   _e.set(0, d.rotY, 0);
   _q.setFromEuler(_e);
   _p.set(d.x, 0, d.z);
@@ -24,67 +24,49 @@ export class DebrisRenderer {
   constructor(private readonly field: DebrisField) {
     this.root.name = 'debris';
     this.meshes = field.types.map(() => null);
-    // Write everything once.
-    field.drainDirty();
-    field.types.forEach((_, i) => this.rebuild(i));
+    this.applyChanges(true);
   }
 
-  private rebuild(typeIndex: number): void {
-    const bucket = this.field.buckets[typeIndex]!;
-    const old = this.meshes[typeIndex];
-    const needed = bucket.length;
-    if (old && old.instanceMatrix.count >= needed) return;
-    let cap = 32;
-    while (cap < needed) cap *= 2;
-    if (old) {
-      old.removeFromParent();
-      old.dispose();
-    }
-    if (needed === 0 && !old) return;
-    const type = this.field.types[typeIndex]!;
-    const mesh = new InstancedMesh(debrisGeometry(type), debrisMaterial(type), cap);
-    mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-    mesh.frustumCulled = false; // instances span the whole house
-    mesh.receiveShadow = true;
-    mesh.castShadow = type.size >= 3;
-    mesh.name = `debris:${type.id}`;
-    const colors = debrisColors(type);
-    for (const d of bucket) {
-      mesh.setMatrixAt(d.slot, debrisMatrix(d, _m));
-      mesh.setColorAt(d.slot, colors[d.colorIndex]!);
-    }
-    if (bucket.length === 0) mesh.setColorAt(0, colors[0]!); // allocate instanceColor
-    mesh.count = bucket.length;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    this.meshes[typeIndex] = mesh;
-    this.root.add(mesh);
-  }
-
-  /** Apply changes since last frame. */
+  /** Apply current changes from the field's single-consumer stream. */
   sync(): void {
-    const dirty = this.field.drainDirty();
-    const touched = new Set<number>();
-    for (const d of dirty) {
-      if (!d.alive) continue;
-      const bucket = this.field.buckets[d.typeIndex]!;
-      if (bucket[d.slot] !== d) continue;
-      let mesh = this.meshes[d.typeIndex];
-      if (!mesh || mesh.instanceMatrix.count <= d.slot) {
-        this.rebuild(d.typeIndex);
-        continue;
+    this.applyChanges(false);
+  }
+
+  private applyChanges(full: boolean): void {
+    for (const { typeIndex, instances, changedSlots } of this.field.consumeChanges({ full })) {
+      let mesh = this.meshes[typeIndex];
+      const needed = instances.length;
+      let rebuilt = false;
+      if (needed > 0 && (!mesh || mesh.instanceMatrix.count < needed)) {
+        let cap = 32;
+        while (cap < needed) cap *= 2;
+        if (mesh) {
+          mesh.removeFromParent();
+          mesh.dispose();
+        }
+        const type = this.field.types[typeIndex]!;
+        mesh = new InstancedMesh(debrisGeometry(type), debrisMaterial(type), cap);
+        mesh.instanceMatrix.setUsage(DynamicDrawUsage);
+        mesh.frustumCulled = false; // instances span the whole Area
+        mesh.receiveShadow = true;
+        mesh.castShadow = type.size >= 3;
+        mesh.name = `debris:${type.id}`;
+        this.meshes[typeIndex] = mesh;
+        this.root.add(mesh);
+        rebuilt = true;
       }
-      mesh.setMatrixAt(d.slot, debrisMatrix(d, _m));
-      mesh.setColorAt(d.slot, debrisColors(d.type)[d.colorIndex]!);
-      touched.add(d.typeIndex);
-    }
-    for (let i = 0; i < this.meshes.length; i++) {
-      const mesh = this.meshes[i];
       if (!mesh) continue;
-      const n = this.field.buckets[i]!.length;
-      if (mesh.count !== n) mesh.count = n;
-      mesh.visible = n > 0;
-      if (touched.has(i)) {
+      // A new buffer needs every instance, including previously unchanged slots.
+      const slots = rebuilt ? instances.keys() : changedSlots;
+      const colors = debrisColors(this.field.types[typeIndex]!);
+      for (const slot of slots) {
+        const d = instances[slot]!;
+        mesh.setMatrixAt(slot, debrisMatrix(d, _m));
+        mesh.setColorAt(slot, colors[d.colorIndex]!);
+      }
+      mesh.count = needed;
+      mesh.visible = needed > 0;
+      if (rebuilt || changedSlots.length > 0) {
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       }
