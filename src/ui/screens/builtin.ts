@@ -1,32 +1,98 @@
-/** Placeholder screens: title, playing, paused, results. Polish/replace by re-registering the same ids. */
-import { getTier } from '../../data/tiers';
-import type { GameEvents } from '../../core/events';
-import { h, registerScreen } from '../screens';
+/**
+ * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
+ * Replace one by re-registering the same id before it is first shown. The title menu shows
+ * Shop / Leaderboard buttons, and Play routes through 'characterSelect', only when those
+ * screens are registered.
+ */
+import type { Game } from '../../game/game';
+import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
+import { h, registerScreen, screenRegistry } from '../screens';
+import { settings } from '../settings';
+import { registerMenuScreens } from './menus';
+import { registerResultsScreen } from './results';
+import './screens.css';
 
-const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+/** Starts a Run, via character select when that screen exists. */
+export function playFromMenu(game: Game): void {
+  if (screenRegistry.has('characterSelect')) game.go('characterSelect');
+  else game.startRun();
+}
 
-const isKey = (e: KeyboardEvent, ...codes: string[]) => codes.includes(e.code);
+function dustMotes(count: number): HTMLElement {
+  const layer = h('div', { className: 'motes' });
+  layer.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < count; i++) {
+    const m = h('span', { className: 'mote' });
+    const size = 3 + Math.random() * 9;
+    m.style.cssText = `--x:${(Math.random() * 100).toFixed(1)}%;--y:${(Math.random() * 100).toFixed(1)}%;--s:${size.toFixed(1)}px;--d:${(9 + Math.random() * 14).toFixed(1)}s;--delay:${(-Math.random() * 20).toFixed(1)}s;--drift:${((Math.random() * 2 - 1) * 60).toFixed(0)}px;--o:${(0.25 + Math.random() * 0.5).toFixed(2)}`;
+    layer.append(m);
+  }
+  return layer;
+}
+
+/** The fuzzy mascot used on the title (and anywhere else that wants it). */
+export function mascot(className = ''): HTMLElement {
+  const el = h(
+    'div',
+    { className: `mascot ${className}`.trim() },
+    h('div', { className: 'mascot-fur' }),
+    h('div', { className: 'mascot-face' }, h('span', { className: 'mascot-eye' }), h('span', { className: 'mascot-eye' }), h('span', { className: 'mascot-blush' }), h('span', { className: 'mascot-blush' })),
+  );
+  el.setAttribute('aria-hidden', 'true');
+  return el;
+}
+
+function logo(): HTMLElement {
+  const word = (text: string, cls: string, offset: number): HTMLElement =>
+    h(
+      'span',
+      { className: `logo-word ${cls}` },
+      ...[...text].map((c, i) => {
+        const s = h('span', { className: 'logo-letter', textContent: c });
+        s.style.setProperty('--i', String(i + offset));
+        return s;
+      }),
+    );
+  const el = h('h1', { className: 'logo' }, word('Dust', 'logo-dust', 0), word('Bunny', 'logo-bunny', 4));
+  el.setAttribute('aria-label', 'Dust Bunny');
+  return el;
+}
 
 export function registerBuiltinScreens(): void {
   registerScreen({
     id: 'title',
     create(game) {
-      const play = h('button', { className: 'btn primary', textContent: 'Play' });
-      play.onclick = () => game.startRun();
+      const play = button('Play', () => playFromMenu(game), { variant: 'primary', size: 'lg', icon: '▶' });
+      const shop = button('Shop', () => game.go('shop'), { icon: '🛍' });
+      const board = button('Leaderboard', () => game.go('leaderboard'), { icon: '🏆' });
+      const howTo = button('How to play', () => game.go('howToPlay', { back: 'title' }), { icon: '?' });
+      const set = button('Settings', () => game.go('settings', { back: 'title' }), { icon: '⚙' });
+      const secondary = h('div', { className: 'menu-grid' }, shop, board, howTo, set);
       const el = h(
         'div',
-        { className: 'panel' },
-        h('h1', { textContent: 'Dust Bunny' }),
-        h('p', { className: 'sub', textContent: 'Roll. Absorb. Grow. Avoid the cleaning crew.' }),
-        play,
-        h('p', { className: 'hint', textContent: 'WASD / arrows or click-and-hold to roll · Space/Shift to dash · Esc/P to pause' }),
+        { className: 'title-screen' },
+        dustMotes(28),
+        h(
+          'div',
+          { className: 'title-card' },
+          mascot('title-mascot'),
+          logo(),
+          h('p', { className: 'tagline', textContent: 'Roll. Absorb. Grow. Avoid the cleaning crew.' }),
+          menu(play, secondary),
+          h('p', { className: 'hint title-hint', textContent: 'Enter to play · WASD / arrows to roll · Space to dash' }),
+        ),
       );
       return {
         el,
-        enter: () => play.focus(),
+        enter() {
+          shop.hidden = !screenRegistry.has('shop');
+          board.hidden = !screenRegistry.has('leaderboard');
+          focusFirst(el, play);
+        },
         onKey(e) {
-          if (isKey(e, 'Enter', 'Space')) {
-            game.startRun();
+          if (handleMenuKeys(e, el)) return true;
+          if (isKey(e, 'Enter', 'Space') && !focusOnControl()) {
+            playFromMenu(game);
             return true;
           }
           return false;
@@ -57,61 +123,39 @@ export function registerBuiltinScreens(): void {
     id: 'paused',
     hud: true,
     create(game) {
-      const resume = h('button', { className: 'btn primary', textContent: 'Resume' });
-      resume.onclick = () => game.go('playing');
-      const quit = h('button', { className: 'btn', textContent: 'End Run' });
-      quit.onclick = () => game.quitRun();
+      const resume = button('Resume', () => game.go('playing'), { variant: 'primary', size: 'lg', icon: '▶' });
+      const set = button('Settings', () => game.go('settings', { back: 'paused' }), { icon: '⚙' });
+      const howTo = button('How to play', () => game.go('howToPlay', { back: 'paused' }), { icon: '?' });
+      const mute = button('', () => settings.update({ muted: !settings.value.muted }), { icon: '🔊' });
+      const end = button('End run', () => game.quitRun(), { variant: 'ghost' });
+      const quit = button(
+        'Quit to title',
+        () => {
+          game.quitRun(); // emits runEnded so meta progress still records the Run
+          game.disposeRun();
+          game.go('title');
+        },
+        { variant: 'ghost' },
+      );
+      settings.subscribe((s) => {
+        (mute.querySelector('.btn-label') as HTMLElement).textContent = s.muted ? 'Unmute' : 'Mute';
+        (mute.querySelector('.btn-icon') as HTMLElement).textContent = s.muted ? '🔇' : '🔊';
+      });
+      const el = panel({ title: 'Paused', className: 'pause-panel' }, menu(resume, h('div', { className: 'menu-grid' }, set, howTo, mute, end), quit));
       return {
-        el: h('div', { className: 'panel' }, h('h2', { textContent: 'Paused' }), resume, quit),
-        enter: () => resume.focus(),
+        el,
+        enter: () => focusFirst(el, resume),
         onKey(e) {
           if (!e.repeat && isKey(e, 'Escape', 'KeyP')) {
             game.go('playing');
             return true;
           }
-          return false;
+          return handleMenuKeys(e, el);
         },
       };
     },
   });
 
-  registerScreen({
-    id: 'results',
-    create(game) {
-      const title = h('h2');
-      const list = h('dl', { className: 'stats' });
-      const again = h('button', { className: 'btn primary', textContent: 'Play again' });
-      again.onclick = () => game.startRun();
-      const toTitle = h('button', { className: 'btn', textContent: 'Title' });
-      toTitle.onclick = () => {
-        game.disposeRun();
-        game.go('title');
-      };
-      return {
-        el: h('div', { className: 'panel' }, title, list, again, toTitle),
-        enter(params) {
-          const e = params as GameEvents['runEnded'] | undefined;
-          if (!e) return;
-          title.textContent = e.reason === 'victory' ? 'Victory!' : e.reason === 'died' ? 'Swept up!' : 'Run over';
-          const s = e.stats;
-          const rows: Array<[string, string]> = [
-            ['Time', fmtTime(s.timeSec)],
-            ['Max radius', `${s.maxRadius.toFixed(1)} cm`],
-            ['Debris absorbed', String(s.debrisAbsorbed)],
-            ['Tier reached', `${s.tierReached} · ${getTier(s.tierReached).name}`],
-            ['Seed', s.seed],
-          ];
-          list.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { textContent: k }), h('dd', { textContent: v })]));
-          again.focus();
-        },
-        onKey(e) {
-          if (isKey(e, 'Enter')) {
-            game.startRun();
-            return true;
-          }
-          return false;
-        },
-      };
-    },
-  });
+  registerResultsScreen();
+  registerMenuScreens();
 }
