@@ -535,6 +535,12 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     column-gap: 28px;
   }
+  .results-panel:has(.results-slot[data-slot='leaderboard']:not([hidden])) .results-actions {
+    grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
+  }
+  .results-panel:has(.results-slot[data-slot='leaderboard']:not([hidden])) .results-actions > .btn {
+    grid-column: auto;
+  }
   .results-body > .results-slot[data-slot='leaderboard'] {
     align-self: stretch;
     padding: 16px;
