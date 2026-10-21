@@ -12,7 +12,7 @@ import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, ringDecal } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 
 export class Roomba extends BaseHazard {
   private turnTimer: number;
@@ -92,8 +92,7 @@ export class Roomba extends BaseHazard {
 export const roombaDef = hazardRegistry.register({
   id: 'roomba',
   name: 'Roomba',
-  minTier: 1,
-  spawnWeight: 1,
+  footprint: tuningFootprint(ROOMBA),
   mass: ROOMBA.mass,
   modelId: 'roomba',
   create(_run, x, z, id, rng) {
@@ -104,8 +103,7 @@ export const roombaDef = hazardRegistry.register({
 export const miniRoombaDef = hazardRegistry.register({
   id: 'mini_roomba',
   name: 'Mini Roomba',
-  minTier: 5,
-  spawnWeight: 0,
+  footprint: tuningFootprint(MINI_ROOMBA),
   mass: MINI_ROOMBA.mass,
   modelId: 'roomba',
   create(_run, x, z, id, rng) {
@@ -116,8 +114,7 @@ export const miniRoombaDef = hazardRegistry.register({
 export const roboMowerDef = hazardRegistry.register({
   id: 'robo_mower',
   name: 'Robotic Mower',
-  minTier: 5,
-  spawnWeight: 1,
+  footprint: tuningFootprint(ROBO_MOWER),
   mass: ROBO_MOWER.mass,
   modelId: ROBO_MOWER.modelId,
   create(_run, x, z, id, rng) {
@@ -128,8 +125,7 @@ export const roboMowerDef = hazardRegistry.register({
 export const miniMowerDef = hazardRegistry.register({
   id: 'mini_mower',
   name: 'Mini Mower',
-  minTier: 7,
-  spawnWeight: 0,
+  footprint: tuningFootprint(MINI_MOWER),
   mass: MINI_MOWER.mass,
   modelId: MINI_MOWER.modelId,
   create(_run, x, z, id, rng) {
@@ -140,8 +136,7 @@ export const miniMowerDef = hazardRegistry.register({
 export const floorScrubberDef = hazardRegistry.register({
   id: 'floor_scrubber',
   name: 'Floor Scrubber',
-  minTier: 7,
-  spawnWeight: 1,
+  footprint: tuningFootprint(FLOOR_SCRUBBER),
   mass: FLOOR_SCRUBBER.mass,
   modelId: FLOOR_SCRUBBER.modelId,
   create(_run, x, z, id, rng) {
@@ -152,8 +147,7 @@ export const floorScrubberDef = hazardRegistry.register({
 export const miniScrubberDef = hazardRegistry.register({
   id: 'mini_scrubber',
   name: 'Mini Scrubber',
-  minTier: 9,
-  spawnWeight: 0,
+  footprint: tuningFootprint(MINI_SCRUBBER),
   mass: MINI_SCRUBBER.mass,
   modelId: MINI_SCRUBBER.modelId,
   create(_run, x, z, id, rng) {

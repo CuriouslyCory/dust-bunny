@@ -46,7 +46,7 @@ describe('spawn director tables', () => {
     for (let t = 1; t < MAX_TIER; t++) expect(hazardBudget(t + 1, 0)).toBeGreaterThanOrEqual(hazardBudget(t, 0));
   });
 
-  it('only spawns Hazards whose minTier has been reached', () => {
+  it('house spawn tables bring Hazards in at their Tier and never pick the boss', () => {
     expect(Object.keys(spawnWeights(1, {})).sort()).toEqual(['lint_roller', 'roomba']);
     expect(Object.keys(spawnWeights(2, {}))).toContain('broom');
     expect(Object.keys(spawnWeights(3, {}))).toContain('mop');

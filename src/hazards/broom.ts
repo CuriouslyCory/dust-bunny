@@ -144,8 +144,8 @@ export class Broom extends BaseHazard {
 export const broomDef = hazardRegistry.register({
   id: 'broom',
   name: 'Broom',
-  minTier: 2,
-  spawnWeight: 1,
+  // Deliberate envelope: half the sweep around the pivot (not the bristle head), at head height.
+  footprint: { radius: BROOM.sweepRadius * 0.5, height: HEAD_HEIGHT },
   mass: BROOM.mass,
   modelId: 'broom',
   create(_run, x, z, id, rng) {

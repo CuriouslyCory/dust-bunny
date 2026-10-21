@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
-import { AREA_BOSSES, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
+import { AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
+import type { AreaId } from '../world/types';
 import { NEIGHBORHOOD } from '../world/neighborhood';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { spawnWeights } from './director';
-import { hazardRegistry } from './index';
 import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
@@ -34,6 +34,14 @@ function moveToStreet(run: Run): void {
   throw new Error('no open street');
 }
 
+/** First Tier whose spawn table lists `id` (the tables decide when a Hazard first appears). */
+function firstTableTier(id: string, area: AreaId): number {
+  const { firstTier, tiers } = AREA_DIRECTORS[area];
+  const i = tiers.findIndex((t) => id in t.types);
+  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
+  return firstTier + i;
+}
+
 describe('outdoor Hazards', () => {
   it('are a threat on arrival outside and absorbable by Tier 7 (except the boss at full size)', () => {
     const tier7 = getTier(7).minRadius;
@@ -44,7 +52,7 @@ describe('outdoor Hazards', () => {
       expect(h.dead, id).toBeFalsy();
       const need = absorbRadiusFor(h.size, 0.7);
       expect(need, id).toBeGreaterThan(NEIGHBORHOOD.debugStartRadius);
-      expect(need, id).toBeGreaterThan(getTier(hazardRegistry.require(id).minTier).minRadius);
+      expect(need, id).toBeGreaterThan(getTier(firstTableTier(id, 'neighborhood')).minRadius);
       expect(need, id).toBeLessThan(tier7);
     }
     expect(absorbRadiusFor(STREET_SWEEPER.size, 0.7)).toBeGreaterThan(tier7);
@@ -63,10 +71,7 @@ describe('outdoor Hazards', () => {
     for (let t = NEIGHBORHOOD_DIRECTOR.firstTier; t <= 7; t++) {
       const ids = Object.keys(spawnWeights(t, {}, 'neighborhood'));
       expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) {
-        expect(OUTDOOR).toContain(id);
-        expect(hazardRegistry.require(id).minTier).toBeLessThanOrEqual(t);
-      }
+      for (const id of ids) expect(OUTDOOR).toContain(id);
     }
     expect(Object.keys(spawnWeights(6, {}, 'neighborhood'))).toContain('lawn_mower');
     for (const id of ['street_sweeper', 'mini_mower']) expect(DIRECTOR_EXCLUDE).toContain(id);

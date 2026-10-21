@@ -20,7 +20,7 @@ import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
 import { absorbRadiusFor, applySuction, bunnySheltered, canTarget, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
 import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { HazardManager, hazardRegistry, type HazardDef } from './index';
 import { scatterDebris, shedMass } from './shed';
 
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
@@ -179,14 +179,15 @@ export class RoboVac9000 extends BaseHazard {
   private summon(run: Run): void {
     const c = this.cfg;
     for (const id of [...this.minis]) if (!run.hazards.hazards.some((h) => h.id === id && !h.dead)) this.minis.delete(id);
+    const fp = HazardManager.footprint(c.miniId);
     for (let n = 0; n < c.summonCount && this.minis.size < c.maxMinis; n++) {
       for (let tries = 0; tries < 8; tries++) {
         const a = this.rng.range(0, Math.PI * 2);
-        const d = c.contactRadius * this.scale + c.mini.radius + 9;
+        const d = c.contactRadius * this.scale + fp.radius + 9;
         const x = this.x + Math.cos(a) * d;
         const z = this.z + Math.sin(a) * d;
-        if (!hazardFloorFree(run.house, x, z, c.mini.radius, c.mini.height)) continue;
-        this.minis.add(run.hazards.spawn(c.mini.id, x, z).id);
+        if (!hazardFloorFree(run.house, x, z, fp.radius, fp.height)) continue;
+        this.minis.add(run.hazards.spawn(c.miniId, x, z).id);
         break;
       }
     }
@@ -241,10 +242,9 @@ export class RoboVac9000 extends BaseHazard {
 export const robovacDef = hazardRegistry.register({
   id: 'robovac_9000',
   name: 'Robo-Vac 9000',
-  minTier: 5,
-  spawnWeight: 0,
-  maxAlive: 1,
   boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: ROBOVAC_9000.contactRadius, height: ROBOVAC_9000.height },
   mass: ROBOVAC_9000.mass,
   modelId: 'robovac_9000',
   create(_run, x, z, id, rng: Rng) {
@@ -255,10 +255,9 @@ export const robovacDef = hazardRegistry.register({
 export const streetSweeperDef = hazardRegistry.register({
   id: 'street_sweeper',
   name: 'Street Sweeper',
-  minTier: 7,
-  spawnWeight: 0,
-  maxAlive: 1,
   boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: STREET_SWEEPER.contactRadius, height: STREET_SWEEPER.height },
   mass: STREET_SWEEPER.mass,
   modelId: STREET_SWEEPER.modelId,
   create(_run, x, z, id, rng: Rng) {
@@ -269,10 +268,9 @@ export const streetSweeperDef = hazardRegistry.register({
 export const garbageTruckDef = hazardRegistry.register({
   id: 'garbage_truck',
   name: 'Garbage Truck',
-  minTier: 9,
-  spawnWeight: 0,
-  maxAlive: 1,
   boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: GARBAGE_TRUCK.contactRadius, height: GARBAGE_TRUCK.height },
   mass: GARBAGE_TRUCK.mass,
   modelId: GARBAGE_TRUCK.modelId,
   create(_run, x, z, id, rng: Rng) {
