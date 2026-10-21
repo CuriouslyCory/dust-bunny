@@ -20,7 +20,7 @@ export const SCORE = {
   victoryBonus: 5000,
   /** Victory only: points per second under `victoryParSec`. */
   victoryPerSecUnderPar: 10,
-  victoryParSec: 900,
+  victoryParSec: 1500,
 } as const;
 
 export interface ScoreInput {
@@ -33,7 +33,7 @@ export interface ScoreInput {
 
 /**
  * score = round(maxRadius × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
- *         + victory ? 5000 + max(0, 900 − seconds) × 10 : 0
+ *         + victory ? 5000 + max(0, 1500 − seconds) × 10 : 0
  */
 export function computeScore(s: ScoreInput): number {
   const radius = Math.max(0, s.maxRadius);
