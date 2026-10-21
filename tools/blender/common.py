@@ -170,6 +170,31 @@ PALETTE = {
     "sweeper_white": ("#f3f1ea", 0.45, 0.0, None, 0),
     "glow_amber": ("#ffb000", 0.3, 0.0, "#ffa000", 5.0),
     "glow_head": ("#fff3c4", 0.3, 0.0, "#ffe9a0", 4.0),
+    # city: buildings
+    "office_glass": ("#5aa9bd", 0.1, 0.2, None, 0),
+    "tower_glass": ("#4a78a8", 0.1, 0.2, None, 0),
+    "steel_light": ("#d4d9de", 0.4, 0.4, None, 0),
+    "granite": ("#8f8b87", 0.6, 0.0, None, 0),
+    "mech_grey": ("#a5abb2", 0.6, 0.1, None, 0),
+    "brick_brown": ("#9a5240", 0.9, 0.0, None, 0),
+    "stucco_cream": ("#eadbb9", 0.85, 0.0, None, 0),
+    "loft_glass": ("#86aab4", 0.15, 0.0, None, 0),
+    "iron_black": ("#2c2e33", 0.55, 0.4, None, 0),
+    "awning_red": ("#d64545", 0.85, 0.0, None, 0),
+    "awning_green": ("#3f9a5a", 0.85, 0.0, None, 0),
+    "awning_blue": ("#3a6fb5", 0.85, 0.0, None, 0),
+    # city: hazards
+    "flusher_blue": ("#2f6fb5", 0.45, 0.0, None, 0),
+    "glutton_green": ("#5aa83c", 0.45, 0.0, None, 0),
+    "garbage_green": ("#2f8a4c", 0.45, 0.1, None, 0),
+    # city: street props
+    "taxi_yellow": ("#f6c22b", 0.35, 0.0, None, 0),
+    "engine_red": ("#d8262b", 0.35, 0.1, None, 0),
+    "dumpster_green": ("#2f7a4a", 0.6, 0.2, None, 0),
+    "news_blue": ("#2a62b0", 0.45, 0.1, None, 0),
+    "booth_red": ("#c8202a", 0.45, 0.0, None, 0),
+    "glow_warm": ("#ffd98a", 0.3, 0.0, "#ffc860", 3.0),
+    "glow_white": ("#fffaf0", 0.3, 0.0, "#fff4d6", 1.5),
 }
 
 

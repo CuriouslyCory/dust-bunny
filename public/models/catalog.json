@@ -1002,6 +1002,471 @@
         }
       },
       "category": "prop"
+    },
+    {
+      "triangles": 1504,
+      "footprintRadius": 93.0,
+      "height": 139.0,
+      "minY": 0.4,
+      "maxY": 139.4,
+      "sizeX": 95.0,
+      "sizeZ": 154.0,
+      "id": "floor_scrubber",
+      "file": "models/floor_scrubber.glb",
+      "bytes": 62408,
+      "notes": "Ride-on sidewalk scrubber, front +Z. brush node (scrub disc under the front) spins about its local Y axis. Orange roof beacon and headlights are emissive.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "brush": {
+          "pivot": [
+            0.0,
+            5.0,
+            38.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1236,
+      "footprintRadius": 55.1,
+      "height": 106.8,
+      "minY": 0.0,
+      "maxY": 106.8,
+      "sizeX": 69.8,
+      "sizeZ": 89.3,
+      "id": "pressure_washer",
+      "file": "models/pressure_washer.glb",
+      "bytes": 56388,
+      "notes": "Wheeled gas pressure washer cart. head node turns about the vertical axis through the origin; the spray wand points +Z with its nozzle tip at about (0, 92.8, 45) in model space (head at rest). Hose runs from the pump to the swivel post.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            90.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 3196,
+      "footprintRadius": 369.0,
+      "height": 286.0,
+      "minY": 0.0,
+      "maxY": 286.0,
+      "sizeX": 263.0,
+      "sizeZ": 691.7,
+      "id": "street_flusher",
+      "file": "models/street_flusher.glb",
+      "bytes": 118600,
+      "notes": "Municipal street-flusher water truck, front +Z: white and blue tank body, cab at the front, spray bar with seven nozzles across the front bumper (bar at y = 38, z = 346; nozzles aim forward-down from z = 350). Amber light bar and headlights are emissive.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1752,
+      "footprintRadius": 93.0,
+      "height": 160.5,
+      "minY": 0.0,
+      "maxY": 160.5,
+      "sizeX": 87.8,
+      "sizeZ": 174.6,
+      "id": "litter_vacuum",
+      "file": "models/litter_vacuum.glb",
+      "bytes": 70340,
+      "notes": "Electric litter-vacuum cart (Glutton style), front +Z: green and white cart with a big ribbed intake hose arcing forward and down to a nozzle on the ground; the nozzle is centred at about (0, 5, 78) in model space with its mouth lip at z = 88.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 3316,
+      "footprintRadius": 481.0,
+      "height": 381.0,
+      "minY": 0.0,
+      "maxY": 381.0,
+      "sizeX": 273.0,
+      "sizeZ": 924.4,
+      "id": "garbage_truck",
+      "file": "models/garbage_truck.glb",
+      "bytes": 137832,
+      "notes": "Boss. Rear-loader garbage truck, cab +Z, compactor at -Z. brush_l / brush_r nodes (gutter brushes under the front bumper corners) spin about local Y. Amber roof beacons and headlights are emissive.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "brush_l": {
+          "pivot": [
+            -100.0,
+            5.0,
+            428.0
+          ]
+        },
+        "brush_r": {
+          "pivot": [
+            100.0,
+            5.0,
+            428.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1692,
+      "footprintRadius": 1697.1,
+      "height": 6000.0,
+      "minY": 0.0,
+      "maxY": 6000.0,
+      "sizeX": 2400.0,
+      "sizeZ": 2400.0,
+      "id": "building_office",
+      "file": "models/building_office.glb",
+      "bytes": 88256,
+      "notes": "Glass-and-steel office tower. Fills the 2400 x 2400 footprint exactly; banded teal curtain wall, recessed glass lobby behind a steel colonnade with a revolving door and canopy centred on +Z, mechanical plant on the roof.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 2136,
+      "footprintRadius": 1414.2,
+      "height": 9500.0,
+      "minY": 0.0,
+      "maxY": 9500.0,
+      "sizeX": 2000.0,
+      "sizeZ": 2000.0,
+      "id": "building_tower",
+      "file": "models/building_tower.glb",
+      "bytes": 117692,
+      "notes": "Slim glass skyscraper. Fills the 2000 x 2000 footprint exactly; granite podium with a recessed lobby (entrance centred on +Z), vertical-pier curtain wall, three setbacks under a pyramid crown topped at 9000 cm, then an antenna with a red beacon (emissive) to 9500 cm.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 3752,
+      "footprintRadius": 1280.6,
+      "height": 3200.0,
+      "minY": 0.0,
+      "maxY": 3200.0,
+      "sizeX": 2000.0,
+      "sizeZ": 1600.0,
+      "id": "building_apartment",
+      "file": "models/building_apartment.glb",
+      "bytes": 202176,
+      "notes": "Five-storey brick apartment block. Fills the 2000 x 1600 footprint exactly; stoop in a recessed entry centred on +Z, fire escape in a recessed bay on the +X side, wooden water tank on the roof reaching 3200 cm.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1920,
+      "footprintRadius": 1389.2,
+      "height": 1200.0,
+      "minY": 0.0,
+      "maxY": 1200.0,
+      "sizeX": 2400.0,
+      "sizeZ": 1400.0,
+      "id": "building_shops",
+      "file": "models/building_shops.glb",
+      "bytes": 109348,
+      "notes": "Two-storey shop row. Fills the 2400 x 1400 footprint exactly; three shopfronts on +Z recessed 120 cm under red / green / blue striped awnings that reach the edge, flat roof behind a parapet.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 3790,
+      "footprintRadius": 1486.6,
+      "height": 2000.0,
+      "minY": 0.0,
+      "maxY": 2000.0,
+      "sizeX": 2200.0,
+      "sizeZ": 2000.0,
+      "id": "building_brick",
+      "file": "models/building_brick.glb",
+      "bytes": 175260,
+      "notes": "Old four-storey brick warehouse / loft. Fills the 2200 x 2000 footprint exactly; arched windows, two arched loading doors and a central entrance on +Z, corbelled cornice and parapet.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1600,
+      "footprintRadius": 247.2,
+      "height": 154.0,
+      "minY": 0.0,
+      "maxY": 154.0,
+      "sizeX": 192.0,
+      "sizeZ": 465.0,
+      "id": "taxi",
+      "file": "models/taxi.glb",
+      "bytes": 69776,
+      "notes": "Yellow sedan cab with a roof sign and checker band, front +Z. Always yellow (not tinted).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 1188,
+      "footprintRadius": 619.2,
+      "height": 310.0,
+      "minY": 0.0,
+      "maxY": 310.0,
+      "sizeX": 265.0,
+      "sizeZ": 1212.0,
+      "id": "city_bus",
+      "file": "models/city_bus.glb",
+      "bytes": 53772,
+      "notes": "City bus, front +Z, doors on the -X side. car_paint (light neutral) is the largest material and is tinted per instance.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 1604,
+      "footprintRadius": 345.3,
+      "height": 306.0,
+      "minY": 0.0,
+      "maxY": 306.0,
+      "sizeX": 275.1,
+      "sizeZ": 654.0,
+      "id": "food_truck",
+      "file": "models/food_truck.glb",
+      "bytes": 66604,
+      "notes": "Step-van food truck, front +Z. Serving hatch with a propped awning on the +X side. car_paint (light neutral) is the largest material and is tinted per instance.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 460,
+      "footprintRadius": 110.7,
+      "height": 125.3,
+      "minY": 0.3,
+      "maxY": 125.6,
+      "sizeX": 192.0,
+      "sizeZ": 124.5,
+      "id": "dumpster",
+      "file": "models/dumpster.glb",
+      "bytes": 22712,
+      "notes": "Green steel dumpster with two black lids; slanted front faces +Z, fork pockets on the sides.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 252,
+      "footprintRadius": 28.3,
+      "height": 110.0,
+      "minY": 0.0,
+      "maxY": 110.0,
+      "sizeX": 42.0,
+      "sizeZ": 43.5,
+      "id": "newspaper_box",
+      "file": "models/newspaper_box.glb",
+      "bytes": 17464,
+      "notes": "Coin-op newspaper box on a pedestal; window and pull handle face +Z.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 780,
+      "footprintRadius": 95.1,
+      "height": 220.0,
+      "minY": 0.0,
+      "maxY": 220.0,
+      "sizeX": 176.0,
+      "sizeZ": 183.2,
+      "id": "hot_dog_cart",
+      "file": "models/hot_dog_cart.glb",
+      "bytes": 39344,
+      "notes": "Stainless hot dog cart with a red and yellow umbrella; wheels at the -Z end, push handle at -Z, service side faces +Z along the long axis.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 800,
+      "footprintRadius": 22.0,
+      "height": 450.0,
+      "minY": 0.0,
+      "maxY": 450.0,
+      "sizeX": 42.0,
+      "sizeZ": 44.0,
+      "id": "street_lamp",
+      "file": "models/street_lamp.glb",
+      "bytes": 29532,
+      "notes": "Cast-iron city lamp post with a lantern head; the lantern glass is emissive warm white.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 924,
+      "footprintRadius": 70.7,
+      "height": 250.0,
+      "minY": 0.0,
+      "maxY": 250.0,
+      "sizeX": 100.0,
+      "sizeZ": 100.0,
+      "id": "phone_booth",
+      "file": "models/phone_booth.glb",
+      "bytes": 51428,
+      "notes": "Red phone booth; glazed door with handle faces +Z, lit TELEPHONE signs (emissive) on all four sides.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 2980,
+      "footprintRadius": 487.3,
+      "height": 310.0,
+      "minY": 0.0,
+      "maxY": 310.0,
+      "sizeX": 271.0,
+      "sizeZ": 931.0,
+      "id": "fire_truck",
+      "file": "models/fire_truck.glb",
+      "bytes": 130928,
+      "notes": "Red fire engine, front +Z: crew cab, silver equipment lockers, ladder along the roof, red/white light bar (emissive).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
     }
   ]
 }
