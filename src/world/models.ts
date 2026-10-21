@@ -3,10 +3,20 @@
  * public/models/ (listed in public/models/manifest.json), otherwise the procedural factory.
  *
  * Conventions: local origin at the footprint centre on the floor (y = 0), front faces +Z,
- * units cm. GLB overrides are fitted to opts {w, h, d} unless the manifest says fit: "none"
- * (then `scale` is applied as-is, e.g. 100 for models authored in metres).
+ * units cm. Every object returned by createModel() follows this, GLB or procedural.
  *
- * manifest.json: { "couch": { "file": "couch.glb" }, "roomba": { "file": "roomba.glb", "fit": "none", "scale": 100 } }
+ * manifest.json entries: { "file": "couch.glb", "fit"?: "footprint" | "xz" | "none", "scale"?: n }
+ *   - "footprint" (default): stretched to opts {w, h, d}.
+ *   - "xz": X/Z stretched to opts {w, d}; height kept at `scale` (the Blender models are authored
+ *     in cm, so clearances under furniture stay exact). Used for furniture.
+ *   - "none": only `scale` is applied; opts are ignored (hazards).
+ *   A model whose lowest point is below y = 0 is lifted onto the floor. The broom is authored
+ *   with its origin at the top of the handle; after loading, the origin sits on the floor
+ *   straight below that pivot, so rotating the object about Y still sweeps around the handle top.
+ *
+ * Child nodes keep their glTF names after cloning (roomba `side_brush`, lint_roller `drum`,
+ * robovac_9000 `brush_l` / `brush_r`): use `obj.getObjectByName('side_brush')`.
+ * Prop models (shoe, sock, toy_car, ...) also back Debris visuals: see getModelTemplate().
  */
 import { Box3, BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
 import { Rng } from '../core/rng';
@@ -25,8 +35,18 @@ export type ModelFactory = (opts: ModelOptions) => Object3D;
 
 interface OverrideEntry {
   template: Object3D;
-  fit: 'footprint' | 'none';
+  fit: FitMode;
   scale: number;
+  /** Bounds of the template at scale 1. */
+  box: Box3;
+}
+
+type FitMode = 'footprint' | 'xz' | 'none';
+
+interface ManifestEntry {
+  file: string;
+  fit?: FitMode;
+  scale?: number;
 }
 
 const factories = new Map<string, ModelFactory>();
@@ -45,28 +65,38 @@ export function hasModelOverride(id: string): boolean {
   return overrides.has(id);
 }
 
+/** The loaded GLB scene for `id` (shared: do not mutate), or undefined if none was loaded. */
+export function getModelTemplate(id: string): Object3D | undefined {
+  return overrides.get(id)?.template;
+}
+
 export function createModel(id: string, opts: ModelOptions): Object3D {
   const ov = overrides.get(id);
-  if (ov) return instantiateOverride(ov, opts);
-  const f = factories.get(id);
-  const obj = f ? f(opts) : placeholder(opts);
+  const obj = ov ? instantiateOverride(ov, opts) : (factories.get(id) ?? placeholder)(opts);
   obj.name = id;
   return obj;
 }
+
+const _size = new Vector3();
+const _c = new Vector3();
 
 function instantiateOverride(ov: OverrideEntry, opts: ModelOptions): Object3D {
   const inner = ov.template.clone(true);
   const wrapper = new Group();
   wrapper.add(inner);
+  const box = ov.box;
+  const size = box.getSize(_size);
+  const c = box.getCenter(_c);
   if (ov.fit === 'none') {
-    inner.scale.multiplyScalar(ov.scale);
+    const s = ov.scale;
+    inner.scale.multiplyScalar(s);
+    if (box.min.y < -0.5) inner.position.y = -box.min.y * s;
   } else {
-    const box = new Box3().setFromObject(inner);
-    const size = box.getSize(new Vector3());
-    inner.scale.set(opts.w / (size.x || 1), opts.h / (size.y || 1), opts.d / (size.z || 1));
-    const box2 = new Box3().setFromObject(inner);
-    const c = box2.getCenter(new Vector3());
-    inner.position.set(-c.x, -box2.min.y, -c.z);
+    const sx = (opts.w || size.x) / (size.x || 1);
+    const sz = (opts.d || size.z) / (size.z || 1);
+    const sy = ov.fit === 'xz' ? ov.scale : (opts.h || size.y) / (size.y || 1);
+    inner.scale.set(sx, sy, sz);
+    inner.position.set(-c.x * sx, -box.min.y * sy, -c.z * sz);
   }
   wrapper.traverse((o) => {
     if ((o as Mesh).isMesh) {
@@ -80,38 +110,45 @@ function instantiateOverride(ov: OverrideEntry, opts: ModelOptions): Object3D {
 /**
  * Loads GLB overrides listed in models/manifest.json. Never throws; missing manifest or
  * failing files fall back to procedural models. Resolves after `timeoutMs` at the latest.
+ * `onProgress(done, total)` reports finished files (for a loading indicator).
  */
-export async function loadModelOverrides(timeoutMs = 8000): Promise<string[]> {
+export async function loadModelOverrides(timeoutMs = 8000, onProgress?: (done: number, total: number) => void): Promise<string[]> {
   const base = import.meta.env.BASE_URL ?? '/';
+  const loaded: string[] = [];
   const work = (async () => {
-    let manifest: Record<string, string | { file: string; fit?: 'footprint' | 'none'; scale?: number }>;
+    let manifest: Record<string, string | ManifestEntry>;
     try {
       const res = await fetch(`${base}models/manifest.json`, { cache: 'no-cache' });
-      if (!res.ok) return [];
+      if (!res.ok) return loaded;
       manifest = await res.json();
     } catch {
-      return [];
+      return loaded;
     }
-    const entries = Object.entries(manifest);
-    if (entries.length === 0) return [];
+    // Keys starting with "$" are comments.
+    const entries = Object.entries(manifest).filter(([id]) => !id.startsWith('$'));
+    if (entries.length === 0) return loaded;
     const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
     const loader = new GLTFLoader();
-    const loaded: string[] = [];
+    let done = 0;
+    onProgress?.(0, entries.length);
     await Promise.all(
       entries.map(async ([id, spec]) => {
-        const s = typeof spec === 'string' ? { file: spec } : spec;
+        const s: ManifestEntry = typeof spec === 'string' ? { file: spec } : spec;
         try {
           const gltf = await loader.loadAsync(`${base}models/${s.file}`);
-          overrides.set(id, { template: gltf.scene, fit: s.fit ?? 'footprint', scale: s.scale ?? 1 });
+          const template = gltf.scene;
+          template.updateMatrixWorld(true);
+          overrides.set(id, { template, fit: s.fit ?? 'footprint', scale: s.scale ?? 1, box: new Box3().setFromObject(template) });
           loaded.push(id);
         } catch (err) {
           console.warn(`[models] failed to load override "${id}", using procedural model`, err);
         }
+        onProgress?.(++done, entries.length);
       }),
     );
     return loaded;
   })();
-  const timeout = new Promise<string[]>((r) => setTimeout(() => r([]), timeoutMs));
+  const timeout = new Promise<string[]>((r) => setTimeout(() => r([...loaded]), timeoutMs));
   return Promise.race([work, timeout]);
 }
 

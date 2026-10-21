@@ -34,11 +34,11 @@ blender -b --factory-startup --python tools/blender/render_preview.py
 | `upright_vacuum` | hazard | `public/models/upright_vacuum.glb` | 27.5 | 109.5 | 30.8 × 46 | +Z | Intake slot on the front of the base (+Z). | 1116 | 43.3 |
 | `robovac_9000` | hazard | `public/models/robovac_9000.glb` | 35.1 | 20.4 | 64.6 × 69.4 | +Z | Boss. brush_l / brush_r nodes spin about local Y. Red visor eye uses an emissive material. Animated nodes: `brush_l` at (-17.09, 1.0, 15.39), `brush_r` at (17.09, 1.0, 15.39). | 2766 | 96.2 |
 | `couch` | furniture | `public/models/couch.glb` | 108.1 | 85 | 200 × 90 | +Z | Skirt gap 6 cm under the frame (Bunny can slip under). | 1192 | 36.4 |
-| `armchair` | furniture | `public/models/armchair.glb` | 60.2 | 85 | 90 × 85 | +Z | Skirt gap 6 cm under the frame. | 760 | 24.9 |
-| `coffee_table` | furniture | `public/models/coffee_table.glb` | 62.3 | 45 | 110 × 60 | +Z | Open underneath: 10 cm clearance below the lower shelf, 35 cm around it. | 340 | 12.6 |
+| `armchair` | furniture | `public/models/armchair.glb` | 60.2 | 85 | 90 × 85 | +Z | Skirt gap 9 cm under the frame. | 760 | 24.9 |
+| `coffee_table` | furniture | `public/models/coffee_table.glb` | 62.3 | 42 | 110 × 60 | +Z | Open underneath: 38 cm clearance below the top (no shelf or apron, so a Bunny under 38 cm can roll under). | 252 | 9.2 |
 | `bookshelf` | furniture | `public/models/bookshelf.glb` | 42.5 | 180 | 80 × 30 | +Z | Open front faces +Z. | 1288 | 70.1 |
-| `bed` | furniture | `public/models/bed.glb` | 134.8 | 100 | 166 × 214 | +Z | Foot of the bed faces +Z; 15 cm clearance underneath. | 1004 | 32.8 |
-| `dining_table` | furniture | `public/models/dining_table.glb` | 91.4 | 75 | 160 × 90 | +Z | Open underneath (63 cm clearance). | 296 | 10.7 |
+| `bed` | furniture | `public/models/bed.glb` | 129.4 | 105 | 160 × 205 | +Z | Foot of the bed faces +Z; 24 cm clearance underneath. Footprint 160 x 205 including head- and footboard. | 1004 | 32.8 |
+| `dining_table` | furniture | `public/models/dining_table.glb` | 91.4 | 75 | 160 × 90 | +Z | Open underneath (71 cm clearance below the top; legs 6 x 6 cm, 6 cm in from the edges). | 284 | 10.1 |
 | `chair` | furniture | `public/models/chair.glb` | 33.2 | 90 | 45 × 46 | +Z | Seat faces +Z (backrest at -Z). | 536 | 18.4 |
 | `kitchen_counter` | furniture | `public/models/kitchen_counter.glb` | 68.2 | 90.5 | 122 × 62 | +Z | Cabinet doors face +Z; worktop at 90 cm. | 412 | 18.8 |
 | `fridge` | furniture | `public/models/fridge.glb` | 49.6 | 180 | 75 × 72.2 | +Z | Doors face +Z. | 488 | 22.3 |
@@ -52,6 +52,6 @@ blender -b --factory-startup --python tools/blender/render_preview.py
 | `book` | prop | `public/models/book.glb` | 13.7 | 3.1 | 15.1 × 23 | +Z | Lying flat, spine on -X. | 156 | 7.9 |
 | `tv_remote` | prop | `public/models/tv_remote.glb` | 9.3 | 2.2 | 5 × 18.2 | +Z | IR end points +Z. | 380 | 18.8 |
 
-Total: 25 models, 20990 triangles, 782 KB.
+Total: 25 models, 20890 triangles, 778 KB.
 
 ![Contact sheet](models-preview.png)

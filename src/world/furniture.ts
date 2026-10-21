@@ -2,6 +2,8 @@
  * Furniture definitions (data). The id doubles as the model id for createModel().
  * Furniture is always an Obstacle; pieces with `clearance` can be passed under by a Bunny
  * whose diameter is smaller than the gap (the couch skirt gates Tier 1 → 2).
+ * Sizes, clearances and legs of pieces with a Blender model match public/models/*.glb
+ * (docs/models.md); those load at scale 1 (fit "xz"), so collision lines up with the visuals.
  * Absorbable "furniture" (chairs, baskets, plants) are Debris types placed by room templates.
  */
 import type { Rect } from '../core/math';
@@ -28,21 +30,21 @@ export interface FurnitureDef {
 }
 
 export const FURNITURE: Record<string, FurnitureDef> = {
-  couch: { id: 'couch', name: 'Couch', w: 210, d: 92, h: 85, clearance: 6, legs: { inset: 8, size: 5 } },
-  armchair: { id: 'armchair', name: 'Armchair', w: 90, d: 86, h: 85, clearance: 9, legs: { inset: 6, size: 5 } },
-  coffee_table: { id: 'coffee_table', name: 'Coffee Table', w: 110, d: 60, h: 42, clearance: 38, legs: { inset: 4, size: 5 } },
+  couch: { id: 'couch', name: 'Couch', w: 200, d: 90, h: 85, clearance: 6, legs: { inset: 3, size: 6 } },
+  armchair: { id: 'armchair', name: 'Armchair', w: 90, d: 85, h: 85, clearance: 9, legs: { inset: 3, size: 6 } },
+  coffee_table: { id: 'coffee_table', name: 'Coffee Table', w: 110, d: 60, h: 42, clearance: 38, legs: { inset: 5, size: 6 } },
   tv_stand: { id: 'tv_stand', name: 'TV Stand', w: 160, d: 45, h: 55, clearance: 0 },
-  bookshelf: { id: 'bookshelf', name: 'Bookshelf', w: 90, d: 32, h: 180, clearance: 0 },
+  bookshelf: { id: 'bookshelf', name: 'Bookshelf', w: 80, d: 30, h: 180, clearance: 0 },
   dining_table: { id: 'dining_table', name: 'Dining Table', w: 160, d: 90, h: 75, clearance: 71, legs: { inset: 6, size: 6 } },
   kitchen_counter: { id: 'kitchen_counter', name: 'Counter', w: 200, d: 62, h: 90, clearance: 0 },
   stove: { id: 'stove', name: 'Stove', w: 76, d: 64, h: 90, clearance: 0 },
-  fridge: { id: 'fridge', name: 'Fridge', w: 80, d: 72, h: 180, clearance: 0 },
-  bed: { id: 'bed', name: 'Bed', w: 160, d: 205, h: 55, clearance: 24, legs: { inset: 5, size: 8 } },
+  fridge: { id: 'fridge', name: 'Fridge', w: 75, d: 72, h: 180, clearance: 0 },
+  bed: { id: 'bed', name: 'Bed', w: 160, d: 205, h: 55, clearance: 24, legs: { inset: 4, size: 6 } },
   nightstand: { id: 'nightstand', name: 'Nightstand', w: 45, d: 40, h: 55, clearance: 0 },
   dresser: { id: 'dresser', name: 'Dresser', w: 120, d: 50, h: 90, clearance: 0 },
   desk: { id: 'desk', name: 'Desk', w: 130, d: 65, h: 75, clearance: 70, legs: { inset: 4, size: 5 } },
   bathtub: { id: 'bathtub', name: 'Bathtub', w: 170, d: 75, h: 58, clearance: 0 },
-  toilet: { id: 'toilet', name: 'Toilet', w: 40, d: 68, h: 78, clearance: 0 },
+  toilet: { id: 'toilet', name: 'Toilet', w: 42, d: 68, h: 78, clearance: 0 },
   sink_cabinet: { id: 'sink_cabinet', name: 'Sink', w: 80, d: 50, h: 88, clearance: 0 },
   console_table: { id: 'console_table', name: 'Console Table', w: 120, d: 38, h: 78, clearance: 72, legs: { inset: 3, size: 4 } },
   shoe_rack: { id: 'shoe_rack', name: 'Shoe Rack', w: 90, d: 32, h: 45, clearance: 0 },

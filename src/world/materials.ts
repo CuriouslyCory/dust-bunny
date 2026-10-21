@@ -7,6 +7,7 @@ export interface FloorTextureInfo {
   texture: Texture;
   /** World size (cm) covered by one texture repeat. */
   worldSize: number;
+  roughness: number;
 }
 
 let maxAnisotropy = 4;
@@ -44,33 +45,71 @@ function woodTexture(dark: boolean): HTMLCanvasElement {
   const rng = new Rng(dark ? 'wood-dark' : 'wood');
   const planks = 8;
   const ph = S / planks;
-  const baseHue = dark ? 22 : 30;
+  const baseHue = dark ? 20 : 31;
+  const baseL = dark ? 31 : 54;
   for (let p = 0; p < planks; p++) {
-    let x = -rng.range(0, S * 0.6);
-    while (x < S) {
-      const len = rng.range(S * 0.45, S * 0.9);
-      const l = (dark ? 30 : 52) + rng.range(-7, 7);
-      ctx.fillStyle = hsl(baseHue + rng.range(-4, 4), dark ? 40 : 45, l);
-      ctx.fillRect(x, p * ph, len, ph);
-      // Grain: long faint sine strokes.
-      for (let g = 0; g < 22; g++) {
-        ctx.strokeStyle = hsl(baseHue, 40, l + rng.range(-12, 6), rng.range(0.08, 0.25));
-        ctx.lineWidth = rng.range(0.6, 2);
+    const y = p * ph;
+    // Planks wrap around the right edge so the texture tiles seamlessly.
+    const start = rng.range(0, S);
+    let x = start;
+    while (x < start + S) {
+      const len = Math.min(rng.range(S * 0.35, S * 0.8), start + S - x);
+      const hue = baseHue + rng.range(-5, 4);
+      const l = baseL + rng.range(-8, 7);
+      const sat = (dark ? 42 : 48) + rng.range(-8, 6);
+      const seed = rng.next() * 1000;
+      for (const off of [0, -S]) {
+        const px = x + off;
+        if (px > S || px + len < 0) continue;
+        ctx.save();
         ctx.beginPath();
-        const y0 = p * ph + rng.range(2, ph - 2);
-        const amp = rng.range(0.5, 3);
-        const freq = rng.range(0.004, 0.02);
-        for (let xx = 0; xx <= len; xx += 12) ctx.lineTo(x + xx, y0 + Math.sin((x + xx) * freq + g) * amp);
-        ctx.stroke();
+        ctx.rect(px, y, len, ph);
+        ctx.clip();
+        // Base with a soft lengthwise tone gradient.
+        const grd = ctx.createLinearGradient(px, y, px + len, y + ph);
+        grd.addColorStop(0, hsl(hue, sat, l + 2));
+        grd.addColorStop(0.5, hsl(hue + 2, sat, l - 2));
+        grd.addColorStop(1, hsl(hue - 1, sat, l + 1));
+        ctx.fillStyle = grd;
+        ctx.fillRect(px, y, len, ph);
+        const prng = new Rng(Math.floor(seed));
+        // Grain: long faint wavy strokes.
+        for (let g = 0; g < 26; g++) {
+          ctx.strokeStyle = hsl(hue, sat - 6, l + prng.range(-14, 8), prng.range(0.08, 0.28));
+          ctx.lineWidth = prng.range(0.6, 2.2);
+          ctx.beginPath();
+          const y0 = y + prng.range(3, ph - 3);
+          const amp = prng.range(0.5, 3.5);
+          const freq = prng.range(0.004, 0.02);
+          const ph0 = prng.range(0, 6);
+          for (let xx = 0; xx <= len; xx += 10) ctx.lineTo(px + xx, y0 + Math.sin(xx * freq + ph0) * amp);
+          ctx.stroke();
+        }
+        // Occasional knot.
+        if (prng.chance(0.35)) {
+          const kx = px + prng.range(len * 0.15, len * 0.85);
+          const ky = y + prng.range(ph * 0.3, ph * 0.7);
+          for (let k = 5; k > 0; k--) {
+            ctx.strokeStyle = hsl(hue - 4, sat, l - 6 - k * 3, 0.35);
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.ellipse(kx, ky, k * 4.5, k * 1.8, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+        // Bevelled edges: light top edge, dark seams.
+        ctx.fillStyle = 'rgba(255,240,220,0.10)';
+        ctx.fillRect(px, y + 2, len, 2);
+        ctx.fillStyle = 'rgba(40,20,10,0.5)';
+        ctx.fillRect(px, y, 2.5, ph);
+        ctx.restore();
       }
-      ctx.fillStyle = 'rgba(40,20,10,0.55)';
-      ctx.fillRect(x, p * ph, 2, ph);
       x += len;
     }
-    ctx.fillStyle = 'rgba(30,15,8,0.6)';
-    ctx.fillRect(0, p * ph, S, 2);
+    ctx.fillStyle = 'rgba(30,15,8,0.55)';
+    ctx.fillRect(0, y, S, 2.5);
   }
-  speckle(ctx, S, S, rng, 4000, 0.08);
+  speckle(ctx, S, S, rng, 5000, 0.07);
   return c;
 }
 
@@ -84,16 +123,44 @@ function tileTexture(tiles: number, hue: number, sat: number, light: number, gro
   const g = Math.max(2, ts * 0.05);
   for (let i = 0; i < tiles; i++) {
     for (let j = 0; j < tiles; j++) {
-      ctx.fillStyle = hsl(hue + rng.range(-3, 3), sat, light + rng.range(-3, 3));
-      ctx.fillRect(i * ts + g / 2, j * ts + g / 2, ts - g, ts - g);
-      const grd = ctx.createLinearGradient(i * ts, j * ts, (i + 1) * ts, (j + 1) * ts);
-      grd.addColorStop(0, 'rgba(255,255,255,0.12)');
-      grd.addColorStop(1, 'rgba(0,0,0,0.06)');
+      const x0 = i * ts + g / 2;
+      const y0 = j * ts + g / 2;
+      const w = ts - g;
+      const tl = light + rng.range(-3, 3);
+      ctx.fillStyle = hsl(hue + rng.range(-3, 3), sat, tl);
+      ctx.fillRect(x0, y0, w, w);
+      // Soft cloudy mottling inside each tile.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0, w, w);
+      ctx.clip();
+      for (let k = 0; k < 10; k++) {
+        const r = rng.range(w * 0.15, w * 0.5);
+        const cx = x0 + rng.range(0, w);
+        const cy = y0 + rng.range(0, w);
+        const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        const dl = rng.range(-5, 4);
+        rg.addColorStop(0, hsl(hue + rng.range(-6, 6), sat, tl + dl, 0.35));
+        rg.addColorStop(1, hsl(hue, sat, tl + dl, 0));
+        ctx.fillStyle = rg;
+        ctx.fillRect(x0, y0, w, w);
+      }
+      ctx.restore();
+      // Glaze: light top-left, slightly darker bottom-right, bevel lines.
+      const grd = ctx.createLinearGradient(x0, y0, x0 + w, y0 + w);
+      grd.addColorStop(0, 'rgba(255,255,255,0.16)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.07)');
       ctx.fillStyle = grd;
-      ctx.fillRect(i * ts + g / 2, j * ts + g / 2, ts - g, ts - g);
+      ctx.fillRect(x0, y0, w, w);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillRect(x0, y0, w, 1.5);
+      ctx.fillRect(x0, y0, 1.5, w);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(x0, y0 + w - 1.5, w, 1.5);
+      ctx.fillRect(x0 + w - 1.5, y0, 1.5, w);
     }
   }
-  speckle(ctx, S, S, rng, 1500, 0.06);
+  speckle(ctx, S, S, rng, 1500, 0.05);
   return c;
 }
 
@@ -101,10 +168,10 @@ function carpetTexture(): HTMLCanvasElement {
   const S = 512;
   const [c, ctx] = canvas(S, S);
   const rng = new Rng('carpet');
-  ctx.fillStyle = hsl(210, 14, 62);
+  ctx.fillStyle = hsl(205, 16, 60);
   ctx.fillRect(0, 0, S, S);
-  for (let i = 0; i < 60000; i++) {
-    ctx.fillStyle = hsl(210 + rng.range(-10, 10), 14, 62 + rng.range(-14, 12), 0.5);
+  for (let i = 0; i < 70000; i++) {
+    ctx.fillStyle = hsl(205 + rng.range(-12, 12), 16, 60 + rng.range(-16, 12), 0.5);
     ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.5, 1.5);
   }
   return c;
@@ -117,19 +184,19 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
   if (!info) {
     switch (id) {
       case 'wood':
-        info = { texture: toTexture(woodTexture(false)), worldSize: 160 };
+        info = { texture: toTexture(woodTexture(false)), worldSize: 160, roughness: 0.62 };
         break;
       case 'woodDark':
-        info = { texture: toTexture(woodTexture(true)), worldSize: 160 };
+        info = { texture: toTexture(woodTexture(true)), worldSize: 160, roughness: 0.58 };
         break;
       case 'tile':
-        info = { texture: toTexture(tileTexture(4, 40, 20, 86, '#b9b1a4')), worldSize: 120 };
+        info = { texture: toTexture(tileTexture(4, 38, 24, 84, '#b3a998')), worldSize: 120, roughness: 0.32 };
         break;
       case 'tileSmall':
-        info = { texture: toTexture(tileTexture(8, 195, 35, 80, '#e9eef0')), worldSize: 80 };
+        info = { texture: toTexture(tileTexture(8, 192, 34, 80, '#e6ebec')), worldSize: 80, roughness: 0.28 };
         break;
       case 'carpet':
-        info = { texture: toTexture(carpetTexture()), worldSize: 60 };
+        info = { texture: toTexture(carpetTexture()), worldSize: 60, roughness: 1 };
         break;
     }
     floorCache.set(id, info);

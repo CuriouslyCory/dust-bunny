@@ -6,19 +6,23 @@ import random
 from common import M, Model
 
 
-def _sofa(m, width, depth, height, arm_w, n_cushions, fabric, fabric_light):
-    """Shared couch/armchair layout with a 6 cm skirt gap underneath."""
+def _sofa(m, width, depth, height, arm_w, n_cushions, fabric, fabric_light,
+          gap=6.0):
+    """Shared couch/armchair layout with a `gap` cm skirt gap underneath.
+
+    The gap and leg positions (centre 6 cm in from each side, radius 3) match
+    the collision data in src/world/furniture.ts (clearance, legs inset 3 size
+    6)."""
     b = m.part("body")
-    gap = 6.0
     half_w, half_d = width / 2, depth / 2
     inner_w = width - 2 * arm_w
     for sx in (-1, 1):
         for sy in (-1, 1):
             b.cyl(2.5, gap, (sx * (half_w - 6), sy * (half_d - 6), gap / 2),
                   M("wood_dark"), segs=8, r2=3.0)
-        b.boxb((arm_w, depth, 56), (sx * (half_w - arm_w / 2), 0, gap),
+        b.boxb((arm_w, depth, 62 - gap), (sx * (half_w - arm_w / 2), 0, gap),
                fabric, bevel=4.0, seg=2)
-    b.boxb((inner_w, depth, 30), (0, 0, gap), fabric, bevel=2.0, seg=2)
+    b.boxb((inner_w, depth, 36 - gap), (0, 0, gap), fabric, bevel=2.0, seg=2)
     back_d = 20.0
     b.boxb((inner_w, back_d, height - 36), (0, half_d - back_d / 2, 36),
            fabric, bevel=3.0, seg=2)
@@ -41,22 +45,20 @@ def couch():
 
 
 def armchair():
-    m = Model("armchair", "Skirt gap 6 cm under the frame.")
+    m = Model("armchair", "Skirt gap 9 cm under the frame.")
     _sofa(m, 90, 85, 85, 16, 1, M("fabric_terracotta"),
-          M("fabric_terracotta_light"))
+          M("fabric_terracotta_light"), gap=9.0)
     return m
 
 
 def coffee_table():
-    m = Model("coffee_table", "Open underneath: 10 cm clearance below the "
-              "lower shelf, 35 cm around it.")
+    m = Model("coffee_table", "Open underneath: 38 cm clearance below the top "
+              "(no shelf or apron, so a Bunny under 38 cm can roll under).")
     b = m.part("body")
-    b.boxb((110, 60, 4), (0, 0, 41), M("wood"), bevel=1.0, seg=2)
-    b.boxb((100, 50, 6), (0, 0, 35), M("wood_dark"), bevel=0.5)
-    b.boxb((94, 44, 2), (0, 0, 10), M("wood_light"), bevel=0.4)
+    b.boxb((110, 60, 4), (0, 0, 38), M("wood"), bevel=1.0, seg=2)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            b.cyl(1.8, 35, (sx * 47, sy * 22, 17.5), M("wood_dark"), segs=10,
+            b.cyl(2.0, 38, (sx * 47, sy * 22, 19), M("wood_dark"), segs=10,
                   r2=2.6)
     return m
 
@@ -97,33 +99,36 @@ def bookshelf():
 
 
 def bed():
-    m = Model("bed", "Foot of the bed faces +Z; 15 cm clearance underneath.")
+    m = Model("bed", "Foot of the bed faces +Z; 24 cm clearance underneath. "
+              "Footprint 160 x 205 including head- and footboard.")
     b = m.part("body")
     wood = M("wood")
+    c = 24.0  # clearance under the frame
     for sx in (-1, 1):
         for sy in (-1, 1):
-            b.cyl(3.0, 15, (sx * 76, sy * 98, 7.5), M("wood_dark"), segs=8)
-    b.boxb((160, 205, 15), (0, 0, 15), wood, bevel=1.5, seg=2)
-    b.boxb((152, 198, 20), (0, 1, 30), M("linen"), bevel=4.0, seg=2)
-    b.boxb((160, 142, 24), (0, -30, 29), M("fabric_lavender"), bevel=3.0,
+            b.cyl(3.0, c, (sx * 73, sy * 95.5, c / 2), M("wood_dark"), segs=8)
+    b.boxb((156, 194, 13), (0, 0, c), wood, bevel=1.5, seg=2)
+    b.boxb((150, 188, 20), (0, 1, c + 13), M("linen"), bevel=4.0, seg=2)
+    b.boxb((156, 132, 22), (0, -28, c + 12), M("fabric_lavender"), bevel=3.0,
            seg=2)
-    b.boxb((160, 14, 24.5), (0, 47, 29), M("linen"), bevel=3.0, seg=2)
+    b.boxb((156, 13, 22.5), (0, 44, c + 12), M("linen"), bevel=3.0, seg=2)
     for sx in (-1, 1):
-        b.boxb((62, 36, 12), (sx * 36, 78, 50), M("linen"), bevel=5.0, seg=2)
-    b.boxb((166, 6, 100), (0, 104, 0), wood, bevel=2.0, seg=2)
-    b.boxb((150, 2, 50), (0, 100.5, 45), M("wood_light"), bevel=1.0)
-    b.boxb((166, 5, 26), (0, -104.5, 15), wood, bevel=1.5, seg=2)
+        b.boxb((60, 34, 12), (sx * 36, 74, c + 33), M("linen"), bevel=5.0,
+               seg=2)
+    b.boxb((160, 6, 105), (0, 99.5, 0), wood, bevel=2.0, seg=2)
+    b.boxb((146, 2, 50), (0, 96, c + 30), M("wood_light"), bevel=1.0)
+    b.boxb((160, 5, 26), (0, -100, c), wood, bevel=1.5, seg=2)
     return m
 
 
 def dining_table():
-    m = Model("dining_table", "Open underneath (63 cm clearance).")
+    m = Model("dining_table", "Open underneath (71 cm clearance below the "
+              "top; legs 6 x 6 cm, 6 cm in from the edges).")
     b = m.part("body")
     b.boxb((160, 90, 4), (0, 0, 71), M("wood_light"), bevel=1.0, seg=2)
-    b.boxb((146, 76, 8), (0, 0, 63), M("wood"))
     for sx in (-1, 1):
         for sy in (-1, 1):
-            b.boxb((6, 6, 63), (sx * 71, sy * 36, 0), M("wood"), bevel=0.8)
+            b.boxb((6, 6, 71), (sx * 71, sy * 36, 0), M("wood"), bevel=0.8)
     return m
 
 

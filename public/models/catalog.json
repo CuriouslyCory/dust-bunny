@@ -227,7 +227,7 @@
       "id": "armchair",
       "file": "models/armchair.glb",
       "bytes": 25476,
-      "notes": "Skirt gap 6 cm under the frame.",
+      "notes": "Skirt gap 9 cm under the frame.",
       "nodes": {
         "body": {
           "pivot": [
@@ -240,17 +240,17 @@
       "category": "furniture"
     },
     {
-      "triangles": 340,
+      "triangles": 252,
       "footprintRadius": 62.3,
-      "height": 45.0,
+      "height": 42.0,
       "minY": 0.0,
-      "maxY": 45.0,
+      "maxY": 42.0,
       "sizeX": 110.0,
       "sizeZ": 60.0,
       "id": "coffee_table",
       "file": "models/coffee_table.glb",
-      "bytes": 12904,
-      "notes": "Open underneath: 10 cm clearance below the lower shelf, 35 cm around it.",
+      "bytes": 9448,
+      "notes": "Open underneath: 38 cm clearance below the top (no shelf or apron, so a Bunny under 38 cm can roll under).",
       "nodes": {
         "body": {
           "pivot": [
@@ -287,16 +287,16 @@
     },
     {
       "triangles": 1004,
-      "footprintRadius": 134.8,
-      "height": 100.0,
+      "footprintRadius": 129.4,
+      "height": 105.0,
       "minY": 0.0,
-      "maxY": 100.0,
-      "sizeX": 166.0,
-      "sizeZ": 214.0,
+      "maxY": 105.0,
+      "sizeX": 160.0,
+      "sizeZ": 205.0,
       "id": "bed",
       "file": "models/bed.glb",
       "bytes": 33636,
-      "notes": "Foot of the bed faces +Z; 15 cm clearance underneath.",
+      "notes": "Foot of the bed faces +Z; 24 cm clearance underneath. Footprint 160 x 205 including head- and footboard.",
       "nodes": {
         "body": {
           "pivot": [
@@ -309,7 +309,7 @@
       "category": "furniture"
     },
     {
-      "triangles": 296,
+      "triangles": 284,
       "footprintRadius": 91.4,
       "height": 75.0,
       "minY": 0.0,
@@ -318,8 +318,8 @@
       "sizeZ": 90.0,
       "id": "dining_table",
       "file": "models/dining_table.glb",
-      "bytes": 10988,
-      "notes": "Open underneath (63 cm clearance).",
+      "bytes": 10340,
+      "notes": "Open underneath (71 cm clearance below the top; legs 6 x 6 cm, 6 cm in from the edges).",
       "nodes": {
         "body": {
           "pivot": [
