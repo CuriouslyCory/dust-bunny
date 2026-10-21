@@ -122,19 +122,32 @@ describe('absorbing Hazards', () => {
     expect(b.radius).toBeGreaterThan(r0 * 1.05);
   });
 
-  it('wins the Run when the Robo-Vac 9000 is absorbed', () => {
+  it('opens the front door when the Robo-Vac 9000 is absorbed, and the Run continues outside', () => {
     const { run, events } = makeRun();
     moveToOpenFloor(run);
     const b = run.bunny;
     const order: string[] = [];
     events.on('bossDefeated', () => order.push('bossDefeated'));
-    events.on('victory', () => order.push('victory'));
+    events.on('exitOpened', () => order.push('exitOpened'));
+    events.on('areaEntered', (e) => order.push(`areaEntered:${e.area}`));
     events.on('runEnded', (e) => order.push(`runEnded:${e.reason}`));
     b.setRadius(absorbRadiusFor(ROBOVAC_9000.size, b.stats.get('absorbRatio')) + 1);
     run.hazards.spawn('robovac_9000', b.x + b.radius, b.z);
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated', 'victory', 'runEnded:victory']);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated', 'exitOpened']);
+    expect(run.ended).toBe(false);
+    expect(run.houseCleared).toBe(true);
+    expect(run.house.obstacles.some((o) => o.id === run.house.exit!.obstacleId)).toBe(false);
+
+    // Rolling into the open doorway leaves the house.
+    const exit = run.house.exit!.rect;
+    b.teleport((exit.minX + exit.maxX) / 2 - run.house.exit!.dir.x * b.radius * 0.4, (exit.minZ + exit.maxZ) / 2);
+    run.update(1 / 60);
+    expect(order).toEqual(['bossDefeated', 'exitOpened', 'areaEntered:neighborhood']);
+    expect(run.area).toBe('neighborhood');
+    expect(run.house.area).toBe('neighborhood');
+    expect(run.hazards.hazards).toHaveLength(0);
+    expect(run.debris.count).toBeGreaterThan(500);
   });
 
   it('keeps the boss out of reach at Tier 5 entry, but reachable after two stun hits', () => {

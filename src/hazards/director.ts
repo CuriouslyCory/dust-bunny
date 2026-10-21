@@ -2,16 +2,19 @@
  * Hazard spawn director. Per Tier (src/data/hazards.ts DIRECTOR.tiers): an alive budget and
  * spawn interval that ramp with Tier progress, weighted Hazard types with per-type caps.
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
- * have become too small to matter, and brings in the Robo-Vac 9000 at Tier 5.
+ * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
+ * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood. Entering a new
+ * area resets the director (grace period, boss).
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
-import { BROOM, DIRECTOR, LINT_ROLLER, MOP, ROBOVAC_9000, ROOMBA, SPRAY_BOTTLE, UPRIGHT_VACUUM, type TierSpawnTable } from '../data/hazards';
-import { MAX_TIER, tierProgress } from '../data/tiers';
+import { AREA_BOSSES, BROOM, DIRECTOR, DIRECTOR_EXCLUDE, LINT_ROLLER, MOP, NEIGHBORHOOD_DIRECTOR, ROBOVAC_9000, ROOMBA, SPRAY_BOTTLE, UPRIGHT_VACUUM, type TierSpawnTable } from '../data/hazards';
+import { tierProgress } from '../data/tiers';
+import type { AreaId } from '../world/types';
 import type { Run } from '../game/run';
 import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
-import type { Hazard, HazardManager } from './index';
+import { hazardRegistry, type Hazard, type HazardManager } from './index';
 
 /** Footprint used to validate spawn spots. */
 export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: number }>> = {
@@ -24,35 +27,43 @@ export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: 
   robovac_9000: { radius: ROBOVAC_9000.contactRadius, height: ROBOVAC_9000.height },
 };
 
-export function spawnTable(tier: number): TierSpawnTable {
-  const t = DIRECTOR.tiers;
-  return t[Math.min(Math.max(tier, 1), t.length) - 1]!;
+export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
+  const t = area === 'house' ? DIRECTOR.tiers : NEIGHBORHOOD_DIRECTOR.tiers;
+  const first = area === 'house' ? 1 : NEIGHBORHOOD_DIRECTOR.firstTier;
+  return t[Math.min(Math.max(tier - first + 1, 1), t.length) - 1]!;
 }
 
 /** Alive Hazard budget for a Tier at `progress` (0..1) through it. */
-export function hazardBudget(tier: number, progress: number): number {
-  const [a, b] = spawnTable(tier).budget;
+export function hazardBudget(tier: number, progress: number, area: AreaId = 'house'): number {
+  const [a, b] = spawnTable(tier, area).budget;
   return Math.round(lerp(a, b, Math.min(1, Math.max(0, progress))));
 }
 
 /** Seconds between spawns for a Tier at `progress` through it. */
-export function spawnInterval(tier: number, progress: number): number {
-  const [a, b] = spawnTable(tier).interval;
+export function spawnInterval(tier: number, progress: number, area: AreaId = 'house'): number {
+  const [a, b] = spawnTable(tier, area).interval;
   return lerp(a, b, Math.min(1, Math.max(0, progress)));
 }
 
 /** Spawn weights per Hazard type given the alive counts; capped types get 0. */
-export function spawnWeights(tier: number, alive: Readonly<Record<string, number>>): Record<string, number> {
+export function spawnWeights(tier: number, alive: Readonly<Record<string, number>>, area: AreaId = 'house'): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const [id, { weight, max }] of Object.entries(spawnTable(tier).types)) out[id] = (alive[id] ?? 0) < max ? weight : 0;
+  for (const [id, { weight, max }] of Object.entries(spawnTable(tier, area).types)) out[id] = (alive[id] ?? 0) < max ? weight : 0;
   return out;
 }
 
 /** Picks the next Hazard type to spawn, or null if the budget is full or every type is capped. */
-export function pickHazardType(tier: number, progress: number, alive: Readonly<Record<string, number>>, rng: Rng, exclude: readonly string[] = ['robovac_9000', 'mini_roomba']): string | null {
+export function pickHazardType(
+  tier: number,
+  progress: number,
+  alive: Readonly<Record<string, number>>,
+  rng: Rng,
+  exclude: readonly string[] = DIRECTOR_EXCLUDE,
+  area: AreaId = 'house',
+): string | null {
   const total = Object.entries(alive).reduce((n, [id, c]) => (exclude.includes(id) ? n : n + c), 0);
-  if (total >= hazardBudget(tier, progress)) return null;
-  const weights = spawnWeights(tier, alive);
+  if (total >= hazardBudget(tier, progress, area)) return null;
+  const weights = spawnWeights(tier, alive, area);
   const ids = Object.keys(weights).filter((id) => weights[id]! > 0);
   return rng.weighted(ids, (id) => weights[id]!) ?? null;
 }
@@ -69,16 +80,19 @@ export class HazardDirector {
   bossSpawned = false;
   private bossTimer = -1;
   bossId: number | null = null;
+  private area: AreaId = 'house';
 
   constructor(private readonly rng: Rng) {}
 
   update(dt: number, run: Run, mgr: HazardManager): void {
+    if (run.area !== this.area) this.enterArea(run.area);
     const b = run.bunny;
     const viewR = viewRadiusFor(b.radius, run.tier);
     this.despawn(dt, run, mgr, viewR);
 
-    if (run.tier >= MAX_TIER && !this.bossSpawned) {
-      if (this.bossTimer < 0) this.bossTimer = ROBOVAC_9000.arrivalDelay;
+    const boss = AREA_BOSSES[run.area];
+    if (run.tier >= boss.tier && !this.bossSpawned && hazardRegistry.has(boss.id)) {
+      if (this.bossTimer < 0) this.bossTimer = boss.arrivalDelay;
       this.bossTimer -= dt;
       if (this.bossTimer <= 0) this.spawnBoss(run, mgr);
     }
@@ -86,28 +100,40 @@ export class HazardDirector {
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
     const progress = tierProgress(b.radius);
-    this.spawnTimer = spawnInterval(run.tier, progress);
+    this.spawnTimer = spawnInterval(run.tier, progress, run.area);
     const alive: Record<string, number> = {};
     for (const h of mgr.hazards) if (!h.dead) alive[h.def.id] = (alive[h.def.id] ?? 0) + 1;
-    const id = pickHazardType(run.tier, progress, alive, this.rng);
+    const id = pickHazardType(run.tier, progress, alive, this.rng, DIRECTOR_EXCLUDE, run.area);
     if (!id) return;
     const fp = SPAWN_FOOTPRINT[id] ?? { radius: 15, height: 20 };
     const spot = this.findSpot(run, fp.radius, fp.height, ...spawnRing(viewR, fp.radius));
     if (spot) mgr.spawn(id, spot.x, spot.z);
   }
 
-  /** Spawns the boss now (also used by debug tools). */
+  /** New area: fresh grace period and the new area's boss still to come. */
+  private enterArea(area: AreaId): void {
+    this.area = area;
+    this.spawnTimer = area === 'house' ? DIRECTOR.graceSeconds : NEIGHBORHOOD_DIRECTOR.graceSeconds;
+    this.farTime.clear();
+    this.bossSpawned = false;
+    this.bossTimer = -1;
+    this.bossId = null;
+  }
+
+  /** Spawns the current area's boss now (also used by debug tools). */
   spawnBoss(run: Run, mgr: HazardManager): Hazard | null {
-    if (this.bossSpawned) return null;
-    const fp = SPAWN_FOOTPRINT.robovac_9000!;
+    if (run.area !== this.area) this.enterArea(run.area);
+    const bossId = AREA_BOSSES[run.area].id;
+    if (this.bossSpawned || !hazardRegistry.has(bossId)) return null;
+    const fp = SPAWN_FOOTPRINT[bossId] ?? { radius: 100, height: 100 };
     const viewR = viewRadiusFor(run.bunny.radius, run.tier);
     const [inner, outer] = spawnRing(viewR * 0.6, fp.radius);
     const spot = this.findSpot(run, fp.radius, fp.height, inner, outer) ?? this.findSpot(run, fp.radius, fp.height, fp.radius + run.bunny.radius + 80, 1e5);
     if (!spot) return null;
     this.bossSpawned = true;
-    const h = mgr.spawn('robovac_9000', spot.x, spot.z);
+    const h = mgr.spawn(bossId, spot.x, spot.z);
     this.bossId = h.id;
-    run.events.emit('bossSpawned', { hazardId: h.id, absorbRadius: absorbRadiusFor(h.size, run.bunny.stats.get('absorbRatio')) });
+    run.events.emit('bossSpawned', { hazardId: h.id, absorbRadius: absorbRadiusFor(h.size, run.bunny.stats.get('absorbRatio')), name: h.def.name });
     return h;
   }
 

@@ -13,7 +13,9 @@ describe('house generation', () => {
       const h = generateHouse(seed);
       expect(h.bounds).toEqual({ minX: 0, minZ: 0, maxX: HOUSE.width, maxZ: HOUSE.depth });
       expect(new Set(h.rooms.map((r) => r.type))).toEqual(new Set(['living', 'kitchen', 'hallway', 'bedroom', 'bathroom']));
-      expect(h.doorways.length).toBe(h.rooms.length); // one per non-hallway room + living/kitchen
+      expect(h.doorways.length).toBe(h.rooms.length + 1); // one per non-hallway room + living/kitchen + front door
+      expect(h.exit?.open).toBe(false);
+      expect(h.obstacles.some((o) => o.id === h.exit!.obstacleId)).toBe(true);
       expect(h.furniture.some((f) => f.defId === 'couch')).toBe(true);
       for (const f of h.furniture) {
         const room = h.rooms.find((r) => r.id === f.roomId)!;

@@ -13,6 +13,7 @@ import type { Debris, DebrisField } from '../entities/debris';
 import { BASE_BUNNY_STATS } from '../entities/stats';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
+import { AREAS, areaDebrisTier } from '../data/areas';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
 import { floorPointVisible, spawnView, viewRadiusFor } from './camera';
@@ -96,32 +97,34 @@ export class DebrisSpawner implements System {
       if (i >= 0) debris.spawn(i, p.x, p.z, rng, { rotY: p.rotY });
     }
 
-    // Start cluster: dense Speck-sized Debris around (and under) the couch.
+    // Start cluster: dense small Debris around the spawn (under the couch in the house).
     const r0 = run.bunny.radius;
-    const cfg = TUNING.debris;
-    const startTypes = types.filter((t) => t.tiers[0] <= 1 && t.size <= r0 * 1.6);
-    for (let n = 0, tries = 0; n < cfg.startCluster && tries < cfg.startCluster * 6; tries++) {
+    const area = AREAS[run.area];
+    const [tierLo, tierHi] = area.tiers;
+    const minStart = run.area === 'house' ? 0 : r0 * TUNING.spawner.meaningfulRatio;
+    const startTypes = types.filter((t) => t.tiers[0] <= tierLo && t.size <= r0 * 1.6 && t.size >= minStart);
+    for (let n = 0, tries = 0; n < area.startCluster && tries < area.startCluster * 6; tries++) {
       const a = rng.range(0, Math.PI * 2);
-      const d = Math.sqrt(rng.next()) * cfg.startClusterRadius + r0 * 1.5;
+      const d = Math.sqrt(rng.next()) * area.startClusterRadius + r0 * 1.5;
       const x = house.spawn.x + Math.cos(a) * d;
       const z = house.spawn.z + Math.sin(a) * d;
       const room = roomAt(house, x, z);
       if (!room) continue;
       const t = rng.weighted(startTypes, (tt) => roomWeight(tt, room.type) * (tt.size <= r0 * 0.7 ? 1 : 0.2));
-      if (!t || !isFloorFree(house, x, z, t.size)) continue;
+      if (!t || !isFloorFree(house, x, z, t.size) || (t.size >= TUNING.debris.clutterMinSize && !clutterFree(debris, x, z, t.size))) continue;
       debris.spawn(this.typeIndex(run, t), x, z, rng);
       n++;
     }
 
     // Scatter: Tier band grows with distance from the spawn point.
     const maxDist = len2(house.bounds.maxX - house.bounds.minX, house.bounds.maxZ - house.bounds.minZ);
-    for (let n = 0, tries = 0; n < cfg.initialScatter && tries < cfg.initialScatter * 4; tries++) {
+    for (let n = 0, tries = 0; n < area.initialScatter && tries < area.initialScatter * 4; tries++) {
       const x = rng.range(house.bounds.minX, house.bounds.maxX);
       const z = rng.range(house.bounds.minZ, house.bounds.maxZ);
       const room = roomAt(house, x, z);
       if (!room) continue;
       const dn = len2(x - house.spawn.x, z - house.spawn.z) / maxDist;
-      const tier = Math.min(5, Math.max(1, Math.round(1 + dn * 5 + rng.range(-1, 1))));
+      const tier = Math.min(tierHi, Math.max(tierLo, Math.round(tierLo + dn * (tierHi - tierLo + 1) + rng.range(-1, 1))));
       const t = rng.weighted(types, (tt) => (tier >= tt.tiers[0] && tier <= tt.tiers[1] ? roomWeight(tt, room.type) : 0));
       if (!t || !isFloorFree(house, x, z, t.size) || !clutterFree(debris, x, z, t.size)) continue;
       debris.spawn(this.typeIndex(run, t), x, z, rng);
@@ -153,7 +156,7 @@ export class DebrisSpawner implements System {
     const s = TUNING.spawner;
     const r = bunny.radius;
     const ratio = bunny.stats.get('absorbRatio');
-    const tier = tierForRadius(r).index;
+    const tier = areaDebrisTier(run.area, tierForRadius(r).index);
     const viewR = viewRadiusFor(r, run.tier);
     const outer = viewR * s.spawnOuter;
     const inner = viewR * s.spawnInner;

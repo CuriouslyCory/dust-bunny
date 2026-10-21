@@ -1,10 +1,21 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-export type RoomType = 'living' | 'kitchen' | 'hallway' | 'bedroom' | 'bathroom';
-export const ROOM_TYPES: readonly RoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
+/** Which world a layout describes: the house floor, then the street outside. */
+export type AreaId = 'house' | 'neighborhood';
 
-export type FloorMaterialId = 'wood' | 'woodDark' | 'tile' | 'tileSmall' | 'carpet';
+export type IndoorRoomType = 'living' | 'kitchen' | 'hallway' | 'bedroom' | 'bathroom';
+/** Neighborhood zones (they play the part of rooms outdoors). */
+export type OutdoorZoneType = 'yard' | 'street' | 'sidewalk' | 'driveway' | 'park';
+export type RoomType = IndoorRoomType | OutdoorZoneType;
+export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
+export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
+
+export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
+  return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
+}
+
+export type FloorMaterialId = 'wood' | 'woodDark' | 'tile' | 'tileSmall' | 'carpet' | 'grass' | 'asphalt' | 'concrete';
 
 export interface Room {
   id: string;
@@ -69,7 +80,27 @@ export interface DebrisPlacement {
   rotY: number;
 }
 
+/**
+ * The house's front door: closed (an obstacle) until the Robo-Vac 9000 is absorbed, then the
+ * way out to the neighborhood. `rect` is the opening in the outer wall.
+ */
+export interface ExitDoor {
+  rect: Rect;
+  /** Outward normal of the wall the door is in. */
+  dir: { x: number; z: number };
+  /** Id of the obstacle that blocks the opening while the door is closed. */
+  obstacleId: string;
+  open: boolean;
+}
+
+/** Flat painted shape on the ground (road lines, crosswalks). Render-only. */
+export interface GroundMarking {
+  rect: Rect;
+  color: string;
+}
+
 export interface HouseLayout {
+  area: AreaId;
   seed: number;
   bounds: Rect;
   rooms: Room[];
@@ -81,4 +112,6 @@ export interface HouseLayout {
   rugs: Rug[];
   debrisPlacements: DebrisPlacement[];
   spawn: { x: number; z: number; roomId: string };
+  exit?: ExitDoor;
+  markings?: GroundMarking[];
 }

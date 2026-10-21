@@ -1,0 +1,63 @@
+/* Door compass (status row) and the fade between areas. */
+.door-compass {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-weight: 700;
+  color: #fff3df;
+  border-color: rgba(255, 214, 120, 0.55);
+  animation: door-compass-pulse 1.6s ease-in-out infinite;
+}
+
+.door-compass-icon {
+  font-size: 18px;
+}
+
+.door-compass-arrow {
+  display: inline-block;
+  font-size: 18px;
+  color: var(--honey, #ffc95c);
+  transition: transform 0.12s linear;
+}
+
+@keyframes door-compass-pulse {
+  50% {
+    border-color: rgba(255, 214, 120, 0.95);
+    box-shadow: 0 0 14px rgba(255, 214, 120, 0.45);
+  }
+}
+
+.area-fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #fff8e8;
+  opacity: 0;
+  z-index: 5;
+}
+
+.area-fade.play {
+  animation: area-fade-in 1.4s ease-out forwards;
+}
+
+@keyframes area-fade-in {
+  0% {
+    opacity: 1;
+  }
+  35% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .door-compass {
+    animation: none;
+  }
+  .area-fade.play {
+    animation-duration: 0.6s;
+  }
+}

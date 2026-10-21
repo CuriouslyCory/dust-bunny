@@ -9,6 +9,7 @@
  *   }
  */
 import type { RunEndReason, RunStats } from '../game/runStats';
+import type { AreaId } from '../world/types';
 
 export interface Vec3Like {
   x: number;
@@ -48,6 +49,10 @@ export interface GameEvents {
   pickupCollected: { pickupId: number; defId: string };
   pickupExpired: { defId: string };
   perkApplied: { perkId: string; stacks: number };
+  /** The house's front door opened (after the Robo-Vac 9000). Position = centre of the doorway. */
+  exitOpened: { x: number; z: number };
+  /** The Bunny left for another area; the Run has swapped `run.house` and repopulated Debris. */
+  areaEntered: { area: AreaId; timeSec: number };
 }
 
 export type GameEventName = keyof GameEvents;

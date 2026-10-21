@@ -51,14 +51,16 @@ export function installHazards(game: Game): void {
       const run = game.run;
       const director = run && directors.get(run);
       if (!run || !director || !hazardRegistry.has(defId)) return null;
-      if (defId === 'robovac_9000') return director.spawnBoss(run, run.hazards);
+      if (hazardRegistry.get(defId)?.boss) return director.spawnBoss(run, run.hazards);
       const fp = SPAWN_FOOTPRINT[defId] ?? { radius: 15, height: 20 };
       const b = run.bunny;
       const spot = director.findSpot(run, fp.radius, fp.height, b.radius + fp.radius + 20, b.radius + fp.radius + 120);
       return spot ? run.hazards.spawn(defId, spot.x, spot.z) : null;
     },
     spawnBoss() {
-      return tools.spawnHazard('robovac_9000');
+      const run = game.run;
+      const director = run && directors.get(run);
+      return run && director ? director.spawnBoss(run, run.hazards) : null;
     },
     clearHazards() {
       for (const h of game.run?.hazards.hazards ?? []) h.dead = true;

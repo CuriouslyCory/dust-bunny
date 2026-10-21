@@ -234,6 +234,30 @@ export const DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Neighborhood director (after the house): spawn tables for Bunny Tiers 5–7, indexed from
+ * `firstTier`. Outdoor Hazards are sized for a 50–250 cm Bunny.
+ */
+export const NEIGHBORHOOD_DIRECTOR = {
+  firstTier: 5,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    { budget: [2, 3], interval: [8, 6], types: { roomba: { weight: 1, max: 2 } } },
+    { budget: [3, 4], interval: [7, 5], types: { roomba: { weight: 1, max: 3 } } },
+    { budget: [4, 5], interval: [6, 5], types: { roomba: { weight: 1, max: 3 } } },
+  ] as readonly TierSpawnTable[],
+};
+
+/** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
+export const AREA_BOSSES = {
+  house: { id: 'robovac_9000', tier: 5, arrivalDelay: 3 },
+  neighborhood: { id: 'street_sweeper', tier: 7, arrivalDelay: 4 },
+} as const;
+
+/** Hazards the director never picks at random (bosses and their summons). */
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper'];
+
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;
 }

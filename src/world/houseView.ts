@@ -1,6 +1,8 @@
 /**
  * Renders a HouseLayout: floors, rugs, walls with baseboards, furniture and soft contact
- * shadows. Anything between the camera and the Bunny (walls, the couch above a Speck) fades out
+ * shadows. The house's front door swings open once `layout.exit.open` is set, with a light
+ * shaft marking the way out. Neighborhood layouts render their walls as a hedge, a grass
+ * ground plane and painted road markings. Anything between the camera and the Bunny (walls, the couch above a Speck) fades out
  * so the Bunny stays visible.
  *
  * Draw-call budget: walls + furniture are baked into one StaticBatch (1 call + shadow), floors
@@ -9,14 +11,19 @@
  * real transparency instead.
  */
 import {
+  AdditiveBlending,
   Box3,
   BoxGeometry,
   BufferGeometry,
+  Color,
+  CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  MeshBasicMaterial,
   Ray,
   Vector3,
   type Material,
@@ -29,6 +36,7 @@ import { FURNITURE } from './furniture';
 import { HOUSE } from './house';
 import { addFloorDetail, floorTexture, rugTexture } from './materials';
 import { createModel } from './models';
+import './outdoorModels';
 import { StaticBatch } from './staticBatch';
 import type { FloorMaterialId, HouseLayout } from './types';
 
@@ -51,6 +59,9 @@ const WALL_PAINT = '#f1e6d6';
 const WALL_CAP = '#8a7a6a';
 const BASEBOARD = '#fbf6ee';
 const BASEBOARD_H = 9;
+const HEDGE = '#3f6b34';
+const HEDGE_TOP = '#4f7f3f';
+const DOOR_WOOD = '#8a5a3b';
 
 export class HouseView {
   readonly root = new Group();
@@ -58,20 +69,31 @@ export class HouseView {
   private readonly batch: StaticBatch;
   /** Furniture objects by FurnitureInstance id (unbatched originals, hidden unless fading). */
   readonly furnitureObjects = new Map<string, Object3D>();
+  private readonly outdoor: boolean;
+  /** Front door leaf (pivot at the hinge) and the light shaft shown once it opens. */
+  private door: Group | null = null;
+  private doorOpen = 0;
+  private beacon: Mesh | null = null;
+  private time = 0;
 
   constructor(readonly layout: HouseLayout) {
-    this.root.name = 'house';
-    this.batch = new StaticBatch('house:static', 2048);
+    this.root.name = layout.area;
+    this.outdoor = layout.area === 'neighborhood';
+    this.batch = new StaticBatch(`${layout.area}:static`, 2048);
     this.buildFloors();
-    this.buildWalls();
+    this.buildMarkings();
+    if (this.outdoor) this.buildHedges();
+    else this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
     this.buildContactShadows();
+    this.buildFrontDoor();
   }
 
   private buildFloors(): void {
     const b = this.layout.bounds;
-    const ground = new Mesh(new PlaneGeometry(8000, 8000), new MeshStandardMaterial({ color: '#2d2520', roughness: 1 }));
+    const groundSize = Math.max(8000, (b.maxX - b.minX) * 4);
+    const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), new MeshStandardMaterial({ color: this.outdoor ? '#4d7434' : '#2d2520', roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((b.minX + b.maxX) / 2, -0.5, (b.minZ + b.maxZ) / 2);
     ground.name = 'ground';
@@ -143,6 +165,103 @@ export class HouseView {
     }
   }
 
+  /** Painted ground shapes (road lines, crosswalks, front walks): one vertex-coloured mesh. */
+  private buildMarkings(): void {
+    const marks = this.layout.markings ?? [];
+    if (marks.length === 0) return;
+    const pos: number[] = [];
+    const col: number[] = [];
+    const idx: number[] = [];
+    const c = new Color();
+    for (const m of marks) {
+      const r = m.rect;
+      const y = 0.25;
+      const i = pos.length / 3;
+      pos.push(r.minX, y, r.minZ, r.minX, y, r.maxZ, r.maxX, y, r.maxZ, r.maxX, y, r.minZ);
+      c.set(m.color);
+      for (let k = 0; k < 4; k++) col.push(c.r, c.g, c.b);
+      idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+    }
+    const g = new BufferGeometry();
+    g.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new Float32BufferAttribute(new Array(pos.length).fill(0).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+    g.setAttribute('color', new Float32BufferAttribute(col, 3));
+    g.setIndex(idx);
+    const mesh = new Mesh(g, new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2 }));
+    mesh.receiveShadow = true;
+    mesh.name = 'markings';
+    this.root.add(mesh);
+  }
+
+  /** Neighborhood edge: a clipped hedge along each wall obstacle. */
+  private buildHedges(): void {
+    const body = new MeshStandardMaterial({ color: HEDGE, roughness: 1 });
+    const top = new MeshStandardMaterial({ color: HEDGE_TOP, roughness: 1 });
+    for (const wall of this.layout.walls) {
+      const w = wall.rect.maxX - wall.rect.minX;
+      const d = wall.rect.maxZ - wall.rect.minZ;
+      const h = wall.height;
+      const g = new Group();
+      const m = new Mesh(new BoxGeometry(w, h, d), body);
+      m.position.y = h / 2;
+      const cap = new Mesh(new BoxGeometry(w + 16, 24, d + 16), top);
+      cap.position.y = h - 4;
+      g.add(m, cap);
+      g.position.set(wall.rect.minX + w / 2, 0, wall.rect.minZ + d / 2);
+      g.name = `hedge:${wall.id}`;
+      this.addStatic(g);
+    }
+  }
+
+  /** The front door: a wooden leaf hinged on one side of the opening, swung open by update(). */
+  private buildFrontDoor(): void {
+    const exit = this.layout.exit;
+    if (!exit) return;
+    const r = exit.rect;
+    const alongZ = exit.dir.x !== 0;
+    const width = alongZ ? r.maxZ - r.minZ : r.maxX - r.minX;
+    const h = Math.min(HOUSE.wallHeight - 4, 86);
+    const hinge = new Group();
+    const leaf = new Mesh(new BoxGeometry(alongZ ? 6 : width, h, alongZ ? width : 6), new MeshStandardMaterial({ color: DOOR_WOOD, roughness: 0.7 }));
+    leaf.position.set(alongZ ? 0 : width / 2, h / 2, alongZ ? width / 2 : 0);
+    const knob = new Mesh(new BoxGeometry(alongZ ? 10 : 5, 5, alongZ ? 5 : 10), new MeshStandardMaterial({ color: '#d4af37', roughness: 0.3, metalness: 0.8 }));
+    knob.position.set(alongZ ? 0 : width - 10, h * 0.48, alongZ ? width - 10 : 0);
+    for (const m of [leaf, knob]) {
+      m.castShadow = true;
+      m.receiveShadow = true;
+    }
+    hinge.add(leaf, knob);
+    hinge.position.set(alongZ ? (r.minX + r.maxX) / 2 : r.minX, 0, alongZ ? r.minZ : (r.minZ + r.maxZ) / 2);
+    hinge.name = 'frontDoor';
+    this.root.add(hinge);
+    this.door = hinge;
+
+    // Daylight shaft through the open door: shown once the door opens.
+    const beam = new Mesh(
+      new CylinderGeometry(width * 0.55, width * 0.75, 600, 20, 1, true),
+      new MeshBasicMaterial({ color: '#fff1c4', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }),
+    );
+    beam.position.set((r.minX + r.maxX) / 2 - exit.dir.x * width * 0.6, 300, (r.minZ + r.maxZ) / 2 - exit.dir.z * width * 0.6);
+    beam.visible = false;
+    beam.name = 'exitBeacon';
+    this.root.add(beam);
+    this.beacon = beam;
+  }
+
+  private updateFrontDoor(frameDt: number): void {
+    const exit = this.layout.exit;
+    if (!exit || !this.door || !exit.open) return;
+    this.time += frameDt;
+    this.doorOpen = Math.min(1, this.doorOpen + frameDt / 0.9);
+    const ease = 1 - (1 - this.doorOpen) ** 3;
+    // Swing outwards, away from the house.
+    const sign = exit.dir.x !== 0 ? exit.dir.x : -exit.dir.z;
+    this.door.rotation.y = sign * ease * Math.PI * 0.55;
+    const beam = this.beacon!;
+    beam.visible = true;
+    (beam.material as MeshBasicMaterial).opacity = ease * (0.22 + 0.08 * Math.sin(this.time * 3));
+  }
+
   private buildFurniture(): void {
     for (const f of this.layout.furniture) {
       const obj = createModel(f.defId, { w: f.w, d: f.d, h: f.height, seed: hashId(f.id) });
@@ -195,6 +314,7 @@ export class HouseView {
 
   /** Fade anything blocking the line from the camera to the Bunny. */
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
+    this.updateFrontDoor(frameDt);
     // Two sight lines: to the centre and to the lower part of the ball (so a table top that
     // hides the bottom half still fades).
     _v.set(bunnyX, bunnyY, bunnyZ);

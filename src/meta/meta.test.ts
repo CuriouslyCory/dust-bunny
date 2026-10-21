@@ -29,6 +29,8 @@ const stats = (over: Partial<RunStats> = {}): RunStats => ({
   tierReached: 3,
   tierTimes: {},
   perks: [],
+  area: 'house',
+  houseCleared: false,
   ...over,
 });
 

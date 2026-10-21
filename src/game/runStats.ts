@@ -1,4 +1,5 @@
 /** Results of a Run, passed with runEnded and shown on the results screen. */
+import type { AreaId } from '../world/types';
 export type RunEndReason = 'died' | 'victory' | 'quit';
 
 export interface RunStats {
@@ -14,4 +15,8 @@ export interface RunStats {
   /** Seconds at which each Tier was first reached (index = Tier number). */
   tierTimes: Record<number, number>;
   perks: string[];
+  /** Area the Run ended in. */
+  area: AreaId;
+  /** True once the Robo-Vac 9000 was absorbed (the front door opened). */
+  houseCleared: boolean;
 }

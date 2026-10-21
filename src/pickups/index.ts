@@ -88,6 +88,11 @@ export class PickupManager implements System {
     p.object3d.removeFromParent();
   }
 
+  /** Removes every floor Pickup (area change). Active effects keep running. */
+  clearFloor(): void {
+    for (const p of [...this.floor]) this.despawn(p);
+  }
+
   /** Effective duration for a def after Hoarder / durationScale. */
   durationFor(def: PickupDef): number {
     return (def.duration ?? 0) * this.durationScale * this.run.bunny.stats.get('pickupDuration');

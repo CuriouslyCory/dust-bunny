@@ -67,6 +67,16 @@ export class Bunny {
     this.health = stats.get('maxHealth');
   }
 
+  /** Moves the Bunny without interpolation and stops it (area change). */
+  teleport(x: number, z: number): void {
+    this.x = this.prevX = x;
+    this.z = this.prevZ = z;
+    this.vx = this.vz = this.impulseX = this.impulseZ = 0;
+    this.dashTime = 0;
+    this.rooted = 0;
+    this.squeeze = 1;
+  }
+
   get maxHealth(): number {
     return Math.round(this.stats.get('maxHealth'));
   }

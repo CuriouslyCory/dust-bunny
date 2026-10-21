@@ -9,13 +9,14 @@ declare module '../core/events' {
     hazardTelegraph: { hazardId: number; defId: string; attack: string; duration: number };
     /** The Bunny lost volume to a Hazard; `pieces` Debris were scattered on the floor. */
     bunnyShed: { volume: number; pieces: number; source: string; radius: number };
-    /** The Robo-Vac 9000 arrived. `absorbRadius` = Bunny radius needed to absorb it. */
-    bossSpawned: { hazardId: number; absorbRadius: number };
+    /** An area boss arrived. `absorbRadius` = Bunny radius needed to absorb it. */
+    bossSpawned: { hazardId: number; absorbRadius: number; name: string };
     /** The boss crashed into a wall and can be rammed. */
     bossStunned: { hazardId: number };
     /** The Bunny rammed the stunned boss and chipped it smaller. */
     bossHit: { hazardId: number; size: number; absorbRadius: number };
-    bossDefeated: { hazardId: number; timeSec: number };
+    /** An area boss was absorbed (`defId` says which; the house boss opens the front door). */
+    bossDefeated: { hazardId: number; defId: string; timeSec: number };
     /** The Run is won (emitted right before runEnded with reason 'victory'). */
     victory: { timeSec: number; radius: number };
   }

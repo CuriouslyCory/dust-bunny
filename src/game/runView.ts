@@ -18,12 +18,13 @@ const _c = new Color();
 
 export class RunView {
   readonly root = new Group();
-  readonly house: HouseView;
+  house: HouseView;
   readonly debris: DebrisRenderer;
   readonly bunny: BunnyView;
   readonly puffs: PuffParticles;
   readonly motes: DustMotes;
-  readonly sunbeams: Sunbeams;
+  /** Afternoon sun shafts through the windows (house only). */
+  sunbeams: Sunbeams | null;
   private readonly disposables = new Disposables();
 
   constructor(
@@ -36,9 +37,11 @@ export class RunView {
     this.bunny = new BunnyView(run.bunny, run.events, getCharacter(run.config.characterId).look);
     this.puffs = new PuffParticles(low ? 300 : 600);
     this.motes = new DustMotes(low ? 90 : 240);
-    this.sunbeams = new Sunbeams(run.house, low ? 15 : 40);
-    this.root.add(this.house.root, this.sunbeams.root, this.debris.root, this.bunny.root, run.entityRoot, this.puffs.points, this.motes.points);
+    this.sunbeams = run.area === 'house' ? new Sunbeams(run.house, low ? 15 : 40) : null;
+    this.root.add(this.house.root, this.debris.root, this.bunny.root, run.entityRoot, this.puffs.points, this.motes.points);
+    if (this.sunbeams) this.root.add(this.sunbeams.root);
     scene.add(this.root);
+    this.disposables.add(run.events.on('areaEntered', () => this.rebuildWorld()));
 
     const fur = new Color(this.bunny.look.color);
     this.disposables.add(
@@ -68,6 +71,15 @@ export class RunView {
     );
   }
 
+  /** The Run swapped areas: rebuild the static world for the new layout. */
+  private rebuildWorld(): void {
+    this.house.dispose();
+    this.sunbeams?.dispose();
+    this.sunbeams = null;
+    this.house = new HouseView(this.run.house);
+    this.root.add(this.house.root);
+  }
+
   render(alpha: number, frameDt: number, rig: CameraRig, viewportHeight = 720): void {
     const b = this.run.bunny;
     this.debris.sync();
@@ -86,7 +98,7 @@ export class RunView {
     const fov = rig.camera.fov;
     this.puffs.update(frameDt, viewportHeight, fov);
     this.motes.update(frameDt, rig.target, rig.distance, viewportHeight, fov);
-    this.sunbeams.update(frameDt, viewportHeight, fov);
+    this.sunbeams?.update(frameDt, viewportHeight, fov);
   }
 
   dispose(): void {
@@ -96,7 +108,7 @@ export class RunView {
     this.house.dispose();
     this.puffs.dispose();
     this.motes.dispose();
-    this.sunbeams.dispose();
+    this.sunbeams?.dispose();
     this.run.entityRoot.removeFromParent();
     this.root.removeFromParent();
   }

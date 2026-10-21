@@ -177,6 +177,65 @@ function carpetTexture(): HTMLCanvasElement {
   return c;
 }
 
+function grassTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('grass');
+  ctx.fillStyle = hsl(98, 38, 40);
+  ctx.fillRect(0, 0, S, S);
+  // Soft mowing patches, then short blade strokes (drawn wrapped so the texture tiles).
+  for (let k = 0; k < 40; k++) {
+    const r = rng.range(30, 110);
+    const cx = rng.range(0, S);
+    const cy = rng.range(0, S);
+    const l = 40 + rng.range(-6, 6);
+    for (const [ox, oy] of [[0, 0], [-S, 0], [0, -S], [-S, -S], [S, 0], [0, S]] as const) {
+      const rg = ctx.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, r);
+      rg.addColorStop(0, hsl(96 + rng.range(-8, 8), 40, l, 0.35));
+      rg.addColorStop(1, hsl(96, 40, l, 0));
+      ctx.fillStyle = rg;
+      ctx.fillRect(cx + ox - r, cy + oy - r, r * 2, r * 2);
+    }
+  }
+  for (let i = 0; i < 26000; i++) {
+    ctx.fillStyle = hsl(92 + rng.range(-14, 16), 42 + rng.range(-8, 10), 40 + rng.range(-14, 14), 0.7);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.2, rng.range(2, 5));
+  }
+  return c;
+}
+
+function asphaltTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('asphalt');
+  ctx.fillStyle = hsl(220, 6, 30);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 40000; i++) {
+    ctx.fillStyle = hsl(220, 5, 30 + rng.range(-12, 14), 0.6);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.5, 1.5);
+  }
+  return c;
+}
+
+function concreteTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('concrete');
+  ctx.fillStyle = hsl(40, 8, 74);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 18000; i++) {
+    ctx.fillStyle = hsl(40, 6, 74 + rng.range(-10, 8), 0.45);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.5, 1.5);
+  }
+  // Expansion joints: a 2 × 2 slab grid.
+  ctx.fillStyle = 'rgba(60,55,50,0.45)';
+  for (const p of [0, S / 2]) {
+    ctx.fillRect(p, 0, 3, S);
+    ctx.fillRect(0, p, S, 3);
+  }
+  return c;
+}
+
 const floorCache = new Map<FloorMaterialId, FloorTextureInfo>();
 
 export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
@@ -197,6 +256,15 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
         break;
       case 'carpet':
         info = { texture: toTexture(carpetTexture()), worldSize: 60, roughness: 1 };
+        break;
+      case 'grass':
+        info = { texture: toTexture(grassTexture()), worldSize: 420, roughness: 1 };
+        break;
+      case 'asphalt':
+        info = { texture: toTexture(asphaltTexture()), worldSize: 360, roughness: 0.95 };
+        break;
+      case 'concrete':
+        info = { texture: toTexture(concreteTexture()), worldSize: 300, roughness: 0.9 };
         break;
     }
     floorCache.set(id, info);

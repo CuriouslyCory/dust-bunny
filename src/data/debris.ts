@@ -6,7 +6,8 @@
  *
  * To add a type: append to DEBRIS_TYPES (or call registerDebrisType() before a Run starts).
  */
-import type { RoomType } from '../world/types';
+import { isOutdoorZone, type AreaId, type RoomType } from '../world/types';
+import { OUTDOOR_DEBRIS } from './outdoorDebris';
 
 export type V3 = [number, number, number];
 
@@ -49,6 +50,8 @@ export interface DebrisType {
   rooms: Partial<Record<RoomType | 'any', number>>;
   /** Inclusive Tier band in which the spawner produces this type. */
   tiers: [number, number];
+  /** Where it spawns (default 'house'). Room weights only apply in rooms of that area. */
+  area?: AreaId;
 }
 
 const PI = Math.PI;
@@ -395,6 +398,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
     material: { roughness: 0.7 },
     rooms: { kitchen: 3, living: 0.5 },
   },
+  ...OUTDOOR_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */
@@ -409,5 +413,6 @@ export function getDebrisType(id: string): DebrisType | undefined {
 }
 
 export function roomWeight(type: DebrisType, room: RoomType): number {
+  if (isOutdoorZone(room) !== ((type.area ?? 'house') === 'neighborhood')) return 0;
   return type.rooms[room] ?? type.rooms.any ?? 0;
 }

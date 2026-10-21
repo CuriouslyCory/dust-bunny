@@ -14,7 +14,9 @@
  * (`perkApplied`) generically. To give them proper icons call
  *   registerHudIcon('pickup', 'sugar_rush', { glyph: '🍬', color: '#ff8fb1' })
  */
+import { AREA_BOSSES } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
+import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
 import { pickupRegistry } from '../pickups';
@@ -333,7 +335,11 @@ function tierWidget(hud: Hud, game: Game): void {
   game.events.on('tierUp', (e) => {
     hud.flash('tier');
     const t = getTier(e.tier);
-    hud.banner('Tier up!', { subtitle: `${t.name}${e.tier >= MAX_TIER ? ' · hunt the Robo-Vac 9000' : ''}`, variant: 'tier', duration: 2.6 });
+    const area = game.run?.area ?? 'house';
+    const boss = AREA_BOSSES[area];
+    const bossDue = e.tier >= boss.tier && (area !== 'house' || !game.run?.houseCleared);
+    const hunt = bossDue ? ` · hunt the ${hazardRegistry.get(boss.id)?.name ?? 'boss'}` : '';
+    hud.banner('Tier up!', { subtitle: `${t.name}${hunt}`, variant: 'tier', duration: 2.6 });
   });
 }
 

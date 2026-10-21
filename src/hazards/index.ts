@@ -56,6 +56,8 @@ export interface HazardDef {
   mass: number;
   /** Model id for createModel() (procedural fallback + optional GLB). */
   modelId?: string;
+  /** An area boss (HUD banner, boss music, `hazardAbsorbed.boss`). */
+  boss?: boolean;
   create(run: Run, x: number, z: number, id: number, rng: Rng): Hazard;
 }
 
@@ -110,7 +112,7 @@ export class HazardManager implements System {
         run.absorbMass(h.size, h.def.mass, h.def.id, { x: h.x, y: 0, z: h.z }, 'hazard');
         h.dead = true;
         absorbed.add(h);
-        run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: h.def.id === 'robovac_9000' });
+        run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: !!h.def.boss });
         h.onAbsorbed?.(run);
         if (run.ended) break;
       } else {
@@ -130,6 +132,11 @@ export class HazardManager implements System {
     h.object3d?.removeFromParent();
     h.dispose?.();
     this.run.events.emit('hazardRemoved', { hazardId: h.id, defId: h.def.id, absorbed });
+  }
+
+  /** Removes every Hazard without absorbing it (area change). */
+  clear(): void {
+    for (const h of [...this.hazards]) this.removeHazard(h, false);
   }
 
   dispose(): void {

@@ -9,7 +9,7 @@ function memoryStorage() {
 
 const stats: RunStats = {
   seed: 's', characterId: 'lint', timeSec: 200, maxRadius: 9.4, finalRadius: 9, debrisAbsorbed: 250,
-  hazardsAbsorbed: 0, tierReached: 3, tierTimes: {}, perks: [],
+  hazardsAbsorbed: 0, tierReached: 3, tierTimes: {}, perks: [], area: 'house', houseCleared: false,
 };
 
 const jsonResponse = (status: number, body: unknown) =>

@@ -4,6 +4,7 @@
  *   ?seed=abc       fixed Run seed (same seed => same house layout)
  *   ?character=zap  starting Character (lint | tumble | zap)
  *   ?autostart      skip the title screen
+ *   ?area=neighborhood  start Runs outside (skips the house; debug / testing)
  */
 import './styles.css';
 import { installAudio } from './audio';
@@ -13,6 +14,7 @@ import { Game } from './game/game';
 import { installHazards } from './hazards/install';
 import { installTouchControls } from './input/touch';
 import { installRoguelike } from './meta/install';
+import { installAreaHud } from './ui/areaHud';
 import { installUi } from './ui/install';
 import { registerLeaderboardScreen } from './ui/leaderboard/screen';
 import { registerBuiltinScreens } from './ui/screens/builtin';
@@ -32,12 +34,14 @@ async function boot(): Promise<void> {
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
+  if (params.get('area') === 'neighborhood') game.nextRunConfig.area = 'neighborhood';
   installRoguelike(game);
   installUi(game);
   installTouchControls(game);
   installAudio(game);
   if (game.debug) installDebug(game);
   installHazards(game);
+  installAreaHud(game);
 
   game.start('title');
   if (params.has('autostart')) game.startRun();

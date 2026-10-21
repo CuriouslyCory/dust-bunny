@@ -44,11 +44,7 @@ export const TUNING = {
     cellSize: 16,
     /** Random size jitter applied per instance (fraction of catalogue size). */
     sizeJitter: 0.2,
-    /** Number of Debris scattered across the house at Run start (beyond the start cluster). */
-    initialScatter: 1400,
-    /** Debris placed around the spawn point at Run start. */
-    startCluster: 260,
-    startClusterRadius: 45,
+    // Initial scatter / start cluster sizes are per area: src/data/areas.ts.
     /** Debris at least this big (cm) keeps clutterSpacing from its neighbours (spawner.ts) so it can't box the Bunny in. */
     clutterMinSize: 2,
   },
@@ -85,7 +81,7 @@ export const TUNING = {
     yaw: 0,
     pitchDeg: 54,
     minDistance: 8,
-    maxDistance: 1500,
+    maxDistance: 6000,
     /** Smoothing rate for distance changes (1/s). */
     zoomRate: 2.2,
     followRate: 10,

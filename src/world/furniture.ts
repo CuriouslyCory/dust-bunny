@@ -48,6 +48,12 @@ export const FURNITURE: Record<string, FurnitureDef> = {
   sink_cabinet: { id: 'sink_cabinet', name: 'Sink', w: 80, d: 50, h: 88, clearance: 0 },
   console_table: { id: 'console_table', name: 'Console Table', w: 120, d: 38, h: 78, clearance: 72, legs: { inset: 3, size: 4 } },
   shoe_rack: { id: 'shoe_rack', name: 'Shoe Rack', w: 90, d: 32, h: 45, clearance: 0 },
+  // Neighborhood. Houses are permanent Obstacles; trees collide by the trunk only (the canopy overhangs).
+  house_a: { id: 'house_a', name: 'House', w: 1000, d: 800, h: 750, clearance: 0 },
+  house_b: { id: 'house_b', name: 'Bungalow', w: 1200, d: 800, h: 520, clearance: 0 },
+  house_c: { id: 'house_c', name: 'Brick House', w: 900, d: 900, h: 800, clearance: 0 },
+  tree_oak: { id: 'tree_oak', name: 'Oak', w: 50, d: 50, h: 800, clearance: 0 },
+  tree_pine: { id: 'tree_pine', name: 'Pine', w: 40, d: 40, h: 900, clearance: 0 },
 };
 
 /** Footprint after rotation by quarter turns. */

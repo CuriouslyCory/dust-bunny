@@ -2,7 +2,8 @@
  * Robo-Vac 9000 (boss, Tier 5). Arrives with an intro, hunts the Bunny with mild suction,
  * telegraphs charges with a red lane on the floor, and summons mini Roombas. A charge that
  * ends in a wall stuns it: ramming it while stunned chips it smaller (and knocks absorbable
- * parts loose). Once size ≤ Bunny radius × absorbRatio it can be absorbed, which wins the Run.
+ * parts loose). Once size ≤ Bunny radius × absorbRatio it can be absorbed, which clears the
+ * house: the front door opens and the Run continues in the neighborhood.
  */
 import type { Rng } from '../core/rng';
 import { ROBOVAC_9000 } from '../data/hazards';
@@ -209,9 +210,9 @@ export class RoboVac9000 extends BaseHazard {
   override onAbsorbed(run: Run): void {
     super.onAbsorbed(run);
     for (const h of run.hazards.hazards) if (this.minis.has(h.id)) h.dead = true;
-    run.events.emit('bossDefeated', { hazardId: this.id, timeSec: run.time });
-    run.events.emit('victory', { timeSec: run.time, radius: run.bunny.radius });
-    run.end('victory');
+    run.events.emit('bossDefeated', { hazardId: this.id, defId: this.def.id, timeSec: run.time });
+    // The house is cleared: the front door opens onto the neighborhood (the Run goes on).
+    run.openExit();
   }
 }
 
@@ -221,6 +222,7 @@ export const robovacDef = hazardRegistry.register({
   minTier: 5,
   spawnWeight: 0,
   maxAlive: 1,
+  boss: true,
   mass: ROBOVAC_9000.mass,
   modelId: 'robovac_9000',
   create(_run, x, z, id, rng: Rng) {

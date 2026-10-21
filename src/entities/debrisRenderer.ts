@@ -83,6 +83,7 @@ export class DebrisRenderer {
       if (!mesh) continue;
       const n = this.field.buckets[i]!.length;
       if (mesh.count !== n) mesh.count = n;
+      mesh.visible = n > 0;
       if (touched.has(i)) {
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

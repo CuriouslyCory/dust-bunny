@@ -1,7 +1,7 @@
 /**
  * Boss HUD: stunned/chipped announcements via the shared HUD banner (the arrival banner is
  * shown by the UI layer on bossSpawned) and a top-right status line with the Bunny radius
- * needed to absorb the Robo-Vac 9000. The UI layer may restyle `.hud-widget-boss-status`.
+ * needed to absorb the current area boss. The UI layer may restyle `.hud-widget-boss-status`.
  */
 import type { Game } from '../game/game';
 import { h } from '../ui/screens';
@@ -36,7 +36,8 @@ export function installHazardHud(game: Game): void {
       status.hidden = !boss;
       if (!boss || !run) return;
       const need = absorbRadiusFor(boss.size, run.bunny.stats.get('absorbRatio'));
-      const text = run.bunny.radius >= need ? 'Robo-Vac 9000 · absorb it now!' : `Robo-Vac 9000 · absorb at ${need.toFixed(1)} cm`;
+      const name = boss.def.name;
+      const text = run.bunny.radius >= need ? `${name} · absorb it now!` : `${name} · absorb at ${need.toFixed(1)} cm`;
       if (status.textContent !== text) status.textContent = text;
     },
   });

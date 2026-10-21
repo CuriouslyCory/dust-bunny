@@ -23,7 +23,7 @@ export interface Debris {
 }
 
 export class DebrisField {
-  readonly hash: SpatialHash<Debris>;
+  hash: SpatialHash<Debris>;
   /** Per type: live Debris, densely packed; index = InstancedMesh instance id. */
   readonly buckets: Debris[][];
   private dirty: Debris[] = [];
@@ -132,6 +132,12 @@ export class DebrisField {
     const out = this.dirty;
     this.dirty = [];
     return out;
+  }
+
+  /** Removes every Debris and switches the spatial hash cell size (bigger cells for bigger areas). */
+  reset(cellSize: number): void {
+    this.clear();
+    if (cellSize !== this.hash.cellSize) this.hash = new SpatialHash<Debris>(cellSize);
   }
 
   clear(): void {

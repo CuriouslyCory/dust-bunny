@@ -70,7 +70,7 @@ describe('validateSubmission', () => {
   });
 
   it('accepts a victory', () => {
-    expect(err(submission({ maxRadius: 60, tierReached: 5, debrisAbsorbed: 4000, durationMs: 600_000, victory: true }))).toBeNull();
+    expect(err(submission({ maxRadius: 220, tierReached: 7, debrisAbsorbed: 4000, durationMs: 1_100_000, victory: true }))).toBeNull();
   });
 
   it('rejects malformed bodies', () => {

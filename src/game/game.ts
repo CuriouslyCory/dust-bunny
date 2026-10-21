@@ -38,6 +38,8 @@ export interface GameOptions {
 }
 
 const BACKGROUND = '#3b2f2a';
+/** Outdoor sky / haze colour (background and fog) for the neighborhood. */
+const SKY = '#b9d4e6';
 
 export class Game {
   readonly events = new EventBus();
@@ -111,6 +113,12 @@ export class Game {
     this.resize();
 
     this.events.on('runEnded', (e) => this.go('results', e));
+    this.events.on('areaEntered', () => {
+      const run = this.run;
+      if (!run) return;
+      this.applyAtmosphere();
+      this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
+    });
     this.loop = new FixedLoop({ update: (dt) => this.update(dt), render: (a, fdt) => this.render(a, fdt) });
   }
 
@@ -152,6 +160,7 @@ export class Game {
       characterId: config.characterId ?? this.nextRunConfig.characterId ?? DEFAULT_CHARACTER_ID,
       modifiers: [...(this.nextRunConfig.modifiers ?? []), ...(config.modifiers ?? [])],
       perks: config.perks ?? this.nextRunConfig.perks,
+      area: config.area ?? this.nextRunConfig.area,
     };
     this.nextRunConfig.seed = undefined;
     const run = new Run(this.events, full);
@@ -159,6 +168,7 @@ export class Game {
     this.run = run;
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
+    this.applyAtmosphere();
     this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId });
     this.go('playing');
     return run;
@@ -174,6 +184,16 @@ export class Game {
     this.run?.dispose();
     this.view = null;
     this.run = null;
+  }
+
+  /** Background, fog colour and lighting for the current Run's area. */
+  private applyAtmosphere(): void {
+    const outdoor = this.run?.area === 'neighborhood';
+    const c = outdoor ? SKY : BACKGROUND;
+    (this.scene.background as Color).set(c);
+    this.fog.color.set(c);
+    this.lighting.setOutdoor(outdoor);
+    this.canvas.parentElement?.classList.toggle('outdoor', outdoor);
   }
 
   pickFloor(clientX: number, clientY: number): { x: number; z: number } | null {

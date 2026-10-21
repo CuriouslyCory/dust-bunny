@@ -6,7 +6,7 @@
 import type { Rect } from '../core/math';
 import { rectFromCenter } from '../core/math';
 import type { Rng } from '../core/rng';
-import type { FloorMaterialId, FurnitureInstance, Room, RoomType } from './types';
+import type { FloorMaterialId, FurnitureInstance, IndoorRoomType, Room } from './types';
 
 export type WallSide = 'n' | 's' | 'e' | 'w';
 
@@ -35,7 +35,7 @@ export interface FurnishContext {
 }
 
 export interface RoomTemplate {
-  type: RoomType;
+  type: IndoorRoomType;
   floors: FloorMaterialId[];
   furnish(ctx: FurnishContext): void;
 }
@@ -206,4 +206,4 @@ const bathroom: RoomTemplate = {
   },
 };
 
-export const ROOM_TEMPLATES: Record<RoomType, RoomTemplate> = { living, kitchen, hallway, bedroom, bathroom };
+export const ROOM_TEMPLATES: Record<IndoorRoomType, RoomTemplate> = { living, kitchen, hallway, bedroom, bathroom };

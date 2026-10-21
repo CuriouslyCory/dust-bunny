@@ -24,6 +24,15 @@ export class Lighting {
     scene.add(this.hemi, this.ambient, this.sun, this.sun.target);
   }
 
+  /** Outdoors: brighter, whiter sky fill and a higher sun; indoors: the warm window light. */
+  setOutdoor(outdoor: boolean): void {
+    this.hemi.color.set(outdoor ? '#e4f0ff' : '#ffeedd');
+    this.hemi.groundColor.set(outdoor ? '#5e7a45' : '#7a5f4a');
+    this.sun.color.set(outdoor ? '#fff1d6' : '#ffe2b8');
+    this.sun.intensity = outdoor ? 2.9 : 2.6;
+    this.dir.set(outdoor ? -0.45 : -0.55, outdoor ? 1.5 : 1.15, outdoor ? 0.5 : 0.42).normalize();
+  }
+
   applyQuality(renderer: WebGLRenderer, q: Quality): void {
     const shadows = q === 'high';
     renderer.shadowMap.enabled = shadows;

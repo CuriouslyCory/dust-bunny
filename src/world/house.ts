@@ -3,7 +3,8 @@
  *
  * Layout: a hallway band across the middle, two rooms above it (living room + kitchen,
  * mirrored by seed) and three below (two bedrooms + bathroom, shuffled). Every room opens
- * onto the hallway; the living room and kitchen also connect directly.
+ * onto the hallway; the living room and kitchen also connect directly. The front door sits in
+ * the outer wall at one end of the hallway; it stays shut (an obstacle) until the boss is beaten.
  */
 import type { Rect } from '../core/math';
 import { rect, rectContains, rectsOverlap } from '../core/math';
@@ -12,7 +13,7 @@ import { getDebrisType } from '../data/debris';
 import { FURNITURE, furnitureObstacles, rotatedSize } from './furniture';
 import type { FurnishContext, WallSide } from './rooms';
 import { ROOM_TEMPLATES, SIDE_TURNS } from './rooms';
-import type { DebrisPlacement, Doorway, FurnitureInstance, HouseLayout, Obstacle, Room, RoomType, Rug } from './types';
+import type { DebrisPlacement, Doorway, ExitDoor, FurnitureInstance, HouseLayout, IndoorRoomType, Obstacle, Room, Rug } from './types';
 
 export const HOUSE = {
   width: 1200,
@@ -22,6 +23,8 @@ export const HOUSE = {
   doorWidth: 90,
   /** Furniture keeps this far from doorways (cm, along the wall normal). */
   doorClearance: 80,
+  /** Front door at one end of the hallway: the way out to the neighborhood. */
+  frontDoorWidth: 110,
 };
 
 interface DoorSpec {
@@ -64,7 +67,7 @@ export function generateHouse(seed: string | number): HouseLayout {
   const split = livingLeft ? livingW : W - livingW;
 
   const rooms: Room[] = [];
-  const addRoom = (id: string, type: RoomType, r: Rect) => {
+  const addRoom = (id: string, type: IndoorRoomType, r: Rect) => {
     const tpl = ROOM_TEMPLATES[type];
     rooms.push({ id, type, rect: r, floor: rng.pick(tpl.floors) });
   };
@@ -75,11 +78,11 @@ export function generateHouse(seed: string | number): HouseLayout {
   const bathW = Math.round(rng.range(260, 320));
   const bedTotal = W - bathW;
   const bedA = Math.round(bedTotal * rng.range(0.42, 0.58));
-  const bottom: Array<[string, RoomType, number]> = rng.shuffle([
+  const bottom: Array<[string, IndoorRoomType, number]> = rng.shuffle([
     ['bedroom1', 'bedroom', bedA],
     ['bedroom2', 'bedroom', bedTotal - bedA],
     ['bathroom', 'bathroom', bathW],
-  ] as Array<[string, RoomType, number]>);
+  ] as Array<[string, IndoorRoomType, number]>);
   let x = 0;
   const bottomSplits: number[] = [];
   for (const [id, type, w] of bottom) {
@@ -102,6 +105,12 @@ export function generateHouse(seed: string | number): HouseLayout {
   const lkA = rng.range(70, hz0 - 70 - lkW);
   doors.push({ axis: 'v', fixed: split, from: lkA, to: lkA + lkW, rooms: ['living', 'kitchen'] });
 
+  // Front door: hallway end wall (west or east), centred on the hallway.
+  const frontWest = rng.chance(0.5);
+  const fdMid = (hz0 + hz1) / 2;
+  const FDW = HOUSE.frontDoorWidth;
+  doors.push({ axis: 'v', fixed: frontWest ? 0 : W, from: fdMid - FDW / 2, to: fdMid + FDW / 2, rooms: ['hallway', 'outside'] });
+
   const doorRect = (d: DoorSpec): Rect => seg(d.axis, d.fixed, d.from, d.to, T);
   const doorways: Doorway[] = doors.map((d) => ({ rect: doorRect(d), rooms: d.rooms }));
 
@@ -111,14 +120,17 @@ export function generateHouse(seed: string | number): HouseLayout {
   const wallRects: Rect[] = [
     ...wallSegments('h', 0, 0, W, [], T),
     ...wallSegments('h', D, 0, W, [], T),
-    ...wallSegments('v', 0, 0, D, [], T),
-    ...wallSegments('v', W, 0, D, [], T),
+    ...wallSegments('v', 0, 0, D, gapsFor('v', 0), T),
+    ...wallSegments('v', W, 0, D, gapsFor('v', W), T),
     ...wallSegments('h', hz0, 0, W, gapsFor('h', hz0), T),
     ...wallSegments('h', hz1, 0, W, gapsFor('h', hz1), T),
     ...wallSegments('v', split, 0, hz0, gapsFor('v', split), T),
     ...bottomSplits.flatMap((sx) => wallSegments('v', sx, hz1, D, [], T)),
   ];
   const walls: Obstacle[] = wallRects.map((r, i) => ({ id: `wall${i}`, kind: 'wall', rect: r, height: HOUSE.wallHeight, clearance: 0 }));
+  const exitRect = doorRect(doors.find((d) => d.rooms[1] === 'outside')!);
+  const exit: ExitDoor = { rect: exitRect, dir: { x: frontWest ? -1 : 1, z: 0 }, obstacleId: 'front_door', open: false };
+  const frontDoor: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exitRect, height: HOUSE.wallHeight, clearance: 0 };
 
   // ── Furniture ──
   const furniture: FurnitureInstance[] = [];
@@ -221,15 +233,16 @@ export function generateHouse(seed: string | number): HouseLayout {
         spawn = { x: sx, z: sz, roomId: room.id };
       },
     };
-    ROOM_TEMPLATES[room.type].furnish(ctx);
+    ROOM_TEMPLATES[room.type as IndoorRoomType].furnish(ctx);
   }
 
   const living = rooms[0]!;
   const finalSpawn = spawn ?? { x: (living.rect.minX + living.rect.maxX) / 2, z: (living.rect.minZ + living.rect.maxZ) / 2, roomId: living.id };
 
-  const obstacles: Obstacle[] = [...walls, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
+  const obstacles: Obstacle[] = [...walls, frontDoor, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
 
   return {
+    area: 'house',
     seed: root.seed,
     bounds: rect(0, 0, W, D),
     rooms,
@@ -240,7 +253,18 @@ export function generateHouse(seed: string | number): HouseLayout {
     rugs,
     debrisPlacements,
     spawn: finalSpawn,
+    exit,
   };
+}
+
+/** Opens the front door: removes its obstacle so the Bunny can squeeze out. Returns false if already open. */
+export function openExit(layout: HouseLayout): boolean {
+  const exit = layout.exit;
+  if (!exit || exit.open) return false;
+  exit.open = true;
+  const i = layout.obstacles.findIndex((o) => o.id === exit.obstacleId);
+  if (i >= 0) layout.obstacles.splice(i, 1);
+  return true;
 }
 
 /** Room containing a point (interior test against the wall centre-line rect). */

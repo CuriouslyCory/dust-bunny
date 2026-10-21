@@ -8,7 +8,7 @@
  */
 
 /** Tier start radii (cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
-export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45];
+export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160];
 export const SCORE_MAX_TIER = SCORE_TIER_MIN_RADII.length;
 
 export const SCORE = {
