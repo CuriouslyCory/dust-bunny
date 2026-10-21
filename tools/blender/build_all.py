@@ -17,9 +17,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common  # noqa: E402
 import furniture  # noqa: E402
 import hazards  # noqa: E402
+import outdoor  # noqa: E402
 
 CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
-              ("prop", furniture.PROPS)]
+              ("prop", furniture.PROPS),
+              # neighbourhood (outside the front door)
+              ("hazard", outdoor.HAZARDS), ("furniture", outdoor.FURNITURE),
+              ("prop", outdoor.PROPS)]
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
 
@@ -71,7 +75,7 @@ def write_doc(models):
         "The broom is the exception: see its row.",
         "- No Draco, no textures: Principled BSDF base colour, roughness, "
         "metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp "
-        "and power light).",
+        "and power light, street sweeper beacon and headlights).",
         "- Each file has one root node named after the id. Static geometry "
         "is a single `body` mesh child; parts the game may animate are "
         "separate children whose origin is their pivot (listed below).",

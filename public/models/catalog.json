@@ -606,6 +606,402 @@
         }
       },
       "category": "prop"
+    },
+    {
+      "triangles": 1496,
+      "footprintRadius": 55.2,
+      "height": 31.4,
+      "minY": 0.0,
+      "maxY": 31.4,
+      "sizeX": 91.0,
+      "sizeZ": 106.5,
+      "id": "robo_mower",
+      "file": "models/robo_mower.glb",
+      "bytes": 55012,
+      "notes": "Robotic lawn mower, front +Z. blade node spins about its local Y axis (pivot under the centre).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "blade": {
+          "pivot": [
+            0.0,
+            2.2,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1416,
+      "footprintRadius": 65.4,
+      "height": 98.6,
+      "minY": 0.3,
+      "maxY": 98.9,
+      "sizeX": 78.2,
+      "sizeZ": 98.9,
+      "id": "lawn_mower",
+      "file": "models/lawn_mower.glb",
+      "bytes": 53208,
+      "notes": "Unmanned red push mower; deck centred on the origin, front +Z, handle and grass bag rise towards -Z.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 916,
+      "footprintRadius": 45.1,
+      "height": 40.0,
+      "minY": 0.0,
+      "maxY": 40.0,
+      "sizeX": 41.0,
+      "sizeZ": 87.7,
+      "id": "leaf_blower",
+      "file": "models/leaf_blower.glb",
+      "bytes": 37820,
+      "notes": "Orange backpack leaf blower set down on the ground; the blower tube runs along the floor to the nozzle at about (0, 4.5, 45) in model space, blowing +Z.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 652,
+      "footprintRadius": 44.5,
+      "height": 69.5,
+      "minY": -0.0,
+      "maxY": 69.5,
+      "sizeX": 77.7,
+      "sizeZ": 68.0,
+      "id": "sprinkler",
+      "file": "models/sprinkler.glb",
+      "bytes": 30872,
+      "notes": "Impact sprinkler on a tripod. head node turns about the vertical axis through the origin; nozzle points +Z with its tip at about (0, 62.9, 13.7) in model space (head at rest).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            50.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 3034,
+      "footprintRadius": 177.5,
+      "height": 228.5,
+      "minY": -0.5,
+      "maxY": 228.0,
+      "sizeX": 223.0,
+      "sizeZ": 309.7,
+      "id": "street_sweeper",
+      "file": "models/street_sweeper.glb",
+      "bytes": 120756,
+      "notes": "Boss. Municipal street sweeper, front +Z. brush_l / brush_r nodes spin about local Y. Rooftop beacon and headlights use emissive materials.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "brush_l": {
+          "pivot": [
+            -75.0,
+            5.0,
+            120.0
+          ]
+        },
+        "brush_r": {
+          "pivot": [
+            75.0,
+            5.0,
+            120.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1746,
+      "footprintRadius": 640.3,
+      "height": 778.0,
+      "minY": 0.0,
+      "maxY": 778.0,
+      "sizeX": 1000.0,
+      "sizeZ": 800.0,
+      "id": "house_a",
+      "file": "models/house_a.glb",
+      "bytes": 101120,
+      "notes": "Two-storey gable house, ridge along X. Fills the 1000 x 800 footprint exactly; front door centred on +Z with a step.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1458,
+      "footprintRadius": 721.1,
+      "height": 548.0,
+      "minY": 0.0,
+      "maxY": 548.0,
+      "sizeX": 1200.0,
+      "sizeZ": 800.0,
+      "id": "house_b",
+      "file": "models/house_b.glb",
+      "bytes": 84024,
+      "notes": "Single-storey bungalow, ridge along X. Fills the 1200 x 800 footprint exactly; garage door on the +X half of the +Z face, front door (with step) on the -X half.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1732,
+      "footprintRadius": 636.4,
+      "height": 800.0,
+      "minY": 0.0,
+      "maxY": 800.0,
+      "sizeX": 900.0,
+      "sizeZ": 900.0,
+      "id": "house_c",
+      "file": "models/house_c.glb",
+      "bytes": 97716,
+      "notes": "Brick two-storey with a pyramid roof. Fills the 900 x 900 footprint exactly; front door centred on +Z under a white portico.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1100,
+      "footprintRadius": 257.1,
+      "height": 799.0,
+      "minY": 0.0,
+      "maxY": 799.0,
+      "sizeX": 477.2,
+      "sizeZ": 494.0,
+      "id": "tree_oak",
+      "file": "models/tree_oak.glb",
+      "bytes": 25208,
+      "notes": "Collision is the trunk only (radius 25 at the base); the lumpy canopy spreads to about r = 260.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 278,
+      "footprintRadius": 180.0,
+      "height": 900.0,
+      "minY": 0.0,
+      "maxY": 900.0,
+      "sizeX": 360.0,
+      "sizeZ": 360.0,
+      "id": "tree_pine",
+      "file": "models/tree_pine.glb",
+      "bytes": 10684,
+      "notes": "Collision is the trunk only (radius 20 at the base); stacked-cone canopy spreads to r = 180.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "furniture"
+    },
+    {
+      "triangles": 1332,
+      "footprintRadius": 216.2,
+      "height": 153.2,
+      "minY": -4.0,
+      "maxY": 149.2,
+      "sizeX": 180.6,
+      "sizeZ": 403.0,
+      "id": "car",
+      "file": "models/car.glb",
+      "bytes": 54976,
+      "notes": "Compact hatchback, front +Z. car_paint (light neutral) is the largest material and is tinted per instance.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 376,
+      "footprintRadius": 35.8,
+      "height": 120.0,
+      "minY": 0.0,
+      "maxY": 120.0,
+      "sizeX": 20.5,
+      "sizeZ": 48.8,
+      "id": "mailbox",
+      "file": "models/mailbox.glb",
+      "bytes": 17856,
+      "notes": "Wooden post with a rounded US-style mailbox; door faces +Z, red flag on the +X side.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 368,
+      "footprintRadius": 47.4,
+      "height": 104.7,
+      "minY": 0.0,
+      "maxY": 104.7,
+      "sizeX": 60.0,
+      "sizeZ": 75.0,
+      "id": "trash_can",
+      "file": "models/trash_can.glb",
+      "bytes": 19740,
+      "notes": "Green wheelie bin; lid hinges at the back (-Z) where the two wheels and the handle are.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 1436,
+      "footprintRadius": 90.1,
+      "height": 99.1,
+      "minY": 0.0,
+      "maxY": 99.1,
+      "sizeX": 56.0,
+      "sizeZ": 178.7,
+      "id": "bicycle",
+      "file": "models/bicycle.glb",
+      "bytes": 60636,
+      "notes": "Upright on its kickstand, front wheel +Z. bike_frame (light neutral) is the largest material and is tinted per instance.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 912,
+      "footprintRadius": 8.9,
+      "height": 40.7,
+      "minY": 0.0,
+      "maxY": 40.7,
+      "sizeX": 17.7,
+      "sizeZ": 17.7,
+      "id": "garden_gnome",
+      "file": "models/garden_gnome.glb",
+      "bytes": 35836,
+      "notes": "Red pointy hat, white beard, blue coat; faces +Z on a small stone base.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
+      "triangles": 1102,
+      "footprintRadius": 20.5,
+      "height": 75.0,
+      "minY": 0.0,
+      "maxY": 75.0,
+      "sizeX": 39.6,
+      "sizeZ": 35.4,
+      "id": "fire_hydrant",
+      "file": "models/fire_hydrant.glb",
+      "bytes": 36508,
+      "notes": "Red hydrant with silver caps: pumper cap faces +Z, hose caps on +/-X.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
     }
   ]
 }

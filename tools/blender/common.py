@@ -129,6 +129,47 @@ PALETTE = {
     "book_c": ("#e9c46a", 0.7, 0.0, None, 0),
     "book_d": ("#264653", 0.7, 0.0, None, 0),
     "book_e": ("#9b5de5", 0.7, 0.0, None, 0),
+    # neighbourhood: houses and trees
+    "siding_blue": ("#a9c6de", 0.8, 0.0, None, 0),
+    "siding_yellow": ("#f4d98c", 0.8, 0.0, None, 0),
+    "brick_red": ("#b0503a", 0.9, 0.0, None, 0),
+    "trim_white": ("#f7f5ef", 0.6, 0.0, None, 0),
+    "roof_grey": ("#535961", 0.85, 0.0, None, 0),
+    "roof_brown": ("#5e3626", 0.85, 0.0, None, 0),
+    "roof_dark": ("#3a3a40", 0.85, 0.0, None, 0),
+    "door_red": ("#b8383b", 0.5, 0.0, None, 0),
+    "door_green": ("#2f6b4f", 0.5, 0.0, None, 0),
+    "shutter_navy": ("#34506f", 0.6, 0.0, None, 0),
+    "concrete": ("#c8c3b9", 0.9, 0.0, None, 0),
+    "garage_gap": ("#8a877f", 0.8, 0.0, None, 0),
+    "flower_pink": ("#f28dad", 0.8, 0.0, None, 0),
+    "bark": ("#7a5536", 0.9, 0.0, None, 0),
+    "leaf_green": ("#5f9e47", 0.85, 0.0, None, 0),
+    "leaf_light": ("#7cb85a", 0.85, 0.0, None, 0),
+    "pine_green": ("#3e7a4c", 0.85, 0.0, None, 0),
+    "pine_dark": ("#2f6340", 0.85, 0.0, None, 0),
+    # neighbourhood: street props (car_paint / bike_frame are tinted per
+    # instance in game, so they stay light neutral)
+    "car_paint": ("#e8e8e8", 0.35, 0.0, None, 0),
+    "bike_frame": ("#e6e6e6", 0.4, 0.0, None, 0),
+    "bumper_grey": ("#5d636b", 0.6, 0.0, None, 0),
+    "tail_red": ("#d62828", 0.35, 0.0, None, 0),
+    "mailbox_slate": ("#4f5b69", 0.45, 0.2, None, 0),
+    "bin_green": ("#3d8b4f", 0.6, 0.0, None, 0),
+    "bin_lid": ("#2e6f3e", 0.6, 0.0, None, 0),
+    "skin": ("#f2c49e", 0.6, 0.0, None, 0),
+    "skin_pink": ("#ee9f86", 0.6, 0.0, None, 0),
+    "rock_grey": ("#a19d94", 0.9, 0.0, None, 0),
+    "hydrant_red": ("#d93a32", 0.45, 0.0, None, 0),
+    # neighbourhood: hazards
+    "mower_lime": ("#9bcb3b", 0.45, 0.0, None, 0),
+    "mower_grey": ("#58606b", 0.5, 0.0, None, 0),
+    "bag_green": ("#6c8a4c", 0.95, 0.0, None, 0),
+    "brass": ("#c9a33a", 0.35, 0.8, None, 0),
+    "hose_green": ("#43a047", 0.5, 0.0, None, 0),
+    "sweeper_white": ("#f3f1ea", 0.45, 0.0, None, 0),
+    "glow_amber": ("#ffb000", 0.3, 0.0, "#ffa000", 5.0),
+    "glow_head": ("#fff3c4", 0.3, 0.0, "#ffe9a0", 4.0),
 }
 
 
@@ -245,6 +286,25 @@ class Part:
                                         radius=r,
                                         matrix=self._m(center, rot, scale))
         return self._finish(res["verts"], material)
+
+    def prism(self, points, depth, center, material, rot=(0, 0, 0),
+              bevel=0.0, seg=1):
+        """Extrude a 2D polygon (local XY) along local Z, centred on `center`.
+
+        rot=(90, 0, 90) maps local X -> world Y and local Y -> world Z, so a
+        side profile (y, z) is extruded along X; rot=(90, 0, 0) maps local
+        Y -> world Z, so a front profile (x, z) is extruded along Y."""
+        M = self._m(center, rot, (1, 1, 1))
+        bm = self.bm
+        lo = [bm.verts.new(M @ Vector((x, y, -depth / 2))) for x, y in points]
+        hi = [bm.verts.new(M @ Vector((x, y, depth / 2))) for x, y in points]
+        bm.faces.new(list(reversed(lo)))
+        bm.faces.new(hi)
+        n = len(points)
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+        return self._finish(lo + hi, material, bevel, seg)
 
     def lathe(self, profile, material, segs=16, center=(0, 0, 0),
               rot=(0, 0, 0), scale=(1, 1, 1), bevel=0.0, seg=1):
