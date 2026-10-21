@@ -1,6 +1,7 @@
 /** Placeholder screens: title, playing, paused, results. Polish/replace by re-registering the same ids. */
 import { getTier } from '../../data/tiers';
 import type { GameEvents } from '../../core/events';
+import { createLeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen } from '../screens';
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -13,12 +14,15 @@ export function registerBuiltinScreens(): void {
     create(game) {
       const play = h('button', { className: 'btn primary', textContent: 'Play' });
       play.onclick = () => game.startRun();
+      const scores = h('button', { className: 'btn', textContent: 'Leaderboard' });
+      scores.onclick = () => game.go('leaderboard');
       const el = h(
         'div',
         { className: 'panel' },
         h('h1', { textContent: 'Dust Bunny' }),
         h('p', { className: 'sub', textContent: 'Roll. Absorb. Grow. Avoid the cleaning crew.' }),
         play,
+        scores,
         h('p', { className: 'hint', textContent: 'WASD / arrows or click-and-hold to roll · Space/Shift to dash · Esc/P to pause' }),
       );
       return {
@@ -82,13 +86,14 @@ export function registerBuiltinScreens(): void {
       const list = h('dl', { className: 'stats' });
       const again = h('button', { className: 'btn primary', textContent: 'Play again' });
       again.onclick = () => game.startRun();
+      const board = createLeaderboardPanel({ submit: true });
       const toTitle = h('button', { className: 'btn', textContent: 'Title' });
       toTitle.onclick = () => {
         game.disposeRun();
         game.go('title');
       };
       return {
-        el: h('div', { className: 'panel' }, title, list, again, toTitle),
+        el: h('div', { className: 'panel' }, title, list, board.el, again, toTitle),
         enter(params) {
           const e = params as GameEvents['runEnded'] | undefined;
           if (!e) return;
@@ -102,6 +107,7 @@ export function registerBuiltinScreens(): void {
             ['Seed', s.seed],
           ];
           list.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { textContent: k }), h('dd', { textContent: v })]));
+          board.showRun(e);
           again.focus();
         },
         onKey(e) {
