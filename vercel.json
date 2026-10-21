@@ -4,6 +4,7 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
+  "rewrites": [{ "source": "/api/auth/:path*", "destination": "/api/auth" }],
   "headers": [
     {
       "source": "/assets/(.*)",

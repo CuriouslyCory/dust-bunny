@@ -1,0 +1,247 @@
+/* Account screen, title chip, provider buttons and leaderboard name marks (src/ui/account/). */
+
+.screen-account {
+  background: rgba(30, 22, 18, 0.45);
+}
+
+.account-panel {
+  width: min(440px, 100%);
+}
+
+.acct-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+
+.acct-pitch,
+.acct-fine,
+.acct-sync,
+.acct-msg {
+  margin: 0;
+}
+
+.acct-pitch {
+  font-size: var(--fs-md);
+  color: var(--ink-soft);
+}
+
+.acct-fine,
+.acct-sync {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.acct-sync.error {
+  color: var(--accent-700);
+}
+
+.acct-msg {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  text-align: center;
+}
+
+.acct-msg:empty,
+.acct-sync:empty {
+  display: none;
+}
+
+.acct-msg.error {
+  color: var(--danger);
+}
+
+/* Provider buttons. */
+.acct-providers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.acct-providers:empty {
+  display: none;
+}
+
+.acct-provider {
+  width: 100%;
+  font-size: var(--fs-md);
+}
+
+.acct-provider-google {
+  --btn-bg: #fff;
+  --btn-fg: #1f1f1f;
+  --btn-edge: #dadce0;
+  --btn-edge-dark: #c4c7c5;
+}
+
+.acct-provider-discord {
+  --btn-bg: #5865f2;
+  --btn-fg: #fff;
+  --btn-edge: #4752c4;
+  --btn-edge-dark: #3c45a5;
+}
+
+.acct-provider-logo {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.acct-providers.compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.acct-providers.compact .acct-provider {
+  --press: 3px;
+  width: auto;
+  min-height: 32px;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: var(--fs-sm);
+}
+
+.acct-providers.compact .acct-provider-logo {
+  width: 14px;
+  height: 14px;
+}
+
+/* Signed-in summary. */
+.acct-who {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.acct-who > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.acct-who strong {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acct-verified {
+  font-size: var(--fs-sm);
+  color: var(--mint-700);
+}
+
+.acct-signout {
+  align-self: center;
+}
+
+.acct-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--honey);
+  color: var(--cocoa-900);
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.acct-avatar.lg {
+  width: 52px;
+  height: 52px;
+  font-size: 24px;
+}
+
+.acct-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Title screen corner chip. */
+.acct-chip {
+  position: absolute;
+  top: calc(12px + var(--safe-top));
+  right: calc(12px + var(--safe-right));
+  z-index: 2;
+  gap: 8px;
+  max-width: min(220px, 46vw);
+  padding: 6px 14px 6px 6px;
+  font-size: var(--fs-sm);
+}
+
+.acct-chip[hidden] {
+  display: none;
+}
+
+.acct-chip-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+}
+
+.acct-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Leaderboard: who is posting, and marks after names. */
+.lb-as {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.lb-as[hidden] {
+  display: none;
+}
+
+.lb-as .acct-providers.compact {
+  justify-content: flex-start;
+}
+
+.lb-as strong {
+  color: var(--mint-700);
+}
+
+.lb-verified {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--mint-700);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: 1px;
+  cursor: help;
+}
+
+.lb-anon {
+  margin-left: 3px;
+  font-size: 9px;
+  font-style: italic;
+  color: var(--muted);
+  opacity: 0.8;
+  cursor: help;
+}

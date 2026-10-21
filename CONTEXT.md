@@ -16,4 +16,6 @@
 - **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends.
 - **Upgrade** — a permanent meta-progression improvement bought in the Shop with Fluff. Persists across Runs.
 - **Fluff** — the meta currency earned at the end of each Run.
+- **Account** — optional sign-in with Google or Discord. A signed-in player's Fluff, Upgrades and stats follow them between devices (the **cloud save**).
+- **Verified score** — a leaderboard entry posted while signed in, shown with a ✓. Entries posted without an account are **anonymous**.
 - **Dash** — a short speed burst on a cooldown.

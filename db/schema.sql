@@ -1,7 +1,59 @@
--- Dust Bunny leaderboard schema (Neon Postgres).
--- api/leaderboard.ts runs the same statements lazily on first use, so applying this file
--- by hand is optional: psql "$DATABASE_URL" -f db/schema.sql
+-- Dust Bunny schema (Neon Postgres): accounts, leaderboard, cloud save.
+-- The functions in api/ run the same statements lazily on first use (server/schema.ts), so
+-- applying this file by hand is optional: psql "$DATABASE_URL" -f db/schema.sql
 
+-- Better Auth core tables (users, sessions, linked provider accounts, OAuth state).
+CREATE TABLE IF NOT EXISTS "user" (
+  "id"            text        NOT NULL PRIMARY KEY,
+  "name"          text        NOT NULL,
+  "email"         text        NOT NULL UNIQUE,
+  "emailVerified" boolean     NOT NULL,
+  "image"         text,
+  "createdAt"     timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updatedAt"     timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "session" (
+  "id"        text        NOT NULL PRIMARY KEY,
+  "expiresAt" timestamptz NOT NULL,
+  "token"     text        NOT NULL UNIQUE,
+  "createdAt" timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updatedAt" timestamptz NOT NULL,
+  "ipAddress" text,
+  "userAgent" text,
+  "userId"    text        NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "account" (
+  "id"                    text        NOT NULL PRIMARY KEY,
+  "accountId"             text        NOT NULL,
+  "providerId"            text        NOT NULL,
+  "userId"                text        NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  "accessToken"           text,
+  "refreshToken"          text,
+  "idToken"               text,
+  "accessTokenExpiresAt"  timestamptz,
+  "refreshTokenExpiresAt" timestamptz,
+  "scope"                 text,
+  "password"              text,
+  "createdAt"             timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updatedAt"             timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "verification" (
+  "id"         text        NOT NULL PRIMARY KEY,
+  "identifier" text        NOT NULL,
+  "value"      text        NOT NULL,
+  "expiresAt"  timestamptz NOT NULL,
+  "createdAt"  timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  "updatedAt"  timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session" ("userId");
+CREATE INDEX IF NOT EXISTS "account_userId_idx" ON "account" ("userId");
+CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification" ("identifier");
+
+-- Leaderboard.
 CREATE TABLE IF NOT EXISTS leaderboard_scores (
   id              bigserial PRIMARY KEY,
   name            text        NOT NULL CHECK (char_length(name) BETWEEN 1 AND 16),
@@ -21,7 +73,18 @@ CREATE TABLE IF NOT EXISTS leaderboard_scores (
 
 -- Tables created before Difficulty existed.
 ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS difficulty text NOT NULL DEFAULT 'casual';
+-- Set when a signed-in player submitted the score (a verified entry); NULL means anonymous.
+ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS user_id text REFERENCES "user" ("id") ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS leaderboard_scores_score_idx ON leaderboard_scores (score DESC, id);
 CREATE INDEX IF NOT EXISTS leaderboard_scores_character_idx ON leaderboard_scores (character, score DESC, id);
 CREATE INDEX IF NOT EXISTS leaderboard_scores_ip_idx ON leaderboard_scores (ip_hash, created_at);
+
+-- Cloud save for signed-in players: Fluff wallet, Upgrade levels (id → level), lifetime stats.
+CREATE TABLE IF NOT EXISTS player_progress (
+  user_id    text        PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
+  fluff      integer     NOT NULL CHECK (fluff >= 0),
+  upgrades   jsonb       NOT NULL,
+  stats      jsonb       NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
