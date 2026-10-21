@@ -210,5 +210,6 @@ export class Game {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.rig.setAspect(w / h);
   }
 }

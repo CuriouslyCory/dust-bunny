@@ -4,7 +4,6 @@ import { Disposables } from '../core/events';
 import { lerp } from '../core/math';
 import { getCharacter } from '../data/characters';
 import { getDebrisType } from '../data/debris';
-import { TUNING } from '../data/tuning';
 import { BunnyView } from '../entities/bunnyView';
 import { DebrisRenderer } from '../entities/debrisRenderer';
 import { DustMotes, PuffParticles } from '../fx/particles';
@@ -78,7 +77,7 @@ export class RunView {
     const r = lerp(b.prevRadius, b.radius, alpha);
     rig.update(frameDt, x, z, r, this.run.tier);
     this.house.update(frameDt, rig.camera.position, x, r, z, r);
-    const fov = TUNING.camera.fov;
+    const fov = rig.camera.fov;
     this.puffs.update(frameDt, viewportHeight, fov);
     this.motes.update(frameDt, rig.target, rig.distance, viewportHeight, fov);
     this.sunbeams.update(frameDt, viewportHeight, fov);
