@@ -7,7 +7,7 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 - Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world.
 - Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).
 - Origin: bottom centre at the floor contact point (y = 0). The broom is the exception: see its row.
-- No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light).
+- No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light, street sweeper beacon and headlights).
 - Each file has one root node named after the id. Static geometry is a single `body` mesh child; parts the game may animate are separate children whose origin is their pivot (listed below).
 - Footprint radius is the largest horizontal distance from the origin to any vertex; height is the vertical extent.
 - `public/models/catalog.json` holds the same numbers in machine-readable form (plus X/Z extents and node pivots).
@@ -51,7 +51,23 @@ blender -b --factory-startup --python tools/blender/render_preview.py
 | `toy_car` | prop | `public/models/toy_car.glb` | 6.6 | 4.8 | 6.4 × 12.3 | +Z | Front faces +Z. | 564 | 24.6 |
 | `book` | prop | `public/models/book.glb` | 13.7 | 3.1 | 15.1 × 23 | +Z | Lying flat, spine on -X. | 156 | 7.9 |
 | `tv_remote` | prop | `public/models/tv_remote.glb` | 9.3 | 2.2 | 5 × 18.2 | +Z | IR end points +Z. | 380 | 18.8 |
+| `robo_mower` | hazard | `public/models/robo_mower.glb` | 55.2 | 31.4 | 91 × 106.5 | +Z | Robotic lawn mower, front +Z. blade node spins about its local Y axis (pivot under the centre). Animated nodes: `blade` at (0.0, 2.2, 0.0). | 1496 | 53.7 |
+| `lawn_mower` | hazard | `public/models/lawn_mower.glb` | 65.4 | 98.6 | 78.2 × 98.9 | +Z | Unmanned red push mower; deck centred on the origin, front +Z, handle and grass bag rise towards -Z. | 1416 | 52.0 |
+| `leaf_blower` | hazard | `public/models/leaf_blower.glb` | 45.1 | 40 | 41 × 87.7 | +Z | Orange backpack leaf blower set down on the ground; the blower tube runs along the floor to the nozzle at about (0, 4.5, 45) in model space, blowing +Z. | 916 | 36.9 |
+| `sprinkler` | hazard | `public/models/sprinkler.glb` | 44.5 | 69.5 | 77.7 × 68 | +Z | Impact sprinkler on a tripod. head node turns about the vertical axis through the origin; nozzle points +Z with its tip at about (0, 62.9, 13.7) in model space (head at rest). Animated nodes: `head` at (0.0, 50.0, 0.0). | 652 | 30.1 |
+| `street_sweeper` | hazard | `public/models/street_sweeper.glb` | 177.5 | 228.5 | 223 × 309.7 | +Z | Boss. Municipal street sweeper, front +Z. brush_l / brush_r nodes spin about local Y. Rooftop beacon and headlights use emissive materials. Animated nodes: `brush_l` at (-75.0, 5.0, 120.0), `brush_r` at (75.0, 5.0, 120.0). | 3034 | 117.9 |
+| `house_a` | furniture | `public/models/house_a.glb` | 640.3 | 778 | 1000 × 800 | +Z | Two-storey gable house, ridge along X. Fills the 1000 x 800 footprint exactly; front door centred on +Z with a step. | 1746 | 98.8 |
+| `house_b` | furniture | `public/models/house_b.glb` | 721.1 | 548 | 1200 × 800 | +Z | Single-storey bungalow, ridge along X. Fills the 1200 x 800 footprint exactly; garage door on the +X half of the +Z face, front door (with step) on the -X half. | 1458 | 82.1 |
+| `house_c` | furniture | `public/models/house_c.glb` | 636.4 | 800 | 900 × 900 | +Z | Brick two-storey with a pyramid roof. Fills the 900 x 900 footprint exactly; front door centred on +Z under a white portico. | 1732 | 95.4 |
+| `tree_oak` | furniture | `public/models/tree_oak.glb` | 257.1 | 799 | 477.2 × 494 | +Z | Collision is the trunk only (radius 25 at the base); the lumpy canopy spreads to about r = 260. | 1100 | 24.6 |
+| `tree_pine` | furniture | `public/models/tree_pine.glb` | 180 | 900 | 360 × 360 | +Z | Collision is the trunk only (radius 20 at the base); stacked-cone canopy spreads to r = 180. | 278 | 10.4 |
+| `car` | prop | `public/models/car.glb` | 216.2 | 153.2 | 180.6 × 403 | +Z | Compact hatchback, front +Z. car_paint (light neutral) is the largest material and is tinted per instance. | 1332 | 53.7 |
+| `mailbox` | prop | `public/models/mailbox.glb` | 35.8 | 120 | 20.5 × 48.8 | +Z | Wooden post with a rounded US-style mailbox; door faces +Z, red flag on the +X side. | 376 | 17.4 |
+| `trash_can` | prop | `public/models/trash_can.glb` | 47.4 | 104.7 | 60 × 75 | +Z | Green wheelie bin; lid hinges at the back (-Z) where the two wheels and the handle are. | 368 | 19.3 |
+| `bicycle` | prop | `public/models/bicycle.glb` | 90.1 | 99.1 | 56 × 178.7 | +Z | Upright on its kickstand, front wheel +Z. bike_frame (light neutral) is the largest material and is tinted per instance. | 1436 | 59.2 |
+| `garden_gnome` | prop | `public/models/garden_gnome.glb` | 8.9 | 40.7 | 17.7 × 17.7 | +Z | Red pointy hat, white beard, blue coat; faces +Z on a small stone base. | 912 | 35.0 |
+| `fire_hydrant` | prop | `public/models/fire_hydrant.glb` | 20.5 | 75 | 39.6 × 35.4 | +Z | Red hydrant with silver caps: pumper cap faces +Z, hose caps on +/-X. | 1102 | 35.7 |
 
-Total: 25 models, 20890 triangles, 778 KB.
+Total: 41 models, 40244 triangles, 1600 KB.
 
 ![Contact sheet](models-preview.png)

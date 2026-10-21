@@ -23,5 +23,21 @@
   "sock": { "file": "sock.glb", "fit": "none" },
   "toy_car": { "file": "toy_car.glb", "fit": "none" },
   "book": { "file": "book.glb", "fit": "none" },
-  "tv_remote": { "file": "tv_remote.glb", "fit": "none" }
+  "tv_remote": { "file": "tv_remote.glb", "fit": "none" },
+  "house_a": { "file": "house_a.glb", "fit": "xz" },
+  "house_b": { "file": "house_b.glb", "fit": "xz" },
+  "house_c": { "file": "house_c.glb", "fit": "xz" },
+  "tree_oak": { "file": "tree_oak.glb", "fit": "none" },
+  "tree_pine": { "file": "tree_pine.glb", "fit": "none" },
+  "robo_mower": { "file": "robo_mower.glb", "fit": "none", "collapse": true },
+  "lawn_mower": { "file": "lawn_mower.glb", "fit": "none", "collapse": true },
+  "leaf_blower": { "file": "leaf_blower.glb", "fit": "none", "collapse": true },
+  "sprinkler": { "file": "sprinkler.glb", "fit": "none", "collapse": true },
+  "street_sweeper": { "file": "street_sweeper.glb", "fit": "none", "collapse": true },
+  "car": { "file": "car.glb", "fit": "none" },
+  "mailbox": { "file": "mailbox.glb", "fit": "none" },
+  "trash_can": { "file": "trash_can.glb", "fit": "none" },
+  "bicycle": { "file": "bicycle.glb", "fit": "none" },
+  "garden_gnome": { "file": "garden_gnome.glb", "fit": "none" },
+  "fire_hydrant": { "file": "fire_hydrant.glb", "fit": "none" }
 }
