@@ -90,10 +90,11 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
 /**
  * GLB-backed Debris: types whose id matches a loaded model (public/models/manifest.json) use the
  * Blender mesh instead of the recipe. The model is scaled so its footprint radius is 1 (= `size`)
- * and rests on y = 0. For ids listed here the largest material is replaced by the per-instance
+ * and rests on y = 0; very tall, thin props (street lamps) use a fifth of their height instead, so
+ * they don't tower over everything. For ids listed here the largest material is replaced by the per-instance
  * colour (other parts keep their authored colours); other GLB types ignore instance colours.
  */
-const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle']);
+const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck']);
 
 /** Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute. */
 export function modelDebrisGeometry(id: string, template: Object3D): BufferGeometry | null {
@@ -114,8 +115,14 @@ export function modelDebrisGeometry(id: string, template: Object3D): BufferGeome
   if (!g) return null;
   const pos = g.getAttribute('position');
   let r = 0;
-  for (let i = 0; i < pos.count; i++) r = Math.max(r, Math.hypot(pos.getX(i), pos.getZ(i)));
-  const s = 1 / (r || 1);
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    r = Math.max(r, Math.hypot(pos.getX(i), pos.getZ(i)));
+    y0 = Math.min(y0, pos.getY(i));
+    y1 = Math.max(y1, pos.getY(i));
+  }
+  const s = 1 / (Math.max(r, (y1 - y0) * 0.2) || 1);
   g.scale(s, s, s);
   g.computeBoundingBox();
   g.translate(0, -g.boundingBox!.min.y, 0);
