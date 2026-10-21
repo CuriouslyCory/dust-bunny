@@ -1,5 +1,7 @@
 /**
- * Hazard extension point. No Hazards are implemented yet; register HazardDefs here.
+ * Hazard extension point: registry, Hazard interface and the HazardManager System.
+ * Implementations live next to this file (roomba.ts, lintRoller.ts, ...); install.ts
+ * registers them all and wires the spawn director per Run.
  *
  * The HazardManager (a System) owns live Hazards: it calls update(), adds/removes their
  * object3d under run.entityRoot, and resolves Bunny contact generically:
@@ -15,6 +17,7 @@ import type { Rng } from '../core/rng';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from '../systems/absorb';
+import './events';
 
 export type HazardShape =
   | { kind: 'circle'; radius: number }
@@ -97,7 +100,8 @@ export class HazardManager implements System {
   update(dt: number, run: Run): void {
     this.director?.(dt, run, this);
     const b = run.bunny;
-    for (const h of this.hazards) {
+    const absorbed = new Set<Hazard>();
+    for (const h of [...this.hazards]) {
       if (h.dead) continue;
       h.update(dt, run);
       if (h.dead || !HazardManager.touches(run, h)) continue;
@@ -105,15 +109,17 @@ export class HazardManager implements System {
         run.hazardsAbsorbed++;
         run.absorbMass(h.size, h.def.mass, h.def.id, { x: h.x, y: 0, z: h.z }, 'hazard');
         h.dead = true;
+        absorbed.add(h);
+        run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: h.def.id === 'robovac_9000' });
         h.onAbsorbed?.(run);
-        this.removeHazard(h, true);
+        if (run.ended) break;
       } else {
         h.onContact?.(run);
       }
     }
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i]!;
-      if (h.dead) this.removeHazard(h, false);
+      if (h.dead) this.removeHazard(h, absorbed.has(h));
     }
   }
 

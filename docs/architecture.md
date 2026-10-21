@@ -13,10 +13,12 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/entities/` | Sim state: `bunny.ts`, `debris.ts` (`DebrisField`), `stats.ts` (stat modifiers). Views: `bunnyView.ts`, `debrisRenderer.ts`, `debrisGeometry.ts`. |
 | `src/systems/` | Per-tick `System`s: `movement.ts` (input, Dash, rolling), `absorb.ts` (absorb rule, growth formula, magnet), `collision.ts`, `growth.ts` (Tier-up), `spawner.ts`. `camera.ts` is render-side (`CameraRig`) plus pure `cameraDistanceFor`/`viewRadiusFor`. |
 | `src/game/` | `run.ts` (`Run`: one session, headless), `runView.ts` (rendering for a Run), `game.ts` (`Game`: renderer, scene, loop, screens, current Run), `system.ts` (`System`, `SYSTEM_ORDER`), `runStats.ts`. |
-| `src/hazards/` | Extension point: interfaces, registry and manager. |
+| `src/hazards/` | Hazards: `index.ts` (registry, `Hazard`, `HazardManager`), one file per Hazard, `director.ts`, `common.ts` (movement/collision, suction, hits), `decals.ts` (floor telegraphs), `shed.ts` (mass shedding), `models.ts` (procedural fallbacks), `hud.ts` (boss banner), `install.ts`. Tuning in `src/data/hazards.ts`. |
 | `src/pickups/`, `src/perks/` | Registries/managers plus content: `pickups.ts` (six Pickups), `director.ts` (floor spawning), `view.ts` (glowing orb); `perks.ts` (twelve Perks), `draft.ts` (draft logic), `combat.ts` (shield / dodge / revive / Dust Cloud / Spiky Dash hooks, Regrowth). |
 | `src/meta/` | Meta-progression: `save.ts` (versioned localStorage), `meta.ts` (Fluff wallet, Upgrades, Run awards, settings), `fluff.ts`, `upgrades.ts` (cost curve, Upgrade → stat modifiers), `install.ts` (`installRoguelike(game)`, called from `main.ts`). |
-| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `screens/builtin.ts` (title/playing/paused/results), `screens/characterSelect.ts`, `screens/perkDraft.ts`, `screens/shop.ts`, `hud.ts` (widget HUD), `roguelikeHud.ts` (Pickup/Perk widgets). Plain DOM + CSS (`src/styles.css`, `src/ui/roguelike.css`) over the canvas. |
+| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `components.ts` (button/panel/slider/toggle/segmented, menu arrow-key nav), `screens/builtin.ts` (title/playing/paused), `screens/results.ts` (results + `registerResultsSection`), `screens/menus.ts` (settings, howToPlay), `screens/characterSelect.ts`, `screens/perkDraft.ts`, `screens/shop.ts`, `hud.ts` (widget HUD, toasts, banners), `roguelikeHud.ts` (charge chips), `settings.ts` + `settingsStorage.ts` (Settings store, persisted in the meta save), `install.ts` (applies quality / reduced motion). Plain DOM + CSS over the canvas: design tokens and shared components in `src/styles.css`; `ui/screens.css`, `ui/hud.css`, `ui/roguelike.css`. |
+| `src/audio/` | WebAudio only, no files: `engine.ts` (buses, unlock, synth primitives), `sfx.ts`, `music.ts` (procedural lo-fi loop, intensity by Tier/boss), `voices.ts` (voice limiter, absorb tone mapping), `index.ts` (`installAudio`: event subscribers, M to mute, UI click/hover sounds). |
+| `src/input/touch.ts` | Dynamic virtual joystick + Dash button (`InputSource`), gesture blocking, orientation refit. |
 | `src/ui/leaderboard/` | Leaderboard panel (`createLeaderboardPanel`, mounted in the results screen) and the `leaderboard` screen (from the title). Own CSS. |
 | `src/net/leaderboard.ts` | Leaderboard client: `getTop`, `submitScore`, `isOnline`. Falls back to a localStorage board when `/api/leaderboard` is unavailable (404, non-JSON, 5xx, network, timeout). |
 | `src/shared/` | Code shared with the Vercel function: `score.ts` (score formula), `leaderboard.ts` (types, name sanitising, submission validation). No runtime imports from the rest of `src/`; relative imports use `.js`. |
@@ -74,6 +76,11 @@ The bus lives on `Game` and outlives Runs: subscribe once at boot. Handlers run 
 | `paused` / `resumed` | `{ reason: screenId }` | `Game.go` when simulation stops/starts mid-Run |
 | `screenChanged` | `{ from, to }` | `Game.go` |
 | `hazardSpawned` / `hazardRemoved` | `{ hazardId, defId }` / `+ absorbed` | `HazardManager` |
+| `hazardAbsorbed` | `{ hazardId, defId, size, radius, boss }` | `HazardManager` (before `hazardRemoved`) |
+| `hazardTelegraph` | `{ hazardId, defId, attack, duration }` | Hazards, when a floor telegraph starts |
+| `bunnyShed` | `{ volume, pieces, source, radius }` | `shedMass` (Lint Roller, Upright Vacuum, boss) |
+| `bossSpawned` / `bossStunned` / `bossHit` | `{ hazardId, absorbRadius }` / `{ hazardId }` / `{ hazardId, size, absorbRadius }` | Robo-Vac 9000 |
+| `bossDefeated` / `victory` | `{ hazardId, timeSec }` / `{ timeSec, radius }` | boss `onAbsorbed`, right before `runEnded` (`victory`) |
 | `pickupSpawned` / `pickupCollected` / `pickupExpired` | `{ pickupId, defId }` / `{ defId }` | `PickupManager` |
 | `perkApplied` | `{ perkId, stacks }` | `Run.applyPerk` |
 
@@ -124,25 +131,23 @@ run.bunny.stats.removeSource('perk:aerodynamic');
 | `bunny.spikyDash` + `bunny.dashing` | Spiky Dash | Contact while dashing deals no damage. The combat System sets `hazard.stunnedFor = 2.5`, calls optional `hazard.stun?(s)`, and counts `stunnedFor` down. Hazards must skip movement/attacks while `stunnedFor > 0`. |
 | `bunny.stats.get('suctionMultiplier')` | Zap (1.5) | Scale suction forces by it. |
 
+## Hazards
+
+`installHazards(game)` (`src/hazards/install.ts`, called from `main.ts`) registers every Hazard and, on `runStarted`, calls `installRunHazards(run)`: the spawn director plus the absorb effect System. Call `installRunHazards` yourself for headless Runs.
+
+- **Hazards** (`BaseHazard` in `base.ts`): Roomba (wander, wall bounce, suction ring), Lint Roller (lane back and forth, sticks the Bunny ~1 s and sheds mass), Broom (red arc telegraph, then sweep with big knockback), Spray Bottle (turret: aim lane telegraph, burst of droplets), Mop (patrol loop, fading wet trail that slows via a `hazard:wet` speed modifier), Upright Vacuum (amber cone warm-up, then a suction cone), Robo-Vac 9000 (boss) and its mini Roombas. `object3d` is a Group at the world origin; `body` holds the model at the Hazard position, decals are separate world-space meshes. A green ring marks a Hazard the Bunny can absorb.
+- **Collision**: `moveCircle` resolves Hazards against walls and furniture whose `clearance` is at most the Hazard's height. A Bunny hiding under furniture the Hazard cannot enter (`bunnySheltered`, e.g. under the couch) gets no contact or suction.
+- **Damage** always goes through `bunny.damage()`; knockback, stick and shedding only happen when it returns true. Knockback is a distance: `max(knockbackCm, knockbackRadii × radius)`. Suction pulls at a fraction of the Bunny's max speed × falloff × `suctionMultiplier` (weaker during i-frames). Hazards honour `hiddenFromHazards` (no aiming, chasing or suction) and `stunnedFor` (no movement or attacks).
+- **Shedding** (`shed.ts`): removes a fraction of r³ and scatters Debris around the Bunny sized so that re-absorbing every piece gives the volume back.
+- **Director** (`director.ts`): `DIRECTOR.tiers` in `src/data/hazards.ts` sets per Tier an alive budget and spawn interval that ramp with Tier progress, plus weighted types with caps. 12 s grace at Run start. Spawns in a ring just outside the view; despawns Hazards that stay far away for 4 s or are out of view and smaller than radius × 0.12. Hazard speeds are per Tier and ramp up to +15 % within a Tier.
+- **Boss**: 3 s after reaching Tier 5 the Robo-Vac 9000 arrives (`bossSpawned`, HUD banner and status line). It hunts with mild suction, telegraphs charges with a red lane, summons mini Roombas, and is stunned when a charge hits a wall. Touching it while stunned (or after a Spiky Dash stun) chips it to `size × 0.88` and knocks absorbable parts loose. Size 36 needs radius ≈ 51 to absorb; after one chip ≈ 45, after two ≈ 40. Absorbing it emits `bossDefeated`, `victory`, then `run.end('victory')`.
+- **Debug** (`?debug`): `__game.debugTools.spawnHazard(id)`, `spawnBoss()`, `clearHazards()`.
+
 ## How to…
 
 **Add a Debris type.** Append to `DEBRIS_TYPES` in `src/data/debris.ts` (or `registerDebrisType()` before a Run starts) with `id, name, size (radius cm), mass, colors, recipe, rooms, tiers`. Recipe parts (`box | sphere | cylinder | cone | torus | capsule | blob`) are in normalised units: `size` maps to 1 and y = 0 is the floor. Final colour is part `color` × an instance colour picked from `colors`. Each type gets one `InstancedMesh`. `tiers: [min, max]` controls when the spawner produces it (one Tier early if already absorbable), and `rooms` holds per-room weights (`any` is the fallback). For a fixed placement (like chairs), call `ctx.placeDebris` in a room template.
 
-**Add a Hazard.** Register in `src/hazards/` (e.g. `src/hazards/roomba.ts`, imported from `main.ts`):
-
-```ts
-hazardRegistry.register({
-  id: 'roomba', name: 'Roomba', minTier: 1, spawnWeight: 1, mass: 2, modelId: 'roomba',
-  create(run, x, z, id, rng) {
-    const object3d = createModel('roomba', { w: 34, d: 34, h: 9 });
-    return { id, def: this, x, z, size: 17, shape: { kind: 'circle', radius: 17 }, object3d,
-      update(dt, run) { /* move; sync object3d.position */ },
-      onContact(run) { if (run.bunny.damage(1, 'roomba')) run.bunny.knockback(run.bunny.x - this.x, run.bunny.z - this.z, 20); } };
-  },
-});
-```
-
-`HazardManager` (`run.hazards`) handles absorbing: when `size ≤ radius × absorbRatio` it calls `run.absorbMass` and `onAbsorbed`, and sets `dead`. Otherwise it calls `onContact`. Spawning is up to you: set `run.hazards.director = (dt, run, mgr) => …` and call `mgr.spawn(defId, x, z)`. Use `isFloorFree(run.house, x, z, size)` from `systems/spawner.ts` to find valid spots. To win the Run, the boss's `onAbsorbed` calls `run.end('victory')`.
+**Add a Hazard.** Subclass `BaseHazard` (implement `tick(dt, run)` and `onContact(run)`), register a def with `hazardRegistry.register({ id, name, minTier, spawnWeight, mass, modelId, create })`, import the file from `install.ts`, and add it to `SPAWN_FOOTPRINT` and a `DIRECTOR.tiers` entry. `HazardManager` absorbs a Hazard when `size ≤ radius × absorbRatio` (`run.absorbMass` with the def's `mass`, `hazardAbsorbed`, `onAbsorbed`); otherwise it calls `onContact`.
 
 **Add a Pickup.** Add data to `src/data/pickups.ts` and a def to `PICKUP_DEFS` in `src/pickups/pickups.ts` (`{ id, name, icon, description, color, duration?, spawnWeight, apply(run, duration) }`). `apply` may return an undo callback that runs on expiry; collecting an active timed Pickup undoes and re-applies it with a fresh timer. Durations are scaled by the `pickupDuration` stat (Hoarder). The director spawns from all registered Pickups by `spawnWeight`; `run.pickups.spawn(defId, x, z)` spawns one directly.
 
@@ -162,7 +167,9 @@ game.go('perkDraft', params);   // Run stops simulating; `paused` is emitted wit
 
 Re-registering an existing id (`title`, `playing`, `paused`, `results`) replaces the placeholder, but only if you do it before that screen is first shown. Screen DOM is created lazily. `Esc`/`P` handling lives in each screen's `onKey`. `game.startRun(config?)`, `game.quitRun()`, `game.disposeRun()`, and `game.nextRunConfig` exist for character select and the Shop.
 
-**Add a HUD widget.** `game.hud.addWidget({ id, el, slot: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center', update(game, dt) })`. Remove one with `removeWidget(id)`.
+**Add a HUD widget.** `game.hud.addWidget({ id, el, slot, update(game, dt) })` with slot `top-left | top-right | top-center | bottom-left | bottom-right | bottom-center | center | status | perks` (`status` is the row under the Tier card, `perks` the row under the top-right counters). Remove one with `removeWidget(id)`. Also: `game.hud.toast(text, { key, tone })` (batched, rate-limited), `game.hud.banner(title, { subtitle, variant: 'tier' | 'boss' | 'good' | 'info', duration })`, `game.hud.flash(widgetId)`. Active Pickups and taken Perks render automatically from `PickupDef.icon` / `PerkDef.icon`; `registerHudIcon(kind, id, { glyph, svg, color, label })` overrides the art.
+
+**Add UI.** Build screens from `src/ui/components.ts` (or the `.panel`, `.btn .btn-primary|secondary|ghost`, `.menu`, `.menu-grid`, `.field` classes) and the CSS custom properties in `src/styles.css`. Call `handleMenuKeys(e, el)` from `onKey` for arrow-key navigation. Results content goes in `registerResultsSection({ id, slot: 'fluff' | 'leaderboard' | 'extra', render(el, result, game) })`. Settings: `settings.value`, `settings.update(patch)`, `settings.subscribe(fn)` from `src/ui/settings.ts`. Sounds: `getAudio()?.sfx.pickup()` etc.; buttons in `#ui` get hover/click sounds automatically.
 
 **Override a model with a `.glb`.** Put the file in `public/models/` and list it in `public/models/manifest.json`:
 
@@ -190,7 +197,7 @@ For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugToo
 
 ## Known gaps
 
-- Hazards, audio, touch joystick: hooks only.
+- Hazard models are procedural until GLB overrides are listed in `public/models/manifest.json`; the broom aligns itself from its bounding box, so either fit mode works.
 - Character `look` beyond `color` (fur length, fluffiness, eye style, glow) is not rendered yet.
 - Fluff is awarded for quit Runs too (per the design formula), so very short Runs still earn ~10 Fluff.
 - Furniture is many small meshes (~500 draw calls at Tier 5 including shadows); merge per material if mid-range GPUs struggle.

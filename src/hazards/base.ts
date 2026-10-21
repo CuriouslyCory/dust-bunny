@@ -1,0 +1,115 @@
+/**
+ * BaseHazard: shared plumbing for the Hazard implementations.
+ *
+ * `object3d` is a Group at the world origin (the manager parents it under run.entityRoot);
+ * `body` holds the model at (x, z) with yaw `yaw`; decals are added in world coordinates.
+ * A green ring under the Hazard shows when it is small enough to absorb.
+ */
+import { Group, type Object3D } from 'three';
+import { DIRECTOR, tierValue, type PerTier } from '../data/hazards';
+import { tierProgress } from '../data/tiers';
+import type { Run } from '../game/run';
+import { createModel } from '../world/models';
+import { bunnyCanAbsorb } from './common';
+import { DECAL_COLORS, ringDecal, type Decal } from './decals';
+import { playAbsorbFx } from './fx';
+import type { Hazard, HazardDef, HazardShape } from './index';
+import { HAZARD_MODEL_SIZES, type HazardModelId } from './models';
+
+export abstract class BaseHazard implements Hazard {
+  readonly object3d = new Group();
+  readonly body = new Group();
+  readonly model: Object3D;
+  shape: HazardShape;
+  dead = false;
+  /** Facing (radians about +Y); 0 faces +Z. */
+  yaw = 0;
+  /** Seconds alive. */
+  time = 0;
+  /** Spiky Dash stun (set and counted down by the combat System): no movement or attacks. */
+  stunnedFor = 0;
+
+  get stunned(): boolean {
+    return this.stunnedFor > 0;
+  }
+
+  /** Called by the combat System when stunned; the wobble is driven by `stunnedFor` in sync(). */
+  stun(_seconds: number): void {}
+  protected readonly decals: Decal[] = [];
+  private readonly absorbMarker: Decal;
+
+  constructor(
+    readonly id: number,
+    readonly def: HazardDef,
+    public x: number,
+    public z: number,
+    public size: number,
+    modelId: HazardModelId,
+  ) {
+    this.shape = { kind: 'circle', radius: size };
+    this.model = createModel(modelId, { ...HAZARD_MODEL_SIZES[modelId] });
+    this.body.add(this.model);
+    this.object3d.add(this.body);
+    this.absorbMarker = this.addDecal(ringDecal(1, 1.12, DECAL_COLORS.absorbable, 0.8));
+    this.absorbMarker.visible = false;
+  }
+
+  /** Per-tick behaviour. */
+  protected abstract tick(dt: number, run: Run): void;
+
+  update(dt: number, run: Run): void {
+    this.time += dt;
+    if (!this.stunned) this.tick(dt, run);
+    this.sync(run);
+  }
+
+  /** Called after tick: syncs the model transform and the absorbable marker. */
+  protected sync(run: Run): void {
+    this.body.position.set(this.x, 0, this.z);
+    this.body.rotation.y = this.yaw;
+    this.body.rotation.z = this.stunned ? Math.sin(this.time * 30) * 0.08 : 0;
+    const absorbable = bunnyCanAbsorb(run, this.size);
+    this.absorbMarker.visible = absorbable;
+    if (absorbable) {
+      const r = this.markerRadius();
+      this.absorbMarker.root.scale.set(r, 1, r);
+      this.absorbMarker.place(this.x, this.z);
+      this.absorbMarker.pulse(this.time, 0.2);
+    }
+  }
+
+  protected markerRadius(): number {
+    return this.shape.kind === 'circle' ? this.shape.radius * 1.15 : Math.max(this.shape.halfW, this.shape.halfD) * 1.15;
+  }
+
+  protected addDecal<T extends Decal>(d: T): T {
+    this.decals.push(d);
+    this.object3d.add(d.root);
+    return d;
+  }
+
+  /** Spins a named model node (GLB or procedural) about its local Y axis. */
+  protected spin(name: string, radians: number, axis: 'x' | 'y' = 'y'): void {
+    const node = this.model.getObjectByName(name);
+    if (node) node.rotation[axis] += radians;
+  }
+
+  /** Speed for the current Tier, ramped up within the Tier. */
+  protected tierSpeed(run: Run, speeds: PerTier): number {
+    const [a, b] = DIRECTOR.speedRamp;
+    return tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.radius));
+  }
+
+  protected emitTelegraph(run: Run, attack: string, duration: number): void {
+    run.events.emit('hazardTelegraph', { hazardId: this.id, defId: this.def.id, attack, duration });
+  }
+
+  onAbsorbed(run: Run): void {
+    playAbsorbFx(run, this.body);
+  }
+
+  dispose(): void {
+    for (const d of this.decals) d.dispose();
+    this.decals.length = 0;
+  }
+}

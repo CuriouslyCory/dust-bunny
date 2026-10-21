@@ -6,11 +6,15 @@
  *   ?autostart      skip the title screen
  */
 import './styles.css';
+import { installAudio } from './audio';
 import { installDebug } from './debug/debug';
 import { showLoading } from './fx/loading';
 import { Game } from './game/game';
-import { registerLeaderboardScreen } from './ui/leaderboard/screen';
+import { installHazards } from './hazards/install';
+import { installTouchControls } from './input/touch';
 import { installRoguelike } from './meta/install';
+import { installUi } from './ui/install';
+import { registerLeaderboardScreen } from './ui/leaderboard/screen';
 import { registerBuiltinScreens } from './ui/screens/builtin';
 import { loadModelOverrides } from './world/models';
 
@@ -29,7 +33,11 @@ async function boot(): Promise<void> {
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
   installRoguelike(game);
+  installUi(game);
+  installTouchControls(game);
+  installAudio(game);
   if (game.debug) installDebug(game);
+  installHazards(game);
 
   game.start('title');
   if (params.has('autostart')) game.startRun();
