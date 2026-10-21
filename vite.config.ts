@@ -70,8 +70,24 @@ function devApi(): Plugin {
   };
 }
 
+/** Static pages in public/ served without `.html` (mirrors vercel.json's `/privacy` and `/terms` rewrites). */
+function devStaticPages(): Plugin {
+  const pages = new Set(['/privacy', '/terms']);
+  return {
+    name: 'dev-static-pages',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const [path, query] = (req.url ?? '').split('?');
+        if (pages.has(path!)) req.url = `${path}.html${query === undefined ? '' : `?${query}`}`;
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [absoluteSocialUrls(), devApi()],
+  plugins: [absoluteSocialUrls(), devApi(), devStaticPages()],
   build: {
     outDir: 'dist',
     target: 'es2022',
