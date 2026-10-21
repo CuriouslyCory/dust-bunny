@@ -47,7 +47,6 @@ export function registerPerkDraftScreen(): void {
       const render = () => {
         const run = game.run;
         if (!run) return;
-        sub.textContent = pending > 1 ? `${pending} picks waiting` : 'Lasts for the rest of this Run';
         cards.replaceChildren(
           ...offer.map((p, i) => {
             const stacks = run.perkStacks(p.id);
@@ -113,6 +112,8 @@ export function registerPerkDraftScreen(): void {
         },
         update(dt) {
           armed = Math.max(0, armed - dt);
+          const text = pending > 1 ? `${pending} picks waiting` : 'Lasts for the rest of this Run';
+          if (sub.textContent !== text) sub.textContent = text;
         },
         onKey(e) {
           if (e.repeat) return false;

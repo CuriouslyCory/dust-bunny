@@ -8,13 +8,15 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | --- | --- |
 | `src/main.ts` | Boot: registers screens, loads GLB overrides, creates `Game`, reads URL params. |
 | `src/core/` | Engine-agnostic utilities: `events.ts` (typed `EventBus`, `Disposables`), `loop.ts` (`FixedLoop`), `input.ts` (`InputSource`, keyboard, mouse steer, `CompositeInput`), `rng.ts` (`Rng`, mulberry32), `spatialHash.ts`, `math.ts` (rects, circle-vs-AABB/circle push-out, damp), `registry.ts`. |
-| `src/data/` | Tunable data only: `debris.ts` (Debris catalogue), `tiers.ts`, `tuning.ts` (all gameplay constants), `characters.ts`. |
+| `src/data/` | Tunable data only: `debris.ts` (Debris catalogue), `tiers.ts`, `tuning.ts` (all gameplay constants), `characters.ts`, `pickups.ts`, `perks.ts`, `upgrades.ts`. |
 | `src/world/` | `house.ts` (seeded `generateHouse`), `rooms.ts` (room templates), `furniture.ts` (furniture defs + collision boxes), `types.ts` (`HouseLayout` etc.). Browser-only: `houseView.ts`, `materials.ts` (canvas textures), `models.ts` (model registry). |
 | `src/entities/` | Sim state: `bunny.ts`, `debris.ts` (`DebrisField`), `stats.ts` (stat modifiers). Views: `bunnyView.ts`, `debrisRenderer.ts`, `debrisGeometry.ts`. |
 | `src/systems/` | Per-tick `System`s: `movement.ts` (input, Dash, rolling), `absorb.ts` (absorb rule, growth formula, magnet), `collision.ts`, `growth.ts` (Tier-up), `spawner.ts`. `camera.ts` is render-side (`CameraRig`) plus pure `cameraDistanceFor`/`viewRadiusFor`. |
 | `src/game/` | `run.ts` (`Run`: one session, headless), `runView.ts` (rendering for a Run), `game.ts` (`Game`: renderer, scene, loop, screens, current Run), `system.ts` (`System`, `SYSTEM_ORDER`), `runStats.ts`. |
-| `src/hazards/`, `src/pickups/`, `src/perks/` | Extension points: interfaces, registries and managers. **No content yet.** |
-| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `screens/builtin.ts` (title/playing/paused/results), `hud.ts` (widget HUD). Plain DOM + CSS (`src/styles.css`) over the canvas. |
+| `src/hazards/` | Extension point: interfaces, registry and manager. |
+| `src/pickups/`, `src/perks/` | Registries/managers plus content: `pickups.ts` (six Pickups), `director.ts` (floor spawning), `view.ts` (glowing orb); `perks.ts` (twelve Perks), `draft.ts` (draft logic), `combat.ts` (shield / dodge / revive / Dust Cloud / Spiky Dash hooks, Regrowth). |
+| `src/meta/` | Meta-progression: `save.ts` (versioned localStorage), `meta.ts` (Fluff wallet, Upgrades, Run awards, settings), `fluff.ts`, `upgrades.ts` (cost curve, Upgrade → stat modifiers), `install.ts` (`installRoguelike(game)`, called from `main.ts`). |
+| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `screens/builtin.ts` (title/playing/paused/results), `screens/characterSelect.ts`, `screens/perkDraft.ts`, `screens/shop.ts`, `hud.ts` (widget HUD), `roguelikeHud.ts` (Pickup/Perk widgets). Plain DOM + CSS (`src/styles.css`, `src/ui/roguelike.css`) over the canvas. |
 | `src/debug/debug.ts` | `?debug` hooks. |
 | `scripts/sim.ts` | Headless balance bot (`pnpm sim [seeds…] [--minutes=N]`). |
 
@@ -83,7 +85,7 @@ Audio should be event-bus subscribers only (e.g. `src/audio/` subscribing in `ma
 
 ## Bunny stats and modifiers (`src/entities/stats.ts`)
 
-Stats: `speed, acceleration, maxHealth, absorbRatio, growthMultiplier, magnetRadius, dashCooldown, dashSpeed, suctionMultiplier, knockbackResistance, startRadius`. Value = base (`BASE_BUNNY_STATS` + Character overrides), then modifiers sorted by `(priority, insertion)`. `add` defaults to priority 100 and `mul` to 200, which gives `(base + Σadd) × Πmul`. Results are clamped by `STAT_LIMITS`.
+Stats: `speed, acceleration, maxHealth, absorbRatio, growthMultiplier, magnetRadius, dashCooldown, dashSpeed, suctionMultiplier, knockbackResistance, startRadius`, plus roguelike stats `pickupDuration` (Hoarder), `pickupLuck` (Pickup spawn rate), `dodgeChance` (Slippery, max 0.75), `perkChoices` (3; Wide Choice → 4), `perkRerolls` (Reroll Upgrade). Value = base (`BASE_BUNNY_STATS` + Character overrides), then modifiers sorted by `(priority, insertion)`. `add` defaults to priority 100 and `mul` to 200, which gives `(base + Σadd) × Πmul`. Results are clamped by `STAT_LIMITS`.
 
 ```ts
 const h = run.bunny.stats.add({ stat: 'speed', op: 'mul', value: 1.5, source: 'pickup:sugar_rush', duration: 8 });
@@ -94,6 +96,29 @@ run.bunny.stats.removeSource('perk:aerodynamic');
 - **Characters**: `src/data/characters.ts` (`stats` overrides base values). `game.nextRunConfig.characterId` / `?character=`.
 - **Upgrades** (Shop): pass permanent modifiers via `game.nextRunConfig.modifiers` (applied at Run start). `startRadius` is read once at start.
 - **Health**: `bunny.damage(amount, source)` respects i-frames (`TUNING.invulnerability`) and `bunny.damageFilters` (return a reduced amount; 0 cancels; use it for Bubble Wrap and Slippery). Also available: `bunny.heal(n)`, `bunny.knockback(dx, dz, strengthInRadiiPerSec)` (scaled by `knockbackResistance`), `bunny.rooted = seconds` (Lint Roller), `bunny.addVolume(dv)` (shed mass when negative).
+
+## Roguelike layer (Characters, Pickups, Perks, Upgrades, save)
+
+`installRoguelike(game)` (`src/meta/install.ts`) registers the Pickups, Perks and the `characterSelect` / `perkDraft` / `shop` screens, then:
+
+- **Run hooks** on `runStarted`: `installRunHooks(run)` adds the combat damage filter (first in `bunny.damageFilters`), the `combat` System (order 290) and the Pickup director. Call it yourself for headless Runs (tests, `pnpm sim`).
+- **Perk draft** on each `tierUp`: `game.go('perkDraft')` (queued when several Tiers are crossed at once). It offers `perkChoices` Perks, never an owned unique or maxed one; keys 1–4 / click / tap pick and R rerolls.
+- **Upgrades → Run**: `game.nextRunConfig.modifiers = getMeta().runModifiers()` at boot and after every purchase (source `upgrade:<id>`, one modifier per Upgrade). `nextRunConfig.characterId` defaults to the last chosen Character.
+- **Fluff** on `runEnded`: `getMeta().awardRun(e)` (idempotent per payload; the results screen calls it too), then `fluffAwarded { amount, total, reason }` is emitted. Formula in `src/meta/fluff.ts`.
+- **Save**: `localStorage['dust-bunny:save:v1']` = `{ version: 1, fluff, upgrades, lastCharacterId, settings, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned } }`. `parseSave` never throws: it migrates unversioned data, sanitises fields one by one, and backs corrupt JSON up to `…:corrupt`. Settings: `getMeta().settings` / `getMeta().updateSettings(patch)` (primitive values only). Listen with `getMeta().store.onChange(cb)`.
+- **Character look**: `CharacterDef.look = { color, tipColor, furLength, fluffiness, eyeStyle: 'round' | 'sleepy' | 'sparkly', glow? }`. `BunnyView` currently applies only `color`.
+- **Events added**: `shieldBlocked`, `damageDodged`, `bunnyRevived`, `hazardStunned`, `fluffAwarded`, `upgradePurchased`.
+
+**Hooks other modules must respect** (fields on `Bunny` / `Hazard`):
+
+| Hook | Set by | Contract |
+| --- | --- | --- |
+| Damage only via `bunny.damage(amount, source)` | — | Lethal effects (e.g. a vacuum sucking the Bunny up) must call `damage`, never set `health` or call `run.end('died')` directly, or Bubble Wrap / Slippery / Second Wind are skipped. Gate knockback on its return value. |
+| `bunny.shield` (charges) | Bubble Wrap | The combat filter consumes one charge per hit and grants i-frames. |
+| `bunny.hiddenFromHazards` | Dust Cloud | Hazards must not target, chase or apply suction/pull while true. Contact damage is already cancelled by the filter. |
+| `bunny.revives` (charges) | Second Wind | A lethal hit restores full health instead (`bunnyRevived`, 2.5 s i-frames). |
+| `bunny.spikyDash` + `bunny.dashing` | Spiky Dash | Contact while dashing deals no damage. The combat System sets `hazard.stunnedFor = 2.5`, calls optional `hazard.stun?(s)`, and counts `stunnedFor` down. Hazards must skip movement/attacks while `stunnedFor > 0`. |
+| `bunny.stats.get('suctionMultiplier')` | Zap (1.5) | Scale suction forces by it. |
 
 ## How to…
 
@@ -115,9 +140,11 @@ hazardRegistry.register({
 
 `HazardManager` (`run.hazards`) handles absorbing: when `size ≤ radius × absorbRatio` it calls `run.absorbMass` and `onAbsorbed`, and sets `dead`. Otherwise it calls `onContact`. Spawning is up to you: set `run.hazards.director = (dt, run, mgr) => …` and call `mgr.spawn(defId, x, z)`. Use `isFloorFree(run.house, x, z, size)` from `systems/spawner.ts` to find valid spots. To win the Run, the boss's `onAbsorbed` calls `run.end('victory')`.
 
-**Add a Pickup.** `pickupRegistry.register({ id, name, description, color, duration?, spawnWeight, apply(run, duration) })` in `src/pickups/`. `apply` may return an undo callback that runs on expiry. Timed stat effects can instead pass `duration` to `stats.add`. Spawn with `run.pickups.spawn(defId, x, z)` or a `run.pickups.director`. `run.pickups.durationScale` is the Hoarder hook. `createObject(radius)` overrides the default glowing sphere.
+**Add a Pickup.** Add data to `src/data/pickups.ts` and a def to `PICKUP_DEFS` in `src/pickups/pickups.ts` (`{ id, name, icon, description, color, duration?, spawnWeight, apply(run, duration) }`). `apply` may return an undo callback that runs on expiry; collecting an active timed Pickup undoes and re-applies it with a fresh timer. Durations are scaled by the `pickupDuration` stat (Hoarder). The director spawns from all registered Pickups by `spawnWeight`; `run.pickups.spawn(defId, x, z)` spawns one directly.
 
-**Add a Perk.** `perkRegistry.register({ id, name, description, unique?, maxStacks?, weight?, apply(run, stacks) })` in `src/perks/`. Apply with `run.applyPerk(id)`. `availablePerks(run)` filters out unique or maxed Perks. Typical apply: `run.bunny.stats.add({ stat, op, value, source: 'perk:<id>' })`. The draft itself is a screen: subscribe to `tierUp`, then `game.go('perkDraft', choices)`.
+**Add a Perk.** Add data to `src/data/perks.ts` and a def to `PERK_DEFS` in `src/perks/perks.ts` (`{ id, name, icon, description, unique?, maxStacks?, weight?, apply(run, stacks) }`). Apply with `run.applyPerk(id)`. `availablePerks(run)` filters out unique or maxed Perks. Typical apply: `run.bunny.stats.add({ stat, op, value, source: 'perk:<id>' })`.
+
+**Add an Upgrade.** Append to `UPGRADES` in `src/data/upgrades.ts` (`stat`, `op`, `perLevel`, `maxLevel`, `baseCost`, `costGrowth`). The Shop lists it and `upgradeModifiers` applies it.
 
 **Add a screen.** Screens are the game state machine:
 
@@ -147,7 +174,7 @@ Re-registering an existing id (`title`, `playing`, `paused`, `results`) replaces
 
 ## Debug hooks
 
-URL params: `?debug`, `?seed=<string>` (same seed → same house and initial Debris), `?character=lint|tumble|zap`, `?autostart` (skip the title screen).
+URL params: `?debug`, `?seed=<string>` (same seed → same house and initial Debris), `?character=lint|tumble|zap` (otherwise the last chosen Character), `?autostart` (skip the title screen and character select).
 
 With `?debug`:
 - `window.__game`: the `Game` (`.run`, `.view`, `.events`, `.loop`, `.screens`…).
@@ -159,7 +186,9 @@ For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugToo
 
 ## Known gaps
 
-- Hazards, Pickups, Perks, character select, Shop, Perk draft, audio, touch joystick, leaderboard: hooks only.
+- Hazards, audio, touch joystick, leaderboard: hooks only.
+- Character `look` beyond `color` (fur length, fluffiness, eye style, glow) is not rendered yet.
+- Fluff is awarded for quit Runs too (per the design formula), so very short Runs still earn ~10 Fluff.
 - Furniture is many small meshes (~500 draw calls at Tier 5 including shadows); merge per material if mid-range GPUs struggle.
 - At Tier 5 the view covers the whole house, so the spawner has no off-screen room left to spawn into. Late-game Debris supply relies on the initial scatter.
 - Debris has no GLB override path (recipes only).
