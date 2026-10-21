@@ -218,3 +218,27 @@
   align-self: center;
   min-width: 140px;
 }
+
+/* Difficulty badge after the Bunny name (non-casual entries only). */
+.lb-diff {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.3px;
+  vertical-align: 1px;
+  color: var(--muted);
+  cursor: help;
+}
+
+.lb-diff-arcade {
+  color: var(--accent-700);
+}
+
+.lb-diff-hardcore {
+  color: var(--berry-700);
+}

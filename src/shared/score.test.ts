@@ -29,6 +29,23 @@ describe('computeScore', () => {
   });
 });
 
+describe('difficulty multiplier', () => {
+  it('leaves casual (and missing) scores unchanged', () => {
+    expect(computeScore({ ...base, difficulty: 'casual' })).toBe(computeScore(base));
+    expect(computeScore(base)).toBe(3200);
+  });
+
+  it('multiplies arcade and hardcore scores and rounds', () => {
+    expect(computeScore({ ...base, difficulty: 'arcade' })).toBe(4000);
+    expect(computeScore({ ...base, difficulty: 'hardcore' })).toBe(5120);
+    // 101 × 1.25 = 126.25 and 101 × 1.6 = 161.6.
+    const odd = { maxRadius: 1.01, debrisAbsorbed: 0, tierReached: 1, durationMs: 0, victory: false };
+    expect(computeScore(odd)).toBe(101);
+    expect(computeScore({ ...odd, difficulty: 'arcade' })).toBe(126);
+    expect(computeScore({ ...odd, difficulty: 'hardcore' })).toBe(162);
+  });
+});
+
 describe('score tiers', () => {
   it('mirror src/data/tiers.ts', () => {
     expect(SCORE_TIER_MIN_RADII).toEqual(TIERS.map((t) => t.minRadius));

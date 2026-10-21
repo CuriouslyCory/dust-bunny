@@ -2,6 +2,7 @@
 
 - **Bunny** — the player character: a fuzzy sphere of dust. Its size is its **radius** (world units are centimetres).
 - **Character** — one of three starting Bunny archetypes chosen before a Run (Lint, Tumble, Zap). Each has different base stats.
+- **Difficulty** — how hard a Run is, chosen with the Character: **Casual** (default, the original balance), **Arcade** (faster, more frequent Hazards with quicker attacks) or **Hardcore** (much more of that, one heart fewer, fewer Pickups, no heal between Areas). Harder Difficulties pay more Fluff and leaderboard score.
 - **Run** — one play session from spawn to death or victory (absorbing the Garbage Truck, the City boss). Runs are procedurally generated from a seed.
 - **Debris** — any floor object the Bunny can absorb once it is big enough (lint, staples, coins, socks, shoes, chairs…). Do not call it "food" or "loot".
 - **Absorb** — the act of the Bunny picking up Debris (or a shrunken Hazard). Absorbed Debris sticks visibly to the Bunny and adds mass.

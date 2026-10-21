@@ -150,6 +150,13 @@ describe('save data', () => {
     expect(data.stats.wins).toBe(2);
   });
 
+  it('remembers the Difficulty, reading missing or unknown values as casual', () => {
+    expect(defaultSave().lastDifficulty).toBe('casual');
+    expect(parseSave(JSON.stringify({ version: 1, lastDifficulty: 'hardcore' })).data.lastDifficulty).toBe('hardcore');
+    expect(parseSave(JSON.stringify({ version: 1, lastDifficulty: 'nightmare' })).data.lastDifficulty).toBe('casual');
+    expect(parseSave(JSON.stringify({ version: 1, fluff: 3 })).data.lastDifficulty).toBe('casual');
+  });
+
   it('treats corrupt JSON as defaults and backs it up', () => {
     const storage = memStorage({ [SAVE_KEY]: '{"fluff": 10,' });
     const store = new SaveStore(storage);

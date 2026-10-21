@@ -31,9 +31,9 @@ Project structure, the game loop, events and extension points are documented in 
 `api/leaderboard.ts` is a Vercel function backed by Neon Postgres (`@neondatabase/serverless`):
 
 - `GET /api/leaderboard[?character=lint|tumble|zap]` returns `{ entries }`, the top 20.
-- `POST /api/leaderboard` with `{ name, character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score }` returns `201 { entry, rank, nameCensored }`. The server validates the fields, recomputes the score (`src/shared/score.ts`), and rate-limits by hashed IP. Errors come back as JSON `{ error, message, field? }`.
+- `POST /api/leaderboard` with `{ name, character, difficulty, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score }` returns `201 { entry, rank, nameCensored }`. The server validates the fields, recomputes the score (`src/shared/score.ts`, × the Difficulty's multiplier: Casual 1, Arcade 1.25, Hardcore 1.6; a missing `difficulty` counts as Casual), and rate-limits by hashed IP. All Difficulties share one board; each entry carries its `difficulty`. Errors come back as JSON `{ error, message, field? }`.
 
-The table is created on first request. `db/schema.sql` contains the same DDL if you want to apply it by hand.
+The table is created on first request, and columns added since (`difficulty`) are added to an existing table the same way. `db/schema.sql` contains the same DDL if you want to apply it by hand.
 
 ## Deploying to Vercel
 

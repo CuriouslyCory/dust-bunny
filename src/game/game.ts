@@ -159,6 +159,7 @@ export class Game {
     const full: RunConfig = {
       seed: config.seed ?? this.nextRunConfig.seed ?? randomSeed(),
       characterId: config.characterId ?? this.nextRunConfig.characterId ?? DEFAULT_CHARACTER_ID,
+      difficulty: config.difficulty ?? this.nextRunConfig.difficulty,
       modifiers: [...(this.nextRunConfig.modifiers ?? []), ...(config.modifiers ?? [])],
       perks: config.perks ?? this.nextRunConfig.perks,
       area: config.area ?? this.nextRunConfig.area,

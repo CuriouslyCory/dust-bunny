@@ -3,11 +3,13 @@
  *   ?debug          debug hooks (window.__game, FPS, G/T keys) — see src/debug/debug.ts
  *   ?seed=abc       fixed Run seed (same seed => same house layout)
  *   ?character=zap  starting Character (lint | tumble | zap)
+ *   ?difficulty=arcade  Difficulty (casual | arcade | hardcore; otherwise the last one picked)
  *   ?autostart      skip the title screen
  *   ?area=neighborhood|city  start Runs in a later area (skips the earlier ones; debug / testing)
  */
 import './styles.css';
 import { installAudio } from './audio';
+import { isDifficultyId } from './data/difficulty';
 import { installDebug } from './debug/debug';
 import { showLoading } from './fx/loading';
 import { Game } from './game/game';
@@ -34,6 +36,8 @@ async function boot(): Promise<void> {
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
+  const difficulty = params.get('difficulty');
+  if (isDifficultyId(difficulty)) game.nextRunConfig.difficulty = difficulty;
   const area = params.get('area');
   if (area === 'neighborhood' || area === 'city') game.nextRunConfig.area = area;
   installRoguelike(game);

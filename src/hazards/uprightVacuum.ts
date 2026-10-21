@@ -86,9 +86,9 @@ export class UprightVacuum extends BaseHazard {
           this.timer = 0.3;
         } else {
           this.state = 'warmup';
-          this.timer = c.warmup;
+          this.timer = this.attackTime(run, c.warmup);
           this.cone.setColor(DECAL_COLORS.warn);
-          this.emitTelegraph(run, this.blows ? 'blow' : 'suction', c.warmup);
+          this.emitTelegraph(run, this.blows ? 'blow' : 'suction', this.timer);
         }
       } else if (this.state === 'warmup') {
         this.state = 'on';
@@ -96,7 +96,7 @@ export class UprightVacuum extends BaseHazard {
         this.cone.setColor(this.blows ? DECAL_COLORS.air : DECAL_COLORS.suction);
       } else {
         this.state = 'off';
-        this.timer = c.off * this.rng.range(0.8, 1.2);
+        this.timer = this.attackTime(run, c.off) * this.rng.range(0.8, 1.2);
       }
     }
 
@@ -105,7 +105,7 @@ export class UprightVacuum extends BaseHazard {
     this.cone.visible = this.state !== 'off';
     this.cone.place(it.x, it.z, this.yaw);
     this.cone.root.scale.setScalar(range / c.coneRange);
-    if (this.state === 'warmup') this.cone.pulse(this.time, 1 - this.timer / c.warmup);
+    if (this.state === 'warmup') this.cone.pulse(this.time, 1 - this.timer / this.attackTime(run, c.warmup));
     else if (this.state === 'on') this.cone.setOpacity(0.28 + 0.1 * Math.sin(this.time * 14));
 
     if (this.state !== 'on') return;

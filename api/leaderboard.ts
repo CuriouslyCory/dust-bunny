@@ -9,12 +9,17 @@
  * client then falls back to its local leaderboard), 500 server_error.
  *
  * Needs DATABASE_URL (injected by the Vercel Neon integration). Optional LEADERBOARD_IP_SALT
- * salts the stored IP hashes. The table is created on first use (same DDL as db/schema.sql).
+ * salts the stored IP hashes. The table is created on first use (same DDL as db/schema.sql);
+ * columns added later are applied with idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`.
+ *
+ * Every Difficulty shares one board: submitted scores already include the Difficulty
+ * multiplier (see src/shared/score.ts), and each entry carries its `difficulty`.
  *
  * Imports from src/ use `.js` extensions: Vercel runs this file as native ESM.
  */
 import { createHash } from 'node:crypto';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { DEFAULT_DIFFICULTY, isDifficultyId } from '../src/shared/difficulty.js';
 import {
   isLeaderboardCharacter,
   LEADERBOARD_CHARACTERS,
@@ -40,9 +45,12 @@ const SCHEMA = [
     tier_reached smallint NOT NULL,
     duration_ms integer NOT NULL,
     victory boolean NOT NULL DEFAULT false,
+    difficulty text NOT NULL DEFAULT 'casual',
     ip_hash text,
     created_at timestamptz NOT NULL DEFAULT now()
   )`,
+  // Tables created before Difficulty existed.
+  `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS difficulty text NOT NULL DEFAULT 'casual'`,
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_score_idx ON leaderboard_scores (score DESC, id)`,
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_character_idx ON leaderboard_scores (character, score DESC, id)`,
   `CREATE INDEX IF NOT EXISTS leaderboard_scores_ip_idx ON leaderboard_scores (ip_hash, created_at)`,
@@ -98,6 +106,7 @@ interface Row {
   tier_reached: number;
   duration_ms: number;
   victory: boolean;
+  difficulty: string | null;
   created_at: string | Date;
 }
 
@@ -112,11 +121,12 @@ function toEntry(r: Row): LeaderboardEntry {
     tierReached: Number(r.tier_reached),
     durationMs: Number(r.duration_ms),
     victory: Boolean(r.victory),
+    difficulty: isDifficultyId(r.difficulty) ? r.difficulty : DEFAULT_DIFFICULTY,
     createdAt: new Date(r.created_at).toISOString(),
   };
 }
 
-const COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, created_at';
+const COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, created_at';
 
 async function getTop(url: URL): Promise<Response> {
   const character = url.searchParams.get('character');
@@ -184,9 +194,9 @@ async function submit(request: Request): Promise<Response> {
   }
 
   const [row] = (await sql.query(
-    `INSERT INTO leaderboard_scores (name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, ip_hash)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ${COLUMNS}`,
-    [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, ipHash],
+    `INSERT INTO leaderboard_scores (name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, ip_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING ${COLUMNS}`,
+    [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, s.difficulty, ipHash],
   )) as Row[];
   const entry = toEntry(row!);
   const [rankRow] = (await sql.query(

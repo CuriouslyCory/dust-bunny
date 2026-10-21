@@ -82,11 +82,11 @@ export class SprayBottle extends BaseHazard {
     else if (canTarget(run) && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
     if (this.state === 'idle' && inRange && Math.abs(wrapAngle(yawOf(dx, dz) - this.yaw)) < 0.25) {
       this.state = 'telegraph';
-      this.timer = tierValue(c.telegraph, run.tier);
+      this.timer = this.attackTime(run, tierValue(c.telegraph, run.tier));
       this.emitTelegraph(run, 'spray', this.timer);
     }
     if (this.state === 'telegraph') {
-      const total = tierValue(c.telegraph, run.tier);
+      const total = this.attackTime(run, tierValue(c.telegraph, run.tier));
       this.aimDecal.visible = true;
       this.aimDecal.place(this.x, this.z, this.yaw);
       this.aimDecal.root.scale.set(1, 1, range);
@@ -103,7 +103,7 @@ export class SprayBottle extends BaseHazard {
         this.timer = c.burstGap;
         if (this.shotsLeft <= 0) {
           this.state = 'cooldown';
-          this.timer = tierValue(c.cooldown, run.tier);
+          this.timer = this.attackTime(run, tierValue(c.cooldown, run.tier));
           this.aimDecal.visible = false;
         }
       }
@@ -116,7 +116,7 @@ export class SprayBottle extends BaseHazard {
   private fire(run: Run, range: number): void {
     const c = this.cfg;
     const a = this.yaw + this.rng.range(-c.spread, c.spread);
-    const speed = tierValue(c.dropletSpeed, run.tier);
+    const speed = this.speed(run, tierValue(c.dropletSpeed, run.tier));
     const mesh = new Mesh(dropletGeometry, dropletMaterial);
     mesh.scale.setScalar(c.dropletRadius);
     this.object3d.add(mesh);
