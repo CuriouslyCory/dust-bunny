@@ -3,20 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Dust Bunny</title>
+    <meta name="description" content="A cosy three.js roguelike: roll across the house as a dust bunny, absorb debris, grow through five Tiers and dodge the cleaning crew." />
     <meta name="theme-color" content="#3b2a22" />
+    <meta name="color-scheme" content="dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Dust Bunny" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Dust Bunny</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Dust Bunny" />
+    <meta property="og:title" content="Dust Bunny" />
+    <meta property="og:description" content="Roll across the house as a dust bunny: absorb debris, grow through five Tiers and dodge the cleaning crew." />
+    <meta property="og:image" content="/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A fluffy dust bunny rolling across a wooden floor scattered with debris." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Dust Bunny" />
+    <meta name="twitter:description" content="Roll across the house as a dust bunny: absorb debris, grow through five Tiers and dodge the cleaning crew." />
+    <meta name="twitter:image" content="/og.png" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="app">
-      <canvas id="game-canvas"></canvas>
+      <canvas id="game-canvas" aria-label="Dust Bunny game view"></canvas>
       <div id="ui"></div>
     </div>
+    <noscript><p style="color:#f4e9dc;font-family:system-ui,sans-serif;padding:24px">Dust Bunny needs JavaScript and WebGL to run.</p></noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
