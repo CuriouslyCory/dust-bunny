@@ -9,7 +9,7 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/main.ts` | Boot: registers screens, loads GLB overrides, creates `Game`, reads URL params. |
 | `src/core/` | Engine-agnostic utilities: `events.ts` (typed `EventBus`, `Disposables`), `loop.ts` (`FixedLoop`), `input.ts` (`InputSource`, keyboard, mouse steer, `CompositeInput`), `rng.ts` (`Rng`, mulberry32), `spatialHash.ts`, `math.ts` (rects, circle-vs-AABB/circle push-out, damp), `registry.ts`. |
 | `src/data/` | Tunable data only: `debris.ts` (Debris catalogue; `outdoorDebris.ts` holds the neighborhood types), `areas.ts` (per-area Debris Tier band, start density, growth multiplier), `tiers.ts`, `tuning.ts` (all gameplay constants), `characters.ts`, `pickups.ts`, `perks.ts`, `upgrades.ts`. |
-| `src/world/` | `house.ts` (seeded `generateHouse`, front door + `openExit`), `neighborhood.ts` (seeded `generateNeighborhood`: streets, lots, houses, trees, park), `outdoorModels.ts` (procedural houses/trees), `rooms.ts` (room templates), `furniture.ts` (furniture defs + collision boxes), `types.ts` (`HouseLayout` etc.). Browser-only: `houseView.ts` (floors, rugs, walls, furniture, occlusion fade), `staticBatch.ts` (walls + furniture in one draw call), `meshBake.ts` (bake meshes to vertex colours), `materials.ts` (canvas textures), `models.ts` (model registry + GLB loader). |
+| `src/world/` | `house.ts` (seeded `generateHouse`, front door + `openExit`), `neighborhood.ts` (seeded `generateNeighborhood`: streets, lots, houses, trees, park, road barrier to the city), `city.ts` (seeded `generateCity`: avenues, sidewalks, building blocks, parking lots, park square), `outdoorModels.ts` (procedural houses/trees), `cityModels.ts` (procedural buildings), `rooms.ts` (room templates), `furniture.ts` (furniture defs + collision boxes), `types.ts` (`HouseLayout` etc.). Browser-only: `houseView.ts` (floors, rugs, walls, furniture, occlusion fade), `staticBatch.ts` (walls + furniture in one draw call), `meshBake.ts` (bake meshes to vertex colours), `materials.ts` (canvas textures), `models.ts` (model registry + GLB loader). |
 | `src/entities/` | Sim state: `bunny.ts`, `debris.ts` (`DebrisField`), `stats.ts` (stat modifiers). Views: `bunnyView.ts` (shell fur, eyes, squash & stretch), `bunnyLook.ts` (`BunnyLook` = Character `look`, `resolveLook`), `debrisRenderer.ts`, `debrisGeometry.ts` (recipes or GLB props). |
 | `src/systems/` | Per-tick `System`s: `movement.ts` (input, Dash, rolling), `absorb.ts` (absorb rule, growth formula, magnet), `collision.ts`, `growth.ts` (Tier-up), `spawner.ts`. `camera.ts` is render-side (`CameraRig`, aspect framing via `framingForAspect`: portrait viewports get a wider fov, steeper pitch and more distance) plus pure `cameraDistanceFor`/`viewRadiusFor` (aspect-independent, so gameplay is identical on every device) and `floorPointVisible`/`onScreen`/`spawnView` (the real on-screen floor trapezoid, from `run.viewInfo` which `RunView` refreshes each frame; a 16:9 default headless). |
 | `src/game/` | `run.ts` (`Run`: one session, headless), `runView.ts` (rendering for a Run), `game.ts` (`Game`: renderer, scene, loop, screens, current Run), `system.ts` (`System`, `SYSTEM_ORDER`), `runStats.ts`. |
@@ -27,7 +27,7 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/debug/debug.ts` | `?debug` hooks. |
 | `scripts/sim.ts` | Headless balance bot (`pnpm sim [seeds…] [--minutes=N]`). |
 
-**Areas.** A Run starts in the house (`run.area === 'house'`). Absorbing the Robo-Vac 9000 calls `run.openExit()`: the front door (an obstacle in the hallway's end wall, `layout.exit`) is removed and `exitOpened` fires. When the Bunny touches the open doorway, the `exit` System (order 650) calls `run.enterNeighborhood()`, which swaps `run.house` for `generateNeighborhood(seed)` (same `HouseLayout` shape: outdoor zones `yard | street | sidewalk | driveway | park` play the part of rooms, houses and trees are furniture, the edge hedge is the walls), resets Debris with a bigger spatial-hash cell, clears Hazards and floor Pickups, moves the Bunny to its front walk (healing 1 heart), repopulates and emits `areaEntered`. Size, health, Perks and active Pickups carry over. `RunView` rebuilds the world view, `Game` switches sky/fog/lighting and snaps the camera. Debris types carry `area` (default `'house'`); `roomWeight` returns 0 across areas. `AREAS[area].tiers` clamps the spawner's Tier band (house 1–5, neighborhood 5–7) and `AREAS[area].growth` scales growth (0.24 outside).
+**Areas.** A Run goes house → neighborhood → city (`AREA_ORDER`, `run.area`). Each area's boss opens its exit when absorbed (`BossTuning.onDefeat: 'openExit'`): `run.openExit()` removes the exit obstacle (`layout.exit`: the front door in the hallway's end wall, then the road barrier across one end of the neighborhood's main street), sets `houseCleared` / `neighborhoodCleared` and emits `exitOpened { area }`. When the Bunny touches the open exit, the `exit` System (order 650) calls `run.enterNextArea()` → `run.enterArea(next)`, which swaps `run.house` for the next generator's layout (`generateNeighborhood` / `generateCity`, same `HouseLayout` shape: zones play the part of rooms, houses / buildings and trees are furniture, the hedge / concrete barrier is the walls), resets Debris with a bigger spatial-hash cell, clears Hazards and floor Pickups, moves the Bunny to the area spawn (healing 1 heart), repopulates and emits `areaEntered`. Size, health, Perks and active Pickups carry over. `RunView` rebuilds the world view, `Game` switches sky/fog/lighting (`Lighting.setArea`) and snaps the camera. Zone types are unique per area (`zoneArea(type)`: house rooms, neighborhood `yard | street | sidewalk | driveway | park`, city `avenue | pavement | plaza | parking | square`); Debris types carry `area` (default `'house'`) and `roomWeight` returns 0 across areas. `AREAS[area].tiers` clamps the spawner's Tier band (house 1–5, neighborhood 5–7, city 7–9) and `AREAS[area].growth` scales growth. The city boss (Garbage Truck, `onDefeat: 'victory'`) wins the Run.
 
 **Sim / render split.** `Run` and everything it touches (`Bunny`, `DebrisField`, systems, `generateHouse`) never touch the DOM or WebGL, so they run under Vitest and `pnpm sim`. Rendering reads that state each frame (`RunView`, `BunnyView`, `DebrisRenderer`, `HouseView`). The one exception: `run.entityRoot` (a `THREE.Group`) holds visuals owned by Hazards and Pickups; it's harmless headless.
 
@@ -47,7 +47,7 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | 500 | `collision` | push-out from walls/furniture AABBs (skipped if `2r < clearance`; walls use a squeezed radius inside doorways, `wallRadiusAt`) and Obstacle Debris circles (Debris up to `radius × TUNING.push.ratio` is shoved instead, `pushDebris`); clamp to bounds |
 | 550 | `pickups` (`PickupManager`) | collect floor Pickups, expire timed effects |
 | 600 | `growth` | emits `tierUp` per Tier crossed, records `run.tierTimes` |
-| 650 | `exit` | once the front door is open, touching the doorway moves the Run to the neighborhood |
+| 650 | `exit` | once the area's exit is open, touching it moves the Run to the next area |
 | 700 | `spawner` (`DebrisSpawner`) | every 0.25 s: cull far tiny Debris, top up meaningful absorbables on floor that is off screen (`floorPointVisible`), reachable (`reachableBy`) and not cluttered (`clutterFree`) |
 
 Add your own with `run.addSystem({ id, order, update(dt, run) })` (e.g. listen to `runStarted` and add it to `game.run`).
@@ -87,8 +87,8 @@ The bus lives on `Game` and outlives Runs: subscribe once at boot. Handlers run 
 | `bossDefeated` / `victory` | `{ hazardId, defId, timeSec }` / `{ timeSec, radius }` | boss `onAbsorbed`; the Robo-Vac 9000 opens the front door, the Street Sweeper emits `victory` right before `runEnded` (`victory`) |
 | `pickupSpawned` / `pickupCollected` / `pickupExpired` | `{ pickupId, defId }` / `{ defId }` | `PickupManager` |
 | `perkApplied` | `{ perkId, stacks }` | `Run.applyPerk` |
-| `exitOpened` | `{ x, z }` (doorway centre) | `Run.openExit` (after the Robo-Vac 9000) |
-| `areaEntered` | `{ area, timeSec }` | `Run.enterNeighborhood` |
+| `exitOpened` | `{ area, x, z }` (exit centre) | `Run.openExit` (after the Robo-Vac 9000 / Street Sweeper) |
+| `areaEntered` | `{ area, timeSec }` | `Run.enterArea` |
 
 Add events by augmenting the interface from your module:
 
@@ -189,21 +189,21 @@ Re-registering an existing id (`title`, `playing`, `paused`, `results`) replaces
 
 **Add input.** Implement `InputSource.sample(): { moveX, moveZ, dash }` (world XZ, |move| ≤ 1, dash edge-triggered) and call `game.input.add(source)`. `screenToWorld(right, up, TUNING.camera.yaw)` converts a screen-relative stick vector. Mouse steering ignores `pointerType === 'touch'`, leaving touch to a joystick source.
 
-**Add an area.** Add the id to `AreaId` (`src/world/types.ts`), a generator returning a `HouseLayout`, an `AREAS` entry, a director table and boss in `src/data/hazards.ts` (`AREA_BOSSES`), and a transition like `Run.enterNeighborhood`.
+**Add an area.** Add the id to `AreaId` and `AREA_ORDER` (`src/world/types.ts`) plus its zone types, a generator returning a `HouseLayout` (with an `exit` if another area follows), an `AREA_WORLDS` entry in `run.ts`, an `AREAS` entry, an `AREA_DIRECTORS` table and `AREA_BOSSES` entry in `src/data/hazards.ts`, sky/light in `game.ts` / `lighting.ts`, and its exit compass text in `ui/areaHud.ts`.
 
 **Add a room / furniture.** Furniture defs go in `src/world/furniture.ts` (`clearance` + `legs` for things you can roll under). Room templates go in `src/world/rooms.ts` and use `FurnishContext` (`placeAgainstWall`, `place`, `placeDebris`, `addRug`, `setSpawn`), which rejects overlaps with doorways and other furniture.
 
 ## Debug hooks
 
-URL params: `?debug`, `?seed=<string>` (same seed → same house, neighborhood and initial Debris), `?character=lint|tumble|zap` (otherwise the last chosen Character), `?autostart` (skip the title screen and character select), `?area=neighborhood` (start outside with a house-cleared Bunny, r = 56).
+URL params: `?debug`, `?seed=<string>` (same seed → same house, neighborhood, city and initial Debris), `?character=lint|tumble|zap` (otherwise the last chosen Character), `?autostart` (skip the title screen and character select), `?area=neighborhood` (start outside with a house-cleared Bunny, r = 56), `?area=city` (start in the city with a neighborhood-cleared Bunny, r = 230).
 
 With `?debug`:
 - `window.__game`: the `Game` (`.run`, `.view`, `.events`, `.loop`, `.screens`…).
-- `window.__game.debugTools`: `grow(factor)`, `setRadius(r)`, `nextTier()`, `setTimeScale(s)`, `advance(seconds)` (simulates immediately), `openExit()`, `enterNeighborhood()`.
-- Keys: `G` grows the radius ×1.25 (`Shift+G` shrinks it), `T` jumps to the next Tier, `N` clears the house and rolls outside, `]` / `[` doubles / halves sim speed.
+- `window.__game.debugTools`: `grow(factor)`, `setRadius(r)`, `nextTier()`, `setTimeScale(s)`, `advance(seconds)` (simulates immediately), `openExit()`, `enterNeighborhood()`, `enterCity()`, `nextArea()`.
+- Keys: `G` grows the radius ×1.25 (`Shift+G` shrinks it), `T` jumps to the next Tier, `N` clears the current area and rolls on to the next, `]` / `[` doubles / halves sim speed.
 - The HUD bottom-left shows fps, draw calls, Debris count, and radius.
 
-For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugTools.nextTier()` ×4 to reach Tier 5. For the neighborhood, load `/?debug&autostart&seed=test&area=neighborhood`. `pnpm sim --area=neighborhood` measures outdoor pacing; in a normal sim Run the bot skips the walk to the front door once the house is cleared.
+For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugTools.nextTier()` ×4 to reach Tier 5. For the neighborhood, load `/?debug&autostart&seed=test&area=neighborhood`; for the city, `&area=city`. `pnpm sim --area=neighborhood|city` measures later-area pacing; in a normal sim Run the bot skips the walk to each exit once an area is cleared.
 
 ## Known gaps
 
