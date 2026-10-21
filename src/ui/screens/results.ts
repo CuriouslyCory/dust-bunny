@@ -18,6 +18,7 @@ import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel } from '../components';
 import { getMeta } from '../../meta/meta';
+import { HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
 
@@ -34,6 +35,14 @@ export interface ResultsSection {
 }
 
 const sections = new Map<string, ResultsSection>();
+
+/** "Victory ×1.5 · " etc.: the Fluff multiplier the Run earned (see meta/fluff.ts). */
+function fluffBonusLabel(e: RunResult): string {
+  if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · `;
+  if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · `;
+  if (e.stats.houseCleared) return `House cleared ×${HOUSE_CLEARED_FLUFF_MULTIPLIER} · `;
+  return '';
+}
 
 export function registerResultsSection(section: ResultsSection): void {
   sections.set(section.id, section);
@@ -54,7 +63,7 @@ function registerDefaultSections(): void {
       const award = getMeta().awardRun(e); // idempotent per Run
       el.append(
         h('span', { className: 'fluff-earned' }, h('span', { className: 'fluff-icon', textContent: '☁️' }), `+${award.fluff} Fluff`),
-        h('span', { className: 'fluff-detail', textContent: `${e.reason === 'victory' ? 'Victory ×1.5 · ' : e.stats.houseCleared ? 'House cleared ×1.25 · ' : ''}total ${award.total}` }),
+        h('span', { className: 'fluff-detail', textContent: `${fluffBonusLabel(e)}total ${award.total}` }),
         ...(award.newBestRadius ? [h('span', { className: 'fluff-best', textContent: 'New best size!' })] : []),
       );
     },
