@@ -252,6 +252,12 @@
   opacity: 0.85;
 }
 
+/* Phone pill only (see .hud-compact below). */
+.tier-goal,
+.tier-next-short {
+  display: none;
+}
+
 .tier-card.flash {
   animation: tier-flash 1.2s var(--ease-out);
 }
@@ -412,6 +418,15 @@
   font: 800 var(--fs-xs) var(--font-body);
 }
 
+/* Fullscreen toggle: touch HUD only, and only where the Fullscreen API exists. */
+.hud-fullscreen {
+  display: none;
+}
+
+.touch .hud-fullscreen:not([hidden]) {
+  display: grid;
+}
+
 /* ── Dash ring ────────────────────────────────────────────── */
 .hud-dash {
   position: relative;
@@ -532,6 +547,11 @@
 .hud-toast.tone-bad {
   background: #ffe1e4;
   color: var(--berry-700);
+}
+
+.hud-toast-swatch,
+.hud-toast-short {
+  display: none;
 }
 
 .hud-toast-count {
@@ -735,4 +755,214 @@
 .hud-pickups:empty,
 .hud-perk-list:empty {
   display: none;
+}
+
+/* ── Phones: top-centre Tier pill + one-line toast ticker ─────
+   .hud-compact is toggled by hud.ts from COMPACT_QUERY (components.ts); the Tier card and the
+   toast layer move into the top-centre slot. */
+.hud-compact {
+  /* Room kept clear for the corner clusters (hearts / counter + buttons) beside the pill. */
+  --hud-side: calc(max(var(--safe-left), var(--safe-right)) + 200px);
+}
+
+.hud-compact .hud-top-center {
+  width: clamp(240px, calc(100vw - 2 * var(--hud-side)), 440px);
+  padding-top: 10px;
+  gap: 6px;
+}
+
+.hud-compact .tier-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 14px 5px 5px;
+  border-radius: var(--radius-pill);
+  background: rgba(42, 29, 23, 0.72);
+}
+
+.hud-compact .tier-head,
+.hud-compact .tier-foot {
+  display: contents;
+}
+
+.hud-compact .tier-name {
+  font-size: var(--fs-lg);
+  white-space: nowrap;
+}
+
+.hud-compact .tier-bar {
+  flex: 1 1 auto;
+  min-width: 36px;
+  height: 10px;
+  margin: 0;
+}
+
+.hud-compact .tier-size,
+.hud-compact .tier-next-short {
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+.hud-compact .tier-size {
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-compact .tier-goal {
+  display: inline;
+  opacity: 0.7;
+}
+
+.hud-compact .tier-next {
+  display: none;
+}
+
+.hud-compact .tier-next-short {
+  display: block;
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+}
+
+/* Top right: [counter] [fullscreen] [pause] on one row; boss status, fps and Perks wrap below. */
+.hud-compact .hud-top-right {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  max-width: 250px;
+}
+
+.hud-compact .hud-top-right > * {
+  order: 4;
+  flex-basis: 100%;
+  text-align: right;
+}
+
+.hud-compact .hud-top-right > .hud-widget-debris {
+  order: 1;
+  flex-basis: auto;
+}
+
+.hud-compact .hud-top-right > .hud-widget-fullscreen {
+  order: 2;
+  flex-basis: auto;
+}
+
+.hud-compact .hud-top-right > .hud-widget-pause {
+  order: 3;
+  flex-basis: auto;
+}
+
+.hud-compact .hud-center {
+  top: max(20%, calc(var(--safe-top) + 92px));
+}
+
+/* Toast ticker: newest on the left, older ones fade out to the right. */
+.hud-compact .hud-toasts {
+  position: static;
+  transform: none;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding-bottom: 3px;
+  overflow: hidden;
+}
+
+.hud-compact .hud-toast {
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px 4px 8px;
+  font-size: var(--fs-sm);
+  translate: none;
+  /* A tight shadow: the ticker clips overflow, so a soft one would show its edge. */
+  box-shadow: 0 2px 0 rgba(42, 29, 23, 0.35);
+  animation: ticker-in 0.35s var(--ease-bounce) both;
+}
+
+.hud-compact .hud-toast.tone-hazard {
+  font-size: var(--fs-sm);
+}
+
+.hud-compact .hud-toast:nth-child(2) {
+  opacity: 0.82;
+  background: rgba(240, 222, 200, 0.85);
+  color: var(--cocoa-800);
+}
+
+.hud-compact .hud-toast:nth-child(3) {
+  opacity: 0.62;
+  background: rgba(240, 222, 200, 0.7);
+  color: var(--cocoa-800);
+}
+
+.hud-compact .hud-toast:nth-child(n + 4) {
+  display: none;
+}
+
+.hud-compact .hud-toast-text {
+  display: none;
+}
+
+.hud-compact .hud-toast-short {
+  display: inline;
+}
+
+.hud-compact .hud-toast-swatch:not([hidden]) {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--swatch);
+  box-shadow:
+    inset 0 -2px 0 rgba(42, 29, 23, 0.25),
+    0 0 0 1px rgba(42, 29, 23, 0.2);
+}
+
+.hud-compact .hud-toast-count {
+  font-size: var(--fs-xs);
+}
+
+.hud-compact .hud-toast.bump {
+  animation: toast-bump 0.3s var(--ease-bounce);
+}
+
+.hud-compact .hud-toast.out {
+  animation: ticker-out 0.3s var(--ease-out) forwards;
+}
+
+@keyframes ticker-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.7);
+  }
+}
+
+@keyframes ticker-out {
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+
+/* Portrait phones: pill and ticker span the top; the corner clusters start below them. */
+@media (orientation: portrait) {
+  .hud-compact .hud-top-center {
+    width: calc(100vw - 20px - var(--safe-left) - var(--safe-right));
+    max-width: 440px;
+  }
+  .hud-compact .hud-top-left,
+  .hud-compact .hud-top-right {
+    top: calc(var(--safe-top) + 74px);
+  }
+  .hud-compact .hud-center {
+    top: max(24%, calc(var(--safe-top) + 150px));
+  }
 }
