@@ -34,7 +34,7 @@ export const PICKUPS = {
     id: 'bubble_wrap',
     name: 'Bubble Wrap',
     icon: '🫧',
-    description: 'Blocks the next hit',
+    description: 'Blocks the next hit (stacks to 3)',
     color: '#c8f0ff',
     spawnWeight: 0.8,
   },
@@ -72,6 +72,8 @@ export const PICKUP_EFFECTS = {
   sugarRushSpeed: 1.5,
   glueDabGrowth: 2,
   crumbCakeHeal: 1,
+  /** Bubble Wrap: each pickup adds one shield charge, up to this many. */
+  bubbleWrapMaxStacks: 3,
 };
 
 /** Floor spawning (see src/pickups/director.ts). */

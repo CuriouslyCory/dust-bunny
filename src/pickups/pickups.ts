@@ -32,7 +32,7 @@ export const PICKUP_DEFS: PickupDef[] = [
   def(PICKUPS.sugar_rush, timedStat('sugar_rush', 'speed', 'mul', FX.sugarRushSpeed)),
   def(PICKUPS.glue_dab, timedStat('glue_dab', 'growthMultiplier', 'mul', FX.glueDabGrowth)),
   def(PICKUPS.bubble_wrap, (run) => {
-    run.bunny.shield = Math.max(1, run.bunny.shield);
+    run.bunny.shield = Math.min(FX.bubbleWrapMaxStacks, run.bunny.shield + 1);
   }),
   def(PICKUPS.crumb_cake, (run) => {
     run.bunny.heal(FX.crumbCakeHeal);

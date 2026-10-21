@@ -88,6 +88,20 @@ describe('combat hooks', () => {
     expect(run.bunny.health).toBe(2);
   });
 
+  it('Bubble Wrap stacks up to 3 charges', () => {
+    const { run } = makeRun();
+    const wrap = pickupRegistry.require('bubble_wrap');
+    for (let i = 0; i < 5; i++) run.pickups.activate(wrap);
+    expect(run.bunny.shield).toBe(3);
+    for (let i = 0; i < 3; i++) {
+      run.bunny.invulnerable = 0;
+      expect(run.bunny.damage(1, 'roomba')).toBe(false);
+    }
+    run.bunny.invulnerable = 0;
+    expect(run.bunny.damage(1, 'roomba')).toBe(true);
+    expect(run.bunny.shield).toBe(0);
+  });
+
   it('Dust Cloud hides the Bunny until it expires', () => {
     const { run } = makeRun();
     run.pickups.activate(pickupRegistry.require('dust_cloud'));

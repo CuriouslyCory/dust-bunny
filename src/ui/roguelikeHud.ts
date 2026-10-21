@@ -19,7 +19,7 @@ function chargeChip(icon: string, title: string, color: string): { el: HTMLEleme
 }
 
 export function installRoguelikeHud(game: Game): void {
-  const shield = chargeChip(pickupRegistry.get('bubble_wrap')?.icon ?? '🫧', 'Bubble Wrap: blocks the next hit', '#c8f0ff');
+  const shield = chargeChip(pickupRegistry.get('bubble_wrap')?.icon ?? '🫧', 'Bubble Wrap: each charge blocks one hit (max 3)', '#c8f0ff');
   const revive = chargeChip(perkRegistry.get('second_wind')?.icon ?? '💞', 'Second Wind: revive once', '#ffb3c4');
   const el = h('div', { className: 'hud-row hud-charges' }, shield.el, revive.el);
   game.hud.addWidget({
