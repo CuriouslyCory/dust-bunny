@@ -3,27 +3,19 @@
  * 'low': no shadows, pixel ratio 1, fewer fur shells and particles.
  *
  *   import { setQuality } from './fx/quality';
- *   setQuality('low');   // e.g. from a settings menu; applies immediately
+ *   setQuality('low');   // the Settings screen does this (src/ui/install.ts)
  *
- * `?quality=low` in the URL sets the initial level. The choice is remembered in localStorage.
- * Game applies renderer/shadow changes; views read the level when they need it.
+ * Game applies renderer/shadow changes immediately; fur and particle counts are read when a Run
+ * starts. `?quality=low` in the URL sets the initial level (persistence lives in UI settings).
  */
 export type Quality = 'high' | 'low';
 
-const KEY = 'dustbunny.quality';
 const listeners = new Set<(q: Quality) => void>();
 
 function initial(): Quality {
   if (typeof window === 'undefined') return 'high';
   const p = new URLSearchParams(window.location.search).get('quality');
-  if (p === 'low' || p === 'high') return p;
-  try {
-    const s = window.localStorage.getItem(KEY);
-    if (s === 'low' || s === 'high') return s;
-  } catch {
-    /* storage unavailable */
-  }
-  return 'high';
+  return p === 'low' ? 'low' : 'high';
 }
 
 let current: Quality = initial();
@@ -35,11 +27,6 @@ export function getQuality(): Quality {
 export function setQuality(q: Quality): void {
   if (q === current) return;
   current = q;
-  try {
-    window.localStorage.setItem(KEY, q);
-  } catch {
-    /* storage unavailable */
-  }
   for (const l of listeners) l(q);
 }
 

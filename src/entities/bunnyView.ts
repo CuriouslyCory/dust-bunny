@@ -75,7 +75,7 @@ const _inv = new Quaternion();
 const _v = new Vector3();
 
 /** Fur length at furLength = 1, as a fraction of the radius. */
-const FUR_UNIT = 0.2;
+const FUR_UNIT = 0.17;
 
 function furCore(fluffiness: number): IcosahedronGeometry {
   const g = new IcosahedronGeometry(1, 5);
@@ -185,7 +185,7 @@ export class BunnyView {
       uShellCount: { value: shellCount },
       uFurLength: { value: FUR_UNIT * L.furLength },
       uDrag: { value: new Vector3() },
-      uDensity: { value: 19 - L.fluffiness * 6 },
+      uDensity: { value: 24 - L.fluffiness * 8 },
       uFluff: { value: L.fluffiness },
       uTime: { value: 0 },
       uGlow: { value: L.glow },
@@ -211,11 +211,14 @@ export class BunnyView {
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
-          vec3 fp = vFurDir * uDensity;
+          // Strands bend in coherent clumps (more with fluffiness) so the fur reads as soft fluff.
+          vec3 clump = furHash(floor(vFurDir * uDensity * 0.35)) - 0.5;
+          vec3 bent = normalize(vFurDir - clump * vShellH * vShellH * (0.06 + 0.18 * uFluff));
+          vec3 fp = bent * uDensity;
           vec3 cell = floor(fp);
           vec3 rnd = furHash(cell);
           vec3 cdir = normalize(cell + 0.2 + 0.6 * rnd);
-          float fd = length(vFurDir - cdir) * uDensity;
+          float fd = length(bent - cdir) * uDensity;
           float strandLen = mix(1.0, 0.3 + 0.7 * rnd.x, uFluff);
           float hh = vShellH / strandLen;
           if (hh > 1.0) discard;

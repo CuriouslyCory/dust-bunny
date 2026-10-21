@@ -42,8 +42,10 @@ interface Fadeable {
 }
 
 const _ray = new Ray();
+const _ray2 = new Ray();
 const _v = new Vector3();
 const _dir = new Vector3();
+const _dir2 = new Vector3();
 
 const WALL_PAINT = '#f1e6d6';
 const WALL_CAP = '#8a7a6a';
@@ -193,13 +195,23 @@ export class HouseView {
 
   /** Fade anything blocking the line from the camera to the Bunny. */
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
+    // Two sight lines: to the centre and to the lower part of the ball (so a table top that
+    // hides the bottom half still fades).
     _v.set(bunnyX, bunnyY, bunnyZ);
     _dir.subVectors(_v, camera);
     const dist = _dir.length();
     _ray.set(camera, _dir.normalize());
+    _v.set(bunnyX, bunnyY * 0.35, bunnyZ);
+    _dir2.subVectors(_v, camera);
+    const dist2 = _dir2.length();
+    _ray2.set(camera, _dir2.normalize());
     for (const f of this.fadeables) {
-      const hit = _ray.intersectBox(f.box, _v);
-      const blocking = hit !== null && hit.distanceTo(camera) < dist - radius * 0.5;
+      let hit = _ray.intersectBox(f.box, _v);
+      let blocking = hit !== null && hit.distanceTo(camera) < dist - radius * 0.5;
+      if (!blocking) {
+        hit = _ray2.intersectBox(f.box, _v);
+        blocking = hit !== null && hit.distanceTo(camera) < dist2 - radius * 0.5;
+      }
       const target = blocking ? 0.22 : 1;
       if (Math.abs(f.opacity - target) < 0.005) continue;
       f.opacity = damp(f.opacity, target, 10, frameDt);

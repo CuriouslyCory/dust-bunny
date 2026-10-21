@@ -2,16 +2,16 @@
  * Applies Settings to the running Game (graphics quality, reduced motion) and other
  * page-level UI behaviour. Called once from main.ts after the Game exists.
  */
+import { setQuality } from '../fx/quality';
 import type { Game } from '../game/game';
 import { settings, type GraphicsQuality } from './settings';
 
-/** low: 1× pixel ratio, no shadows. high: up to 2× pixel ratio with shadows. */
-export function applyGraphicsQuality(game: Game, quality: GraphicsQuality): void {
-  const ratio = quality === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2);
-  game.renderer.setPixelRatio(ratio);
-  // Toggling castShadow changes the lights hash, so materials recompile without shadow sampling.
-  game.sun.castShadow = quality === 'high';
-  game.resize();
+/**
+ * low: 1× pixel ratio, no shadows, lighter fur and particles. high: up to 2× pixel ratio with
+ * soft shadows. Game applies renderer changes via fx/quality (fur/particles on the next Run).
+ */
+export function applyGraphicsQuality(_game: Game, quality: GraphicsQuality): void {
+  setQuality(quality);
 }
 
 export function installUi(game: Game): void {

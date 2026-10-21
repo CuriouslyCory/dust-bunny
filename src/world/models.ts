@@ -5,7 +5,9 @@
  * Conventions: local origin at the footprint centre on the floor (y = 0), front faces +Z,
  * units cm. Every object returned by createModel() follows this, GLB or procedural.
  *
- * manifest.json entries: { "file": "couch.glb", "fit"?: "footprint" | "xz" | "none", "scale"?: n }
+ * manifest.json entries: { "file": "couch.glb", "fit"?: "footprint" | "xz" | "none", "scale"?: n, "collapse"?: true }
+ *   - "collapse": per node, merge the single-colour glTF primitives into one vertex-coloured mesh
+ *     (named "<node>_merged"; named nodes, pivots and emissive parts are kept). Used for hazards.
  *   - "footprint" (default): stretched to opts {w, h, d}.
  *   - "xz": X/Z stretched to opts {w, d}; height kept at `scale` (the Blender models are authored
  *     in cm, so clearances under furniture stay exact). Used for furniture.
@@ -20,6 +22,7 @@
  */
 import { Box3, BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3, type Object3D } from 'three';
 import { Rng } from '../core/rng';
+import { collapsePrimitives } from './meshBake';
 
 export interface ModelOptions {
   /** Target size (cm): w along X, d along Z, h height. */
@@ -47,6 +50,8 @@ interface ManifestEntry {
   file: string;
   fit?: FitMode;
   scale?: number;
+  /** Merge each node's single-colour primitives into one vertex-coloured mesh (fewer draw calls). */
+  collapse?: boolean;
 }
 
 const factories = new Map<string, ModelFactory>();
@@ -138,6 +143,7 @@ export async function loadModelOverrides(timeoutMs = 8000, onProgress?: (done: n
           const gltf = await loader.loadAsync(`${base}models/${s.file}`);
           const template = gltf.scene;
           template.updateMatrixWorld(true);
+          if (s.collapse) collapsePrimitives(template);
           overrides.set(id, { template, fit: s.fit ?? 'footprint', scale: s.scale ?? 1, box: new Box3().setFromObject(template) });
           loaded.push(id);
         } catch (err) {

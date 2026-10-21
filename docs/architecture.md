@@ -9,8 +9,8 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/main.ts` | Boot: registers screens, loads GLB overrides, creates `Game`, reads URL params. |
 | `src/core/` | Engine-agnostic utilities: `events.ts` (typed `EventBus`, `Disposables`), `loop.ts` (`FixedLoop`), `input.ts` (`InputSource`, keyboard, mouse steer, `CompositeInput`), `rng.ts` (`Rng`, mulberry32), `spatialHash.ts`, `math.ts` (rects, circle-vs-AABB/circle push-out, damp), `registry.ts`. |
 | `src/data/` | Tunable data only: `debris.ts` (Debris catalogue), `tiers.ts`, `tuning.ts` (all gameplay constants), `characters.ts`, `pickups.ts`, `perks.ts`, `upgrades.ts`. |
-| `src/world/` | `house.ts` (seeded `generateHouse`), `rooms.ts` (room templates), `furniture.ts` (furniture defs + collision boxes), `types.ts` (`HouseLayout` etc.). Browser-only: `houseView.ts`, `materials.ts` (canvas textures), `models.ts` (model registry). |
-| `src/entities/` | Sim state: `bunny.ts`, `debris.ts` (`DebrisField`), `stats.ts` (stat modifiers). Views: `bunnyView.ts`, `debrisRenderer.ts`, `debrisGeometry.ts`. |
+| `src/world/` | `house.ts` (seeded `generateHouse`), `rooms.ts` (room templates), `furniture.ts` (furniture defs + collision boxes), `types.ts` (`HouseLayout` etc.). Browser-only: `houseView.ts` (floors, rugs, walls, furniture, occlusion fade), `staticBatch.ts` (walls + furniture in one draw call), `meshBake.ts` (bake meshes to vertex colours), `materials.ts` (canvas textures), `models.ts` (model registry + GLB loader). |
+| `src/entities/` | Sim state: `bunny.ts`, `debris.ts` (`DebrisField`), `stats.ts` (stat modifiers). Views: `bunnyView.ts` (shell fur, eyes, squash & stretch), `bunnyLook.ts` (`BunnyLook` = Character `look`, `resolveLook`), `debrisRenderer.ts`, `debrisGeometry.ts` (recipes or GLB props). |
 | `src/systems/` | Per-tick `System`s: `movement.ts` (input, Dash, rolling), `absorb.ts` (absorb rule, growth formula, magnet), `collision.ts`, `growth.ts` (Tier-up), `spawner.ts`. `camera.ts` is render-side (`CameraRig`) plus pure `cameraDistanceFor`/`viewRadiusFor`. |
 | `src/game/` | `run.ts` (`Run`: one session, headless), `runView.ts` (rendering for a Run), `game.ts` (`Game`: renderer, scene, loop, screens, current Run), `system.ts` (`System`, `SYSTEM_ORDER`), `runStats.ts`. |
 | `src/hazards/` | Hazards: `index.ts` (registry, `Hazard`, `HazardManager`), one file per Hazard, `director.ts`, `common.ts` (movement/collision, suction, hits), `decals.ts` (floor telegraphs), `shed.ts` (mass shedding), `models.ts` (procedural fallbacks), `hud.ts` (boss banner), `install.ts`. Tuning in `src/data/hazards.ts`. |
@@ -23,6 +23,7 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/net/leaderboard.ts` | Leaderboard client: `getTop`, `submitScore`, `isOnline`. Falls back to a localStorage board when `/api/leaderboard` is unavailable (404, non-JSON, 5xx, network, timeout). |
 | `src/shared/` | Code shared with the Vercel function: `score.ts` (score formula), `leaderboard.ts` (types, name sanitising, submission validation). No runtime imports from the rest of `src/`; relative imports use `.js`. |
 | `api/leaderboard.ts` | Vercel Node function (Neon via `DATABASE_URL`). Type-checked by `tsconfig.api.json`, not bundled by Vite. Schema: `db/schema.sql`. |
+| `src/fx/` | Render-side polish: `lighting.ts` (hemisphere + sun, shadow frustum follows the camera), `quality.ts` (`setQuality('low' \| 'high')`, `?quality=low`), `particles.ts` (puffs, dust motes), `sunbeams.ts`, `contactShadows.ts`, `vignette.ts`, `loading.ts`. |
 | `src/debug/debug.ts` | `?debug` hooks. |
 | `scripts/sim.ts` | Headless balance bot (`pnpm sim [seeds…] [--minutes=N]`). |
 
@@ -174,10 +175,10 @@ Re-registering an existing id (`title`, `playing`, `paused`, `results`) replaces
 **Override a model with a `.glb`.** Put the file in `public/models/` and list it in `public/models/manifest.json`:
 
 ```json
-{ "couch": { "file": "couch.glb" }, "roomba": { "file": "roomba.glb", "fit": "none", "scale": 100 } }
+{ "couch": { "file": "couch.glb", "fit": "xz" }, "roomba": { "file": "roomba.glb", "fit": "none", "collapse": true } }
 ```
 
-`loadModelOverrides()` runs at boot (async, 8 s timeout, never throws). `createModel(id, { w, d, h, seed })` returns a clone of the GLB. By default the clone is fitted to the requested footprint box (origin at footprint centre, y = 0 floor, front faces +Z). With `fit: "none"` only `scale` is applied. With no override, it falls back to the procedural factory (`registerModel(id, factory)`). Furniture ids: `couch, armchair, coffee_table, tv_stand, bookshelf, dining_table, kitchen_counter, stove, fridge, bed, nightstand, dresser, desk, bathtub, toilet, sink_cabinet, console_table, shoe_rack`. Debris uses recipes, not the model registry.
+`loadModelOverrides()` runs at boot (async, 8 s timeout, never throws). `createModel(id, { w, d, h, seed })` returns a clone of the GLB. By default the clone is fitted to the requested footprint box (origin at footprint centre, y = 0 floor, front faces +Z). `fit: "xz"` stretches only X/Z and keeps the authored height (furniture, so clearances stay exact). With `fit: "none"` only `scale` is applied, and a model reaching below y = 0 is lifted onto the floor (the broom's handle-top origin ends up on the floor below the pivot). `collapse: true` merges each node's primitives into one vertex-coloured mesh; named nodes (`side_brush`, `drum`, `brush_l`/`brush_r`) survive cloning. All Blender models are listed in the manifest (see `docs/models.md`). With no override, it falls back to the procedural factory (`registerModel(id, factory)`). Furniture ids: `couch, armchair, coffee_table, tv_stand, bookshelf, dining_table, kitchen_counter, stove, fridge, bed, nightstand, dresser, desk, bathtub, toilet, sink_cabinet, console_table, shoe_rack`. Debris types whose id matches a loaded model (shoe, sock, toy_car, book, tv_remote, chair, laundry_basket) use the baked GLB in their InstancedMesh; others use recipes.
 
 **Add input.** Implement `InputSource.sample(): { moveX, moveZ, dash }` (world XZ, |move| ≤ 1, dash edge-triggered) and call `game.input.add(source)`. `screenToWorld(right, up, TUNING.camera.yaw)` converts a screen-relative stick vector. Mouse steering ignores `pointerType === 'touch'`, leaving touch to a joystick source.
 
@@ -197,9 +198,7 @@ For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugToo
 
 ## Known gaps
 
-- Hazard models are procedural until GLB overrides are listed in `public/models/manifest.json`; the broom aligns itself from its bounding box, so either fit mode works.
-- Character `look` beyond `color` (fur length, fluffiness, eye style, glow) is not rendered yet.
 - Fluff is awarded for quit Runs too (per the design formula), so very short Runs still earn ~10 Fluff.
-- Furniture is many small meshes (~500 draw calls at Tier 5 including shadows); merge per material if mid-range GPUs struggle.
+- Walls and furniture are one static batch (~80-120 draw calls at Tier 5 with Hazards). Rugs are one mesh each.
 - At Tier 5 the view covers the whole house, so the spawner has no off-screen room left to spawn into. Late-game Debris supply relies on the initial scatter.
-- Debris has no GLB override path (recipes only).
+- Furniture without a Blender model (tv_stand, stove, nightstand, dresser, desk, sink_cabinet, console_table, shoe_rack) is still procedural.
