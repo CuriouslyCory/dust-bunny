@@ -210,6 +210,11 @@ export class Hud {
     this.toasts.clear();
   }
 
+  clearBanner(): void {
+    clearTimeout(this.bannerTimer);
+    this.bannerEl.classList.remove('show');
+  }
+
   banner(title: string, opts: BannerOptions = {}): void {
     const b = this.bannerEl;
     b.className = `hud-banner variant-${opts.variant ?? 'info'}`;
@@ -466,6 +471,7 @@ function absorbToasts(hud: Hud, game: Game): void {
   game.events.on('runStarted', () => {
     seenTypes.clear();
     hud.clearToasts();
+    hud.clearBanner();
   });
   game.events.on('debrisAbsorbed', (e) => {
     const first = !seenTypes.has(e.typeId);

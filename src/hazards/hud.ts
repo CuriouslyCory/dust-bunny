@@ -1,43 +1,27 @@
 /**
- * Boss HUD: a centre announcement (arrival, stunned, chipped) and a top-right status line
- * with the Bunny radius needed to absorb the Robo-Vac 9000. Uses existing HUD classes;
- * the UI layer may restyle `.hud-widget-boss-banner` / `.hud-widget-boss-status`.
+ * Boss HUD: stunned/chipped announcements via the shared HUD banner (the arrival banner is
+ * shown by the UI layer on bossSpawned) and a top-right status line with the Bunny radius
+ * needed to absorb the Robo-Vac 9000. The UI layer may restyle `.hud-widget-boss-status`.
  */
 import type { Game } from '../game/game';
 import { h } from '../ui/screens';
 import { absorbRadiusFor } from './common';
 
 export function installHazardHud(game: Game): void {
-  const banner = h('div', { className: 'tier-banner' });
-  let bannerTime = 0;
-  const announce = (text: string, seconds: number) => {
-    banner.textContent = text;
-    bannerTime = seconds;
-  };
+  const announce = (title: string, subtitle: string, duration: number) =>
+    game.hud.banner(title, { subtitle, variant: 'boss', duration });
 
   let bossId: number | null = null;
   game.events.on('runStarted', () => {
     bossId = null;
-    bannerTime = 0;
   });
   game.events.on('bossSpawned', (e) => {
     bossId = e.hazardId;
-    announce('The Robo-Vac 9000 has arrived!', 3.5);
   });
-  game.events.on('bossStunned', () => announce('Stunned! Ram it!', 1.6));
-  game.events.on('bossHit', (e) => announce(`Chipped! Absorb at ${e.absorbRadius.toFixed(0)} cm`, 2));
+  game.events.on('bossStunned', () => announce('Stunned!', 'Ram it!', 1.6));
+  game.events.on('bossHit', (e) => announce('Chipped!', `Absorb at ${e.absorbRadius.toFixed(0)} cm`, 2));
   game.events.on('hazardRemoved', (e) => {
     if (e.hazardId === bossId) bossId = null;
-  });
-
-  game.hud.addWidget({
-    id: 'boss-banner',
-    slot: 'center',
-    el: banner,
-    update(_g, dt) {
-      bannerTime = Math.max(0, bannerTime - dt);
-      banner.style.opacity = String(Math.min(1, bannerTime * 2));
-    },
   });
 
   const status = h('div', { className: 'debris-count' });
