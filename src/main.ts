@@ -8,6 +8,8 @@
 import './styles.css';
 import { installDebug } from './debug/debug';
 import { Game } from './game/game';
+import { registerLeaderboardScreen } from './ui/leaderboard/screen';
+import { installRoguelike } from './meta/install';
 import { registerBuiltinScreens } from './ui/screens/builtin';
 import { loadModelOverrides } from './world/models';
 
@@ -17,11 +19,13 @@ async function boot(): Promise<void> {
   const ui = document.getElementById('ui') as HTMLElement;
 
   registerBuiltinScreens();
+  registerLeaderboardScreen();
   await loadModelOverrides();
 
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
+  installRoguelike(game);
   if (game.debug) installDebug(game);
 
   game.start('title');
