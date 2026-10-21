@@ -17,6 +17,8 @@ import { CHARACTERS } from '../../data/characters';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel } from '../components';
+import { getMeta } from '../../meta/meta';
+import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
 
 export type RunResult = GameEvents['runEnded'];
@@ -43,7 +45,34 @@ const VARIANTS = {
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
 
+/** Built-in sections: Fluff earned (meta save) and the leaderboard panel. */
+function registerDefaultSections(): void {
+  registerResultsSection({
+    id: 'fluff',
+    slot: 'fluff',
+    render(el, e) {
+      const award = getMeta().awardRun(e); // idempotent per Run
+      el.append(
+        h('span', { className: 'fluff-earned' }, h('span', { className: 'fluff-icon', textContent: '☁️' }), `+${award.fluff} Fluff`),
+        h('span', { className: 'fluff-detail', textContent: `${e.reason === 'victory' ? 'Victory ×1.5 · ' : ''}total ${award.total}` }),
+        ...(award.newBestRadius ? [h('span', { className: 'fluff-best', textContent: 'New best size!' })] : []),
+      );
+    },
+  });
+  let board: LeaderboardPanel | null = null;
+  registerResultsSection({
+    id: 'leaderboard',
+    slot: 'leaderboard',
+    render(el, e) {
+      board ??= createLeaderboardPanel({ submit: true });
+      el.append(board.el);
+      board.showRun(e);
+    },
+  });
+}
+
 export function registerResultsScreen(): void {
+  registerDefaultSections();
   registerScreen({
     id: 'results',
     create(game) {
@@ -67,7 +96,7 @@ export function registerResultsScreen(): void {
       });
       const shop = button('Shop', () => {
         game.disposeRun();
-        game.go('shop');
+        game.go('shop', { back: 'characterSelect' });
       }, { icon: '🛍' });
       const toTitle = button('Title', () => {
         game.disposeRun();

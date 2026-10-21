@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc -p tsconfig.api.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.api.json",
     "sim": "tsx scripts/sim.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
     "three": "^0.186.1"
   },
   "devDependencies": {

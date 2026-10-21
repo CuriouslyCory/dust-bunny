@@ -32,6 +32,16 @@ export interface BunnyStatValues {
   knockbackResistance: number;
   /** Starting radius in cm (read once at Run start). */
   startRadius: number;
+  /** Multiplies Pickup effect durations (Hoarder Perk). */
+  pickupDuration: number;
+  /** Multiplies the floor Pickup spawn rate (Lucky Find Perk, Pickup Luck Upgrade). */
+  pickupLuck: number;
+  /** 0..1 chance to dodge a hit entirely (Slippery Perk). */
+  dodgeChance: number;
+  /** Perk options offered per draft (Wide Choice Upgrade: 4). */
+  perkChoices: number;
+  /** Perk draft rerolls available per Run (Reroll Upgrade). */
+  perkRerolls: number;
 }
 
 export type StatKey = keyof BunnyStatValues;
@@ -48,6 +58,11 @@ export const BASE_BUNNY_STATS: Readonly<BunnyStatValues> = Object.freeze({
   suctionMultiplier: 1,
   knockbackResistance: 0,
   startRadius: 1,
+  pickupDuration: 1,
+  pickupLuck: 1,
+  dodgeChance: 0,
+  perkChoices: 3,
+  perkRerolls: 0,
 });
 
 /** Clamp ranges applied after modifiers. */
@@ -63,6 +78,11 @@ export const STAT_LIMITS: Partial<Record<StatKey, [number, number]>> = {
   suctionMultiplier: [0, 10],
   knockbackResistance: [0, 1],
   startRadius: [0.2, 100],
+  pickupDuration: [0.1, 10],
+  pickupLuck: [0, 20],
+  dodgeChance: [0, 0.75],
+  perkChoices: [1, 6],
+  perkRerolls: [0, 9],
 };
 
 export interface StatModifier {

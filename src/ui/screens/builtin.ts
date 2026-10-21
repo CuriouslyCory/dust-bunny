@@ -10,7 +10,7 @@ import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
 import { registerMenuScreens } from './menus';
 import { registerResultsScreen } from './results';
-import './screens.css';
+import '../screens.css';
 
 /** Starts a Run, via character select when that screen exists. */
 export function playFromMenu(game: Game): void {
@@ -63,7 +63,7 @@ export function registerBuiltinScreens(): void {
     id: 'title',
     create(game) {
       const play = button('Play', () => playFromMenu(game), { variant: 'primary', size: 'lg', icon: '▶' });
-      const shop = button('Shop', () => game.go('shop'), { icon: '🛍' });
+      const shop = button('Shop', () => game.go('shop', { back: 'title' }), { icon: '🛍' });
       const board = button('Leaderboard', () => game.go('leaderboard'), { icon: '🏆' });
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'title' }), { icon: '?' });
       const set = button('Settings', () => game.go('settings', { back: 'title' }), { icon: '⚙' });

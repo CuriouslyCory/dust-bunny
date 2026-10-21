@@ -17,6 +17,7 @@
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
+import { pickupRegistry } from '../pickups';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
 import { h } from './screens';
 import { settings } from './settings';
@@ -99,11 +100,13 @@ for (const [id, glyph] of [
 const HEART_SVG =
   '<svg viewBox="0 0 32 29" aria-hidden="true"><path d="M16 28.5S1.5 19.6 1.5 9.6C1.5 4.9 5.2 1.5 9.4 1.5c2.8 0 5.2 1.5 6.6 3.8 1.4-2.3 3.8-3.8 6.6-3.8 4.2 0 7.9 3.4 7.9 8.1 0 10-14.5 18.9-14.5 18.9z"/></svg>';
 
-function chip(kind: 'pickup' | 'perk', id: string, name: string, fallbackColor?: string): { el: HTMLElement; ring?: SVGCircleElement } {
-  const icon = getHudIcon(kind, id);
-  const el = h('div', { className: `hud-chip hud-chip-${kind}`, title: icon?.label ?? name });
+function chip(kind: 'pickup' | 'perk', id: string, name: string, fallbackColor?: string, defIcon?: string, description?: string): { el: HTMLElement; ring?: SVGCircleElement } {
+  const registered = getHudIcon(kind, id);
+  // The def's own icon replaces the default glyph; registered svg / colour / label still apply.
+  const icon: HudIcon = { ...registered, glyph: defIcon ?? registered?.glyph };
+  const el = h('div', { className: `hud-chip hud-chip-${kind}`, title: icon?.label ?? (description ? `${name}: ${description}` : name) });
   el.style.setProperty('--chip', icon?.color ?? fallbackColor ?? 'var(--honey)');
-  el.setAttribute('aria-label', icon?.label ?? name);
+  el.setAttribute('aria-label', icon.label ?? name);
   const art = h('span', { className: 'hud-chip-art' });
   if (icon?.svg) art.innerHTML = icon.svg;
   else art.textContent = icon?.glyph ?? name.slice(0, 1).toUpperCase();
@@ -345,7 +348,7 @@ function pickupTimersWidget(hud: Hud): void {
         seen.add(id);
         let c = chips.get(id);
         if (!c) {
-          c = chip('pickup', id, e.def.name, e.def.color);
+          c = chip('pickup', id, e.def.name, e.def.color, e.def.icon, e.def.description);
           chips.set(id, c);
           el.append(c.el);
         }
@@ -369,8 +372,8 @@ function perksWidget(hud: Hud, game: Game): void {
   const set = (perkId: string, stacks: number): void => {
     let c = chips.get(perkId);
     if (!c) {
-      const name = perkRegistry.get(perkId)?.name ?? perkId;
-      c = chip('perk', perkId, name).el;
+      const def = perkRegistry.get(perkId);
+      c = chip('perk', perkId, def?.name ?? perkId, undefined, def?.icon, def?.description).el;
       c.append(h('span', { className: 'hud-chip-stacks' }));
       chips.set(perkId, c);
       el.append(c);
@@ -474,7 +477,8 @@ function absorbToasts(hud: Hud, game: Game): void {
     hud.toast(`+ ${name}!`, { key: e.typeId, tone: e.kind === 'hazard' ? 'hazard' : first ? 'good' : 'absorb' });
   });
   game.events.on('pickupCollected', (e) => {
-    hud.toast(`${absorbedName(e.defId)}!`, { key: `pickup:${e.defId}`, tone: 'good' });
+    const def = pickupRegistry.get(e.defId);
+    hud.toast(`${def?.icon ? `${def.icon} ` : ''}${def?.name ?? absorbedName(e.defId)}!`, { key: `pickup:${e.defId}`, tone: 'good' });
   });
 }
 

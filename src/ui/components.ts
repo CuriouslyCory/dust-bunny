@@ -165,7 +165,7 @@ export function handleMenuKeys(e: KeyboardEvent, root: HTMLElement): boolean {
   const horizontal = e.code === 'ArrowLeft' || e.code === 'ArrowRight';
   if (!vertical && !horizontal) return false;
   const active = document.activeElement as HTMLElement | null;
-  if (horizontal && active instanceof HTMLInputElement && active.type === 'range') return false;
+  if (active instanceof HTMLInputElement && (horizontal || active.type !== 'range')) return false;
   const items = focusables(root);
   if (items.length === 0) return false;
   const i = active ? items.indexOf(active) : -1;

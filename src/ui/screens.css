@@ -3,7 +3,10 @@
 /* ── Backdrops ────────────────────────────────────────────── */
 .screen-title,
 :root:not(.in-run) .screen-settings,
-:root:not(.in-run) .screen-howToPlay {
+:root:not(.in-run) .screen-howToPlay,
+:root:not(.in-run) .screen-characterSelect,
+:root:not(.in-run) .screen-shop,
+:root:not(.in-run) .screen-leaderboard {
   pointer-events: auto;
   background:
     radial-gradient(ellipse 70% 55% at 50% 48%, rgba(255, 210, 150, 0.32), transparent 70%),
@@ -17,9 +20,15 @@
 .screen-title::before,
 :root:not(.in-run) .screen-settings::before,
 :root:not(.in-run) .screen-howToPlay::before,
+:root:not(.in-run) .screen-characterSelect::before,
+:root:not(.in-run) .screen-shop::before,
+:root:not(.in-run) .screen-leaderboard::before,
 .screen-title::after,
 :root:not(.in-run) .screen-settings::after,
-:root:not(.in-run) .screen-howToPlay::after {
+:root:not(.in-run) .screen-howToPlay::after,
+:root:not(.in-run) .screen-characterSelect::after,
+:root:not(.in-run) .screen-shop::after,
+:root:not(.in-run) .screen-leaderboard::after {
   content: '';
   position: absolute;
   left: 0;
@@ -29,7 +38,10 @@
 
 .screen-title::before,
 :root:not(.in-run) .screen-settings::before,
-:root:not(.in-run) .screen-howToPlay::before {
+:root:not(.in-run) .screen-howToPlay::before,
+:root:not(.in-run) .screen-characterSelect::before,
+:root:not(.in-run) .screen-shop::before,
+:root:not(.in-run) .screen-leaderboard::before {
   top: 0;
   height: calc(11vh + var(--safe-top));
   background: linear-gradient(180deg, #120b08, var(--cocoa-900));
@@ -37,7 +49,10 @@
 
 .screen-title::after,
 :root:not(.in-run) .screen-settings::after,
-:root:not(.in-run) .screen-howToPlay::after {
+:root:not(.in-run) .screen-howToPlay::after,
+:root:not(.in-run) .screen-characterSelect::after,
+:root:not(.in-run) .screen-shop::after,
+:root:not(.in-run) .screen-leaderboard::after {
   top: calc(11vh + var(--safe-top) - 1px);
   height: 20px;
   background: radial-gradient(circle at 50% 0, var(--cocoa-900) 11px, transparent 12px) 0 0 / 30px 20px repeat-x;
@@ -599,4 +614,42 @@
     grid-column: 1 / -1;
     grid-row: 2;
   }
+}
+
+.results-section-fluff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 12px;
+}
+
+.fluff-earned {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-xl);
+  color: var(--accent-700);
+  animation: badge-pop 0.6s var(--ease-bounce) both 0.5s;
+}
+
+.fluff-detail {
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+}
+
+.fluff-best {
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--mint-700);
+  color: #fff;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.results-slot[data-slot='leaderboard'] .results-section {
+  text-align: left;
 }

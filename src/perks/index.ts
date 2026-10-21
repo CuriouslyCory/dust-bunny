@@ -1,8 +1,8 @@
 /**
- * Perk extension point. No Perks are defined yet; register PerkDefs here.
+ * Perk extension point. The twelve design Perks are registered in ./perks.ts.
  * run.applyPerk(id) tracks stacks, calls def.apply(run, stacks) and emits perkApplied.
  * Typical apply: run.bunny.stats.add({ stat: 'speed', op: 'mul', value: 1.1, source: `perk:${id}` }).
- * The draft UI (pick 1 of N on tierUp) is not part of core.
+ * Drafting (pick 1 of perkChoices on tierUp) is ./draft.ts + src/ui/screens/perkDraft.ts.
  */
 import { Registry } from '../core/registry';
 import type { Run } from '../game/run';
@@ -11,6 +11,8 @@ export interface PerkDef {
   id: string;
   name: string;
   description: string;
+  /** Emoji / short glyph for the draft cards and HUD. */
+  icon?: string;
   /** Can only be taken once per Run. */
   unique?: boolean;
   maxStacks?: number;
