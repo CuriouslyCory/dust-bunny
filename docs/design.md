@@ -6,7 +6,9 @@ Terms follow `CONTEXT.md`. Numbers below are starting points; tune them in the d
 
 Katamari-style growth roguelike on a house floor, rendered in three.js. You start as a 1 cm Speck under the couch, absorbing lint and staples. Every Tier you grow into pulls the camera back, reveals more of the house, and turns former Obstacles into Debris. Roombas, lint rollers, brooms, and other cleaning gear roam the floor and hurt you, until you are big enough to absorb them too. Final goal: absorb the Robo-Vac 9000 boss.
 
-Target: a 10–15 minute demo-quality Run, playable on desktop (keyboard/mouse) and mobile (touch).
+Target: a 10–15 minute demo-quality house, then a 5–8 minute neighborhood finale, playable on desktop (keyboard/mouse) and mobile (touch).
+
+**Neighborhood phase.** Absorbing the Robo-Vac 9000 no longer ends the Run: the front door at the end of the hallway swings open and a door compass points to it. Rolling out of it fades into a seeded suburban street (about 96 × 72 m: a main street and a cross street, seven houses with yards and driveways, a park). Outdoor Debris runs from pinecones and garden gnomes up to bikes, picnic tables and parked cars; houses and big trees stay Obstacles. Absorbing the Street Sweeper (arrives at Tier 7) wins the Run.
 
 ## Tech
 
@@ -34,7 +36,9 @@ Target: a 10–15 minute demo-quality Run, playable on desktop (keyboard/mouse) 
 | 2 | Fluff      | 3 – 8             | paperclips, bobby pins, cereal, coins, buttons, LEGO    | living room |
 | 3 | Tumbleweed | 8 – 20            | socks, pens, toy cars, keys, batteries, sponges         | living room + hallway |
 | 4 | Dust Devil | 20 – 45           | shoes, books, remotes, slippers, cat toys, lint rollers | most of the house |
-| 5 | Dust Titan | 45+               | chairs, laundry baskets, Roombas, the boss               | whole house |
+| 5 | Dust Titan | 45 – 75           | chairs, laundry baskets, Roombas, the boss; outside: gnomes, pumpkins, cones | whole house / front yard |
+| 6 | Dust Storm | 75 – 160          | mailboxes, trash cans, bikes, grills, shrubs, benches   | the block |
+| 7 | Dust Cyclone | 160+            | picnic tables, golf carts, swing sets, cars, the Street Sweeper | the neighborhood |
 
 Camera distance and fog distance scale with radius so the visible floor area grows each Tier. Areas are gated physically: e.g. the gap under the couch skirt and closed doors are passable/absorbable only at certain sizes.
 
