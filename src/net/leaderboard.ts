@@ -44,6 +44,11 @@ export interface SubmitResult<E = LeaderboardEntry> {
   nameCensored: boolean;
 }
 
+export interface SubmitOptions {
+  /** Save on this device when the API is unavailable (default true). */
+  local?: boolean;
+}
+
 export class LeaderboardError extends Error {
   constructor(
     message: string,
@@ -57,6 +62,8 @@ export class LeaderboardError extends Error {
 export interface LeaderboardClientOptions {
   baseUrl?: string;
   timeoutMs?: number;
+  /** POSTs wait longer: a cold function may be creating tables first. */
+  postTimeoutMs?: number;
   /** After the API looks unavailable, skip it for this long (ms) and use local scores. */
   offlineRetryMs?: number;
   fetch?: typeof fetch;
@@ -84,6 +91,7 @@ function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
 export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
   const baseUrl = opts.baseUrl ?? '/api/leaderboard';
   const timeoutMs = opts.timeoutMs ?? 4000;
+  const postTimeoutMs = opts.postTimeoutMs ?? 10_000;
   const offlineRetryMs = opts.offlineRetryMs ?? 30_000;
   const doFetch = opts.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const storage = opts.storage === undefined ? defaultStorage() : opts.storage;
@@ -95,11 +103,14 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
   async function request(path: string, init?: RequestInit): Promise<unknown> {
     if (online === false && now() < skipUntil) throw new Unavailable('skipping');
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const post = init?.method === 'POST';
+    const timer = setTimeout(() => ctrl.abort(), post ? postTimeoutMs : timeoutMs);
     let res: Response;
     try {
       res = await doFetch(baseUrl + path, { ...init, signal: ctrl.signal, headers: { Accept: 'application/json', ...init?.headers } });
     } catch {
+      // A POST that timed out may have been stored: retry it (the Run id dedupes) rather than keep a local copy.
+      if (post && ctrl.signal.aborted) throw new LeaderboardError('The leaderboard took too long to answer. Try again.', 'timeout');
       throw markOffline();
     } finally {
       clearTimeout(timer);
@@ -212,7 +223,8 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
       }
     },
 
-    async submitScore(sub: ScoreSubmission): Promise<SubmitResult> {
+    /** `local: false` throws instead of saving on this device when the API is unavailable. */
+    async submitScore(sub: ScoreSubmission, o: SubmitOptions = {}): Promise<SubmitResult> {
       const v = validateSubmission(sub);
       if (!v.ok) throw new LeaderboardError(v.message, 'invalid', v.field);
       try {
@@ -224,6 +236,7 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
         return { entry: body.entry, rank: body.rank ?? null, online: true, nameCensored: Boolean(body.nameCensored) };
       } catch (err) {
         if (!(err instanceof Unavailable)) throw err;
+        if (o.local === false) throw new LeaderboardError('Could not reach the leaderboard. Try again.', 'unavailable');
         const { nameCensored: _c, ...fields } = v.value;
         const { runId: _r, ...stored } = fields;
         const entry: LeaderboardEntry = { ...stored, id: localId(), verified: false, createdAt: new Date(now()).toISOString() };
@@ -250,7 +263,7 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
       }
     },
 
-    async submitAreaScore(sub: AreaScoreSubmission): Promise<SubmitResult<AreaLeaderboardEntry>> {
+    async submitAreaScore(sub: AreaScoreSubmission, o: SubmitOptions = {}): Promise<SubmitResult<AreaLeaderboardEntry>> {
       const v = validateAreaSubmission(sub);
       if (!v.ok) throw new LeaderboardError(v.message, 'invalid', v.field);
       try {
@@ -262,6 +275,7 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
         return { entry: body.entry, rank: body.rank ?? null, online: true, nameCensored: Boolean(body.nameCensored) };
       } catch (err) {
         if (!(err instanceof Unavailable)) throw err;
+        if (o.local === false) throw new LeaderboardError('Could not reach the leaderboard. Try again.', 'unavailable');
         const { nameCensored: _c, runId: _r, ...fields } = v.value;
         const entry: AreaLeaderboardEntry = { ...fields, id: localId(), verified: false, createdAt: new Date(now()).toISOString() };
         const all = [...readLocalAreas(), entry];

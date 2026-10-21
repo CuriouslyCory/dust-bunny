@@ -113,4 +113,20 @@ describe('leaderboard client', () => {
     expect((await client.submitAreaScore(areaSubmission(house, 'lint', 'casual', 'Alice'))).rank).toBe(2);
     expect(urls).toEqual(['GET /api/leaderboard?board=city&character=zap', 'POST /api/leaderboard?board=house']);
   });
+
+  it('keeps a POST that timed out retryable instead of saving it locally', async () => {
+    const storage = memoryStorage();
+    const client = createLeaderboardClient({
+      storage,
+      postTimeoutMs: 5,
+      fetch: (_url, init) => new Promise((_, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))),
+    });
+    await expect(client.submitScore(submissionFromRun(stats, 'died', 'Alice'))).rejects.toMatchObject({ code: 'timeout' });
+    expect(storage.getItem('dustbunny.leaderboard.local.v1')).toBeNull();
+  });
+
+  it('throws instead of falling back when asked not to save locally', async () => {
+    const client = createLeaderboardClient({ storage: memoryStorage(), fetch: async () => new Response('', { status: 503 }) });
+    await expect(client.submitScore(submissionFromRun(stats, 'died', 'Alice'), { local: false })).rejects.toMatchObject({ code: 'unavailable' });
+  });
 });

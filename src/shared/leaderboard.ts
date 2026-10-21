@@ -14,6 +14,7 @@ import {
   isScoreArea,
   SCORE_AREAS,
   SCORE_MAX_TIER,
+  SCORE_TIER_MIN_RADII,
   scoreTierForRadius,
   type ScoreArea,
 } from './score.js';
@@ -136,6 +137,16 @@ export type ValidationResult = Validation<ValidSubmission>;
 export type AreaValidationResult = Validation<ValidAreaSubmission>;
 
 const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * Radius bounds per Area (cm): arriving needs the previous boss's Tier (Tier 5 = 45, Tier 7 = 160),
+ * and the cap is two Tiers above the Area's last Debris Tier, which no real Run approaches.
+ */
+const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>> = {
+  house: { minIn: BOUNDS.maxRadius.min, max: SCORE_TIER_MIN_RADII[6]! },
+  neighborhood: { minIn: SCORE_TIER_MIN_RADII[4]!, max: SCORE_TIER_MIN_RADII[8]! },
+  city: { minIn: SCORE_TIER_MIN_RADII[6]!, max: BOUNDS.maxRadius.max },
+};
 
 export function isLeaderboardCharacter(id: unknown): id is LeaderboardCharacter {
   return typeof id === 'string' && (LEADERBOARD_CHARACTERS as readonly string[]).includes(id);
@@ -275,6 +286,9 @@ export function validateAreaSubmission(body: unknown): AreaValidationResult {
 
   // A Run starts in the house, and an Area is cleared by absorbing its boss, which arrives at a set Tier.
   if (area === 'house' && radiusIn > BOUNDS.maxStartRadius) return fail('radiusIn', 'radiusIn is too large for the start of a Run.');
+  // Later Areas open only after the previous boss, so the Bunny arrives at least at that boss's Tier.
+  if (radiusIn < AREA_RADIUS[area].minIn) return fail('radiusIn', `Reaching the ${area} needs a radius of ${AREA_RADIUS[area].minIn} cm.`);
+  if (maxRadius > AREA_RADIUS[area].max) return fail('maxRadius', `maxRadius is too large for the ${area}.`);
   if (scoreTierForRadius(maxRadius) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
   const sec = durationMs / 1000;
   if (maxRadius > radiusIn * BOUNDS.areaEntryGrowth + 10 + BOUNDS.maxGrowthPerSec * sec) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');

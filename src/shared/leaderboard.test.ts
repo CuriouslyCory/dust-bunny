@@ -185,6 +185,10 @@ describe('validateAreaSubmission', () => {
     expect(areaErr(area({ maxRadius: 30 }))).toBe('maxRadius'); // Tier 4: the Robo-Vac 9000 never came
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 150 }))).toBe('maxRadius');
     expect(areaErr(area({ radiusIn: 30 }))).toBe('radiusIn'); // a Run starts small
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: 0.2, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBe('radiusIn'); // arrived before the Robo-Vac fell
+    expect(areaErr(area({ area: 'city', radiusIn: 100, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBe('radiusIn');
+    expect(areaErr(area({ maxRadius: 600, durationMs: 1_000_000 }))).toBe('maxRadius'); // far beyond anything the house offers
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 900, debrisAbsorbed: 2000, durationMs: 1_000_000 }))).toBe('maxRadius');
     expect(areaErr(area({ maxRadius: 0.5 }))).toBe('maxRadius'); // below radiusIn
     expect(areaErr(area({ durationMs: 10_000 }))).toBe('maxRadius'); // too fast
     expect(areaErr(area({ debrisAbsorbed: 100_000 }))).toBe('debrisAbsorbed');

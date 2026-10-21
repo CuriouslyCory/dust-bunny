@@ -50,11 +50,12 @@ function fakeAccount(status: AccountState['status'], name = 'Ada') {
   return { account, signIn };
 }
 
-function fakeGame(area?: 'city') {
+function fakeGame(area?: 'city', debug = false) {
   const events = new EventBus();
   const toasts: string[] = [];
   const game = {
     events,
+    debug,
     run: { config: { characterId: 'lint', area }, difficulty: { id: 'casual' } },
     hud: { toast: (t: string) => toasts.push(t) },
   } as unknown as Game;
@@ -157,5 +158,20 @@ describe('installLeaderboardPosting', () => {
     await settle();
     expect(posted).toEqual([]);
     expect(posting.auto).toBe(false);
+  });
+
+  it('does not rank a Run played with debug tools, even on submit', async () => {
+    const { client, posted } = offlineClient();
+    const { account } = fakeAccount('signedOut');
+    const { game, events } = fakeGame(undefined, true);
+    const posting = installLeaderboardPosting(game, { client, account });
+    events.emit('runStarted', { seed: 's', characterId: 'lint' });
+    const e = { reason: 'died' as const, stats: stats([house]) };
+    events.emit('runEnded', e);
+    const posts = posting.forResult(e);
+    await posts.post('Bea');
+    expect(posted).toEqual([]);
+    expect(posts.list().map((p) => p.state)).toEqual(['invalid', 'invalid']);
+    expect(posts.pending).toBe(false);
   });
 });

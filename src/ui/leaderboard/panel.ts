@@ -265,7 +265,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       return;
     }
     client.setPlayerName(name);
-    await posts.post(name);
+    await posts.post(name, undefined, { local: !(posting?.auto ?? false) });
     const run = posts.get('run');
     if (run?.state === 'posted') input.value = run.result!.entry.name;
   });

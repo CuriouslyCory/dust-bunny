@@ -12,7 +12,7 @@
  * comes back `verified: true`; without one the entry is anonymous (`verified: false`). Signed-in
  * players post every Run automatically, so a board lists each signed-in player once, with their
  * best entry; anonymous entries are listed individually. `rank` is where the posted entry places
- * against everyone else's best.
+ * among those listed entries (a signed-in player's own better entry counts too).
  *
  * A submission may carry a client-generated `runId`. Posting the same Run to the same board again
  * (a retry after a timeout, say) returns the stored entry with 200 instead of adding a second row.
@@ -51,8 +51,15 @@ import { ensureSchema, query } from '../server/db.js';
 import { errorResponse, HttpError, json, readJson } from '../server/http.js';
 
 const MAX_BODY_BYTES = 2048;
-/** Accepted submissions per IP per window and table (checked against the table, so it holds across instances). */
-const RATE_LIMIT = { run: { max: 6, windowSec: 600 }, area: { max: 9, windowSec: 600 } };
+/**
+ * Accepted submissions per window and table (checked against the table, so it holds across instances):
+ * per IP for anonymous posts, per account for signed-in ones, which post every Run automatically.
+ */
+const RATE_LIMIT = {
+  anonymous: { run: 6, area: 9 },
+  account: { run: 30, area: 30 },
+  windowSec: 600,
+};
 /** Best-effort per-instance burst limit on all POSTs (including rejected ones). One Run posts up to four entries. */
 const BURST_LIMIT = { max: 12, windowMs: 60_000 };
 
@@ -75,8 +82,6 @@ interface Row {
   // Area boards
   area?: string;
   radius_in?: number;
-  /** Selected only where the rank needs the owner. */
-  user_id?: string | null;
 }
 
 function common(r: Row) {
@@ -117,10 +122,15 @@ function boardSql(board: BoardId): BoardSql {
   return { table: 'area_scores', columns: AREA_COLUMNS, toEntry: toAreaEntry, scope: { sql: 'area = $1', params: [board] } };
 }
 
-/** One row per signed-in player (their best), every anonymous row on its own. */
-const PLAYER_KEY = `COALESCE(user_id, 'anon:' || id::text)`;
-const bestPerPlayer = (table: string, where: string) =>
-  `SELECT DISTINCT ON (${PLAYER_KEY}) * FROM ${table} WHERE ${where} ORDER BY ${PLAYER_KEY}, score DESC, id ASC`;
+/**
+ * The listed entries: every anonymous row, plus each signed-in player's best. Two halves so each can
+ * use its index (score for anonymous rows, user_id + score for players). `limit` caps the anonymous
+ * half, which is all a top-N needs from it.
+ */
+const listed = (table: string, where: string, limit = '') =>
+  `(SELECT * FROM ${table} WHERE ${where} AND user_id IS NULL ORDER BY score DESC, id ASC ${limit})
+   UNION ALL
+   (SELECT DISTINCT ON (user_id) * FROM ${table} WHERE ${where} AND user_id IS NOT NULL ORDER BY user_id, score DESC, id ASC)`;
 
 function readBoard(url: URL): BoardId {
   const board = url.searchParams.get('board') ?? 'run';
@@ -141,7 +151,8 @@ async function getTop(url: URL): Promise<Response> {
     where += ` AND character = $${params.length}`;
   }
   params.push(LEADERBOARD_SIZE);
-  const rows = await query<Row>(`SELECT ${b.columns} FROM (${bestPerPlayer(b.table, where)}) best ORDER BY score DESC, id ASC LIMIT $${params.length}`, params);
+  const n = `$${params.length}`;
+  const rows = await query<Row>(`SELECT ${b.columns} FROM (${listed(b.table, where, `LIMIT ${n}`)}) best ORDER BY score DESC, id ASC LIMIT ${n}`, params);
   return json(200, { entries: rows.map(b.toEntry) });
 }
 
@@ -166,26 +177,28 @@ function checkBurst(ipHash: string, now = Date.now()): void {
   if (burst.size > 5000) burst.clear();
 }
 
-async function checkRateLimit(table: BoardSql['table'], ipHash: string): Promise<void> {
-  const limit = table === 'leaderboard_scores' ? RATE_LIMIT.run : RATE_LIMIT.area;
+async function checkRateLimit(table: BoardSql['table'], ipHash: string, userId: string | null): Promise<void> {
+  const kind = table === 'leaderboard_scores' ? 'run' : 'area';
+  const max = userId ? RATE_LIMIT.account[kind] : RATE_LIMIT.anonymous[kind];
+  const windowSec = RATE_LIMIT.windowSec;
   const [recent] = await query<{ n: number; oldest: number | null }>(
     `SELECT count(*)::int AS n, extract(epoch FROM min(created_at))::float AS oldest
-       FROM ${table} WHERE ip_hash = $1 AND created_at > now() - make_interval(secs => $2)`,
-    [ipHash, limit.windowSec],
+       FROM ${table} WHERE ${userId ? 'user_id = $1' : 'ip_hash = $1 AND user_id IS NULL'} AND created_at > now() - make_interval(secs => $2)`,
+    [userId ?? ipHash, windowSec],
   );
-  if (recent && recent.n >= limit.max) {
-    const retry = Math.max(1, Math.ceil((recent.oldest ?? Date.now() / 1000) + limit.windowSec - Date.now() / 1000));
+  if (recent && recent.n >= max) {
+    const retry = Math.max(1, Math.ceil((recent.oldest ?? Date.now() / 1000) + windowSec - Date.now() / 1000));
     throw new HttpError(429, 'rate_limited', 'Too many submissions; try again later.', { retryAfterSec: retry }, { 'Retry-After': String(retry) });
   }
 }
 
-/** Where `entry` places against every other player's best on its board (1-based). */
-async function rankOf(b: BoardSql, entry: AnyLeaderboardEntry, userId: string | null): Promise<number | null> {
+/** Where `entry` places among the board's listed entries (1-based), as if it were listed itself. */
+async function rankOf(b: BoardSql, entry: AnyLeaderboardEntry): Promise<number | null> {
   const n = b.scope.params.length;
   const [row] = await query<{ rank: number }>(
-    `SELECT count(*)::int + 1 AS rank FROM (${bestPerPlayer(b.table, b.scope.sql)}) best
-      WHERE (score > $${n + 1} OR (score = $${n + 1} AND id < $${n + 2})) AND ($${n + 3}::text IS NULL OR user_id IS DISTINCT FROM $${n + 3})`,
-    [...b.scope.params, entry.score, entry.id, userId],
+    `SELECT count(*)::int + 1 AS rank FROM (${listed(b.table, b.scope.sql)}) best
+      WHERE (score > $${n + 1} OR (score = $${n + 1} AND id < $${n + 2}))`,
+    [...b.scope.params, entry.score, entry.id],
   );
   return row?.rank ?? null;
 }
@@ -217,7 +230,7 @@ function prepareInsert(board: BoardId, body: unknown): { columns: string[]; valu
 
 async function findRun(b: BoardSql, runId: string): Promise<Row | undefined> {
   const n = b.scope.params.length;
-  const [row] = await query<Row>(`SELECT ${b.columns}, user_id FROM ${b.table} WHERE ${b.scope.sql} AND run_id = $${n + 1}`, [...b.scope.params, runId]);
+  const [row] = await query<Row>(`SELECT ${b.columns} FROM ${b.table} WHERE ${b.scope.sql} AND run_id = $${n + 1}`, [...b.scope.params, runId]);
   return row;
 }
 
@@ -238,13 +251,13 @@ async function submit(request: Request, url: URL): Promise<Response> {
   const existing = ins.runId ? await findRun(b, ins.runId) : undefined;
   let row = existing;
   if (!row) {
-    await checkRateLimit(b.table, ipHash);
+    await checkRateLimit(b.table, ipHash, user?.id ?? null);
     const columns = [...ins.columns, 'ip_hash', 'user_id'];
     const values = [...ins.values, ipHash, user?.id ?? null];
     const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
     const conflict = board === 'run' ? '(run_id) WHERE run_id IS NOT NULL' : '(run_id, area) WHERE run_id IS NOT NULL';
     [row] = await query<Row>(
-      `INSERT INTO ${b.table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT ${conflict} DO NOTHING RETURNING ${b.columns}, user_id`,
+      `INSERT INTO ${b.table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT ${conflict} DO NOTHING RETURNING ${b.columns}`,
       values,
     );
     // Lost a race with a concurrent post of the same Run.
@@ -252,8 +265,7 @@ async function submit(request: Request, url: URL): Promise<Response> {
   }
   if (!row) throw new HttpError(500, 'server_error', 'The score was not stored.');
   const entry = b.toEntry(row);
-  const owner = row.user_id ?? null;
-  const rank = await rankOf(b, entry, owner);
+  const rank = await rankOf(b, entry);
   return json(existing ? 200 : 201, { entry, rank, nameCensored: ins.nameCensored });
 }
 

@@ -56,7 +56,7 @@ function submission(name: string, extra: { maxRadius?: number; runId?: string } 
   return { name, character: 'lint', ...fields, score: computeScore(fields), ...(extra.runId ? { runId: extra.runId } : {}) };
 }
 
-/** An Area clear over 400 s (plausible up to ~810 cm from the house, ~1110 cm from the City's 190 cm). */
+/** An Area clear over 400 s (the house caps at 160 cm; the City allows ~1110 cm from 190 cm in that time). */
 function areaSub(name: string, extra: { maxRadius?: number; runId?: string; area?: 'house' | 'city' } = {}) {
   const area = extra.area ?? 'house';
   const fields = { area, radiusIn: area === 'house' ? 1 : 190, maxRadius: extra.maxRadius ?? 50, debrisAbsorbed: 900, durationMs: 400_000, difficulty: 'casual' as const };
@@ -157,10 +157,10 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
   });
 
   it('keeps Area boards separate from the Run board and from each other', async () => {
-    const res = await post('/api/leaderboard?board=house', areaSub(`T${RUN}h`, { maxRadius: 777 }));
+    const res = await post('/api/leaderboard?board=house', areaSub(`T${RUN}h`, { maxRadius: 159 }));
     expect(res.status).toBe(201);
     const { entry, rank } = (await res.json()) as { entry: { id: string; area: string; radiusIn: number; maxRadius: number; verified: boolean }; rank: number };
-    expect(entry).toMatchObject({ area: 'house', radiusIn: 1, maxRadius: 777, verified: false });
+    expect(entry).toMatchObject({ area: 'house', radiusIn: 1, maxRadius: 159, verified: false });
     expect(rank).toBe(1);
 
     const house = (await (await call(leaderboardApi, '/api/leaderboard?board=house')).json()) as { entries: Array<{ id: string }> };
@@ -202,9 +202,11 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     const ids = top.entries.map((e) => e.id);
     expect(ids.slice(0, 2)).toEqual([hi.entry.id, anon.entry.id]);
     expect(ids).not.toContain(lo.entry.id);
-    // Ranks compare against everyone else's best: the player's own better entry doesn't push this one down.
     expect(hi.rank).toBe(1);
     expect(anon.rank).toBe(2);
+    // A later, weaker Run ranks where it would sit in that list: under the player's own best.
+    const later = (await (await post('/api/leaderboard?board=city', areaSub(`T${RUN}b4`, { area: 'city', maxRadius: huge - 0.75 }), cookie)).json()) as { rank: number };
+    expect(later.rank).toBe(3);
   });
 
   it('requires a session for progress', async () => {

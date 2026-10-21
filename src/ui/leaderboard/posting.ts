@@ -5,7 +5,8 @@
  * Signed-in players post automatically: each Area as soon as it is cleared (with a HUD toast),
  * the Run board when the Run ends, and anything left unsent when they sign in later (e.g. from
  * the results screen). Anonymous players' entries wait as `unsent` until they submit them from
- * the results screen. Runs started in a later Area (`?area=`, debug) are never auto-posted.
+ * the results screen. Runs played with debug tools (`?debug`) or started in a later Area (`?area=`)
+ * are not ranked: their entries are listed as `invalid` and never posted.
  *
  *   const posting = installLeaderboardPosting(game);
  *   const posts = posting.forResult(runEndedPayload);   // the results screen's view of the Run
@@ -22,6 +23,7 @@ import {
   LeaderboardError,
   submissionFromRun,
   type LeaderboardClient,
+  type SubmitOptions,
   type SubmitResult,
 } from '../../net/leaderboard';
 import type { DifficultyId } from '../../shared/difficulty';
@@ -65,7 +67,14 @@ export class RunPosts {
     private readonly client: LeaderboardClient,
     readonly characterId: string,
     readonly difficulty: DifficultyId | undefined,
+    /** False for debug / later-Area starts: entries are shown but never posted. */
+    readonly ranked = true,
   ) {}
+
+  /** Initial state of a new entry. */
+  private fresh(): Pick<BoardPost, 'state' | 'error'> {
+    return this.ranked ? { state: 'unsent' } : { state: 'invalid', error: 'runs played with debug tools or started past the house are not ranked.' };
+  }
 
   /** In board order: Run board first, then Areas in Run order. */
   list(): BoardPost[] {
@@ -99,7 +108,7 @@ export class RunPosts {
     if (!stats.cleared || this.posts.has(stats.area)) return;
     this.posts.set(stats.area, {
       board: stats.area,
-      state: 'unsent',
+      ...this.fresh(),
       build: (name) => areaSubmission(stats, this.characterId, this.difficulty, name, this.runId),
     });
     this.changed();
@@ -110,13 +119,17 @@ export class RunPosts {
     this.result = e;
     for (const a of e.stats.areas ?? []) this.addArea(a);
     if (!this.posts.has('run')) {
-      this.posts.set('run', { board: 'run', state: 'unsent', build: (name) => submissionFromRun(e.stats, e.reason, name, this.runId) });
+      this.posts.set('run', { board: 'run', ...this.fresh(), build: (name) => submissionFromRun(e.stats, e.reason, name, this.runId) });
     }
     this.changed();
   }
 
-  /** Posts every unsent or failed entry (or just `boards`) under `name`. Never throws. */
-  async post(name: string, boards?: BoardId[]): Promise<void> {
+  /**
+   * Posts every unsent or failed entry (or just `boards`) under `name`. Never throws. `local: false`
+   * (signed-in auto-posts) leaves an entry `failed` instead of saving it on this device when the API
+   * can't be reached.
+   */
+  async post(name: string, boards?: BoardId[], opts: SubmitOptions = {}): Promise<void> {
     const todo = [...this.posts.values()].filter((p) => (p.state === 'unsent' || p.state === 'failed') && (!boards || boards.includes(p.board)));
     for (const p of todo) {
       p.state = 'posting';
@@ -128,8 +141,8 @@ export class RunPosts {
       try {
         const sub = p.build(name);
         p.result = p.board === 'run'
-          ? await this.client.submitScore(sub as Parameters<LeaderboardClient['submitScore']>[0])
-          : await this.client.submitAreaScore(sub as Parameters<LeaderboardClient['submitAreaScore']>[0]);
+          ? await this.client.submitScore(sub as Parameters<LeaderboardClient['submitScore']>[0], opts)
+          : await this.client.submitAreaScore(sub as Parameters<LeaderboardClient['submitAreaScore']>[0], opts);
         p.state = 'posted';
       } catch (err) {
         // A Run the server can never accept (e.g. under a second long) is not worth retrying.
@@ -167,7 +180,7 @@ export function installLeaderboardPosting(
   const client = opts.client ?? defaultClient;
   const account = opts.account ?? defaultAccount;
   let current: RunPosts | null = null;
-  /** Debug starts in a later Area are playable but never auto-posted. */
+  /** Whether the current Run counts (see RunPosts.ranked). */
   let ranked = true;
 
   const playerName = (): string =>
@@ -176,8 +189,9 @@ export function installLeaderboardPosting(
 
   /** Posts and, mid-Run, toasts each result. */
   async function autoPost(posts: RunPosts, boards?: BoardId[]): Promise<void> {
-    if (!ranked || !isAuto()) return;
-    await posts.post(playerName(), boards);
+    if (!posts.ranked || !isAuto()) return;
+    // Signed-in posts never fall back to this device: a failure stays retryable.
+    await posts.post(playerName(), boards, { local: false });
     if (posts.result || !boards) return;
     for (const b of boards) {
       const p = posts.get(b);
@@ -189,8 +203,8 @@ export function installLeaderboardPosting(
 
   game.events.on('runStarted', () => {
     const run = game.run;
-    ranked = !run?.config.area || run.config.area === 'house';
-    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id);
+    ranked = !game.debug && (!run?.config.area || run.config.area === 'house');
+    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked);
   });
   game.events.on('areaCompleted', (e) => {
     if (!current) return;
