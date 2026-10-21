@@ -23,7 +23,7 @@ export const OUTDOOR_DEBRIS: DebrisType[] = [
     rooms: { yard: 2, park: 4, sidewalk: 1 },
   },
   {
-    id: 'tennis_ball', name: 'Tennis Ball', size: 8, mass: 0.8, tiers: [5, 5], area: 'neighborhood',
+    id: 'yard_ball', name: 'Tennis Ball', size: 8, mass: 0.8, tiers: [5, 5], area: 'neighborhood',
     colors: ['#d8f04a'],
     recipe: [{ shape: 'sphere', radius: 1, pos: [0, 1, 0] }],
     material: { roughness: 1 },

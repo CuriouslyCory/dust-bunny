@@ -134,8 +134,8 @@ export class Run {
 
   /**
    * Leaves the house: swaps in the neighborhood layout, clears Debris, Hazards and floor
-   * Pickups, puts the Bunny on its front walk and repopulates. The Bunny keeps its size,
-   * health, Perks and active Pickups. Emits areaEntered (RunView rebuilds the world view).
+   * Pickups, puts the Bunny on its front walk (healing 1 heart) and repopulates. The Bunny keeps
+   * its size, health, Perks and active Pickups. Emits areaEntered (RunView rebuilds the world view).
    */
   enterNeighborhood(): void {
     if (this.area === 'neighborhood') return;
@@ -147,6 +147,8 @@ export class Run {
     this.hazards.clear();
     this.pickups.clearFloor();
     this.bunny.teleport(this.house.spawn.x, this.house.spawn.z);
+    // Fresh air: arriving outside restores a heart.
+    this.bunny.heal(1);
     this.spawner.populate(this);
     this.events.emit('areaEntered', { area: this.area, timeSec: this.time });
   }

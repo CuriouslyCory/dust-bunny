@@ -38,3 +38,11 @@ describe('neighborhood generation', () => {
     });
   }
 });
+
+describe('Debris catalogue', () => {
+  it('has unique ids (visual caches are keyed by id)', async () => {
+    const { DEBRIS_TYPES } = await import('../data/debris');
+    const ids = DEBRIS_TYPES.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
