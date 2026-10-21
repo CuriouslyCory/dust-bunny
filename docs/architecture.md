@@ -16,7 +16,9 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | `src/hazards/` | Hazards: `index.ts` (registry, `Hazard`, `HazardManager`), one file per Hazard, `director.ts`, `common.ts` (movement/collision, suction, hits), `decals.ts` (floor telegraphs), `shed.ts` (mass shedding), `models.ts` (procedural fallbacks), `hud.ts` (boss banner), `install.ts`. Tuning in `src/data/hazards.ts`. |
 | `src/pickups/`, `src/perks/` | Registries/managers plus content: `pickups.ts` (six Pickups), `director.ts` (floor spawning), `view.ts` (glowing orb); `perks.ts` (twelve Perks), `draft.ts` (draft logic), `combat.ts` (shield / dodge / revive / Dust Cloud / Spiky Dash hooks, Regrowth). |
 | `src/meta/` | Meta-progression: `save.ts` (versioned localStorage), `meta.ts` (Fluff wallet, Upgrades, Run awards, settings), `fluff.ts`, `upgrades.ts` (cost curve, Upgrade → stat modifiers), `install.ts` (`installRoguelike(game)`, called from `main.ts`). |
-| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `screens/builtin.ts` (title/playing/paused/results), `screens/characterSelect.ts`, `screens/perkDraft.ts`, `screens/shop.ts`, `hud.ts` (widget HUD), `roguelikeHud.ts` (Pickup/Perk widgets). Plain DOM + CSS (`src/styles.css`, `src/ui/roguelike.css`) over the canvas. |
+| `src/ui/` | `screens.ts` (screen registry + manager, `h()` DOM helper), `components.ts` (button/panel/slider/toggle/segmented, menu arrow-key nav), `screens/builtin.ts` (title/playing/paused), `screens/results.ts` (results + `registerResultsSection`), `screens/menus.ts` (settings, howToPlay), `screens/characterSelect.ts`, `screens/perkDraft.ts`, `screens/shop.ts`, `hud.ts` (widget HUD, toasts, banners), `roguelikeHud.ts` (charge chips), `settings.ts` + `settingsStorage.ts` (Settings store, persisted in the meta save), `install.ts` (applies quality / reduced motion). Plain DOM + CSS over the canvas: design tokens and shared components in `src/styles.css`; `ui/screens.css`, `ui/hud.css`, `ui/roguelike.css`. |
+| `src/audio/` | WebAudio only, no files: `engine.ts` (buses, unlock, synth primitives), `sfx.ts`, `music.ts` (procedural lo-fi loop, intensity by Tier/boss), `voices.ts` (voice limiter, absorb tone mapping), `index.ts` (`installAudio`: event subscribers, M to mute, UI click/hover sounds). |
+| `src/input/touch.ts` | Dynamic virtual joystick + Dash button (`InputSource`), gesture blocking, orientation refit. |
 | `src/ui/leaderboard/` | Leaderboard panel (`createLeaderboardPanel`, mounted in the results screen) and the `leaderboard` screen (from the title). Own CSS. |
 | `src/net/leaderboard.ts` | Leaderboard client: `getTop`, `submitScore`, `isOnline`. Falls back to a localStorage board when `/api/leaderboard` is unavailable (404, non-JSON, 5xx, network, timeout). |
 | `src/shared/` | Code shared with the Vercel function: `score.ts` (score formula), `leaderboard.ts` (types, name sanitising, submission validation). No runtime imports from the rest of `src/`; relative imports use `.js`. |
@@ -165,7 +167,9 @@ game.go('perkDraft', params);   // Run stops simulating; `paused` is emitted wit
 
 Re-registering an existing id (`title`, `playing`, `paused`, `results`) replaces the placeholder, but only if you do it before that screen is first shown. Screen DOM is created lazily. `Esc`/`P` handling lives in each screen's `onKey`. `game.startRun(config?)`, `game.quitRun()`, `game.disposeRun()`, and `game.nextRunConfig` exist for character select and the Shop.
 
-**Add a HUD widget.** `game.hud.addWidget({ id, el, slot: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center', update(game, dt) })`. Remove one with `removeWidget(id)`.
+**Add a HUD widget.** `game.hud.addWidget({ id, el, slot, update(game, dt) })` with slot `top-left | top-right | top-center | bottom-left | bottom-right | bottom-center | center | status | perks` (`status` is the row under the Tier card, `perks` the row under the top-right counters). Remove one with `removeWidget(id)`. Also: `game.hud.toast(text, { key, tone })` (batched, rate-limited), `game.hud.banner(title, { subtitle, variant: 'tier' | 'boss' | 'good' | 'info', duration })`, `game.hud.flash(widgetId)`. Active Pickups and taken Perks render automatically from `PickupDef.icon` / `PerkDef.icon`; `registerHudIcon(kind, id, { glyph, svg, color, label })` overrides the art.
+
+**Add UI.** Build screens from `src/ui/components.ts` (or the `.panel`, `.btn .btn-primary|secondary|ghost`, `.menu`, `.menu-grid`, `.field` classes) and the CSS custom properties in `src/styles.css`. Call `handleMenuKeys(e, el)` from `onKey` for arrow-key navigation. Results content goes in `registerResultsSection({ id, slot: 'fluff' | 'leaderboard' | 'extra', render(el, result, game) })`. Settings: `settings.value`, `settings.update(patch)`, `settings.subscribe(fn)` from `src/ui/settings.ts`. Sounds: `getAudio()?.sfx.pickup()` etc.; buttons in `#ui` get hover/click sounds automatically.
 
 **Override a model with a `.glb`.** Put the file in `public/models/` and list it in `public/models/manifest.json`:
 
@@ -193,7 +197,6 @@ For browser tests, load `/?debug&autostart&seed=test`, then use `__game.debugToo
 
 ## Known gaps
 
-- Audio, touch joystick: hooks only.
 - Hazard models are procedural until GLB overrides are listed in `public/models/manifest.json`; the broom aligns itself from its bounding box, so either fit mode works.
 - Character `look` beyond `color` (fur length, fluffiness, eye style, glow) is not rendered yet.
 - Fluff is awarded for quit Runs too (per the design formula), so very short Runs still earn ~10 Fluff.

@@ -1,0 +1,101 @@
+/* Touch controls (src/input/touch.ts). Tokens: src/styles.css */
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.touch [data-screen='playing'] .touch-layer,
+:root.touch[data-screen='playing'] .touch-layer {
+  display: block;
+}
+
+.stick-base {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 132px;
+  height: 132px;
+  margin: -66px 0 0 -66px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 247, 236, 0.08) 0%, rgba(255, 247, 236, 0.2) 70%, rgba(255, 247, 236, 0.32) 100%);
+  border: 3px solid rgba(255, 247, 236, 0.55);
+  box-shadow: 0 6px 18px rgba(20, 10, 5, 0.25);
+  opacity: 0;
+  scale: 0.7;
+  transition:
+    opacity 0.15s,
+    scale 0.2s var(--ease-bounce);
+}
+
+.stick-base.active {
+  opacity: 1;
+  scale: 1;
+}
+
+.stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #fffaf2, #e9dccd);
+  border: 3px solid #fff;
+  box-shadow: 0 4px 0 rgba(42, 29, 23, 0.45), 0 8px 16px rgba(20, 10, 5, 0.3);
+}
+
+.touch-dash {
+  display: none;
+  pointer-events: auto;
+  position: relative;
+  width: 92px;
+  height: 92px;
+  margin: 0 6px 10px 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #fff7ec, #f3dcc2);
+  color: var(--cocoa-800);
+  box-shadow: 0 6px 0 rgba(42, 29, 23, 0.55), 0 10px 20px rgba(20, 10, 5, 0.35);
+  touch-action: none;
+  transition: transform 0.08s var(--ease-out);
+}
+
+.touch .touch-dash {
+  display: grid;
+  place-items: center;
+}
+
+.touch-dash svg {
+  position: absolute;
+  inset: -7px;
+  width: calc(100% + 14px);
+  height: calc(100% + 14px);
+  transform: rotate(-90deg);
+}
+
+.touch-dash-label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1px;
+  opacity: 0.55;
+}
+
+.touch-dash.ready .touch-dash-label {
+  opacity: 1;
+}
+
+.touch-dash.pressed {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 rgba(42, 29, 23, 0.55), 0 4px 10px rgba(20, 10, 5, 0.3);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .touch-dash {
+    width: 78px;
+    height: 78px;
+  }
+}

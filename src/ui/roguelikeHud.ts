@@ -1,6 +1,8 @@
 /**
- * HUD widgets for the roguelike layer: active Pickups (icon + timer bar), Bubble Wrap /
- * Second Wind charges, owned Perks (icon ×stacks), and a short toast on Pickup collect.
+ * HUD additions for the roguelike layer, built on the shared HUD (src/ui/hud.ts):
+ * Bubble Wrap / Second Wind charge chips in the status row, and toasts for blocked hits,
+ * dodges and revives. Active Pickup timers and Perk icons are rendered by the core HUD
+ * widgets from PickupDef.icon / PerkDef.icon.
  */
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
@@ -8,89 +10,33 @@ import { pickupRegistry } from '../pickups';
 import { h } from './screens';
 import './roguelike.css';
 
-function chip(icon: string, label: string, title: string): HTMLElement {
-  return h('div', { className: 'rl-chip', title }, h('span', { className: 'rl-chip-icon', textContent: icon }), h('span', { className: 'rl-chip-label', textContent: label }));
+function chargeChip(icon: string, title: string, color: string): { el: HTMLElement; count: HTMLElement } {
+  const count = h('span', { className: 'hud-chip-stacks' });
+  const el = h('div', { className: 'hud-chip hud-chip-charge', title }, h('span', { className: 'hud-chip-art', textContent: icon }), count);
+  el.style.setProperty('--chip', color);
+  el.setAttribute('aria-label', title);
+  return { el, count };
 }
 
 export function installRoguelikeHud(game: Game): void {
-  // Active Pickups + charges.
-  const effects = h('div', { className: 'rl-effects' });
-  let effectsKey = '';
+  const shield = chargeChip(pickupRegistry.get('bubble_wrap')?.icon ?? '🫧', 'Bubble Wrap: blocks the next hit', '#c8f0ff');
+  const revive = chargeChip(perkRegistry.get('second_wind')?.icon ?? '💞', 'Second Wind: revive once', '#ffb3c4');
+  const el = h('div', { className: 'hud-row hud-charges' }, shield.el, revive.el);
   game.hud.addWidget({
-    id: 'pickups',
-    slot: 'top-right',
-    el: effects,
+    id: 'charges',
+    slot: 'status',
+    el,
     update(g) {
-      const run = g.run;
-      if (!run) return;
-      const b = run.bunny;
-      const items = run.pickups.active.map((e) => ({ e, secs: Math.ceil(e.remaining) }));
-      const key = `${items.map((i) => `${i.e.def.id}:${i.secs}`).join(',')}|${b.shield}|${b.revives}`;
-      if (key !== effectsKey) {
-        effectsKey = key;
-        const chips: HTMLElement[] = [];
-        if (b.shield > 0) chips.push(chip(pickupRegistry.get('bubble_wrap')?.icon ?? '🫧', b.shield > 1 ? `×${b.shield}` : '', 'Bubble Wrap: blocks the next hit'));
-        if (b.revives > 0) chips.push(chip(perkRegistry.get('second_wind')?.icon ?? '💞', b.revives > 1 ? `×${b.revives}` : '', 'Second Wind: revive once'));
-        for (const { e, secs } of items) {
-          const c = chip(e.def.icon ?? '✦', `${secs}s`, `${e.def.name}: ${e.def.description}`);
-          c.classList.add('timed');
-          c.style.setProperty('--c', e.def.color);
-          chips.push(c);
-        }
-        effects.replaceChildren(...chips);
-      }
-      // Timer bar (cheap per-frame style update).
-      let i = effects.children.length - items.length;
-      for (const { e } of items) {
-        (effects.children[i++] as HTMLElement | undefined)?.style.setProperty('--p', String(Math.max(0, e.remaining / e.duration)));
-      }
+      const b = g.run?.bunny;
+      if (!b) return;
+      shield.el.hidden = b.shield <= 0;
+      shield.count.textContent = b.shield > 1 ? `×${b.shield}` : '';
+      revive.el.hidden = b.revives <= 0;
+      revive.count.textContent = b.revives > 1 ? `×${b.revives}` : '';
     },
   });
 
-  // Owned Perks.
-  const perks = h('div', { className: 'rl-perks' });
-  let perksKey = '';
-  game.hud.addWidget({
-    id: 'perks',
-    slot: 'top-right',
-    el: perks,
-    update(g) {
-      const run = g.run;
-      if (!run) return;
-      const owned = perkRegistry.all().filter((p) => run.perkStacks(p.id) > 0);
-      const key = owned.map((p) => `${p.id}${run.perkStacks(p.id)}`).join(',');
-      if (key === perksKey) return;
-      perksKey = key;
-      perks.replaceChildren(
-        ...owned.map((p) => {
-          const n = run.perkStacks(p.id);
-          return h('span', { className: 'rl-perk', title: `${p.name}: ${p.description}` }, p.icon ?? '✦', n > 1 ? h('sub', { textContent: String(n) }) : '');
-        }),
-      );
-    },
-  });
-
-  // Toast.
-  const toast = h('div', { className: 'rl-toast' });
-  let toastTime = 0;
-  const show = (text: string) => {
-    toast.textContent = text;
-    toastTime = 1.6;
-  };
-  game.events.on('pickupCollected', (e) => {
-    const d = pickupRegistry.get(e.defId);
-    if (d) show(`${d.icon ?? ''} ${d.name}!`);
-  });
-  game.events.on('shieldBlocked', () => show('🫧 Pop! Hit blocked'));
-  game.events.on('damageDodged', () => show('🧼 Dodged!'));
-  game.events.on('bunnyRevived', () => show('💞 Second Wind!'));
-  game.hud.addWidget({
-    id: 'pickup-toast',
-    slot: 'center',
-    el: toast,
-    update(_g, dt) {
-      toastTime = Math.max(0, toastTime - dt);
-      toast.style.opacity = String(Math.min(1, toastTime * 3));
-    },
-  });
+  game.events.on('shieldBlocked', () => game.hud.toast('🫧 Pop! Hit blocked', { tone: 'good' }));
+  game.events.on('damageDodged', () => game.hud.toast('🧼 Dodged!', { tone: 'good' }));
+  game.events.on('bunnyRevived', () => game.hud.banner('Second Wind!', { subtitle: 'Back on your fluff', variant: 'good', duration: 2 }));
 }
