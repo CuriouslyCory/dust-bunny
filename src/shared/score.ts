@@ -8,7 +8,7 @@
  */
 
 /** Tier start radii (cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
-export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160];
+export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600];
 export const SCORE_MAX_TIER = SCORE_TIER_MIN_RADII.length;
 
 export const SCORE = {
@@ -20,7 +20,7 @@ export const SCORE = {
   victoryBonus: 5000,
   /** Victory only: points per second under `victoryParSec`. */
   victoryPerSecUnderPar: 10,
-  victoryParSec: 1500,
+  victoryParSec: 2100,
 } as const;
 
 export interface ScoreInput {
@@ -33,7 +33,7 @@ export interface ScoreInput {
 
 /**
  * score = round(maxRadius × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
- *         + victory ? 5000 + max(0, 1500 − seconds) × 10 : 0
+ *         + victory ? 5000 + max(0, 2100 − seconds) × 10 : 0
  */
 export function computeScore(s: ScoreInput): number {
   const radius = Math.max(0, s.maxRadius);

@@ -5,12 +5,12 @@
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
  * while stunned. Prints when each Tier is reached, plus how the Run ended.
  *
- * When the Robo-Vac 9000 falls the bot does not walk to the front door: the Run moves
- * straight to the neighborhood (logged), so outdoor pacing is measured too.
+ * When an area boss falls (Robo-Vac 9000, Street Sweeper) the bot does not walk to the exit:
+ * the Run moves straight to the next area (logged), so outdoor and city pacing are measured too.
  *
  * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
  *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
- *                 [--area=neighborhood]   start outside (as after the house boss)
+ *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
  */
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
@@ -49,7 +49,7 @@ const god = args.includes('--god');
 const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
 const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
-const startArea = opt('area') === 'neighborhood' ? 'neighborhood' : undefined;
+const startArea = opt('area') === 'neighborhood' || opt('area') === 'city' ? (opt('area') as 'neighborhood' | 'city') : undefined;
 const seeds = args.filter((a) => !a.startsWith('--'));
 if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo');
 
@@ -79,7 +79,7 @@ class Planner {
     this.builtAt = this.run.time;
     this.builtLayout = house;
     const bd = house.bounds;
-    this.cell = Math.min(house.area === 'house' ? 8 : 60, Math.max(2, r * 0.6));
+    this.cell = Math.min(house.area === 'house' ? 8 : house.area === 'neighborhood' ? 60 : 200, Math.max(2, r * 0.6));
     this.cols = Math.ceil((bd.maxX - bd.minX) / this.cell);
     this.rows = Math.ceil((bd.maxZ - bd.minZ) / this.cell);
     const n = this.cols * this.rows;
@@ -461,10 +461,10 @@ for (const characterId of chars) {
   for (const seed of seeds) {
     const events = new EventBus();
     const run = new Run(events, { seed, characterId, modifiers, perks: fixedPerks, area: startArea });
-    let leaveHouse = false;
-    events.on('exitOpened', () => {
-      log.push(`${fmt(run.time)} house cleared r=${run.bunny.radius.toFixed(1)} → neighborhood`);
-      leaveHouse = true;
+    let leaveArea = false;
+    events.on('exitOpened', (e) => {
+      log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
+      leaveArea = true;
     });
     const bot = new Bot(run);
     run.input = bot;
@@ -504,11 +504,11 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
+    for (let i = 0; i < steps && !run.ended && (withHazards || run.tier < (run.area === 'house' ? 5 : run.area === 'neighborhood' ? 7 : 9)); i++) {
       run.update(dt);
-      if (leaveHouse) {
-        leaveHouse = false;
-        run.enterNeighborhood();
+      if (leaveArea) {
+        leaveArea = false;
+        run.enterNextArea();
       }
       if (traceAt !== undefined && run.time > traceAt && run.time < traceAt + 6 && i % 15 === 0) {
         const b = run.bunny;

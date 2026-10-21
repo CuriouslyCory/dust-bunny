@@ -257,7 +257,7 @@ export function generateHouse(seed: string | number): HouseLayout {
   };
 }
 
-/** Opens the front door: removes its obstacle so the Bunny can squeeze out. Returns false if already open. */
+/** Opens the area exit (front door / road barrier): removes its obstacle. Returns false if already open. */
 export function openExit(layout: HouseLayout): boolean {
   const exit = layout.exit;
   if (!exit || exit.open) return false;

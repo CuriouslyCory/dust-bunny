@@ -54,6 +54,12 @@ export const FURNITURE: Record<string, FurnitureDef> = {
   house_c: { id: 'house_c', name: 'Brick House', w: 900, d: 900, h: 800, clearance: 0 },
   tree_oak: { id: 'tree_oak', name: 'Oak', w: 50, d: 50, h: 800, clearance: 0 },
   tree_pine: { id: 'tree_pine', name: 'Pine', w: 40, d: 40, h: 900, clearance: 0 },
+  // City buildings (footprints match the Blender models, fit "xz").
+  building_office: { id: 'building_office', name: 'Office Tower', w: 2400, d: 2400, h: 6000, clearance: 0 },
+  building_tower: { id: 'building_tower', name: 'Skyscraper', w: 2000, d: 2000, h: 9000, clearance: 0 },
+  building_apartment: { id: 'building_apartment', name: 'Apartments', w: 2000, d: 1600, h: 3200, clearance: 0 },
+  building_shops: { id: 'building_shops', name: 'Shops', w: 2400, d: 1400, h: 1200, clearance: 0 },
+  building_brick: { id: 'building_brick', name: 'Brick Loft', w: 2200, d: 2000, h: 2000, clearance: 0 },
 };
 
 /** Footprint after rotation by quarter turns. */

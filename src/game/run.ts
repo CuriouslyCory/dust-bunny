@@ -24,15 +24,16 @@ import { DebrisSpawner } from '../systems/spawner';
 import type { ViewInfo } from '../systems/camera';
 import { circleVsRect } from '../core/math';
 import { generateHouse, openExit } from '../world/house';
+import { CITY, generateCity } from '../world/city';
 import { generateNeighborhood, NEIGHBORHOOD } from '../world/neighborhood';
-import type { AreaId, HouseLayout } from '../world/types';
+import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/types';
 import type { RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
 
 export interface RunConfig {
   seed: string;
   characterId: string;
-  /** Start in this area (debug / testing; 'neighborhood' skips the house). */
+  /** Start in this area (debug / testing; 'neighborhood' skips the house, 'city' skips both). */
   area?: AreaId;
   /** Extra stat modifiers applied at start (permanent Upgrades from the Shop). */
   modifiers?: StatModifier[];
@@ -40,9 +41,21 @@ export interface RunConfig {
   perks?: string[];
 }
 
+/** Layout generator, Debris hash cell and debug start radius per area. */
+const AREA_WORLDS: Record<AreaId, { generate: (seed: string) => HouseLayout; cellSize?: number; startRadius: number }> = {
+  house: { generate: generateHouse, startRadius: 0 },
+  neighborhood: { generate: generateNeighborhood, cellSize: NEIGHBORHOOD.debrisCellSize, startRadius: NEIGHBORHOOD.debugStartRadius },
+  city: { generate: generateCity, cellSize: CITY.debrisCellSize, startRadius: CITY.debugStartRadius },
+};
+
+/** Bunny radius a Run starting in `area` begins with (about the size after the previous boss). */
+export function areaStartRadius(area: AreaId): number {
+  return AREA_WORLDS[area].startRadius;
+}
+
 /**
- * Leaves the house once the front door is open and the Bunny rolls up to it (the house bounds
- * stop the Bunny's centre a radius short of the outer wall, so touching the opening is enough).
+ * Leaves the area once its exit is open and the Bunny rolls up to it (the bounds stop the
+ * Bunny's centre a radius short of the outer wall, so touching the opening is enough).
  */
 const exitSystem: System = {
   id: 'exit',
@@ -51,19 +64,23 @@ const exitSystem: System = {
     const exit = run.house.exit;
     if (!exit?.open) return;
     const b = run.bunny;
-    if (circleVsRect(b.x, b.z, b.radius + 6, exit.rect) !== null) run.enterNeighborhood();
+    if (circleVsRect(b.x, b.z, b.radius + Math.max(6, b.radius * 0.05), exit.rect) !== null) run.enterNextArea();
   },
 };
 
 export class Run {
   readonly rng: Rng;
-  /** Current area's layout: the house floor, then the neighborhood (swapped by enterNeighborhood). */
+  /** Current area's layout: the house floor, then the neighborhood, then the city (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
   /** The Robo-Vac 9000 has been absorbed and the front door is open. */
   houseCleared = false;
+  /** The Street Sweeper has been absorbed and the road to the city is open. */
+  neighborhoodCleared = false;
   /** Simulated second at which the Run entered the neighborhood (null while in the house). */
   neighborhoodAt: number | null = null;
+  /** Simulated second at which the Run entered the city (null before). */
+  cityAt: number | null = null;
   readonly bunny: Bunny;
   readonly debris: DebrisField;
   readonly hazards: HazardManager;
@@ -115,39 +132,60 @@ export class Run {
     this.spawner.populate(this);
     this.disposables.add(events.on('bunnyDied', () => this.end('died')));
     for (const id of config.perks ?? []) this.applyPerk(id);
-    if (config.area === 'neighborhood') {
-      // Debug / testing start: a house-cleared sized Bunny on its front walk.
-      this.bunny.setRadius(Math.max(this.bunny.radius, NEIGHBORHOOD.debugStartRadius));
+    if (config.area && config.area !== 'house') {
+      // Debug / testing start: a Bunny the size it would be after the previous area's boss.
+      this.bunny.setRadius(Math.max(this.bunny.radius, areaStartRadius(config.area)));
       this.tier = tierForRadius(this.bunny.radius).index;
       for (let t = 2; t <= this.tier; t++) this.tierTimes[t] = 0;
-      this.enterNeighborhood();
+      this.enterArea(config.area);
     }
   }
 
-  /** Opens the front door once the house is cleared (emits exitOpened). */
+  /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */
   openExit(): void {
-    this.houseCleared = true;
+    if (this.area === 'house') this.houseCleared = true;
+    if (this.area === 'neighborhood') this.neighborhoodCleared = true;
     const exit = this.house.exit;
     if (!exit || !openExit(this.house)) return;
-    this.events.emit('exitOpened', { x: (exit.rect.minX + exit.rect.maxX) / 2, z: (exit.rect.minZ + exit.rect.maxZ) / 2 });
+    this.events.emit('exitOpened', { area: this.area, x: (exit.rect.minX + exit.rect.maxX) / 2, z: (exit.rect.minZ + exit.rect.maxZ) / 2 });
+  }
+
+  /** Moves on through the open exit to the next area (no-op in the last area). */
+  enterNextArea(): void {
+    const next = nextArea(this.area);
+    if (next) this.enterArea(next);
+  }
+
+  /** Leaves the house for the neighborhood (debug / tests; same as enterArea('neighborhood')). */
+  enterNeighborhood(): void {
+    this.enterArea('neighborhood');
+  }
+
+  /** Leaves the neighborhood for the city (debug / tests). */
+  enterCity(): void {
+    this.enterArea('city');
   }
 
   /**
-   * Leaves the house: swaps in the neighborhood layout, clears Debris, Hazards and floor
-   * Pickups, puts the Bunny on its front walk (healing 1 heart) and repopulates. The Bunny keeps
-   * its size, health, Perks and active Pickups. Emits areaEntered (RunView rebuilds the world view).
+   * Moves the Run to a later area: swaps in its layout, clears Debris, Hazards and floor
+   * Pickups, puts the Bunny at the area's spawn (healing 1 heart) and repopulates. The Bunny keeps
+   * its size, health, Perks and active Pickups. Every earlier area counts as cleared. Emits
+   * areaEntered (RunView rebuilds the world view).
    */
-  enterNeighborhood(): void {
-    if (this.area === 'neighborhood') return;
+  enterArea(area: AreaId): void {
+    if (AREA_ORDER.indexOf(area) <= AREA_ORDER.indexOf(this.area)) return;
     this.houseCleared = true;
-    this.area = 'neighborhood';
-    this.neighborhoodAt = this.time;
-    this.house = generateNeighborhood(this.config.seed);
-    this.debris.reset(NEIGHBORHOOD.debrisCellSize);
+    if (area === 'city') this.neighborhoodCleared = true;
+    this.area = area;
+    if (area === 'neighborhood') this.neighborhoodAt = this.time;
+    if (area === 'city') this.cityAt = this.time;
+    const world = AREA_WORLDS[area];
+    this.house = world.generate(this.config.seed);
+    this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
     this.hazards.clear();
     this.pickups.clearFloor();
     this.bunny.teleport(this.house.spawn.x, this.house.spawn.z);
-    // Fresh air: arriving outside restores a heart.
+    // Fresh air: arriving in a new area restores a heart.
     this.bunny.heal(1);
     this.spawner.populate(this);
     this.events.emit('areaEntered', { area: this.area, timeSec: this.time });
@@ -216,6 +254,7 @@ export class Run {
       perks: [...this.perks.entries()].flatMap(([id, n]) => Array<string>(n).fill(id)),
       area: this.area,
       houseCleared: this.houseCleared,
+      neighborhoodCleared: this.neighborhoodCleared,
     };
   }
 

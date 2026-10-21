@@ -100,7 +100,7 @@ describe('outdoor Hazards', () => {
     for (const id of spawned) expect([...OUTDOOR, 'street_sweeper', 'mini_mower']).toContain(id);
   });
 
-  it('absorbing the Street Sweeper wins the Run (bossDefeated → victory → runEnded) and clears its minis', () => {
+  it('absorbing the Street Sweeper opens the road to the city (bossDefeated → exitOpened) and clears its minis', () => {
     const { run, events } = makeRun('sweeper-win');
     moveToStreet(run);
     const b = run.bunny;
@@ -108,6 +108,8 @@ describe('outdoor Hazards', () => {
     events.on('bossDefeated', (e) => order.push(`bossDefeated:${e.defId}`));
     events.on('victory', () => order.push('victory'));
     events.on('runEnded', (e) => order.push(`runEnded:${e.reason}`));
+    events.on('exitOpened', (e) => order.push(`exitOpened:${e.area}`));
+    events.on('areaEntered', (e) => order.push(`areaEntered:${e.area}`));
     b.setRadius(absorbRadiusFor(STREET_SWEEPER.size, b.stats.get('absorbRatio')) + 1);
     const boss = run.hazards.spawn('street_sweeper', b.x + b.radius + 600, b.z) as RoboVac9000;
     const mini = run.hazards.spawn('mini_mower', b.x, b.z + b.radius + 800);
@@ -115,10 +117,17 @@ describe('outdoor Hazards', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:street_sweeper', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:street_sweeper', 'exitOpened:neighborhood']);
+    expect(run.ended).toBe(false);
+    expect(run.neighborhoodCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
     expect(run.hazards.count('mini_mower')).toBe(0);
+    // Rolling into the opened barrier moves the Run to the city.
+    const exit = run.house.exit!;
+    b.teleport((exit.rect.minX + exit.rect.maxX) / 2 - exit.dir.x * b.radius, (exit.rect.minZ + exit.rect.maxZ) / 2);
+    run.update(1 / 60);
+    expect(order.at(-1)).toBe('areaEntered:city');
+    expect(run.area).toBe('city');
   });
 
   it('the Lawn Mower mows fluff off (damage + shed) without sticking', () => {

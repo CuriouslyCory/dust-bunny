@@ -4,7 +4,7 @@
  *   ?seed=abc       fixed Run seed (same seed => same house layout)
  *   ?character=zap  starting Character (lint | tumble | zap)
  *   ?autostart      skip the title screen
- *   ?area=neighborhood  start Runs outside (skips the house; debug / testing)
+ *   ?area=neighborhood|city  start Runs in a later area (skips the earlier ones; debug / testing)
  */
 import './styles.css';
 import { installAudio } from './audio';
@@ -34,7 +34,8 @@ async function boot(): Promise<void> {
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
   if (params.has('character')) game.nextRunConfig.characterId = params.get('character')!;
-  if (params.get('area') === 'neighborhood') game.nextRunConfig.area = 'neighborhood';
+  const area = params.get('area');
+  if (area === 'neighborhood' || area === 'city') game.nextRunConfig.area = area;
   installRoguelike(game);
   installUi(game);
   installTouchControls(game);

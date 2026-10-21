@@ -4,9 +4,16 @@
  * snaps to whole shadow texels to avoid shimmering while the Bunny moves.
  */
 import { AmbientLight, DirectionalLight, HemisphereLight, Vector3, type Scene, type WebGLRenderer } from 'three';
+import type { AreaId } from '../world/types';
 import type { Quality } from './quality';
 
 const _v = new Vector3();
+
+const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; intensity: number; dir: [number, number, number] }> = {
+  house: { sky: '#ffeedd', ground: '#7a5f4a', sun: '#ffe2b8', intensity: 2.6, dir: [-0.55, 1.15, 0.42] },
+  neighborhood: { sky: '#e4f0ff', ground: '#5e7a45', sun: '#fff1d6', intensity: 2.9, dir: [-0.45, 1.5, 0.5] },
+  city: { sky: '#ffe2c4', ground: '#5d5a5f', sun: '#ffc98a', intensity: 3.0, dir: [-0.7, 1.05, 0.35] },
+};
 
 export class Lighting {
   readonly hemi = new HemisphereLight('#ffeedd', '#7a5f4a', 1.25);
@@ -24,13 +31,17 @@ export class Lighting {
     scene.add(this.hemi, this.ambient, this.sun, this.sun.target);
   }
 
-  /** Outdoors: brighter, whiter sky fill and a higher sun; indoors: the warm window light. */
-  setOutdoor(outdoor: boolean): void {
-    this.hemi.color.set(outdoor ? '#e4f0ff' : '#ffeedd');
-    this.hemi.groundColor.set(outdoor ? '#5e7a45' : '#7a5f4a');
-    this.sun.color.set(outdoor ? '#fff1d6' : '#ffe2b8');
-    this.sun.intensity = outdoor ? 2.9 : 2.6;
-    this.dir.set(outdoor ? -0.45 : -0.55, outdoor ? 1.5 : 1.15, outdoor ? 0.5 : 0.42).normalize();
+  /**
+   * Indoors: the warm window light. Neighborhood: brighter, whiter sky fill and a higher sun.
+   * City: golden-hour light, a lower amber sun and a cooler fill bouncing off concrete.
+   */
+  setArea(area: AreaId): void {
+    const L = AREA_LIGHT[area];
+    this.hemi.color.set(L.sky);
+    this.hemi.groundColor.set(L.ground);
+    this.sun.color.set(L.sun);
+    this.sun.intensity = L.intensity;
+    this.dir.set(...L.dir).normalize();
   }
 
   applyQuality(renderer: WebGLRenderer, q: Quality): void {

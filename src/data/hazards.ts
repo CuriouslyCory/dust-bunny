@@ -317,7 +317,7 @@ export interface BossTuning {
   mini: { id: string; radius: number; height: number };
   /** Spin (rad/s) of the `brush_l` / `brush_r` model nodes. */
   brushSpin: number;
-  /** Absorbing it opens the house's front door, or wins the Run. */
+  /** Absorbing it opens the area's exit (front door, road to the city), or wins the Run. */
   onDefeat: 'openExit' | 'victory';
   modelId: HazardModelId;
 }
@@ -463,7 +463,8 @@ export const SPRINKLER: TurretTuning = {
 
 /**
  * Street Sweeper (neighborhood boss, Tier 7). Needs Bunny radius ≈ 214 at absorbRatio 0.7,
- * ≈ 182 after one chip and ≈ 155 after two (Tier 7 starts at 160). Absorbing it wins the Run.
+ * ≈ 182 after one chip and ≈ 155 after two (Tier 7 starts at 160). Absorbing it opens the road
+ * to the city.
  */
 export const STREET_SWEEPER: BossTuning = {
   size: 150,
@@ -494,7 +495,7 @@ export const STREET_SWEEPER: BossTuning = {
   maxMinis: 4,
   mini: { id: 'mini_mower', radius: MINI_MOWER.size, height: MINI_MOWER.height },
   brushSpin: 12,
-  onDefeat: 'victory',
+  onDefeat: 'openExit',
   modelId: 'street_sweeper',
 };
 
@@ -576,14 +577,42 @@ export const NEIGHBORHOOD_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * City director (after the neighborhood): spawn tables for Bunny Tiers 7–9, indexed from
+ * `firstTier`. City Hazards are sized for a 230–900 cm Bunny.
+ */
+export const CITY_DIRECTOR = {
+  firstTier: 7,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Placeholder until the city Hazards land: outdoor Hazards (absorbable on arrival).
+    { budget: [3, 4], interval: [7, 5], types: { robo_mower: { weight: 1, max: 2 }, lawn_mower: { weight: 1, max: 2 } } },
+  ] as readonly TierSpawnTable[],
+};
+
+/** Spawn director table per area: first Tier the table covers, grace period, per-Tier tables. */
+export interface AreaDirector {
+  firstTier: number;
+  graceSeconds: number;
+  tiers: readonly TierSpawnTable[];
+}
+
+export const AREA_DIRECTORS: Record<'house' | 'neighborhood' | 'city', AreaDirector> = {
+  house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
+  neighborhood: NEIGHBORHOOD_DIRECTOR,
+  city: CITY_DIRECTOR,
+};
+
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
 export const AREA_BOSSES = {
   house: { id: 'robovac_9000', tier: 5, arrivalDelay: 3 },
   neighborhood: { id: 'street_sweeper', tier: 7, arrivalDelay: 4 },
+  city: { id: 'garbage_truck', tier: 9, arrivalDelay: 4 },
 } as const;
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

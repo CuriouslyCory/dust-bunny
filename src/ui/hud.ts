@@ -337,7 +337,8 @@ function tierWidget(hud: Hud, game: Game): void {
     const t = getTier(e.tier);
     const area = game.run?.area ?? 'house';
     const boss = AREA_BOSSES[area];
-    const bossDue = e.tier >= boss.tier && (area !== 'house' || !game.run?.houseCleared);
+    const cleared = area === 'house' ? game.run?.houseCleared : area === 'neighborhood' ? game.run?.neighborhoodCleared : false;
+    const bossDue = e.tier >= boss.tier && !cleared;
     const hunt = bossDue ? ` · hunt the ${hazardRegistry.get(boss.id)?.name ?? 'boss'}` : '';
     hud.banner('Tier up!', { subtitle: `${t.name}${hunt}`, variant: 'tier', duration: 2.6 });
   });

@@ -21,6 +21,9 @@ export const TIERS: readonly TierDef[] = [
   // Neighborhood (after the Robo-Vac 9000).
   { index: 6, id: 'dust_storm', name: 'Dust Storm', minRadius: 75, cameraScale: 20, growth: 1 },
   { index: 7, id: 'dust_cyclone', name: 'Dust Cyclone', minRadius: 160, cameraScale: 21, growth: 1 },
+  // City (after the Street Sweeper).
+  { index: 8, id: 'dust_hurricane', name: 'Dust Hurricane', minRadius: 320, cameraScale: 22, growth: 1 },
+  { index: 9, id: 'dust_colossus', name: 'Dust Colossus', minRadius: 600, cameraScale: 23, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

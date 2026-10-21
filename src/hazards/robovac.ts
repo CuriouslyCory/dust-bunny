@@ -7,7 +7,8 @@
  *
  * Street Sweeper (neighborhood, Tier 7): the same state machine with STREET_SWEEPER tuning. Its
  * charges are stunned by houses, trees and the hedge, it summons mini mowers, and absorbing it
- * wins the Run (bossDefeated → victory → runEnded 'victory').
+ * opens the road barrier to the city. The city boss (onDefeat 'victory') wins the Run
+ * (bossDefeated → victory → runEnded 'victory').
  */
 import type { Rng } from '../core/rng';
 import { ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
@@ -222,7 +223,7 @@ export class RoboVac9000 extends BaseHazard {
       run.events.emit('victory', { timeSec: run.time, radius: run.bunny.radius });
       run.end('victory');
     } else {
-      // The house is cleared: the front door opens onto the neighborhood (the Run goes on).
+      // The area is cleared: its exit opens onto the next area (the Run goes on).
       run.openExit();
     }
   }

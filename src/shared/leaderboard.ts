@@ -16,13 +16,13 @@ export const FALLBACK_NAME = 'Anonymous Bunny';
 
 /** Plausibility bounds. Generous on purpose: they reject impossible runs, not good ones. */
 export const BOUNDS = {
-  maxRadius: { min: 0.2, max: 500 },
+  maxRadius: { min: 0.2, max: 3000 },
   debrisAbsorbed: { min: 0, max: 200_000 },
   durationMs: { min: 1_000, max: 4 * 60 * 60 * 1000 },
   /** Largest plausible starting radius (Tumble 1.2 cm × Head Start upgrades, with headroom). */
   maxStartRadius: 2.5,
   /** Fastest plausible sustained growth, cm of radius per simulated second. */
-  maxGrowthPerSec: 1,
+  maxGrowthPerSec: 2,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
 } as const;

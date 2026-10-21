@@ -50,7 +50,7 @@ export interface GameEvents {
   pickupExpired: { defId: string };
   perkApplied: { perkId: string; stacks: number };
   /** The house's front door opened (after the Robo-Vac 9000). Position = centre of the doorway. */
-  exitOpened: { x: number; z: number };
+  exitOpened: { area: AreaId; x: number; z: number };
   /** The Bunny left for another area; the Run has swapped `run.house` and repopulated Debris. */
   areaEntered: { area: AreaId; timeSec: number };
 }

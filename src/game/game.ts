@@ -30,6 +30,7 @@ import { CameraRig } from '../systems/camera';
 import { addDefaultHudWidgets, Hud } from '../ui/hud';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
+import type { AreaId } from '../world/types';
 import { Run, type RunConfig } from './run';
 import { RunView } from './runView';
 
@@ -38,8 +39,8 @@ export interface GameOptions {
 }
 
 const BACKGROUND = '#3b2f2a';
-/** Outdoor sky / haze colour (background and fog) for the neighborhood. */
-const SKY = '#b9d4e6';
+/** Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze. */
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6' };
 
 export class Game {
   readonly events = new EventBus();
@@ -188,12 +189,13 @@ export class Game {
 
   /** Background, fog colour and lighting for the current Run's area. */
   private applyAtmosphere(): void {
-    const outdoor = this.run?.area === 'neighborhood';
-    const c = outdoor ? SKY : BACKGROUND;
+    const area = this.run?.area ?? 'house';
+    const c = AREA_SKY[area];
     (this.scene.background as Color).set(c);
     this.fog.color.set(c);
-    this.lighting.setOutdoor(outdoor);
-    this.canvas.parentElement?.classList.toggle('outdoor', outdoor);
+    this.lighting.setArea(area);
+    this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
+    this.canvas.parentElement?.classList.toggle('city', area === 'city');
   }
 
   pickFloor(clientX: number, clientY: number): { x: number; z: number } | null {

@@ -6,7 +6,7 @@
  *
  * To add a type: append to DEBRIS_TYPES (or call registerDebrisType() before a Run starts).
  */
-import { isOutdoorZone, type AreaId, type RoomType } from '../world/types';
+import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 
 export type V3 = [number, number, number];
@@ -413,6 +413,6 @@ export function getDebrisType(id: string): DebrisType | undefined {
 }
 
 export function roomWeight(type: DebrisType, room: RoomType): number {
-  if (isOutdoorZone(room) !== ((type.area ?? 'house') === 'neighborhood')) return 0;
+  if (zoneArea(room) !== (type.area ?? 'house')) return 0;
   return type.rooms[room] ?? type.rooms.any ?? 0;
 }

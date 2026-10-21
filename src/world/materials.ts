@@ -236,6 +236,32 @@ function concreteTexture(): HTMLCanvasElement {
   return c;
 }
 
+/** City plaza stone pavers: offset rows of warm grey slabs. */
+function pavingTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('paving');
+  ctx.fillStyle = hsl(30, 6, 46);
+  ctx.fillRect(0, 0, S, S);
+  const rows = 8;
+  const rh = S / rows;
+  for (let r = 0; r < rows; r++) {
+    const cols = 4;
+    const cw = S / cols;
+    const off = (r % 2) * (cw / 2);
+    for (let k = -1; k < cols; k++) {
+      const x = k * cw + off;
+      ctx.fillStyle = hsl(32 + rng.range(-6, 6), 8 + rng.range(-3, 4), 68 + rng.range(-7, 6));
+      ctx.fillRect(x + 3, r * rh + 3, cw - 6, rh - 6);
+    }
+  }
+  for (let i = 0; i < 12000; i++) {
+    ctx.fillStyle = hsl(30, 6, 66 + rng.range(-12, 8), 0.35);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.5, 1.5);
+  }
+  return c;
+}
+
 const floorCache = new Map<FloorMaterialId, FloorTextureInfo>();
 
 export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
@@ -265,6 +291,9 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
         break;
       case 'concrete':
         info = { texture: toTexture(concreteTexture()), worldSize: 300, roughness: 0.9 };
+        break;
+      case 'paving':
+        info = { texture: toTexture(pavingTexture()), worldSize: 480, roughness: 0.85 };
         break;
     }
     floorCache.set(id, info);

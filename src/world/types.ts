@@ -1,21 +1,39 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-/** Which world a layout describes: the house floor, then the street outside. */
-export type AreaId = 'house' | 'neighborhood';
+/** Which world a layout describes: the house floor, then the street outside, then the city. */
+export type AreaId = 'house' | 'neighborhood' | 'city';
+export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city'];
+
+/** The area after `area` (null for the last one). */
+export function nextArea(area: AreaId): AreaId | null {
+  return AREA_ORDER[AREA_ORDER.indexOf(area) + 1] ?? null;
+}
 
 export type IndoorRoomType = 'living' | 'kitchen' | 'hallway' | 'bedroom' | 'bathroom';
 /** Neighborhood zones (they play the part of rooms outdoors). */
 export type OutdoorZoneType = 'yard' | 'street' | 'sidewalk' | 'driveway' | 'park';
-export type RoomType = IndoorRoomType | OutdoorZoneType;
+/** City zones: roads, sidewalks, paved plazas, parking lots and a park square. */
+export type CityZoneType = 'avenue' | 'pavement' | 'plaza' | 'parking' | 'square';
+export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
+export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
 }
 
-export type FloorMaterialId = 'wood' | 'woodDark' | 'tile' | 'tileSmall' | 'carpet' | 'grass' | 'asphalt' | 'concrete';
+export function isCityZone(type: RoomType): type is CityZoneType {
+  return (CITY_ZONE_TYPES as readonly string[]).includes(type);
+}
+
+/** The area a room / zone type belongs to. */
+export function zoneArea(type: RoomType): AreaId {
+  return isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
+}
+
+export type FloorMaterialId = 'wood' | 'woodDark' | 'tile' | 'tileSmall' | 'carpet' | 'grass' | 'asphalt' | 'concrete' | 'paving';
 
 export interface Room {
   id: string;
@@ -81,8 +99,9 @@ export interface DebrisPlacement {
 }
 
 /**
- * The house's front door: closed (an obstacle) until the Robo-Vac 9000 is absorbed, then the
- * way out to the neighborhood. `rect` is the opening in the outer wall.
+ * The way to the next area: the house's front door (closed until the Robo-Vac 9000 is absorbed)
+ * or the neighborhood's road barrier to the city (closed until the Street Sweeper is absorbed).
+ * While closed it is an obstacle; `rect` is the opening in the outer wall / hedge.
  */
 export interface ExitDoor {
   rect: Rect;

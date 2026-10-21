@@ -5,14 +5,16 @@
  *
  * Layout: a main street across the middle and a cross street, which split the map into four
  * blocks of two lots each. Lots face the main street (front yard, driveway, house, back yard);
- * one lot is a park. The Bunny starts on the front walk of its own house (a north lot).
+ * one lot is a park. The Bunny starts on the front walk of its own house (a north lot). One end
+ * of the main street leaves through the hedge towards the city, closed by a road barrier until
+ * the Street Sweeper is absorbed (layout.exit).
  */
 import type { Rect } from '../core/math';
 import { rect, rectsOverlap } from '../core/math';
 import { Rng } from '../core/rng';
 import { FURNITURE, furnitureObstacles } from './furniture';
 import { wallSegments } from './house';
-import type { DebrisPlacement, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, OutdoorZoneType, Room } from './types';
+import type { DebrisPlacement, ExitDoor, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, OutdoorZoneType, Room } from './types';
 
 export const NEIGHBORHOOD = {
   width: 9600,
@@ -240,11 +242,21 @@ export function generateNeighborhood(seed: string | number): HouseLayout {
     markings.push({ rect: rect(cx1 + 10, u, cx1 + 150, u + 50), color: '#f4f1ea' });
   }
 
-  // ── Hedge around the edge ──
+  // ── Hedge around the edge, with the road to the city at one end of the main street ──
   const T = N.hedgeThickness;
-  const wallRects: Rect[] = [...wallSegments('h', 0, 0, W, [], T), ...wallSegments('h', D, 0, W, [], T), ...wallSegments('v', 0, 0, D, [], T), ...wallSegments('v', W, 0, D, [], T)];
+  const gateEast = root.fork('cityGate').chance(0.5);
+  const gap: [number, number] = [sz0 - sw, sz1 + sw];
+  const wallRects: Rect[] = [
+    ...wallSegments('h', 0, 0, W, [], T),
+    ...wallSegments('h', D, 0, W, [], T),
+    ...wallSegments('v', 0, 0, D, gateEast ? [] : [gap], T),
+    ...wallSegments('v', W, 0, D, gateEast ? [gap] : [], T),
+  ];
   const walls: Obstacle[] = wallRects.map((r, i) => ({ id: `hedge${i}`, kind: 'wall', rect: r, height: N.hedgeHeight, clearance: 0 }));
-  const obstacles: Obstacle[] = [...walls, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
+  const gx = gateEast ? W : 0;
+  const exit: ExitDoor = { rect: rect(gx - T / 2, gap[0], gx + T / 2, gap[1]), dir: { x: gateEast ? 1 : -1, z: 0 }, obstacleId: 'city_gate', open: false };
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: N.hedgeHeight, clearance: 0 };
+  const obstacles: Obstacle[] = [...walls, gate, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
 
   return {
     area: 'neighborhood',
@@ -259,5 +271,6 @@ export function generateNeighborhood(seed: string | number): HouseLayout {
     debrisPlacements,
     spawn: spawn ?? { x: W / 2, z: sz0 - sw - 100, roomId: rooms[0]!.id },
     markings,
+    exit,
   };
 }

@@ -3,13 +3,15 @@
  * spawn interval that ramp with Tier progress, weighted Hazard types with per-type caps.
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
  * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
- * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood. Entering a new
+ * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
+ * at Tier 9 in the city. Entering a new
  * area resets the director (grace period, boss).
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
 import {
   AREA_BOSSES,
+  AREA_DIRECTORS,
   BROOM,
   DIRECTOR,
   DIRECTOR_EXCLUDE,
@@ -18,7 +20,6 @@ import {
   LINT_ROLLER,
   MINI_MOWER,
   MOP,
-  NEIGHBORHOOD_DIRECTOR,
   ROBO_MOWER,
   ROBOVAC_9000,
   ROOMBA,
@@ -53,8 +54,7 @@ export const SPAWN_FOOTPRINT: Readonly<Record<string, { radius: number; height: 
 };
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
-  const t = area === 'house' ? DIRECTOR.tiers : NEIGHBORHOOD_DIRECTOR.tiers;
-  const first = area === 'house' ? 1 : NEIGHBORHOOD_DIRECTOR.firstTier;
+  const { tiers: t, firstTier: first } = AREA_DIRECTORS[area];
   return t[Math.min(Math.max(tier - first + 1, 1), t.length) - 1]!;
 }
 
@@ -138,7 +138,7 @@ export class HazardDirector {
   /** New area: fresh grace period and the new area's boss still to come. */
   private enterArea(area: AreaId): void {
     this.area = area;
-    this.spawnTimer = area === 'house' ? DIRECTOR.graceSeconds : NEIGHBORHOOD_DIRECTOR.graceSeconds;
+    this.spawnTimer = AREA_DIRECTORS[area].graceSeconds;
     this.farTime.clear();
     this.bossSpawned = false;
     this.bossTimer = -1;

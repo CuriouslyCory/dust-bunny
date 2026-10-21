@@ -40,7 +40,7 @@ export function registerResultsSection(section: ResultsSection): void {
 }
 
 const VARIANTS = {
-  victory: { title: 'Victory!', sub: 'The Street Sweeper is part of you now. The whole neighborhood is yours.', badge: '👑' },
+  victory: { title: 'Victory!', sub: 'The Garbage Truck is part of you now. The whole city is yours.', badge: '👑' },
   died: { title: 'Swept up!', sub: 'The cleaning crew got you this time.', badge: '🧹' },
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
@@ -115,12 +115,23 @@ export function registerResultsScreen(): void {
           if (!e) return;
           const v = VARIANTS[e.reason] ?? VARIANTS.quit;
           const s = e.stats;
-          const outside = s.area === 'neighborhood';
+          const outside = s.area !== 'house';
+          const inCity = s.area === 'city';
           card.dataset.variant = e.reason;
           badge.textContent = v.badge;
           title.textContent = v.title;
           sub.textContent =
-            e.reason === 'died' && outside ? 'Swept off the street. The house was yours, at least.' : e.reason === 'died' && s.houseCleared ? 'So close to the front door!' : v.sub;
+            e.reason !== 'died'
+              ? v.sub
+              : inCity
+                ? 'Hosed off the avenue. The whole neighborhood was yours, at least.'
+                : s.neighborhoodCleared
+                  ? 'So close to the city!'
+                  : outside
+                    ? 'Swept off the street. The house was yours, at least.'
+                    : s.houseCleared
+                      ? 'So close to the front door!'
+                      : v.sub;
           const tier = getTier(s.tierReached);
           const rows: Array<[string, string, string]> = [
             ['⏱', 'Time', fmtTime(s.timeSec)],
@@ -129,6 +140,7 @@ export function registerResultsScreen(): void {
             ['⭐', 'Tier reached', `${s.tierReached} · ${tier.name}`],
           ];
           if (s.houseCleared) rows.push(['🏠', 'House', outside ? 'Cleared · made it outside' : 'Cleared']);
+          if (s.neighborhoodCleared) rows.push(['🌳', 'Neighborhood', inCity ? 'Cleared · made it downtown' : 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

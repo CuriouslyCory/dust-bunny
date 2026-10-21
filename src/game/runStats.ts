@@ -19,4 +19,6 @@ export interface RunStats {
   area: AreaId;
   /** True once the Robo-Vac 9000 was absorbed (the front door opened). */
   houseCleared: boolean;
+  /** True once the Street Sweeper was absorbed (the road to the city opened). */
+  neighborhoodCleared?: boolean;
 }

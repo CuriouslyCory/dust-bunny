@@ -37,6 +37,7 @@ import { HOUSE } from './house';
 import { addFloorDetail, floorTexture, rugTexture } from './materials';
 import { createModel } from './models';
 import './outdoorModels';
+import './cityModels';
 import { StaticBatch } from './staticBatch';
 import type { FloorMaterialId, HouseLayout } from './types';
 
@@ -62,6 +63,9 @@ const BASEBOARD_H = 9;
 const HEDGE = '#3f6b34';
 const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
+const BARRIER = '#b9b4aa';
+const BARRIER_STRIPE = '#e0a526';
+const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257' };
 
 export class HouseView {
   readonly root = new Group();
@@ -69,31 +73,34 @@ export class HouseView {
   private readonly batch: StaticBatch;
   /** Furniture objects by FurnitureInstance id (unbatched originals, hidden unless fading). */
   readonly furnitureObjects = new Map<string, Object3D>();
-  private readonly outdoor: boolean;
   /** Front door leaf (pivot at the hinge) and the light shaft shown once it opens. */
   private door: Group | null = null;
+  /** Neighborhood road barrier to the city: boom arms (pivot at their posts) and the sign. */
+  private booms: Array<{ arm: Group; sign: number }> = [];
+  private gateSign: Group | null = null;
   private doorOpen = 0;
   private beacon: Mesh | null = null;
   private time = 0;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
-    this.outdoor = layout.area === 'neighborhood';
     this.batch = new StaticBatch(`${layout.area}:static`, 2048);
     this.buildFloors();
     this.buildMarkings();
-    if (this.outdoor) this.buildHedges();
+    if (layout.area === 'neighborhood') this.buildHedges();
+    else if (layout.area === 'city') this.buildBarriers();
     else this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
     this.buildContactShadows();
-    this.buildFrontDoor();
+    if (layout.area === 'house') this.buildFrontDoor();
+    else this.buildRoadGate();
   }
 
   private buildFloors(): void {
     const b = this.layout.bounds;
     const groundSize = Math.max(8000, (b.maxX - b.minX) * 4);
-    const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), new MeshStandardMaterial({ color: this.outdoor ? '#4d7434' : '#2d2520', roughness: 1 }));
+    const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((b.minX + b.maxX) / 2, -0.5, (b.minZ + b.maxZ) / 2);
     ground.name = 'ground';
@@ -175,7 +182,7 @@ export class HouseView {
     const c = new Color();
     for (const m of marks) {
       const r = m.rect;
-      const y = 0.25;
+      const y = this.layout.area === 'city' ? 2 : 0.25;
       const i = pos.length / 3;
       pos.push(r.minX, y, r.minZ, r.minX, y, r.maxZ, r.maxX, y, r.maxZ, r.maxX, y, r.minZ);
       c.set(m.color);
@@ -211,6 +218,124 @@ export class HouseView {
       g.name = `hedge:${wall.id}`;
       this.addStatic(g);
     }
+  }
+
+  /** City edge: a concrete barrier with a hazard-yellow stripe along each wall obstacle. */
+  private buildBarriers(): void {
+    const body = new MeshStandardMaterial({ color: BARRIER, roughness: 0.95 });
+    const stripe = new MeshStandardMaterial({ color: BARRIER_STRIPE, roughness: 0.8 });
+    for (const wall of this.layout.walls) {
+      const w = wall.rect.maxX - wall.rect.minX;
+      const d = wall.rect.maxZ - wall.rect.minZ;
+      const h = wall.height;
+      const g = new Group();
+      const m = new Mesh(new BoxGeometry(w, h, d), body);
+      m.position.y = h / 2;
+      const band = new Mesh(new BoxGeometry(w + 8, h * 0.18, d + 8), stripe);
+      band.position.y = h * 0.62;
+      const foot = new Mesh(new BoxGeometry(w + 40, h * 0.2, d + 40), body);
+      foot.position.y = h * 0.1;
+      g.add(m, band, foot);
+      g.position.set(wall.rect.minX + w / 2, 0, wall.rect.minZ + d / 2);
+      g.name = `barrier:${wall.id}`;
+      this.addStatic(g);
+    }
+  }
+
+  /**
+   * Neighborhood exit to the city: two striped boom barriers across the road opening with a
+   * "road closed" sign between them. Once the exit opens the booms swing up, the sign sinks
+   * and a light shaft marks the way (updateRoadGate).
+   */
+  private buildRoadGate(): void {
+    const exit = this.layout.exit;
+    if (!exit) return;
+    const r = exit.rect;
+    const alongZ = exit.dir.x !== 0;
+    const width = alongZ ? r.maxZ - r.minZ : r.maxX - r.minX;
+    const cx = (r.minX + r.maxX) / 2;
+    const cz = (r.minZ + r.maxZ) / 2;
+    const red = new MeshStandardMaterial({ color: '#d0342c', roughness: 0.6 });
+    const white = new MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.6 });
+    const post = new MeshStandardMaterial({ color: '#5b5f66', roughness: 0.5, metalness: 0.4 });
+    const armLen = width / 2 - 20;
+    const armH = 110;
+    for (const end of [-1, 1]) {
+      // Post at each end of the opening; the arm reaches towards the middle.
+      const g = new Group();
+      const p = new Mesh(new BoxGeometry(30, armH + 30, 30), post);
+      p.position.y = (armH + 30) / 2;
+      g.add(p);
+      const arm = new Group();
+      arm.position.y = armH;
+      const n = 8;
+      for (let i = 0; i < n; i++) {
+        const seg = new Mesh(new BoxGeometry(alongZ ? 14 : armLen / n, 14, alongZ ? armLen / n : 14), i % 2 ? white : red);
+        const t = (armLen / n) * (i + 0.5);
+        if (alongZ) seg.position.z = -end * t;
+        else seg.position.x = -end * t;
+        arm.add(seg);
+      }
+      g.add(arm);
+      g.position.set(alongZ ? cx : cx + end * (width / 2 - 10), 0, alongZ ? cz + end * (width / 2 - 10) : cz);
+      g.traverse((o) => {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      });
+      g.name = 'roadGateBoom';
+      this.root.add(g);
+      this.booms.push({ arm, sign: end });
+    }
+    // "Road closed" sign on a frame in the middle.
+    const sign = new Group();
+    const board = new Mesh(new BoxGeometry(alongZ ? 8 : 260, 90, alongZ ? 260 : 8), new MeshStandardMaterial({ color: '#f08a24', roughness: 0.6 }));
+    board.position.y = 120;
+    const band = new Mesh(new BoxGeometry(alongZ ? 10 : 230, 26, alongZ ? 230 : 10), white);
+    band.position.y = 120;
+    sign.add(board, band);
+    for (const s of [-1, 1]) {
+      const leg = new Mesh(new BoxGeometry(10, 120, 10), post);
+      leg.position.set(alongZ ? 0 : s * 110, 60, alongZ ? s * 110 : 0);
+      sign.add(leg);
+    }
+    sign.position.set(cx - exit.dir.x * 160, 0, cz - exit.dir.z * 160);
+    sign.traverse((o) => {
+      o.castShadow = true;
+    });
+    sign.name = 'roadGateSign';
+    this.root.add(sign);
+    this.gateSign = sign;
+
+    const beam = new Mesh(
+      new CylinderGeometry(width * 0.3, width * 0.5, 600, 24, 1, true),
+      new MeshBasicMaterial({ color: '#fff1c4', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }),
+    );
+    beam.position.set(cx - exit.dir.x * width * 0.3, 300, cz - exit.dir.z * width * 0.3);
+    beam.visible = false;
+    beam.name = 'exitBeacon';
+    this.root.add(beam);
+    this.beacon = beam;
+  }
+
+  private updateRoadGate(frameDt: number): void {
+    const exit = this.layout.exit;
+    if (!exit || this.booms.length === 0 || !exit.open) return;
+    this.time += frameDt;
+    this.doorOpen = Math.min(1, this.doorOpen + frameDt / 1.4);
+    const ease = 1 - (1 - this.doorOpen) ** 3;
+    const alongZ = exit.dir.x !== 0;
+    for (const { arm, sign } of this.booms) {
+      // Lift each arm about the axis through its post, perpendicular to the arm.
+      if (alongZ) arm.rotation.x = -sign * ease * Math.PI * 0.45;
+      else arm.rotation.z = sign * ease * Math.PI * 0.45;
+    }
+    if (this.gateSign) {
+      this.gateSign.position.y = -ease * 220;
+      this.gateSign.visible = ease < 1;
+    }
+    const beam = this.beacon!;
+    beam.visible = true;
+    (beam.material as MeshBasicMaterial).opacity = ease * (0.14 + 0.06 * Math.sin(this.time * 3));
   }
 
   /** The front door: a wooden leaf hinged on one side of the opening, swung open by update(). */
@@ -315,6 +440,7 @@ export class HouseView {
   /** Fade anything blocking the line from the camera to the Bunny. */
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
     this.updateFrontDoor(frameDt);
+    this.updateRoadGate(frameDt);
     // Two sight lines: to the centre and to the lower part of the ball (so a table top that
     // hides the bottom half still fades).
     _v.set(bunnyX, bunnyY, bunnyZ);

@@ -81,7 +81,7 @@ export const TUNING = {
     yaw: 0,
     pitchDeg: 54,
     minDistance: 8,
-    maxDistance: 6000,
+    maxDistance: 26000,
     /** Smoothing rate for distance changes (1/s). */
     zoomRate: 2.2,
     followRate: 10,

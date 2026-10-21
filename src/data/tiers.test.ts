@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { getTier, MAX_TIER, TIERS, tierForRadius, tierProgress } from './tiers';
 
 describe('tiers', () => {
-  it('has the five house thresholds and two neighborhood ones', () => {
-    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160]);
-    expect(TIERS.map((t) => t.name)).toEqual(['Speck', 'Fluff', 'Tumbleweed', 'Dust Devil', 'Dust Titan', 'Dust Storm', 'Dust Cyclone']);
-    expect(MAX_TIER).toBe(7);
+  it('has the five house thresholds, two neighborhood ones and two city ones', () => {
+    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600]);
+    expect(TIERS.map((t) => t.name)).toEqual(['Speck', 'Fluff', 'Tumbleweed', 'Dust Devil', 'Dust Titan', 'Dust Storm', 'Dust Cyclone', 'Dust Hurricane', 'Dust Colossus']);
+    expect(MAX_TIER).toBe(9);
   });
 
   it('looks up the Tier for a radius (thresholds inclusive)', () => {
@@ -19,7 +19,9 @@ describe('tiers', () => {
     expect(tierForRadius(45).index).toBe(5);
     expect(tierForRadius(74.9).index).toBe(5);
     expect(tierForRadius(75).index).toBe(6);
-    expect(tierForRadius(500).index).toBe(7);
+    expect(tierForRadius(300).index).toBe(7);
+    expect(tierForRadius(320).index).toBe(8);
+    expect(tierForRadius(5000).index).toBe(9);
   });
 
   it('reports progress towards the next Tier', () => {
@@ -27,12 +29,12 @@ describe('tiers', () => {
     expect(tierProgress(2)).toBeCloseTo(0.5);
     expect(tierProgress(14)).toBeCloseTo(0.5);
     expect(tierProgress(60)).toBeCloseTo(0.5);
-    expect(tierProgress(600)).toBe(1);
+    expect(tierProgress(5000)).toBe(1);
   });
 
   it('camera scale rises each Tier so Tier-up pulls the camera back', () => {
     for (let i = 1; i < TIERS.length; i++) expect(TIERS[i]!.cameraScale).toBeGreaterThan(TIERS[i - 1]!.cameraScale);
-    expect(getTier(99).index).toBe(7);
+    expect(getTier(99).index).toBe(9);
     expect(getTier(0).index).toBe(1);
   });
 });
