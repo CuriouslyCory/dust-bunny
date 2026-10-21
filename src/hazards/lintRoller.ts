@@ -13,7 +13,7 @@ import type { HouseLayout } from '../world/types';
 import { BaseHazard } from './base';
 import { bunnySheltered, freeDistance, hitBunny, knockbackCm, knockbackDistance, pushBunnyOut, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 import { shedMass } from './shed';
 
 export interface Lane {
@@ -180,8 +180,7 @@ export class LintRoller extends BaseHazard {
 export const lintRollerDef = hazardRegistry.register({
   id: 'lint_roller',
   name: 'Lint Roller',
-  minTier: 1,
-  spawnWeight: 1,
+  footprint: tuningFootprint(LINT_ROLLER),
   mass: LINT_ROLLER.mass,
   modelId: 'lint_roller',
   create(run, x, z, id, rng) {
@@ -192,8 +191,7 @@ export const lintRollerDef = hazardRegistry.register({
 export const lawnMowerDef = hazardRegistry.register({
   id: 'lawn_mower',
   name: 'Lawn Mower',
-  minTier: 6,
-  spawnWeight: 1,
+  footprint: tuningFootprint(LAWN_MOWER),
   mass: LAWN_MOWER.mass,
   modelId: LAWN_MOWER.modelId,
   create(run, x, z, id, rng) {

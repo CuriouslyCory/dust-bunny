@@ -13,7 +13,7 @@ import { roomAt } from '../world/house';
 import { BaseHazard } from './base';
 import { bunnySheltered, hazardFloorFree, hitBunny, moveCircle, pushBunnyOut, turnTowards, yawOf } from './common';
 import { DECAL_COLORS } from './decals';
-import { hazardRegistry, type HazardDef } from './index';
+import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 
 export const WET_SOURCE = 'hazard:wet';
 
@@ -164,8 +164,7 @@ export class Mop extends BaseHazard {
 export const mopDef = hazardRegistry.register({
   id: 'mop',
   name: 'Mop',
-  minTier: 3,
-  spawnWeight: 1,
+  footprint: tuningFootprint(MOP),
   mass: MOP.mass,
   modelId: 'mop',
   create(run, x, z, id, rng) {
@@ -176,8 +175,7 @@ export const mopDef = hazardRegistry.register({
 export const streetFlusherDef = hazardRegistry.register({
   id: 'street_flusher',
   name: 'Street Flusher',
-  minTier: 8,
-  spawnWeight: 1,
+  footprint: tuningFootprint(STREET_FLUSHER),
   mass: STREET_FLUSHER.mass,
   modelId: STREET_FLUSHER.modelId,
   create(run, x, z, id, rng) {

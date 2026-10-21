@@ -355,8 +355,8 @@ export interface BossTuning {
   summonInterval: number;
   summonCount: number;
   maxMinis: number;
-  /** Summoned Hazard def id and its footprint, for placement. */
-  mini: { id: string; radius: number; height: number };
+  /** Summoned Hazard def id (placed by its def's footprint). */
+  miniId: string;
   /** Spin (rad/s) of the `brush_l` / `brush_r` model nodes. */
   brushSpin: number;
   /** Absorbing it opens the area's exit (front door, road to the city), or wins the Run. */
@@ -395,7 +395,7 @@ export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
   summonInterval: 13,
   summonCount: 2,
   maxMinis: 4,
-  mini: { id: 'mini_roomba', radius: MINI_ROOMBA.size, height: MINI_ROOMBA.height },
+  miniId: 'mini_roomba',
   brushSpin: 16,
   onDefeat: 'openExit',
   modelId: 'robovac_9000',
@@ -540,7 +540,7 @@ export const STREET_SWEEPER: BossTuning = {
   summonInterval: 14,
   summonCount: 2,
   maxMinis: 4,
-  mini: { id: 'mini_mower', radius: MINI_MOWER.size, height: MINI_MOWER.height },
+  miniId: 'mini_mower',
   brushSpin: 12,
   onDefeat: 'openExit',
   modelId: 'street_sweeper',
@@ -692,7 +692,7 @@ export const GARBAGE_TRUCK: BossTuning = {
   summonInterval: 14,
   summonCount: 2,
   maxMinis: 4,
-  mini: { id: 'mini_scrubber', radius: MINI_SCRUBBER.size, height: MINI_SCRUBBER.height },
+  miniId: 'mini_scrubber',
   brushSpin: 12,
   onDefeat: 'victory',
   modelId: 'garbage_truck',
