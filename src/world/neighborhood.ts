@@ -256,6 +256,16 @@ export function generateNeighborhood(seed: string | number): HouseLayout {
   const gx = gateEast ? W : 0;
   const exit: ExitDoor = { rect: rect(gx - T / 2, gap[0], gx + T / 2, gap[1]), dir: { x: gateEast ? 1 : -1, z: 0 }, obstacleId: 'city_gate', open: false };
   const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: N.hedgeHeight, clearance: 0 };
+  // The road carries on past the barrier towards the city (render-only, outside the bounds).
+  const out = (a: number, b: number) => (gateEast ? rect(W + a, 0, W + b, 0) : rect(-b, 0, -a, 0));
+  const roadOut = (z0: number, z1: number, color: string) => {
+    const r = out(T / 2, 6000);
+    markings.push({ rect: { ...r, minZ: z0, maxZ: z1 }, color });
+  };
+  roadOut(sz0 - sw, sz0, '#cfc9bd');
+  roadOut(sz0, sz1, '#56585c');
+  roadOut(sz1, sz1 + sw, '#cfc9bd');
+  for (let x = T / 2 + 150; x < 6000; x += 600) markings.push({ rect: { ...out(x, x + 300), minZ: midZ - 8, maxZ: midZ + 8 }, color: '#f2c94c' });
   const obstacles: Obstacle[] = [...walls, gate, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
 
   return {

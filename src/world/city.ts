@@ -313,6 +313,11 @@ export function generateCity(seed: string | number): HouseLayout {
     }
   }
 
+  // The road from the neighborhood arrives at the west end of the main avenue (render-only, outside the bounds).
+  markings.push({ rect: rect(-8000, mainZ - rw / 2 - sw, -C.wallThickness / 2, mainZ - rw / 2), color: '#c9c3b8' });
+  markings.push({ rect: rect(-8000, mainZ - rw / 2, -C.wallThickness / 2, mainZ + rw / 2), color: '#56585c' });
+  markings.push({ rect: rect(-8000, mainZ + rw / 2, -C.wallThickness / 2, mainZ + rw / 2 + sw), color: '#c9c3b8' });
+
   // ── Concrete barrier around the edge ──
   const T = C.wallThickness;
   const wallRects: Rect[] = [...wallSegments('h', 0, 0, W, [], T), ...wallSegments('h', D, 0, W, [], T), ...wallSegments('v', 0, 0, D, [], T), ...wallSegments('v', W, 0, D, [], T)];
