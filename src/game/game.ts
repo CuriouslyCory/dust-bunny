@@ -59,6 +59,7 @@ export class Game {
   /** Default config for the next Run (character select / shop write here). */
   nextRunConfig: Partial<RunConfig> = {};
 
+  private quality: Quality = 'high';
   /** Screen that paused the Run, if it is paused mid-Run. */
   private pausedBy: string | null = null;
   private readonly raycaster = new Raycaster();
@@ -199,16 +200,30 @@ export class Game {
 
   /** Render quality (see fx/quality.ts): shadows and pixel ratio. */
   private applyQuality(q: Quality): void {
-    this.renderer.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio, 2));
+    this.quality = q;
     this.lighting.applyQuality(this.renderer, q);
     this.resize();
+  }
+
+  /**
+   * Device pixel ratio capped per quality and by a pixel budget, so high-DPI phones and large
+   * monitors don't render far more pixels than the GPU can fill (fur shells are fill-bound).
+   */
+  static pixelRatioFor(q: Quality, cssW: number, cssH: number, dpr: number): number {
+    const cap = q === 'low' ? 1.5 : 2;
+    const budget = q === 'low' ? 1.0e6 : 3.7e6;
+    const fit = Math.sqrt(budget / Math.max(1, cssW * cssH));
+    return Math.min(dpr || 1, Math.max(1, Math.min(cap, fit)));
   }
 
   resize(): void {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
+    const pr = Game.pixelRatioFor(this.quality, w, h, window.devicePixelRatio);
+    if (this.renderer.getPixelRatio() !== pr) this.renderer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.rig.setAspect(w / h);
   }
 }

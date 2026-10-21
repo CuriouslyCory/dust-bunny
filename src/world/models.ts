@@ -132,8 +132,14 @@ export async function loadModelOverrides(timeoutMs = 8000, onProgress?: (done: n
     // Keys starting with "$" are comments.
     const entries = Object.entries(manifest).filter(([id]) => !id.startsWith('$'));
     if (entries.length === 0) return loaded;
-    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
-    const loader = new GLTFLoader();
+    let loader: import('three/examples/jsm/loaders/GLTFLoader.js').GLTFLoader;
+    try {
+      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+      loader = new GLTFLoader();
+    } catch (err) {
+      console.warn('[models] GLTFLoader failed to load, using procedural models', err);
+      return loaded;
+    }
     let done = 0;
     onProgress?.(0, entries.length);
     await Promise.all(

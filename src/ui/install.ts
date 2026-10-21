@@ -2,7 +2,8 @@
  * Applies Settings to the running Game (graphics quality, reduced motion) and other
  * page-level UI behaviour. Called once from main.ts after the Game exists.
  */
-import { setQuality } from '../fx/quality';
+import { installPerfWatchdog } from '../fx/perfWatchdog';
+import { getQuality, onQualityChange, setQuality } from '../fx/quality';
 import type { Game } from '../game/game';
 import { settings, type GraphicsQuality } from './settings';
 
@@ -16,15 +17,30 @@ export function applyGraphicsQuality(_game: Game, quality: GraphicsQuality): voi
 
 export function installUi(game: Game): void {
   const root = document.documentElement;
+  // `?quality=low|high` overrides the saved setting for this page load (not persisted).
+  const urlQuality = new URLSearchParams(location.search).get('quality');
+  const urlOverride = urlQuality === 'low' || urlQuality === 'high';
   settings.subscribe((s, prev) => {
-    if (!prev || prev.quality !== s.quality) applyGraphicsQuality(game, s.quality);
+    if (prev ? prev.quality !== s.quality : !urlOverride) applyGraphicsQuality(game, s.quality);
     root.classList.toggle('reduce-motion', s.reducedMotion);
-    root.dataset.quality = s.quality;
   });
+  // Effective render quality (the URL override or watchdog may differ from the saved setting).
+  root.dataset.quality = getQuality();
+  onQualityChange((q) => (root.dataset.quality = q));
   // Screen id on the root lets CSS react to game state (e.g. hide touch controls off-play).
   game.events.on('screenChanged', (e) => {
     root.dataset.screen = e.to;
     root.classList.toggle('in-run', !!game.run);
   });
   root.dataset.screen = game.screens.current?.id ?? '';
+
+  // Sustained low frame rate on High during play: drop to Low once (saved; Settings can undo).
+  installPerfWatchdog({
+    active: () => game.simulating && getQuality() === 'high' && !document.hidden,
+    onSlow: () => {
+      settings.update({ quality: 'low' });
+      setQuality('low');
+      game.hud.toast('Graphics set to Low for smoother play', { key: 'auto-quality', tone: 'info' });
+    },
+  });
 }

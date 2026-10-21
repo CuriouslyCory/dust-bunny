@@ -14,7 +14,7 @@ import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
-import { cameraDistanceFor, DEFAULT_VIEW_ASPECT, floorPointVisible, viewRadiusFor, type ViewInfo } from './camera';
+import { cameraDistanceFor, DEFAULT_VIEW_ASPECT, framingForAspect, floorPointVisible, viewRadiusFor, type ViewInfo } from './camera';
 import { passesUnder } from './collision';
 
 /** True if a Debris disc of radius `size` can sit at (x, z): inside a room, clear of walls and solid furniture. */
@@ -50,7 +50,8 @@ export function reachableBy(house: HouseLayout, x: number, z: number, size: numb
 export function spawnView(run: Run): ViewInfo {
   const target = cameraDistanceFor(run.bunny.radius, run.tier);
   const v = run.viewInfo;
-  return v ? { ...v, distance: Math.max(v.distance, target) } : { distance: target, aspect: DEFAULT_VIEW_ASPECT, fovDeg: TUNING.camera.fov };
+  // The live distance lags a Tier-up zoom; never use less than the Tier's (aspect-framed) target.
+  return v ? { ...v, distance: Math.max(v.distance, target * framingForAspect(v.aspect).distanceScale) } : { distance: target, aspect: DEFAULT_VIEW_ASPECT, fovDeg: TUNING.camera.fov };
 }
 
 export class DebrisSpawner implements System {

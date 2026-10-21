@@ -84,7 +84,8 @@ export class AudioEngine {
       this.build();
       for (const fn of this.readyFns.splice(0)) fn();
     }
-    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {});
+    // Safari reports 'interrupted' after phone calls / Siri; treat it like 'suspended'.
+    if (this.ctx.state !== 'running' && this.ctx.state !== 'closed') void this.ctx.resume().catch(() => {});
   }
 
   suspend(): void {
@@ -92,7 +93,7 @@ export class AudioEngine {
   }
 
   resume(): void {
-    if (this.ctx?.state === 'suspended') void this.ctx.resume().catch(() => {});
+    if (this.ctx && this.ctx.state !== 'running' && this.ctx.state !== 'closed') void this.ctx.resume().catch(() => {});
   }
 
   private build(): void {

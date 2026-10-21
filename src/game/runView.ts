@@ -4,13 +4,12 @@ import { Disposables } from '../core/events';
 import { lerp } from '../core/math';
 import { getCharacter } from '../data/characters';
 import { getDebrisType } from '../data/debris';
-import { TUNING } from '../data/tuning';
 import { BunnyView } from '../entities/bunnyView';
 import { DebrisRenderer } from '../entities/debrisRenderer';
 import { DustMotes, PuffParticles } from '../fx/particles';
 import { getQuality } from '../fx/quality';
 import { Sunbeams } from '../fx/sunbeams';
-import type { CameraRig } from '../systems/camera';
+import { framingForAspect, type CameraRig } from '../systems/camera';
 import { HouseView } from '../world/houseView';
 import type { Run } from './run';
 
@@ -82,8 +81,9 @@ export class RunView {
     vi.distance = rig.distance;
     vi.aspect = cam.aspect;
     vi.fovDeg = cam.fov;
+    vi.pitchDeg = framingForAspect(cam.aspect).pitchDeg;
     this.house.update(frameDt, rig.camera.position, x, r, z, r);
-    const fov = TUNING.camera.fov;
+    const fov = rig.camera.fov;
     this.puffs.update(frameDt, viewportHeight, fov);
     this.motes.update(frameDt, rig.target, rig.distance, viewportHeight, fov);
     this.sunbeams.update(frameDt, viewportHeight, fov);
