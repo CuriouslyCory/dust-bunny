@@ -17,7 +17,7 @@ export interface AreaTuning {
 export const AREAS: Record<AreaId, AreaTuning> = {
   house: { name: 'The House', tiers: [1, 5], initialScatter: 1400, startCluster: 260, startClusterRadius: 45, growth: 1 },
   neighborhood: { name: 'The Neighborhood', tiers: [5, 7], initialScatter: 1500, startCluster: 120, startClusterRadius: 700, growth: 0.24 },
-  city: { name: 'The City', tiers: [7, 9], initialScatter: 1800, startCluster: 110, startClusterRadius: 2600, growth: 0.09 },
+  city: { name: 'The City', tiers: [7, 9], initialScatter: 1800, startCluster: 110, startClusterRadius: 2600, growth: 0.11 },
 };
 
 /** The Tier the spawner uses for a Bunny Tier in an area. */

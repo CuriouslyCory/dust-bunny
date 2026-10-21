@@ -34,7 +34,7 @@ export const CITY = {
   /** Debris spatial hash cell (cm). */
   debrisCellSize: 300,
   /** Bunny radius for Runs that start here (?area=city); about the size after the Street Sweeper. */
-  debugStartRadius: 230,
+  debugStartRadius: 185,
 };
 
 const FLOORS: Record<CityZoneType, Room['floor']> = { avenue: 'asphalt', pavement: 'concrete', plaza: 'paving', parking: 'asphalt', square: 'grass' };

@@ -50,11 +50,9 @@ interface Fadeable {
   batchId: number;
 }
 
-const _ray = new Ray();
-const _ray2 = new Ray();
+const _rays: Array<{ ray: Ray; dist: number }> = [];
 const _v = new Vector3();
 const _dir = new Vector3();
-const _dir2 = new Vector3();
 
 const WALL_PAINT = '#f1e6d6';
 const WALL_CAP = '#8a7a6a';
@@ -441,22 +439,26 @@ export class HouseView {
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
-    // Two sight lines: to the centre and to the lower part of the ball (so a table top that
-    // hides the bottom half still fades).
-    _v.set(bunnyX, bunnyY, bunnyZ);
-    _dir.subVectors(_v, camera);
-    const dist = _dir.length();
-    _ray.set(camera, _dir.normalize());
-    _v.set(bunnyX, bunnyY * 0.35, bunnyZ);
-    _dir2.subVectors(_v, camera);
-    const dist2 = _dir2.length();
-    _ray2.set(camera, _dir2.normalize());
+    // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
+    // the bottom half still fades); in the city also to its left and right edges, since a tower
+    // can hide half of a giant Bunny without covering its centre.
+    const sides = this.layout.area === 'city' ? [0, -0.75, 0.75] : [0];
+    let n = 0;
+    for (const sx of sides) {
+      for (const yk of sx === 0 ? [1, 0.35] : [0.6]) {
+        const ray = (_rays[n] ??= { ray: new Ray(), dist: 0 });
+        _v.set(bunnyX + sx * radius, bunnyY * yk, bunnyZ);
+        _dir.subVectors(_v, camera);
+        ray.dist = _dir.length();
+        ray.ray.set(camera, _dir.normalize());
+        n++;
+      }
+    }
     for (const f of this.fadeables) {
-      let hit = _ray.intersectBox(f.box, _v);
-      let blocking = hit !== null && hit.distanceTo(camera) < dist - radius * 0.5;
-      if (!blocking) {
-        hit = _ray2.intersectBox(f.box, _v);
-        blocking = hit !== null && hit.distanceTo(camera) < dist2 - radius * 0.5;
+      let blocking = false;
+      for (let i = 0; i < n && !blocking; i++) {
+        const hit = _rays[i]!.ray.intersectBox(f.box, _v);
+        blocking = hit !== null && hit.distanceTo(camera) < _rays[i]!.dist - radius * 0.5;
       }
       const target = blocking ? 0.22 : 1;
       if (Math.abs(f.opacity - target) < 0.005) continue;
