@@ -229,6 +229,12 @@ export class BunnyView {
   /** 0..1 eased Hunker plant (flattens the ball onto the floor). */
   private plantView = 0;
   private wasDashing = false;
+  /**
+   * The intro (src/story/intro.ts): how open the eyes are, 0..1 (null: open, blinking on their own),
+   * and a shimmer added to the fur's glow (Zap's static sparkle on the strand tips).
+   */
+  introEyes: number | null = null;
+  introShimmer = 0;
   private readonly disposables = new Disposables();
 
   constructor(
@@ -675,7 +681,7 @@ export class BunnyView {
     (this.furUniforms.uDrag!.value as Vector3).lerp(_v.applyQuaternion(_inv), Math.min(1, dt * 6));
     this.furUniforms.uTime!.value = this.time;
     // Zap's glow follows the Static meter (glowBase + glowPerCharge × charge).
-    const glow = b.staticCharge === null ? this.look.glow : DISCHARGE.glowBase + DISCHARGE.glowPerCharge * b.staticCharge;
+    const glow = (b.staticCharge === null ? this.look.glow : DISCHARGE.glowBase + DISCHARGE.glowPerCharge * b.staticCharge) + this.introShimmer;
     this.furUniforms.uGlow!.value = glow;
     this.rimStrength.value = 0.45 + glow * 0.8 - this.plantView * 0.15;
 
@@ -694,6 +700,11 @@ export class BunnyView {
     for (const p of this.pupils) p.position.set(look * 0.06, -0.02 * speedN + 0.01, 0.06);
     this.eyes.scale.setScalar(r);
     this.eyes.scale.y = r * (blinking && !sleepy ? 0.18 : 1);
+    if (this.introEyes !== null) {
+      const open = Math.max(0, Math.min(1, this.introEyes));
+      this.eyes.scale.y = r * Math.max(0.02, open);
+      this.eyes.visible = open > 0.03;
+    } else this.eyes.visible = true;
     this.eyes.position.y = Math.sin(this.time * 6) * r * 0.015 * Math.min(1, speedN);
 
     // Contact shadow on the floor, under the (squashed) ball.

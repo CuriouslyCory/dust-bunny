@@ -2,11 +2,10 @@
  * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
  * Replace one by re-registering the same id before it is first shown. The title menu shows
  * Shop / Leaderboard buttons and the account chip (top right), and Play routes through
- * 'intro' (first Play only) and 'characterSelect', only when those screens are registered.
+ * 'characterSelect' when that screen is registered. (A first Run opens on the story's 'intro'
+ * screen instead of 'playing': Game.runOpening, src/story/install.ts.)
  */
 import type { Game } from '../../game/game';
-import { introDue } from '../../story';
-import type { IntroParams } from '../../story/screens';
 import { accountChip } from '../account/screen';
 import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
@@ -15,17 +14,13 @@ import { registerMenuScreens } from './menus';
 import { registerResultsScreen } from './results';
 import '../screens.css';
 
-/** Starts a Run, via character select when that screen exists, after the intro on a first Play. */
+/** Starts a Run, via character select when that screen exists. */
 export function playFromMenu(game: Game): void {
-  const play = (): void => {
-    if (screenRegistry.has('characterSelect')) game.go('characterSelect');
-    else game.startRun();
-  };
-  if (screenRegistry.has('intro') && introDue()) game.go('intro', { done: play } satisfies IntroParams);
-  else play();
+  if (screenRegistry.has('characterSelect')) game.go('characterSelect');
+  else game.startRun();
 }
 
-/** Floating dust motes behind the title (and the story cards). */
+/** Floating dust motes behind the title. */
 export function dustMotes(count: number): HTMLElement {
   const layer = h('div', { className: 'motes' });
   layer.setAttribute('aria-hidden', 'true');

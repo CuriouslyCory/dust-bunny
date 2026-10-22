@@ -25,6 +25,11 @@ export class RunView {
   readonly motes: DustMotes;
   /** Afternoon sun shafts through the windows (house only). */
   sunbeams: Sunbeams | null;
+  /**
+   * What furniture must not hide (the occlusion fade), when not the Bunny: the intro's opening
+   * shots look at the floor in front of the couch, so the couch must stay solid (src/story/intro.ts).
+   */
+  focus: { x: number; y: number; z: number; radius: number } | null = null;
   private readonly disposables = new Disposables();
 
   constructor(
@@ -94,10 +99,12 @@ export class RunView {
     vi.aspect = cam.aspect;
     vi.fovDeg = cam.fov;
     vi.pitchDeg = framingForAspect(cam.aspect).pitchDeg;
-    this.house.update(frameDt, rig.camera.position, x, r, z, r);
+    const f = this.focus;
+    if (f) this.house.update(frameDt, rig.camera.position, f.x, f.y, f.z, f.radius);
+    else this.house.update(frameDt, rig.camera.position, x, r, z, r);
     const fov = rig.camera.fov;
     this.puffs.update(frameDt, viewportHeight, fov);
-    this.motes.update(frameDt, rig.target, rig.distance, viewportHeight, fov);
+    this.motes.update(frameDt, rig.viewTarget, rig.viewDistance, viewportHeight, fov);
     this.sunbeams?.update(frameDt, viewportHeight, fov);
   }
 

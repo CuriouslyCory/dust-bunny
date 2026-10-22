@@ -44,6 +44,25 @@ export interface NoiseOptions {
   dest?: AudioNode;
 }
 
+export interface DroneOptions {
+  /** Oscillator type, or 'noise' for filtered white noise. */
+  type?: OscillatorType | 'noise';
+  freq?: number;
+  filter?: BiquadFilterType;
+  cutoff?: number;
+  q?: number;
+  pan?: number;
+  dest?: AudioNode;
+}
+
+/** A sustained voice: its level moves with `set` and `stop` fades it out and frees it. */
+export interface Drone {
+  /** Ramps the level to `gain` over `seconds`. */
+  set(gain: number, seconds: number): void;
+  /** Fades out over `seconds` (0: cut) and stops. */
+  stop(seconds?: number): void;
+}
+
 export class AudioEngine {
   ctx: AudioContext | null = null;
   master!: GainNode;
@@ -198,6 +217,55 @@ export class AudioEngine {
     osc.start(start);
     osc.stop(end + 0.02);
     return end;
+  }
+
+  /** Starts a silent sustained voice (room tone, a hum); raise it with `set`. Null before unlock. */
+  drone(o: DroneOptions = {}): Drone | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    let src: AudioScheduledSourceNode;
+    if (o.type === 'noise') {
+      const n = ctx.createBufferSource();
+      n.buffer = this.noiseBuffer();
+      n.loop = true;
+      src = n;
+    } else {
+      const osc = ctx.createOscillator();
+      osc.type = o.type ?? 'sine';
+      osc.frequency.value = o.freq ?? 110;
+      src = osc;
+    }
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    let node: AudioNode = src;
+    if (o.filter) {
+      const f = ctx.createBiquadFilter();
+      f.type = o.filter;
+      f.frequency.value = o.cutoff ?? 1000;
+      f.Q.value = o.q ?? 0.7;
+      src.connect(f);
+      node = f;
+    }
+    node.connect(g).connect(this.output(o.dest, o.pan));
+    src.start();
+    let stopped = false;
+    const ramp = (gain: number, seconds: number): number => {
+      const now = ctx.currentTime;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(Math.max(0, gain), now + Math.max(0.01, seconds));
+      return now + Math.max(0.01, seconds);
+    };
+    return {
+      set(gain, seconds) {
+        if (!stopped) ramp(gain, seconds);
+      },
+      stop(seconds = 0) {
+        if (stopped) return;
+        stopped = true;
+        src.stop(ramp(0, seconds) + 0.05);
+      },
+    };
   }
 
   /** Plays filtered white noise. Returns its end time. */
