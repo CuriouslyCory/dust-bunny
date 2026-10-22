@@ -10,9 +10,12 @@
 .screen-intro,
 .screen-chapter {
   pointer-events: auto;
-  background: radial-gradient(ellipse 70% 60% at 50% 50%, #2e211b 0%, #1b130f 70%, #120c09 100%);
   user-select: none;
   touch-action: manipulation;
+}
+
+.screen-chapter {
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, #2e211b 0%, #1b130f 70%, #120c09 100%);
 }
 
 .story-stage {
@@ -78,6 +81,30 @@
 
 .story-skip {
   --btn-fg: rgba(255, 247, 236, 0.75);
+}
+
+/* The intro plays over the Run itself (src/story/intro.ts): captions in the lower third over a
+   soft shade, and a black layer for the fade up (and reduced motion's cuts). */
+.story-intro {
+  justify-content: flex-end;
+  padding-bottom: calc(14vh + var(--safe-bottom));
+  background: linear-gradient(to top, rgba(18, 12, 9, 0.55) 0%, rgba(18, 12, 9, 0.2) 32%, transparent 50%);
+}
+
+.story-black {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+}
+
+.story-intro .story-cards {
+  min-height: 7.5em;
+  justify-content: flex-end;
+}
+
+.story-intro.captions-off .story-cards {
+  visibility: hidden;
 }
 
 /* Chapter card: "Chapter 2", an amber rule, the title, then the line. */

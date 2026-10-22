@@ -95,7 +95,7 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
  * colour (other parts keep their authored colours); other GLB types ignore instance colours. The
  * Solar System's generic planets (`rocky_planet`, `icy_moon`, `ice_giant`) back several Debris types this way.
  */
-const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck', 'rocky_planet', 'icy_moon', 'ice_giant']);
+const GLB_TINTED = new Set(['shoe', 'sock', 'slipper', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck', 'rocky_planet', 'icy_moon', 'ice_giant']);
 
 /**
  * Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute (1 where the

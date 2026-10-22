@@ -7,7 +7,7 @@
  * to a 16:9 desktop. The sim (spawner, Hazard director) keeps using `viewRadiusFor`, so
  * gameplay is identical on every device.
  */
-import { Fog, PerspectiveCamera, Vector3 } from 'three';
+import { Fog, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { clamp, damp } from '../core/math';
 import { getTier } from '../data/tiers';
 import { TUNING } from '../data/tuning';
@@ -119,7 +119,41 @@ export function onScreen(run: Run, x: number, z: number, margin = 0): boolean {
   return floorPointVisible(x - run.bunny.x, z - run.bunny.z, spawnView(run), margin);
 }
 
+/**
+ * A scripted camera pose (the diegetic intro, src/story/intro.ts) blended with the chase pose:
+ * `weight` 0 shows the script alone, 1 the chase camera alone. In between, the look point moves in
+ * a straight line and the camera swings round it (direction slerped, distance lerped), so handing
+ * the camera back is one continuous move.
+ */
+export interface CameraScript {
+  position: Vector3;
+  look: Vector3;
+  weight: number;
+  /** Vertical fov (degrees, at the 16:9 framing; narrow viewports widen it like the chase camera's). Default: the chase fov. */
+  fov?: number;
+}
+
+/** A script's fov, widened for the viewport like the chase fov, blended towards the chase fov by `weight`. */
+function scriptFov(fov: number, framingFov: number, weight: number): number {
+  const half = (deg: number) => Math.tan((deg * Math.PI) / 360);
+  const wide = half(fov) * (half(framingFov) / half(TUNING.camera.fov));
+  const t = wide + (half(framingFov) - wide) * clamp(weight, 0, 1);
+  return (Math.atan(t) * 360) / Math.PI;
+}
+
+const _a = new Vector3();
+const _b = new Vector3();
+const _q = new Quaternion();
+const _qId = new Quaternion();
+
 export class CameraRig {
+  /** Scripted pose blended over the chase pose (null: chase camera only). */
+  script: CameraScript | null = null;
+  /** What the camera actually looks at and its distance from it (script blend included). */
+  readonly viewTarget = new Vector3();
+  viewDistance = 0;
+  /** Eased hand-back of a script to the chase camera: seconds left, total, starting weight. */
+  private release = { left: 0, total: 0, from: 0 };
   /** Smoothed Tier distance (before aspect framing). */
   private zoom: number;
   private framing: Framing = framingForAspect(16 / 9);
@@ -163,8 +197,25 @@ export class CameraRig {
     this.offsetDir.set(Math.sin(c.yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(c.yaw) * Math.cos(pitch));
   }
 
-  /** Jump straight to the target framing (Run start). */
+  /**
+   * Hands a scripted pose back to the chase camera, easing its weight to 1 over `seconds` (0: at
+   * once), then drops the script.
+   */
+  releaseScript(seconds: number): void {
+    if (!this.script) return;
+    if (seconds <= 0 || this.script.weight >= 1) {
+      this.script = null;
+      this.release.left = 0;
+      this.apply();
+      return;
+    }
+    this.release = { left: seconds, total: seconds, from: this.script.weight };
+  }
+
+  /** Jump straight to the target framing (Run start). Drops any scripted pose. */
   snap(x: number, z: number, radius: number, tier: number): void {
+    this.script = null;
+    this.release.left = 0;
     this.zoom = cameraDistanceFor(radius, tier);
     this.target.set(x, radius * 0.5, z);
     this.lean.set(0, 0, 0);
@@ -194,7 +245,17 @@ export class CameraRig {
     this.target.z += (z - this.target.z) * k;
     this.target.y = radius * 0.5;
     this.updateBend(frameDt);
+    this.updateRelease(frameDt);
     this.apply();
+  }
+
+  private updateRelease(frameDt: number): void {
+    const r = this.release;
+    if (r.left <= 0 || !this.script) return;
+    r.left = Math.max(0, r.left - frameDt);
+    const t = 1 - r.left / r.total;
+    this.script.weight = r.from + (1 - r.from) * t * t * (3 - 2 * t);
+    if (r.left <= 0) this.script = null;
   }
 
   private updateBend(frameDt: number): void {
@@ -224,17 +285,40 @@ export class CameraRig {
     const c = TUNING.camera;
     const d = this.distance;
     this.look.copy(this.target).add(this.lean);
-    this.camera.position.copy(this.look).addScaledVector(this.offsetDir, d);
+    let view = d;
+    const s = this.script;
+    if (s && s.weight < 1) {
+      // Swing from the scripted pose to the chase pose round the moving look point.
+      const w = clamp(s.weight, 0, 1);
+      _a.subVectors(s.position, s.look);
+      const la = _a.length() || 1;
+      _a.divideScalar(la);
+      _b.copy(this.offsetDir);
+      _q.setFromUnitVectors(_a, _b);
+      _q.copy(_qId.identity().slerp(_q, w));
+      view = la + (d - la) * w;
+      this.look.lerpVectors(s.look, this.look, w);
+      this.camera.position.copy(this.look).addScaledVector(_a.applyQuaternion(_q), view);
+    } else {
+      this.camera.position.copy(this.look).addScaledVector(this.offsetDir, d);
+    }
     this.camera.lookAt(this.look);
     if (this.roll !== 0) this.camera.rotateZ(this.roll);
-    const near = Math.max(0.05, d * 0.02);
-    const far = d * (c.fogFar + 1.5);
+    const fov = s?.fov && s.weight < 1 ? scriptFov(s.fov, this.framing.fov, s.weight) : this.framing.fov;
+    if (Math.abs(this.camera.fov - fov) > 1e-3) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.viewTarget.copy(this.look);
+    this.viewDistance = view;
+    const near = Math.max(0.05, view * 0.02);
+    const far = view * (c.fogFar + 1.5);
     if (Math.abs(this.camera.near - near) > near * 0.01 || Math.abs(this.camera.far - far) > far * 0.01) {
       this.camera.near = near;
       this.camera.far = far;
       this.camera.updateProjectionMatrix();
     }
-    this.fog.near = d * c.fogNear;
-    this.fog.far = d * c.fogFar;
+    this.fog.near = view * c.fogNear;
+    this.fog.far = view * c.fogFar;
   }
 }
