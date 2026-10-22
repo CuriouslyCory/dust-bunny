@@ -7,7 +7,9 @@
  * ball (a fresnel shell) and, from Dust Moon (Tier 14) on, the Moon sits half-buried in the fur.
  * In the Solar System the Bunny glows from within (plasma): the fur's roots and core shine warm,
  * a pulsing orange corona shell surrounds it and a point light on it lights what it rolls past
- * (`plasmaBoost` brightens it all when the Sun's light goes out, src/fx/solar.ts).
+ * (`plasmaBoost` brightens it all when the Sun's light goes out, src/fx/solar.ts). Once it has
+ * absorbed Sagittarius A* (`Bunny.form` 'black_hole', for the rest of the Run) the fur and core go
+ * dark and an accretion disc of lint and a lensing shimmer surround it (blackHoleLook.ts); the eyes stay.
  * Appearance comes from a BunnyLook (the Character `look`), see bunnyLook.ts.
  *
  * Hierarchy: root (x, r·squashY, z) → body (yaw = heading, squash scale) → roll (fur, Debris)
@@ -43,6 +45,7 @@ import { ContactShadows } from '../fx/contactShadows';
 import { getQuality } from '../fx/quality';
 import { furTextures } from '../world/materials';
 import type { Bunny } from './bunny';
+import { BlackHoleLook, HOLE } from './blackHoleLook';
 import { resolveLook, type BunnyLook } from './bunnyLook';
 import { debrisColors, debrisGeometry, debrisMaterial } from './debrisGeometry';
 
@@ -99,6 +102,8 @@ const PEAKS = { count: 9, size: [0.42, 0.6] as const, lift: 2, growSeconds: 1.4 
 const ORBIT = { glowRadius: 1.3, glow: '#8fd2ff', moonSize: 0.36, moonDir: [0.55, 0.62, -0.56] as const, growSeconds: 1.2 };
 /** The Solar System's plasma: colour, inner glow (fur roots, core), corona shell strength, point light (intensity, reach in ball radii). */
 const PLASMA = { color: '#ff9a3c', inner: 0.55, core: 0.35, shell: 1.25, light: 1.6, reach: 9 };
+/** The black-hole form's colours: fur roots and core near-black, tips dim lint, a warm rim (the photon ring's light). */
+const DARK = { root: new Color('#040309'), tip: new Color('#4a4060'), core: new Color('#020104'), rim: new Color('#ffa860') };
 
 /** Fresnel rim shader: transparent face-on, glowing towards the silhouette (additive). */
 function atmosphereMaterial(color: string): ShaderMaterial {
@@ -205,6 +210,10 @@ export class BunnyView {
   private atmosphere: Mesh | null = null;
   private moon: Group | null = null;
   private moonGrow = 0;
+  /** The black-hole form (after Sagittarius A*): its disc and shimmer, 0..1 grown in, and the dust look's colours to darken from. */
+  private hole: BlackHoleLook | null = null;
+  private holeGrow = 0;
+  private readonly dustColors: { root: Color; tip: Color; core: Color; rim: Color };
   private stuck: StuckItem[] = [];
   private stuckMeshes = new Map<string, InstancedMesh>();
   private stuckDirty = true;
@@ -308,6 +317,10 @@ export class BunnyView {
     this.shells.receiveShadow = true;
     this.rollGroup.add(this.shells);
 
+    this.dustColors = { root: (this.furUniforms.uRoot!.value as Color).clone(), tip: tip.clone(), core: coreMat.color.clone(), rim: this.rim.value.clone() };
+    // A view built after the change (a later Area) shows it at once.
+    if (bunny.form === 'black_hole') this.holeGrow = 1;
+
     this.body.add(this.rollGroup);
     this.buildEyes();
     this.body.add(this.eyes);
@@ -407,6 +420,13 @@ export class BunnyView {
     light.name = 'plasmaLight';
     this.root.add(light);
     return light;
+  }
+
+  /** The black-hole form's accretion disc and lensing shimmer, round the ball (not rolling, not squashed). */
+  private buildHole(): BlackHoleLook {
+    const hole = new BlackHoleLook();
+    this.root.add(hole.root);
+    return hole;
   }
 
   /** The Moon (the `moon` Debris: its Blender prop when loaded) half-buried in the fur, rolling with the ball. */
@@ -621,6 +641,19 @@ export class BunnyView {
       this.plasmaLight.distance = r * PLASMA.reach * (1 + boost * 0.5);
       this.plasmaLight.position.y = r * 0.4;
     }
+    // The black-hole form: dark fur and core, the accretion disc and the lensing shimmer grow in.
+    const holeOn = b.form === 'black_hole';
+    if (holeOn) this.hole ??= this.buildHole();
+    if (this.hole) {
+      this.holeGrow = holeOn ? Math.min(1, this.holeGrow + dt / HOLE.growSeconds) : 0;
+      const g = 1 - (1 - this.holeGrow) ** 3;
+      const D = this.dustColors;
+      (this.furUniforms.uRoot!.value as Color).copy(D.root).lerp(DARK.root, g);
+      (this.furUniforms.uTip!.value as Color).copy(D.tip).lerp(DARK.tip, g);
+      this.coreMat.color.copy(D.core).lerp(DARK.core, g);
+      this.rim.value.copy(D.rim).lerp(DARK.rim, g);
+      this.hole.update(dt, r, g, this.time);
+    }
     const moonOn = orbit && b.realRadius >= getTier(14).minRadius;
     if (moonOn) this.moon ??= this.buildMoon();
     if (this.moon) {
@@ -681,6 +714,7 @@ export class BunnyView {
       this.atmosphere.geometry.dispose();
       (this.atmosphere.material as ShaderMaterial).dispose();
     }
+    this.hole?.dispose();
     this.shells.dispose();
     this.root.removeFromParent();
   }

@@ -42,6 +42,15 @@ export interface DebrisMaterial {
   metalness?: number;
   emissive?: string;
   emissiveIntensity?: number;
+  /**
+   * Self-lit GLB props (the Galaxy's stars and nebulae): each part glows with its Blender
+   * material's emission, baked per vertex (`emission`), times `glow`. Baking a prop into one
+   * vertex-coloured mesh otherwise drops per-part emission. Recipes (no model loaded, headless)
+   * use `emissive` instead, so set it to the prop's main colour too.
+   */
+  glow?: number;
+  /** GLB props: the instance colour (`colors`) multiplies every part (and its glow), not just the largest material. */
+  tintAll?: boolean;
 }
 
 export interface DebrisType {

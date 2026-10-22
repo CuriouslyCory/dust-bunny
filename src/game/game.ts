@@ -21,6 +21,7 @@ import { Lighting } from '../fx/lighting';
 import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
 import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
+import { GalaxySky } from '../fx/galaxy';
 import { SolarSky, VICTORY_HOLD_SECONDS } from '../fx/solar';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
@@ -48,7 +49,7 @@ const BACKGROUND = '#3b2f2a';
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
  * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts),
- * and the Galaxy's violet-black (placeholder: the world pass adds the nebula skybox and instanced stars).
+ * and the Galaxy's violet-black (its painted floor carries the nebula backdrop and the disc, galaxyTextures.ts; the stars are fx/galaxy.ts).
  */
 const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c' };
 
@@ -66,6 +67,8 @@ export class Game {
   readonly lighting: Lighting;
   /** The Solar System's Sun, glare, light and the light going out (fx/solar.ts). */
   readonly solarSky: SolarSky;
+  /** The Galaxy's Sagittarius A*, core glow, light and starfield (fx/galaxy.ts). */
+  readonly galaxySky: GalaxySky;
   /** Pending results screen after a Solar System victory (held so the light can go out). */
   private resultsTimer: number | null = null;
   /** Continent horizon overlay (null without a canvas container). */
@@ -122,6 +125,7 @@ export class Game {
 
     this.hud = new Hud(this);
     this.solarSky = new SolarSky(this.scene, this.lighting, this.hud);
+    this.galaxySky = new GalaxySky(this.scene, this.lighting);
     addDefaultHudWidgets(this.hud, this);
     this.hud.visible = false;
     this.uiLayer.append(this.hud.el);
@@ -223,6 +227,7 @@ export class Game {
     if (this.resultsTimer !== null) window.clearTimeout(this.resultsTimer);
     this.resultsTimer = null;
     this.solarSky.attach(null);
+    this.galaxySky.attach(null);
     this.view?.dispose();
     this.run?.dispose();
     this.view = null;
@@ -237,6 +242,7 @@ export class Game {
     this.fog.color.set(c);
     this.lighting.setArea(area);
     this.solarSky.attach(this.run);
+    this.galaxySky.attach(this.run);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
     if (this.limb) showHorizon(this.limb, area === 'globe');
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
@@ -260,6 +266,7 @@ export class Game {
     if (this.view) {
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
+      this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
       this.lighting.update(this.rig.target, this.rig.distance);
     }
     this.hud.update(frameDt);

@@ -234,7 +234,11 @@ export class Run {
     if (area === 'continent') this.continentCleared = true;
     if (area === 'globe') this.globeCleared = true;
     if (area === 'solar_system') this.solarSystemCleared = true;
-    if (area === 'galaxy') this.galaxyCleared = true;
+    if (area === 'galaxy') {
+      this.galaxyCleared = true;
+      // It has absorbed the thing that absorbs things: a black hole with fur from now on.
+      this.bunny.form = 'black_hole';
+    }
   }
 
   /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */

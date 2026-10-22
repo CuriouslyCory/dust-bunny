@@ -91,14 +91,14 @@ export const AREAS: Record<AreaId, AreaTuning> = {
   // ends at ≈0.03–0.05 AU (≈5e-7 ly, ≈5e-9 units), so the Bunny leaps a fourth time, to 0.85 units
   // (85 ly; stars, clusters and nebulae are drawn at play size, not to scale): Tier 18 starts at 1
   // and Tier 19 at 3. The readout is in light-years. The galactic disc is flat, round Sagittarius A*.
-  // Placeholder growth (Act 8 groundwork): the world pass tunes it to a 4–6 minute Act.
+  // Growth tuned so the Act takes 4–6 minutes (docs/design.md, Galaxy pacing check).
   galaxy: {
     name: 'The Galaxy',
     tiers: [18, 19],
     initialScatter: 2400,
     startCluster: 120,
     startClusterRadius: 11,
-    growth: 0.2,
+    growth: 0.21,
     unit: 9.461e19,
     readout: 'ly',
     fluffPerUnit: 1.5,

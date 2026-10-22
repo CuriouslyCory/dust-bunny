@@ -73,10 +73,12 @@ export const BOUNDS = {
    * Continent's 10 km units. The Continent repeats the Region's 0.85 → 3 → boss curve, but its
    * placeholder content let a max-Loadout Zap clear it 0.85 → 6.2 units in 96 s (99% of 0.05/s),
    * so it allows 0.08 until the Continent content is tuned. The Globe (1,000 km units) repeats the
-   * Continent's curve and allows the same, and so do the Solar System (0.01 AU units) and the
-   * Galaxy (100 ly units).
+   * Continent's curve and allows the same, and so does the Solar System (0.01 AU units). The
+   * Galaxy (100 ly units) allows 0.1: a perk-loaded Zap clears it 0.85 → 5.8–7.1 units in 52–62 s
+   * (`pnpm sim --seeds=3 --minutes=80 --validate`: 103–111% of 0.08/s, Sagittarius A*'s mass
+   * landing at the end of a short Act).
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.08 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1 },
   /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
   areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */

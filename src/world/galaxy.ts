@@ -4,21 +4,31 @@
  * floor (HouseLayout); the map does not wrap and has no exit yet (Act 9, the Universe, does not
  * exist: Sagittarius A* wins the Run).
  *
- * Placeholder map (Act 8 groundwork; the world pass replaces it). Zones are painted on a coarse
- * grid (`cell` units per cell, merged into rects) by distance from the centre and by the phase of a
- * two-armed logarithmic spiral: `galactic_core` (the bulge round Sagittarius A*), the `bar` through
- * it (at a seeded angle), the spiral arms (`inner_arms` within `innerArms` of the centre,
- * `outer_arms` beyond) with the dark `dust_lanes` between them, and the thin stellar `halo` past
- * the disc's edge (`disc`) out to the corners. The map's edge is the bounds; no walls.
+ * Zones are painted on a coarse grid (`cell` units per cell, merged into rects) by distance from
+ * the centre and by `armPhase`, a logarithmic spiral (`pitch`) of four arms: two major arms
+ * leaving the ends of the bar and two minor arms between them that only start `minorFrom` units
+ * out (so the inner disc has two arms and the outer disc four). Zones: `galactic_core` (the bulge
+ * round Sagittarius A*), the `bar` through it (at a seeded angle), the spiral arms (`inner_arms`
+ * within `innerArms` of the centre, `outer_arms` beyond) with the dark `dust_lanes` between them,
+ * and the thin stellar `halo` past the disc's edge (`disc`) out to the corners. The map's edge is
+ * the bounds; no walls. `armDensity` is the same spiral as a smooth 0..1 (the painted floor,
+ * src/world/galaxyTextures.ts, and the starfield, src/fx/galaxy.ts, follow it).
  *
- * The Bunny arrives out in an arm (`spawnDistance` from the centre, on the arm nearest due south,
- * so the core is up the screen). `layout.routes` carries orbits round the core (kind 'orbit',
- * closed polylines, first point repeated last) for Hazards that ride them (Globular Clusters).
- * No Debris is placed by the generator: the spawner fills the map from src/data/galaxyDebris.ts.
+ * The Bunny arrives out in an arm (`spawnDistance` from the centre, past the minor arms' fade-in:
+ * the arm crossing nearest due south, so the core is up the screen). `layout.debrisPlacements` puts a rogue planet
+ * (`free_floating_planet`, its own narrator line) and a sock (`space_sock`) a few units from the
+ * spawn, on screen at arrival, and `coreClusters` star clusters (`star_cluster`: they stun
+ * Sagittarius A*) round the bulge and along the bar. `layout.routes` carries orbits round the core
+ * (kind 'orbit', closed polylines, first point repeated last) for Hazards that ride them (Globular
+ * Clusters). The spawner fills the rest from src/data/galaxyDebris.ts.
+ *
+ * Size: at arrival (r 0.85, camera 32 × r) the view reaches ≈21 units, so the spawn's arm, the
+ * dust lane beside it and the two one-offs are in view; at the end of the Act (r ≈ 4.5, Tier 19)
+ * ≈120, a third of the map, with the core's glow up the screen.
  */
 import { rect, rectContains } from '../core/math';
 import { Rng } from '../core/rng';
-import type { FloorMaterialId, GalaxyZoneType, HouseLayout, MapRoute } from './types';
+import type { DebrisPlacement, FloorMaterialId, GalaxyZoneType, HouseLayout, MapRoute } from './types';
 import { ZoneGrid } from './zoneGrid';
 
 export const GALAXY = {
@@ -28,18 +38,26 @@ export const GALAXY = {
   /** Zone grid cell (units): zones are painted on a coarse grid so the spiral merges into few rects. */
   cell: 3,
   /** Radius (units from the centre) of the bulge, the bar's half-length and half-width, the inner arms' reach and the disc. */
-  core: 14,
-  barLength: 38,
-  barWidth: 7,
+  core: 16,
+  barLength: 40,
+  barWidth: 8,
   innerArms: 95,
   disc: 168,
-  /** Spiral arms: two, wound at this pitch (tan of the pitch angle), starting from the bar's ends. */
-  arms: 2,
-  pitch: 0.26,
-  /** cos(arms × phase) above this is an arm; below it, a dust lane. */
+  /** Spiral arms: two major arms from the bar's ends, wound at this pitch (tan of the pitch angle). */
+  pitch: 0.25,
+  /** The two minor arms (between the major ones) fade in from here outwards (units from the centre). */
+  minorFrom: 62,
+  /** armPhase above this is an arm; below it, a dust lane. */
   armWidth: 0.1,
-  /** The spawn: this far from the centre, on the arm nearest due south. */
-  spawnDistance: 120,
+  /** The spawn: this far from the centre (past the minor arms' fade-in), on the arm crossing nearest due south. */
+  spawnDistance: 112,
+  /** One-offs near the spawn (distance from it, units): the rogue planet and the sock. */
+  roguePlanetDistance: 6.5,
+  sockDistance: 8,
+  /** Star clusters placed round the core: how many, between these distances from the centre, at least `clusterGap` apart. */
+  coreClusters: 16,
+  clusterRing: [19, 46] as const,
+  clusterGap: 7,
   /** Orbits round the core (units) for Hazards that ride them. */
   orbits: [30, 60, 90, 120, 150] as readonly number[],
   laneWidth: 3,
@@ -69,14 +87,43 @@ export function galacticCentre(layout: Pick<HouseLayout, 'bounds'>): { x: number
   return { x: (b.minX + b.maxX) / 2, z: (b.minZ + b.maxZ) / 2 };
 }
 
-/** The angle (radians) of arm 0's centre line at distance `d` from the centre, for a bar at `barAngle`. */
-function armAngle(d: number, barAngle: number): number {
+/** The angle (radians) of major arm 0's centre line at distance `d` from the centre, for a bar at `barAngle`. */
+export function armAngle(d: number, barAngle: number): number {
   return barAngle + Math.log(Math.max(d, 1) / GALAXY.barLength) / GALAXY.pitch;
 }
 
-/** How much a point at distance `d`, angle `a` lies on an arm: 1 on an arm's centre line, −1 midway between arms. */
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** How far out the minor arms are (0 inside `minorFrom`, 1 from 24 units past it). */
+export function minorArms(d: number): number {
+  return smoothstep(GALAXY.minorFrom, GALAXY.minorFrom + 24, d);
+}
+
+/**
+ * How much a point at distance `d`, angle `a` lies on an arm: 1 on a major arm's centre line (0.88
+ * on a minor arm's), −1 midway between arms. Two major arms (from the bar's ends, half a turn apart) everywhere; the minor arms
+ * half-way between them only from `minorFrom` out, a little narrower (inside it the space between
+ * the major arms is all dust lane).
+ */
 export function armPhase(d: number, a: number, barAngle: number): number {
-  return Math.cos(GALAXY.arms * (a - armAngle(d, barAngle)));
+  const t = a - armAngle(d, barAngle);
+  const c4 = Math.cos(4 * t);
+  if (Math.cos(2 * t) >= 0) return c4;
+  return -1 + (c4 + 0.88) * minorArms(d);
+}
+
+/** Smooth arm density 0..1 (1 on an arm's centre line, 0 in the middle of a lane), for painting. */
+export function armDensity(d: number, a: number, barAngle: number): number {
+  const p = Math.min(1, Math.max(0, (armPhase(d, a, barAngle) + 1) / 2));
+  return p * p * (3 - 2 * p);
+}
+
+/** The bar's seeded angle (radians), as the generator picks it. */
+export function barAngleFor(seed: number | string): number {
+  return new Rng(seed).fork('galaxy:bar').range(-Math.PI, Math.PI);
 }
 
 export function generateGalaxy(seed: number | string): HouseLayout {
@@ -86,7 +133,7 @@ export function generateGalaxy(seed: number | string): HouseLayout {
   const D = G.depth;
   const cx = W / 2;
   const cz = D / 2;
-  const barAngle = root.fork('galaxy:bar').range(-Math.PI, Math.PI);
+  const barAngle = barAngleFor(seed);
 
   // ── Zones: bulge, bar, arms and dust lanes, halo ──
   const gw = Math.ceil(W / G.cell);
@@ -118,12 +165,12 @@ export function generateGalaxy(seed: number | string): HouseLayout {
     rect: rect(r.rect.minX * G.cell, r.rect.minZ * G.cell, Math.min(W, r.rect.maxX * G.cell), Math.min(D, r.rect.maxZ * G.cell)),
   }));
 
-  // The Bunny arrives on an arm at `spawnDistance`, the arm crossing nearest due south (+Z), so the core is up the screen.
+  // The Bunny arrives on an arm at `spawnDistance` (major or minor: the minor arms are full there), the crossing nearest due south (+Z), so the core is up the screen.
   const a0 = armAngle(G.spawnDistance, barAngle);
   let spawnAngle = a0;
   let best = Infinity;
   for (let k = -8; k <= 8; k++) {
-    const a = a0 + (k * Math.PI * 2) / G.arms;
+    const a = a0 + (k * Math.PI) / 2;
     const gap = Math.abs(Math.atan2(Math.sin(a - Math.PI / 2), Math.cos(a - Math.PI / 2)));
     if (gap < best) {
       best = gap;
@@ -132,6 +179,44 @@ export function generateGalaxy(seed: number | string): HouseLayout {
   }
   const spawn = { x: Math.round((cx + Math.cos(spawnAngle) * G.spawnDistance) * 100) / 100, z: Math.round((cz + Math.sin(spawnAngle) * G.spawnDistance) * 100) / 100, roomId: '' };
   spawn.roomId = rooms.find((r) => rectContains(r.rect, spawn.x, spawn.z))!.id;
+
+  // ── Placements ──
+  const prng = root.fork('galaxy:placements');
+  const debrisPlacements: DebrisPlacement[] = [];
+  const placed: Array<{ x: number; z: number }> = [];
+  const place = (typeId: string, x: number, z: number) => {
+    debrisPlacements.push({ typeId, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, rotY: Math.round(prng.range(0, Math.PI * 2) * 1000) / 1000 });
+    placed.push({ x, z });
+  };
+  // A rogue planet a few units north-west of the spawn and a sock north-east: in the first screen.
+  {
+    const a = prng.range(-2.6, -2.0);
+    place('free_floating_planet', spawn.x + Math.cos(a) * G.roguePlanetDistance, spawn.z + Math.sin(a) * G.roguePlanetDistance);
+    const b = prng.range(-1.1, -0.5);
+    place('space_sock', spawn.x + Math.cos(b) * G.sockDistance, spawn.z + Math.sin(b) * G.sockDistance);
+  }
+  // Star clusters round the bulge and along the bar (Sagittarius A*'s stun), well apart.
+  for (let n = 0, tries = 0; n < G.coreClusters && tries < G.coreClusters * 60; tries++) {
+    let x: number;
+    let z: number;
+    if (n % 2 === 0) {
+      // Along the bar, either side of its spine.
+      const along = prng.range(G.core + 3, G.barLength + 4) * (prng.next() < 0.5 ? -1 : 1);
+      const across = prng.range(-G.barWidth - 3, G.barWidth + 3);
+      x = cx + along * bc - across * bs;
+      z = cz + along * bs + across * bc;
+    } else {
+      const a = prng.range(-Math.PI, Math.PI);
+      const d = prng.range(G.clusterRing[0], G.clusterRing[1]);
+      x = cx + Math.cos(a) * d;
+      z = cz + Math.sin(a) * d;
+    }
+    const d = Math.hypot(x - cx, z - cz);
+    if (d < G.clusterRing[0] || d > G.clusterRing[1]) continue;
+    if (!placed.every((p) => Math.hypot(p.x - x, p.z - z) >= G.clusterGap)) continue;
+    place('star_cluster', x, z);
+    n++;
+  }
 
   // ── Orbits round the core: closed polylines ──
   const routes: MapRoute[] = G.orbits.map((r, i) => {
@@ -153,7 +238,7 @@ export function generateGalaxy(seed: number | string): HouseLayout {
     furniture: [],
     obstacles: [],
     rugs: [],
-    debrisPlacements: [],
+    debrisPlacements,
     spawn,
     routes,
   };
