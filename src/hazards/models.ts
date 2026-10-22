@@ -1,6 +1,6 @@
 /**
  * Procedural fallbacks for the Hazard models (used when no .glb override is loaded).
- * They follow docs/models.md: cm units (Continent ones: Continent units, Globe ones: Globe units), +Z forward, origin at the floor contact point
+ * They follow docs/models.md: cm units (Continent ones: Continent units, Globe ones: Globe units, Solar System ones: Solar System units), +Z forward, origin at the floor contact point
  * (the broom's origin is the top of the handle), and the same named animatable nodes
  * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper / garbage_truck
  * `brush_l` / `brush_r`, robo_mower `blade`, floor_scrubber `brush`, sprinkler and
@@ -8,10 +8,12 @@
  * `funnel`, hurricane `bands`; all spin about Y; crop_duster `propeller` spins about Z; volcano
  * `crater` at the vent; ice_sheet `calving_l` / `calving_r` hide when they calve; debris_satellite
  * `panels`, asat_laser `head` and globe_hurricane `spiral` turn about Y; space_station `arrays`
- * tilts about X; orbital_sweeper `net` and `wings` (flaps about Z)).
+ * tilts about X; orbital_sweeper `net` and `wings` (flaps about Z); rogue_asteroid `rock`, sunspot
+ * `head`, solar_flare `loop` and the_sun `corona` turn about Y; comet `tail` flutters (scale);
+ * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide when chipped).
  * If another module already registered a factory for an id, it is kept.
  */
-import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
+import { BoxGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
 import { addBox, addCylinder, hasModel, mat, registerModel } from '../world/models';
 
 /** Native sizes from public/models/catalog.json (cm): footprint w (X) × d (Z), height h. */
@@ -60,6 +62,14 @@ export const HAZARD_MODEL_SIZES = {
   globe_hurricane: { w: 6.22, d: 6.16, h: 0.42 },
   orbital_sweeper: { w: 5.04, d: 3.9, h: 1.35 },
   mini_sweeper: { w: 1, d: 0.54, h: 0.29 },
+  // Solar System (the models brief's footprints in 0.0001 AU ÷ 100: Solar System units, as loaded at
+  // scale 0.01); reconcile with public/models/catalog.json when the GLBs land.
+  rogue_asteroid: { w: 2.2, d: 2, h: 0.8 },
+  comet: { w: 1.8, d: 4.6, h: 1.4 },
+  sunspot: { w: 2.6, d: 2.6, h: 0.7 },
+  sungrazer: { w: 1.1, d: 3, h: 0.6 },
+  solar_flare: { w: 4.8, d: 4.4, h: 1.4 },
+  the_sun: { w: 5.8, d: 5.8, h: 3 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -1032,6 +1042,138 @@ function miniSweeper(): Object3D {
   return g;
 }
 
+// ── Solar System Hazards (Solar System units: the GLBs are authored at 1 = 0.0001 AU and loaded at
+// scale 0.01, so these fallbacks are built directly at the loaded size: 1 unit = 0.01 AU) ──
+
+/** A sphere (or squashed ellipsoid) centred on (x, y, z). */
+function ball(g: Object3D, radius: number, x: number, y: number, z: number, m: MeshStandardMaterial, squash = 1, detail = 1): Mesh {
+  const mesh = shadow(new Mesh(new IcosahedronGeometry(radius, detail), m));
+  mesh.position.set(x, y, z);
+  mesh.scale.set(1, squash, 1);
+  g.add(mesh);
+  return mesh;
+}
+
+/** A see-through glowing cone from an apex at (x, y, z) widening back along −Z (comet tails). */
+function streamer(g: Object3D, radius: number, length: number, x: number, y: number, z: number, color: string, opacity: number): Mesh {
+  const mesh = new Mesh(new ConeGeometry(radius, length, 14, 1, true), new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false }));
+  mesh.rotation.x = Math.PI / 2; // apex (+Y) to +Z
+  mesh.position.set(x, y, z - length / 2);
+  g.add(mesh);
+  return mesh;
+}
+
+/** A plasma arch standing in the XY plane (feet at x = ±radius), turned by `yaw`. */
+function arch(g: Object3D, radius: number, tube: number, x: number, y: number, z: number, m: MeshStandardMaterial, yaw = 0): Mesh {
+  const mesh = new Mesh(new TorusGeometry(radius, tube, 8, 20, Math.PI), m);
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = yaw;
+  g.add(mesh);
+  return mesh;
+}
+
+function rogueAsteroid(): Object3D {
+  // Lumpy cratered rock with a few pebbles; the `rock` node (pivot (0, 0.4, 0)) spins about Y.
+  const g = new Group();
+  const rock = node(g, 'rock', 0, 0.4, 0);
+  const grey = mat('#7d756c', 0.95);
+  ball(rock, 0.55, 0, 0, 0, grey, 0.7).scale.set(1.5, 0.7, 1.1);
+  ball(rock, 0.3, 0.55, 0.12, 0.25, mat('#8d8378', 0.95), 0.8);
+  for (const [x, z] of [[-0.35, 0.3], [0.25, -0.35], [0.6, -0.1]] as const) addCylinder(rock, 0.12, 0.1, 0.03, x, 0.3, z, mat('#4f4a45', 1), 10);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.7;
+    ball(rock, 0.08 + (i % 2) * 0.04, Math.cos(a) * 1, -0.3, Math.sin(a) * 0.9, grey, 1, 0);
+  }
+  return g;
+}
+
+function comet(): Object3D {
+  // Icy dark nucleus (r 0.6) inside a glowing coma at the origin; the `tail` node (pivot at the
+  // nucleus) holds the curved cream dust tail and the straight blue ion tail streaming to −Z.
+  const g = new Group();
+  ball(g, 0.6, 0, 0.6, 0, mat('#4a4744', 0.9), 0.85);
+  ball(g, 0.25, 0.25, 0.85, 0.35, mat('#e8f4fa', 0.4), 1, 0);
+  const coma = new Mesh(new IcosahedronGeometry(0.8, 2), new MeshBasicMaterial({ color: '#e8f6ff', transparent: true, opacity: 0.3, depthWrite: false }));
+  coma.position.set(0, 0.6, 0);
+  g.add(coma);
+  const tail = node(g, 'tail', 0, 0.6, 0);
+  streamer(tail, 0.75, 3.8, 0, 0, -0.3, '#cfe9ff', 0.35);
+  const dust = streamer(tail, 0.9, 3.2, 0.2, 0, -0.3, '#fff1d0', 0.3);
+  dust.rotation.z = 0.2;
+  dust.rotation.y = 0.18;
+  return g;
+}
+
+function sunspot(): Object3D {
+  // A dark umbra disc in an orange penumbra, flat on the floor; the `head` node (a twisted
+  // flux-tube arch along Z with a glowing muzzle at (0, 0.45, 1.0)) turns about Y.
+  const g = new Group();
+  addCylinder(g, 1.3, 1.3, 0.02, 0, 0, 0, glow('#ff8a1a', 1.2), 24);
+  addCylinder(g, 0.75, 0.75, 0.03, 0, 0, 0, mat('#3a1c0e', 0.9), 20);
+  addCylinder(g, 0.45, 0.45, 0.035, 0, 0, 0, mat('#140a06', 1), 18);
+  const head = node(g, 'head', 0, 0.03, 0);
+  arch(head, 0.42, 0.09, 0, 0, 0.55, glow('#ffb347', 1.8), Math.PI / 2);
+  arch(head, 0.36, 0.05, 0.08, 0, 0.55, glow('#ff6a1a', 1.6), Math.PI / 2 + 0.3);
+  ball(head, 0.12, 0, 0.45, 1.0, glow('#fff1c8', 2.6), 1, 0);
+  return g;
+}
+
+function sungrazer(): Object3D {
+  // A small white-hot comet head at +Z with a short, wide tail streaming to −Z.
+  const g = new Group();
+  ball(g, 0.32, 0, 0.3, 0.9, glow('#fff6e0', 2.6), 0.9);
+  ball(g, 0.42, 0, 0.3, 0.9, glow('#ffd27a', 1.2), 0.7, 1).scale.set(1, 0.7, 0.8);
+  streamer(g, 0.75, 2.2, 0, 0.3, 0.75, '#fff1d0', 0.4);
+  streamer(g, 0.5, 2.4, 0, 0.3, 0.75, '#bfe8ff', 0.35);
+  return g;
+}
+
+function solarFlare(): Object3D {
+  // A bright patch on the floor and an arching plasma loop rooted in it (feet at x = ±1.2, top
+  // y ≈ 1.2); the `loop` node pulses and spins about Y. The blast faces +Z.
+  const g = new Group();
+  addCylinder(g, 2.2, 2.2, 0.02, 0, 0, 0, glow('#ff8a1a', 1), 24);
+  addCylinder(g, 1.4, 1.4, 0.03, 0, 0, 0.3, glow('#ffd27a', 1.6), 20);
+  const loop = node(g, 'loop', 0, 0, 0);
+  arch(loop, 1.2, 0.2, 0, 0, 0, glow('#ffb347', 2.2));
+  arch(loop, 1.0, 0.1, 0, 0, 0.25, glow('#fff1c8', 2.4), 0.25);
+  for (const s of [-1, 1]) ball(loop, 0.3, s * 1.2, 0.1, 0, glow('#fff6e0', 2.6), 0.6, 0);
+  return g;
+}
+
+function theSun(): Object3D {
+  // The boss, front +Z: a glowing granulated sphere (r 2.7, squashed to 3 tall), two dark sunspot
+  // eyes on the +Z side, the `corona` node (a fringe of flames round the equator) turning about Y,
+  // and `prominence_l` / `prominence_r` (arcs on the −X / +X sides) that hide when chipped.
+  const g = new Group();
+  ball(g, 2.7, 0, 1.5, 0, glow('#ffb03a', 1.6), 0.556, 2);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    ball(g, 0.5, Math.cos(a) * 1.9, 2.15, Math.sin(a) * 1.9, glow('#ffd27a', 1.8), 0.3, 0);
+  }
+  for (const s of [-1, 1]) {
+    ball(g, 0.38, s * 0.8, 1.9, 2.25, mat('#2a1206', 0.9), 0.6, 1);
+    ball(g, 0.16, s * 0.8, 1.95, 2.45, mat('#0c0503', 1), 0.6, 0);
+  }
+  const corona = node(g, 'corona', 0, 1.5, 0);
+  const ring = new Mesh(new TorusGeometry(2.75, 0.18, 8, 40), glow('#ff7a1a', 2));
+  ring.rotation.x = -Math.PI / 2;
+  corona.add(ring);
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const flame = new Mesh(new ConeGeometry(0.16, 0.5 + (i % 3) * 0.15, 8), glow(i % 2 ? '#ffb347' : '#ff6a1a', 2));
+    flame.position.set(Math.cos(a) * 2.95, 0, Math.sin(a) * 2.95);
+    flame.rotation.z = -Math.PI / 2;
+    flame.rotation.y = -a;
+    corona.add(flame);
+  }
+  for (const [name, s] of [['prominence_l', -1], ['prominence_r', 1]] as const) {
+    const p = node(g, name, s * 2.5, 1.2, 0);
+    arch(p, 0.6, 0.13, 0, 0, 0, glow('#ff8a3a', 2.2), Math.PI / 2).scale.set(1, 1.3, 1);
+  }
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -1070,6 +1212,12 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   globe_hurricane: globeHurricane,
   orbital_sweeper: orbitalSweeper,
   mini_sweeper: miniSweeper,
+  rogue_asteroid: rogueAsteroid,
+  comet,
+  sunspot,
+  sungrazer,
+  solar_flare: solarFlare,
+  the_sun: theSun,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

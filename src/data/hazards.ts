@@ -171,6 +171,14 @@ export interface LaneTuning {
    * spawn on a map that wraps). Otherwise the lane is planned through the spawn point as usual.
    */
   orbitReach?: number;
+  /**
+   * Orbit rings (the Comet): if the layout has a `routes` entry of kind 'orbit' within this
+   * distance of the spawn point, the Hazard rides that closed polyline one way round with no ends
+   * (`ringPath`), a short lane telegraph sliding ahead of it. Otherwise the lane is planned as usual.
+   */
+  ringReach?: number;
+  /** Model node that flutters (scale) while moving: the Comet's `tail`. */
+  flutterNode?: string;
 }
 
 export const LINT_ROLLER: LaneTuning = {
@@ -369,6 +377,9 @@ export interface AirConeTuning {
   /** Model node spun about Y at spinRate rad/s (the Hurricane's `bands`). */
   spinNode?: string;
   spinRate?: number;
+  /** Model node that swells by up to `pulseAmount` (scale) through the warm-up and pulses while the air is on (the Solar Flare's `loop`). */
+  pulseNode?: string;
+  pulseAmount?: number;
 }
 
 export const UPRIGHT_VACUUM: AirConeTuning = {
@@ -1542,45 +1553,270 @@ export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
   moon: { typeId: 'moon', interval: 8, range: 26, margin: 1.25, gap: 3 },
 };
 
-// ── Solar System Hazards (Act 7), Solar System units (1 = 0.01 AU) ──────────────
-// Placeholder tunings (Act 7 groundwork): each reskins a Globe Hazard's behaviour at the same
-// scale (both Acts arrive at 0.85 units and end past ≈4) and borrows its model until the Solar
-// System models land.
+// ── Solar System Hazards (Tiers 16–17, 1 world unit = 0.01 AU, Bunny radius ≈ 0.85–4.5 units) ──
+// What is left to clean up in the solar system: rocks, ice and the Sun's own weather. The Solar
+// System repeats the Globe's shape (Tiers at 1 and 3 units, arrival at 0.85, boss absorbable at ≈ 4),
+// so each Hazard keeps the size and speed of the Globe Hazard whose behaviour it reskins, with its
+// own twist. The Blender models are authored at 1 model unit = 0.0001 AU and loaded at scale 0.01,
+// so they arrive in Solar System units: `modelSize` is the catalog footprint radius / 100 (the
+// Comet's is its coma, so its tail streams far behind it) and heights follow the model. Footprints
+// are the models brief's estimates until the GLBs land (reconcile with public/models/catalog.json).
+// Tier 16 Hazards are a threat on arrival (r 0.85) and food by early Tier 17; the Tier 17 Solar
+// Flare is food before the Sun is.
 
-/** Rogue Asteroid: Roomba behaviour, a tumbling rock whose gravity pulls. */
-export const ROGUE_ASTEROID: RoombaTuning = { ...DEBRIS_SATELLITE, speed: solarTiers(2.4, 4.2) };
+/** Rogue Asteroid: Roomba behaviour, a tumbling rock whose gravity pulls; spins its `rock`. */
+export const ROGUE_ASTEROID: RoombaTuning = {
+  size: 1.1,
+  /** Model top (≈ 80) × 1.1 / 1.1. */
+  height: 0.8,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 1.8,
+  knockbackRadii: 2.5,
+  speed: solarTiers(2.4, 4.2),
+  /** Tumbling: frequent, wide turns (the Debris-Field Satellite's). */
+  turnInterval: [1, 2.6],
+  turnAngle: 2.4,
+  /** Its gravity reaches a little further and pulls a little harder than the satellite's debris field (1.2, 0.26). */
+  suctionReach: 1.5,
+  suctionStrength: 0.3,
+  modelId: 'rogue_asteroid',
+  /** Footprint radius ≈ 110 model units. */
+  modelSize: 1.1,
+  spinNode: 'rock',
+  spinRate: 1.8,
+};
 
-/** Comet: a lane patrol along an orbit ring (its ice tail trails behind it). */
-export const COMET: LaneTuning = { ...SPACE_STATION, speed: solarTiers(2.4, 3.8), orbitReach: undefined };
+/**
+ * Comet: a lane patrol that rides the orbit ring nearest its spawn (`ringReach`) one way round,
+ * with no ends, its tail streaming behind it (`flutterNode`). A hit knocks the Bunny off the ring
+ * and sheds mass (no sticking). Faster than the Space Station.
+ */
+export const COMET: LaneTuning = {
+  size: 1.6,
+  /** The coma, about 0.6 tall at model scale 2. */
+  height: 0.6,
+  mass: 4,
+  damage: 1,
+  speed: solarTiers(3.2, 4.6),
+  /** Straight lane when no ring is in reach (the placeholder map always has one). */
+  laneMin: 10,
+  laneMax: 40,
+  endPause: 1.2,
+  stickSeconds: 0,
+  releaseInvulnerability: 0,
+  shedFraction: 0.08,
+  releaseCm: 3,
+  releaseRadii: 4,
+  hitPause: 1.2,
+  modelId: 'comet',
+  /** The coma's radius (≈ 80 model units), not the footprint: the ≈ 380-unit tail streams 7.6 units behind. */
+  modelSize: 0.8,
+  spinNode: null,
+  ringReach: 20,
+  flutterNode: 'tail',
+};
 
-/** Sunspot: a turret that fires pulsar-like flares. */
+/** Sunspot: a turret whose flux-tube `head` sweeps like a pulsar beam, locks a lane, then fires a pulsed burst of flare bolts. */
 export const SUNSPOT: TurretTuning = {
-  ...ASAT_LASER,
+  size: 1.3,
+  /** Model ≈ 70 tall × 1.3 / 1.3. */
+  height: 0.7,
+  mass: 3,
+  damage: 1,
+  knockbackCm: 0.8,
+  knockbackRadii: 0.6,
   range: solarTiers(10, 14),
-  telegraph: solarTiers(1.25, 1.05),
-  cooldown: solarTiers(3.4, 2.8),
-  dropletSpeed: solarTiers(15, 20),
+  turnRate: 1.6,
+  telegraph: solarTiers(1.2, 1),
+  /** Pulses: four bolts, further apart than the laser's three. */
+  burst: 4,
+  burstGap: 0.16,
+  cooldown: solarTiers(3.2, 2.6),
+  dropletSpeed: solarTiers(14, 19),
+  dropletRadius: 0.22,
+  spread: 0.03,
+  /** The emitter's muzzle (≈ 50 model units up). */
+  nozzleHeight: 0.5,
+  modelId: 'sunspot',
+  /** Footprint radius ≈ 130 model units. */
+  modelSize: 1.3,
+  aimNode: 'head',
+  /** The pulsar sweep while the Bunny is out of range (the laser's scan is 0.4). */
+  idleSpin: 0.9,
+  wetSeconds: 0,
+  wetMultiplier: 1,
   dropletColor: '#ffb347',
 };
 
-/** Sungrazer: Mop behaviour, a comet diving past the Sun, leaving an ice tail that slows. */
-export const SUNGRAZER: MopTuning = { ...REENTRY_BURN, speed: solarTiers(2.6, 3.8), burn: undefined, slowMultiplier: 0.6, trailColor: '#bfe8ff' };
+/** Sungrazer: Mop behaviour, a comet diving past the Sun across zones; its icy tail trail slows. */
+export const SUNGRAZER: MopTuning = {
+  size: 1.5,
+  /** Model ≈ 50 tall × 1.5 / 1.5. */
+  height: 0.5,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 2.2,
+  knockbackRadii: 3,
+  speed: solarTiers(2.8, 4),
+  waypoints: 4,
+  patrolRange: 24,
+  trailSpacing: 0.7,
+  trailLife: 7,
+  trailFade: 0.5,
+  /** A wide tail: wider than the Re-entry Burn's fire. */
+  trailRadius: 1,
+  slowMultiplier: 0.55,
+  modelId: 'sungrazer',
+  /** Footprint radius ≈ 150 model units (head at +Z, tail to −Z). */
+  modelSize: 1.5,
+  roam: true,
+  trailColor: '#bfe8ff',
+};
 
-/** Solar Flare: Leaf Blower behaviour, a flare that blasts the Bunny away. */
-export const SOLAR_FLARE: AirConeTuning = { ...GLOBE_HURRICANE, speed: solarTiers(2, 2.8), wetSeconds: 0, wetMultiplier: 1 };
+/** Solar Flare: Leaf Blower behaviour, a plasma arch that flares up (`loop` spins and pulses) and blasts the Bunny away. */
+export const SOLAR_FLARE: AirConeTuning = {
+  size: 2.4,
+  /** Model ≈ 120 tall × 2.4 / 2.4. */
+  height: 1.2,
+  mass: 3.5,
+  damage: 1,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  shedFraction: 0,
+  speed: solarTiers(1.8, 2.6),
+  turnRate: 0.6,
+  coneHalfAngle: 0.45,
+  coneRange: 15,
+  /** Push speed at the arch: faster than the Bunny can roll into it (the Hurricane's 1.15). */
+  suctionStrength: 1.25,
+  warmup: 1.1,
+  on: 1.8,
+  off: 2.6,
+  mode: 'blow',
+  blowDebrisSize: 0.45,
+  debrisSpeed: 12,
+  /** The blast leaves the arch's front foot. */
+  nozzleOffset: 0.3,
+  modelId: 'solar_flare',
+  /** Footprint radius ≈ 240 model units. */
+  modelSize: 2.4,
+  spinNode: 'loop',
+  spinRate: 0.5,
+  pulseNode: 'loop',
+  pulseAmount: 0.25,
+};
 
 /**
- * The Sun (solar system boss, Tier 17): placeholder on the Orbital Sweeper's numbers without its
- * net, lasers or swarm. Needs Bunny radius ≈ 4 units at absorbRatio 0.7. Absorbing it clears the
- * Solar System (the last built Area, so the Run is won).
+ * The solar wind: while the Sun hunts (or recovers), a Bunny whose near edge is within `reach` of
+ * its surface is pushed straight away from it at up to `strength` × its max speed (fading to 0 at
+ * `reach`; `applyPush`, so a hunkered or hidden Bunny is not pushed), unless the Bunny can absorb
+ * it. Loose Debris up to `debrisSize` in that ring is blown outward at up to `debrisSpeed`. World
+ * units at full size, scaled with its chips.
  */
-export const THE_SUN: BossTuning = {
-  ...ORBITAL_SWEEPER,
-  miniId: undefined,
+export interface SolarWindTuning {
+  reach: number;
+  strength: number;
+  debrisSize: number;
+  debrisSpeed: number;
+}
+
+/**
+ * The giant planets that stop the Sun (Debris types `typeIds`). A charge that runs into one the
+ * Bunny can't absorb yet (`canAbsorbDebris`, so a Jupiter still locked until Tier 17 counts) stops
+ * against it and stuns the Sun (an eclipse); such a planet also blocks it while it hunts. When it
+ * arrives, and every `interval` s while it hunts, if none is within `range` of the Bunny, a
+ * `fallbackId` giant (the Hot Jupiter) swings round: it lands `gap` beyond the Bunny's edge (between
+ * the Bunny and the Sun the first time, then at a random bearing), at least the type's own size and
+ * `margin` × the largest size the Bunny can absorb.
+ */
+export interface GiantTuning {
+  typeIds: readonly string[];
+  fallbackId: string;
+  interval: number;
+  range: number;
+  margin: number;
+  gap: number;
+}
+
+export interface SunTuning extends BossTuning {
+  wind: SolarWindTuning;
+  giants: GiantTuning;
+  /** Glow (emissive intensity) multiplier during a stun: the eclipse. */
+  eclipseGlow: number;
+  /** Seconds before a chipped prominence (`prominence_l` / `prominence_r`) shows again. */
+  prominenceRegrow: number;
+}
+
+/**
+ * The Sun (solar system boss, Tier 17): the bosses' state machine (src/hazards/theSun.ts). It
+ * hunts inside its solar wind (a push away from it, not when the Bunny can absorb it), telegraphs
+ * coronal mass ejections as charges with a red lane, and throws flare volleys (`ash`, orange). Only
+ * a charge into a giant planet the Bunny can't absorb yet stuns it (an eclipse: the glow dims and
+ * the wind stops); chips are prominences (`prominence` Debris, src/data/sunDebris.ts). Needs Bunny
+ * radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 17 starts
+ * at 3). Absorbing it clears the Solar System (the last built Area, so the Run is won).
+ */
+export const THE_SUN: SunTuning = {
+  size: 2.8,
+  /** The photosphere (radius ≈ 270 model units) × 2.8 / 2.9; the corona fringe reaches the 290 footprint. */
+  contactRadius: 2.6,
+  /** A sphere squashed in Y (≈ 300 model units tall) × 2.8 / 2.9. */
+  height: 2.9,
+  mass: 6,
+  damage: 1,
+  knockbackCm: 4,
+  knockbackRadii: 3,
+  shedFraction: 0.05,
+  introTime: 3.5,
+  /** The Orbital Sweeper's: a Tier 17 Bunny (18 units/s) outruns it. */
+  huntSpeed: 5,
+  turnRate: 1.2,
+  huntTime: [3, 4.5],
+  chargeTrigger: 32,
+  /** A coronal mass ejection: a slightly longer wind-up than the Sweeper's 1.5. */
+  telegraph: 1.6,
+  chargeSpeed: 22,
+  chargeDistance: 42,
+  stunTime: 3.8,
+  recover: 1.2,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  /** No suction: the solar wind pushes instead (`wind`). */
+  suctionReach: 0,
+  suctionStrength: 0,
+  /** No minis. */
+  summonInterval: 999,
   summonCount: 0,
   maxMinis: 0,
-  ash: undefined,
+  brushSpin: 0,
   onDefeat: 'openExit',
+  modelId: 'the_sun',
+  /** The model's footprint radius (≈ 290 model units). */
+  modelSize: 2.9,
+  /** Flare volleys from the limb facing the target: fewer, slower bolts than the Sweeper's lasers. */
+  ash: {
+    interval: 7,
+    telegraph: 1.1,
+    count: 3,
+    gap: 0.18,
+    speed: 20,
+    radius: 0.35,
+    range: 28,
+    spread: 0.05,
+    damage: 1,
+    knockbackCm: 1,
+    knockbackRadii: 0.6,
+    shedFraction: 0.03,
+    originOffset: 0.9,
+    color: '#ffd27a',
+    glow: '#ff8a1a',
+    laneColor: '#ff9a1a',
+  },
+  wind: { reach: 9, strength: 0.4, debrisSize: 0.6, debrisSpeed: 8 },
+  giants: { typeIds: ['jupiter', 'saturn', 'uranus', 'neptune', 'hot_jupiter'], fallbackId: 'hot_jupiter', interval: 8, range: 26, margin: 1.25, gap: 3 },
+  eclipseGlow: 0.15,
+  prominenceRegrow: 8,
 };
 
 export interface TierSpawnTable {
