@@ -20,7 +20,7 @@
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { COMET, FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -493,5 +493,17 @@ export const cometDef = hazardRegistry.register({
   modelId: COMET.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, COMET);
+  },
+});
+
+/** Galaxy lane patrol: a globular cluster orbiting the galactic core (GLOBULAR_CLUSTER, ring riding like the Comet). */
+export const globularClusterDef = hazardRegistry.register({
+  id: 'globular_cluster',
+  name: 'Globular Cluster',
+  footprint: tuningFootprint(GLOBULAR_CLUSTER),
+  mass: GLOBULAR_CLUSTER.mass,
+  modelId: GLOBULAR_CLUSTER.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, GLOBULAR_CLUSTER);
   },
 });

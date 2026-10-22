@@ -47,9 +47,10 @@ const BACKGROUND = '#3b2f2a';
  * altitude haze, blue-violet dusk from the stratosphere (where the horizon overlay curves the
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
- * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts).
+ * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts),
+ * and the Galaxy's violet-black (placeholder: the world pass adds the nebula skybox and instanced stars).
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c' };
 
 export class Game {
   readonly events = new EventBus();
@@ -136,8 +137,8 @@ export class Game {
     this.resize();
 
     this.events.on('runEnded', (e) => {
-      // Winning in the Solar System: the light goes out first (fx/solar.ts), then the results.
-      if (e.reason === 'victory' && this.run?.area === 'solar_system') {
+      // A victory (the last built Area's boss absorbed) holds the results back a moment so it is seen.
+      if (e.reason === 'victory') {
         const run = this.run;
         this.resultsTimer = window.setTimeout(() => {
           this.resultsTimer = null;

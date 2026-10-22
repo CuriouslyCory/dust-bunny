@@ -96,6 +96,12 @@ export const STORY: Story = {
         'Jupiter is absorbed by a dust bunny. Irony is not a force of nature. It should be.',
       ],
     ],
+    // Act 8 · The Galaxy
+    dust_nebula: [
+      'It is now mostly hydrogen, lint, and a sock.',
+      'A rogue planet, drifting between stars for a billion years. Finally, something happens to it.',
+    ],
+    dust_cluster: ['The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.'],
   },
 
   areas: {
@@ -156,6 +162,17 @@ export const STORY: Story = {
         [
           'The Sun has been blowing dust out of the solar system for 4.6 billion years. It is a very large leaf blower.',
           'It is also, technically, Debris.',
+        ],
+      ],
+    },
+    galaxy: {
+      title: 'The Biggest Vacuum There Is',
+      entered: ['Astronomers on a distant world classify it as a nebula. They are not wrong.'],
+      cleared: ['It has absorbed the thing that absorbs things. It is now that thing, with fur.'],
+      boss: [
+        [
+          'At the centre of the galaxy is a hole four million times heavier than the Sun.',
+          'It has been quietly cleaning the galactic core for thirteen billion years. It is the biggest vacuum there is. It is not big enough.',
         ],
       ],
     },

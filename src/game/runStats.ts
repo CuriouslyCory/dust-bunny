@@ -52,8 +52,10 @@ export interface RunStats {
   continentCleared?: boolean;
   /** True once the Orbital Sweeper was absorbed (the escape trajectory over the North Pole opened). */
   globeCleared?: boolean;
-  /** True once the Sun was absorbed. */
+  /** True once the Sun was absorbed (the heliopause gate to the galaxy opened). */
   solarSystemCleared?: boolean;
+  /** True once Sagittarius A* was absorbed. */
+  galaxyCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
   /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */

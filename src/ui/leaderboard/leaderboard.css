@@ -261,22 +261,21 @@
   width: min(520px, 100%);
 }
 
-/* Eight boards (Full run and seven Areas): two rows of four, Full run first (the results screen's
-   leaderboard column is narrow on desktop too, so the labels shrink a little); three rows on phones. */
+/* Nine boards (Full run and eight Areas): three rows of three, Full run first, on desktop and
+   phones alike, so "Neighborhood" and "Solar System" fit (the results screen's leaderboard column
+   is narrow on desktop too, so the labels shrink a little). */
 .lb-boards {
   flex-wrap: wrap;
 }
 
 .lb-board {
-  flex: 1 1 22%;
+  flex: 1 1 30%;
   padding: 4px 3px;
   font-size: 12.5px;
 }
 
-/* Phones: rows of three, so "Neighborhood" and "Solar System" fit. */
 @media (max-width: 480px) {
   .lb-board {
-    flex-basis: 30%;
     font-size: 12px;
   }
 }

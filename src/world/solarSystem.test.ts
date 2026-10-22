@@ -50,9 +50,19 @@ describe('solar system generation', () => {
         }
       }
       expect(g.walls).toHaveLength(0);
-      expect(g.obstacles).toHaveLength(0);
       expect(g.wrapX).toBeFalsy();
-      expect(g.exit).toBeUndefined();
+    });
+
+    it(`puts the heliopause gate on the north bound, north-east of the Sun, barred until the Sun falls (seed ${seed})`, () => {
+      const exit = g.exit!;
+      expect(exit.open).toBe(false);
+      expect(exit.dir).toEqual({ x: 0, z: -1 });
+      expect(exit.rect.minZ).toBe(0);
+      expect(exit.rect.maxX - exit.rect.minX).toBe(SOLAR.exitWidth);
+      const mid = (exit.rect.minX + exit.rect.maxX) / 2;
+      expect(mid).toBeGreaterThanOrEqual(sun.x + SOLAR.exitEast[0] - 1);
+      expect(mid).toBeLessThanOrEqual(sun.x + SOLAR.exitEast[1] + 1);
+      expect(g.obstacles.map((o) => o.id)).toEqual([exit.obstacleId]);
     });
 
     it(`spawns on Earth's empty orbit south of the Sun, with open space round it (seed ${seed})`, () => {

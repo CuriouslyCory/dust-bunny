@@ -23,7 +23,8 @@
  * - **Chips are prominences** (`prominence` Debris, src/data/sunDebris.ts); each chip hides one of
  *   its `prominence_l` / `prominence_r` arcs for `prominenceRegrow` s. Its `corona` turns.
  *
- * Absorbing it clears the Solar System (`run.clearArea()`; the last built Area, so the Run is won).
+ * Absorbing it clears the Solar System (`run.clearArea()`): the heliopause gate opens onto the Galaxy.
+ * Sagittarius A* (src/hazards/sagittariusA.ts) is the Galaxy's placeholder on this class.
  */
 import type { Material, Mesh, MeshStandardMaterial } from 'three';
 import type { Rng } from '../core/rng';
@@ -175,13 +176,14 @@ export class TheSun extends RoboVac9000 {
     this.eclipses++;
   }
 
-  /** Chip pieces are prominences; each chip hides one of its prominence arcs for a while. */
+  /** Chip pieces are prominences (`chipTypeId`); each chip hides one of its prominence arcs for a while. */
   protected override scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
     const i = this.nextProminence;
     this.nextProminence = 1 - i;
     this.regrow[i] = this.sun.prominenceRegrow;
     this.setProminenceVisible(i, false);
-    const type = run.debris.types.find((t) => t.id === PROMINENCE_ID);
+    const chipId = this.sun.chipTypeId ?? PROMINENCE_ID;
+    const type = run.debris.types.find((t) => t.id === chipId);
     if (!type) {
       super.scatterChips(run, count, size, inner, outer);
       return;

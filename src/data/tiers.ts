@@ -39,6 +39,9 @@ export const TIERS: readonly TierDef[] = [
   // Solar System (after the Orbital Sweeper; 1 world unit = 0.01 AU, so these are 1 and 3 units).
   { index: 16, id: 'dust_giant', name: 'Dust Giant', minRadius: 1.496e11, cameraScale: 30, growth: 1 },
   { index: 17, id: 'dust_star', name: 'Dust Star', minRadius: 4.488e11, cameraScale: 31, growth: 1 },
+  // Galaxy (after the Sun; 1 world unit = 100 ly, so these are 1 and 3 units: 100 ly and 300 ly).
+  { index: 18, id: 'dust_nebula', name: 'Dust Nebula', minRadius: 9.461e19, cameraScale: 32, growth: 1 },
+  { index: 19, id: 'dust_cluster', name: 'Dust Cluster', minRadius: 2.8383e20, cameraScale: 33, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

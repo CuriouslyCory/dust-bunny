@@ -32,6 +32,8 @@ export interface DebugTools {
   enterGlobe(): void;
   /** Moves the Run to the solar system, growing the Bunny to Orbital-Sweeper-beaten size (then the arrival leap). */
   enterSolarSystem(): void;
+  /** Moves the Run to the galaxy, growing the Bunny to Sun-beaten size (then the arrival leap). */
+  enterGalaxy(): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -87,6 +89,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterSolarSystem() {
       goTo('solar_system');
+    },
+    enterGalaxy() {
+      goTo('galaxy');
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

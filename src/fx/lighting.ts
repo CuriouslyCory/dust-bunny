@@ -25,6 +25,9 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   globe: { sky: '#26304a', ground: '#4a8fd8', sun: '#fffaf2', intensity: 3.4, dir: [0.9, 0.62, -0.55] },
   // The ecliptic: a warm, hard light from the Sun (its direction follows the Sun, `setSolar`) and a dim violet fill.
   solar_system: { sky: '#2a2140', ground: '#2a1c14', sun: '#ffe7b8', intensity: 3.8, dir: [0, 0.8, -1] },
+  // The galactic disc (placeholder): cool starlight from above with a blue-magenta nebula fill and
+  // a warm glow from the core (up the screen from the spawn).
+  galaxy: { sky: '#3a3070', ground: '#5a2a5a', sun: '#e8ecff', intensity: 3.2, dir: [0.2, 1.2, -0.8] },
 };
 
 export class Lighting {

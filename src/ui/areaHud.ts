@@ -1,7 +1,8 @@
 /**
  * Area HUD: the "area cleared" banner and an exit compass while the area's exit is open (the
  * house's front door, the neighborhood's road to the city, the city's highway on-ramp to the
- * region, the region's motorway west to the continent), with a skip button that moves on
+ * region, the region's motorway west to the continent, the continent's launch corridor, the
+ * globe's escape trajectory, the solar system's heliopause), with a skip button that moves on
  * without rolling to the exit (Enter on a keyboard), then a fade-in and an arrival banner when
  * the Bunny arrives in the next area. With the narrator on (src/story/), the cleared banner carries
  * the Area's cleared line and arriving plays the chapter card before the arrival banner.
@@ -28,7 +29,8 @@ const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; s
   region: { icon: '🌍', label: 'West to the continent', go: 'roll on!', skip: 'Head west', cleared: 'Region cleared!', sub: 'The motorway west is open · roll out to the continent' },
   continent: { icon: '🚀', label: 'Up to orbit', go: 'lift off!', skip: 'Leave the atmosphere', cleared: 'Continent cleared!', sub: 'The launch corridor is open · head north and up' },
   globe: { icon: '☀️', label: 'Escape orbit', go: 'break free!', skip: 'Leave Earth behind', cleared: 'Globe cleared!', sub: 'The escape trajectory is open · head over the North Pole' },
-  // The Solar System is the last built Area: the Sun wins the Run (an exit to the Galaxy comes with Act 8).
+  solar_system: { icon: '🌌', label: 'Heliopause', go: 'cross it!', skip: 'Follow Voyager out', cleared: 'The Sun is yours', sub: 'The heliopause is open · head north, the way Voyager went' },
+  // The Galaxy is the last built Area: Sagittarius A* wins the Run (an exit to the Universe comes with Act 9).
 };
 
 /** "37 m", "1.2 km", "240 km", "0.31 Earths", "0.012 AU": a compass distance (real cm) without the readout's decimals. */

@@ -15,5 +15,9 @@ describe('length unit ladder', () => {
     expect(formatLength(0.85 * 1.496e11, 'AU')).toBe('0.0085 AU');
     expect(formatLength(3 * 1.496e11, 'AU')).toBe('0.030 AU');
     expect(formatLength(0.13 * 6.371e8, 'Earths')).toBe('0.13 Earths');
+    // The Galaxy's readout starts in light-years (1 unit = 100 ly), the top rung.
+    expect(formatLength(0.85 * 9.461e19, 'ly')).toBe('85.0 ly');
+    expect(formatLength(3 * 9.461e19, 'ly')).toBe('300.0 ly');
+    expect(formatLength(45 * 9.461e19, 'ly')).toBe('4500 ly');
   });
 });

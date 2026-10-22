@@ -184,6 +184,8 @@ export function dropCaption(bossId: string, bossName: string, material: string):
       return "The Orbital Sweeper's net is full of flecks of everything humanity ever launched. It keeps some.";
     case 'the_sun':
       return 'The Sun is made of the same stuff as everything else, only hotter. It keeps some.';
+    case 'sagittarius_a':
+      return 'Caught at the edge of Sagittarius A* is lint that has been falling in for thirteen billion years. It keeps some.';
     default:
       return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
   }

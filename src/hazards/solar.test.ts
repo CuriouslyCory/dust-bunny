@@ -476,12 +476,13 @@ describe('the Sun', () => {
     expect(shed).toBeGreaterThan(0);
   });
 
-  it('absorbing the Sun clears the Solar System and wins the Run (bossDefeated → victory → runEnded)', () => {
+  it('absorbing the Sun clears the Solar System and opens the heliopause onto the Galaxy (bossDefeated → exitOpened)', () => {
     const { run, events } = makeRun('sun-win');
     const p = moveToOpen(run);
     const b = run.bunny;
     const order: string[] = [];
     events.on('bossDefeated', (e) => order.push(`bossDefeated:${e.defId}`));
+    events.on('exitOpened', (e) => order.push(`exitOpened:${e.area}`));
     events.on('victory', () => order.push('victory'));
     events.on('runEnded', (e) => order.push(`runEnded:${e.reason}`));
     b.setRadius(absorbRadiusFor(THE_SUN.size, b.stats.get('absorbRatio')) + 0.05);
@@ -489,8 +490,12 @@ describe('the Sun', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:the_sun', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:the_sun', 'exitOpened:solar_system']);
+    expect(run.solarSystemCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.ended).toBe(false);
+    expect(run.canLeaveArea).toBe(true);
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('galaxy');
   });
 });

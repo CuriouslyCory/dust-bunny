@@ -16,7 +16,7 @@
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
+import { BLACK_HOLE, DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -240,5 +240,17 @@ export const rogueAsteroidDef = hazardRegistry.register({
   modelId: ROGUE_ASTEROID.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, ROGUE_ASTEROID);
+  },
+});
+
+/** Galaxy wanderer: a black hole, the real vacuum, with a strong pull (BLACK_HOLE). */
+export const blackHoleDef = hazardRegistry.register({
+  id: 'black_hole',
+  name: 'Black Hole',
+  footprint: tuningFootprint(BLACK_HOLE),
+  mass: BLACK_HOLE.mass,
+  modelId: BLACK_HOLE.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, BLACK_HOLE);
   },
 });

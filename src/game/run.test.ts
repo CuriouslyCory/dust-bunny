@@ -100,10 +100,14 @@ describe('Run (headless)', () => {
     run.openExit(); // the Orbital Sweeper fell: the escape trajectory over the North Pole opens
     expect(run.leaveArea()).toBe(true);
     expect(run.area).toBe('solar_system');
-    run.openExit(); // no exit in the last area: the Sun wins the Run instead
+    expect(run.canLeaveArea).toBe(false); // the heliopause is still shut
+    run.openExit(); // the Sun fell: the heliopause opens onto the Galaxy
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('galaxy');
+    run.openExit(); // no exit in the last area: Sagittarius A* wins the Run instead
     expect(run.canLeaveArea).toBe(false);
     expect(run.leaveArea()).toBe(false);
-    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system']);
+    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy']);
   });
 
   it('re-bases the Bunny into the Region unit on entry, keeping its real size', () => {
@@ -188,8 +192,13 @@ describe('Run (headless)', () => {
     expect(run.endReason).toBeNull();
     run.leaveArea();
     run.clearArea();
-    expect(order).toEqual(['exit:region', 'exit:continent', 'exit:globe', 'victory', 'end:victory']);
-    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, globeCleared: true, solarSystemCleared: true, area: 'solar_system' });
+    expect(run.solarSystemCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.endReason).toBeNull();
+    run.leaveArea();
+    run.clearArea();
+    expect(order).toEqual(['exit:region', 'exit:continent', 'exit:globe', 'exit:solar_system', 'victory', 'end:victory']);
+    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, globeCleared: true, solarSystemCleared: true, galaxyCleared: true, area: 'galaxy' });
   });
 
   it('records each Area it plays and emits areaCompleted on leaving a cleared one', () => {
@@ -217,7 +226,7 @@ describe('Run (headless)', () => {
     expect(completed).toHaveLength(1); // dying mid-Area completes nothing
   });
 
-  it('counts the City, the Region, the Continent and the Globe as cleared once their exits open, and the Solar System only on victory', () => {
+  it('counts the City, the Region, the Continent, the Globe and the Solar System as cleared once their exits open, and the Galaxy only on victory', () => {
     const events = new EventBus();
     const run = new Run(events, { seed: 'city', characterId: 'zap', area: 'city' });
     expect(run.getStats().areas!.map((a) => a.area)).toEqual(['city']); // a debug start skips the earlier Areas
@@ -254,7 +263,18 @@ describe('Run (headless)', () => {
     expect(solar.tier).toBe(15);
     expect(solar.house.wrapX).toBeFalsy();
     solar.clearArea();
-    expect(solar.endReason).toBe('victory');
+    expect(solar.endReason).toBeNull();
+    expect(solar.house.exit?.open).toBe(true);
     expect(solar.getStats().areas![0]!.cleared).toBe(true);
+    // A debug start in the Galaxy begins at the Sun-beaten size (0.044 AU), then leaps to 85 ly.
+    const galaxy = new Run(new EventBus(), { seed: 'galaxy', characterId: 'zap', area: 'galaxy' });
+    expect(galaxy.bunny.realRadius).toBeCloseTo(0.85 * 9.461e19, -14);
+    expect(galaxy.bunny.radius).toBeCloseTo(0.85);
+    expect(galaxy.tier).toBe(17);
+    expect(galaxy.house.wrapX).toBeFalsy();
+    expect(galaxy.house.exit).toBeUndefined();
+    galaxy.clearArea();
+    expect(galaxy.endReason).toBe('victory');
+    expect(galaxy.getStats().areas![0]!.cleared).toBe(true);
   });
 });

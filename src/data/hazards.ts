@@ -85,6 +85,15 @@ export function solarTiers(t16: number, t17: number): PerTier {
   return [t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t17];
 }
 
+/**
+ * Per-Tier values for galaxy Hazards (Tiers 18, 19), in Galaxy units (1 = 100 ly). Tiers 1–17
+ * repeat the Tier 18 value: the Bunny arrives in the Galaxy at Tier 17 (0.85 units, the arrival
+ * leap) and galaxy Hazards live only there.
+ */
+export function galaxyTiers(t18: number, t19: number): PerTier {
+  return [t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t19];
+}
+
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
 export interface RoombaTuning {
   size: number;
@@ -1750,6 +1759,8 @@ export interface SunTuning extends BossTuning {
   eclipseGlow: number;
   /** Seconds before a chipped prominence (`prominence_l` / `prominence_r`) shows again. */
   prominenceRegrow: number;
+  /** Debris type its chips knock loose (default: the Sun's `prominence`, src/data/sunDebris.ts). */
+  chipTypeId?: string;
 }
 
 /**
@@ -1759,7 +1770,7 @@ export interface SunTuning extends BossTuning {
  * a charge into a giant planet the Bunny can't absorb yet stuns it (an eclipse: the glow dims and
  * the wind stops); chips are prominences (`prominence` Debris, src/data/sunDebris.ts). Needs Bunny
  * radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 17 starts
- * at 3). Absorbing it clears the Solar System (the last built Area, so the Run is won).
+ * at 3). Absorbing it clears the Solar System: the heliopause opens onto the Galaxy.
  */
 export const THE_SUN: SunTuning = {
   size: 2.8,
@@ -1821,6 +1832,101 @@ export const THE_SUN: SunTuning = {
   giants: { typeIds: ['jupiter', 'saturn', 'uranus', 'neptune', 'hot_jupiter'], fallbackId: 'hot_jupiter', interval: 8, range: 26, margin: 1.25, gap: 3 },
   eclipseGlow: 0.15,
   prominenceRegrow: 8,
+};
+
+// ── Galaxy Hazards (Tiers 18–19, 1 world unit = 100 ly, Bunny radius ≈ 0.85–4.5 units) ──
+// Placeholder tunings (Act 8 groundwork): the Galaxy repeats the Solar System's shape (Tiers at 1
+// and 3 units, arrival at 0.85, boss absorbable at ≈ 4), so each Hazard reskins the Solar System
+// Hazard with the same behaviour at the same size and speed. Models: the procedural fallbacks in
+// src/hazards/models.ts (`modelSize` is their footprint radius) until the Blender models land
+// (ids black_hole, globular_cluster, pulsar, supernova_remnant, supernova, sagittarius_a).
+
+/** Black Hole: Roomba behaviour, the real vacuum: a wanderer with a strong, long pull; spins its accretion `disc`. */
+export const BLACK_HOLE: RoombaTuning = {
+  ...ROGUE_ASTEROID,
+  height: 0.6,
+  speed: galaxyTiers(2.2, 3.8),
+  /** Slow, deliberate turns: it drifts rather than tumbles. */
+  turnInterval: [2, 4],
+  turnAngle: 1.4,
+  /** Twice the Rogue Asteroid's reach (1.5) and a much harder pull (0.3). */
+  suctionReach: 3,
+  suctionStrength: 0.55,
+  modelId: 'black_hole',
+  modelSize: 1.05,
+  spinNode: 'disc',
+  spinRate: 2.4,
+};
+
+/** Globular Cluster: a lane patrol orbiting the galactic core on the ring nearest its spawn (the Comet's ring riding). */
+export const GLOBULAR_CLUSTER: LaneTuning = {
+  ...COMET,
+  height: 1.6,
+  speed: galaxyTiers(3, 4.4),
+  modelId: 'globular_cluster',
+  modelSize: 1,
+  flutterNode: undefined,
+};
+
+/** Pulsar: a turret whose beam `head` rotates fast (the lighthouse sweep), locks a lane, then fires a burst. */
+export const PULSAR: TurretTuning = {
+  ...SUNSPOT,
+  height: 0.8,
+  range: galaxyTiers(10, 14),
+  cooldown: galaxyTiers(3.8, 3),
+  dropletSpeed: galaxyTiers(13, 18),
+  nozzleHeight: 0.4,
+  modelId: 'pulsar',
+  modelSize: 1.3,
+  aimNode: 'head',
+  /** The rotating beam while the Bunny is out of range (the Sunspot's sweep is 0.9). */
+  idleSpin: 2.4,
+  dropletColor: '#9fd8ff',
+};
+
+/** Supernova Remnant: Mop behaviour, an expanding shell drifting across the arms; its gas trail slows. */
+export const SUPERNOVA_REMNANT: MopTuning = {
+  ...SUNGRAZER,
+  height: 0.5,
+  speed: galaxyTiers(2.6, 3.6),
+  modelId: 'supernova_remnant',
+  modelSize: 1.5,
+  trailColor: '#d68cff',
+};
+
+/** Supernova: Leaf Blower behaviour, a star that blows its shell outward (`shell` pulses) and blasts the Bunny away. */
+export const SUPERNOVA: AirConeTuning = {
+  ...SOLAR_FLARE,
+  height: 1.2,
+  speed: galaxyTiers(1.8, 2.6),
+  modelId: 'supernova',
+  modelSize: 2.3,
+  spinNode: 'shell',
+  pulseNode: 'shell',
+};
+
+/**
+ * Sagittarius A* (galaxy boss, Tier 19): placeholder on the Sun's state machine (src/hazards/theSun.ts,
+ * registered in src/hazards/sagittariusA.ts) with suction instead of the solar wind. A charge into
+ * a star cluster the Bunny can't absorb yet stuns it (the Sun's giant-planet stun; a `star_cluster`
+ * swings round when none is near); chips are relativistic jets (`relativistic_jet` Debris,
+ * src/data/galaxyDebris.ts). Same size curve as the Sun: needs Bunny radius ≈ 4 units at
+ * absorbRatio 0.7. Absorbing it clears the Galaxy (the last built Area, so the Run is won).
+ * The real fight (camera-bending suction, star-cluster stun, jets) replaces this.
+ */
+export const SAGITTARIUS_A: SunTuning = {
+  ...THE_SUN,
+  /** Stronger than any earlier boss's pull (the Garbage Truck's compactor). */
+  suctionReach: 10,
+  suctionStrength: 0.45,
+  /** No solar wind. */
+  wind: { reach: 0, strength: 0, debrisSize: 0, debrisSpeed: 0 },
+  giants: { typeIds: ['star_cluster', 'open_cluster'], fallbackId: 'star_cluster', interval: 8, range: 26, margin: 1.25, gap: 3 },
+  /** Its jets fire the volley (violet-white). */
+  ash: { ...THE_SUN.ash!, color: '#e6d8ff', glow: '#9a6bff', laneColor: '#b48cff' },
+  modelId: 'sagittarius_a',
+  modelSize: 3,
+  chipTypeId: 'relativistic_jet',
 };
 
 export interface TierSpawnTable {
@@ -2067,6 +2173,37 @@ export const SOLAR_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Galaxy director (after the solar system): spawn tables for Bunny Tiers 18–19, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 17 at 0.85 units, the arrival leap, and uses the
+ * Tier 18 table). Placeholder budgets copied from the Solar System's.
+ */
+export const GALAXY_DIRECTOR = {
+  firstTier: 18,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 18 (arrival, r ≈ 0.85–3): black holes, pulsars, globular clusters and supernova remnants.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { black_hole: { weight: 1, max: 2 }, pulsar: { weight: 0.8, max: 2 }, globular_cluster: { weight: 0.9, max: 1 }, supernova_remnant: { weight: 0.7, max: 1 } },
+    },
+    // Tier 19 (r ≥ 3): supernovae join, and Sagittarius A* arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        black_hole: { weight: 1.2, max: 3 },
+        supernova: { weight: 0.9, max: 2 },
+        globular_cluster: { weight: 0.8, max: 2 },
+        supernova_remnant: { weight: 0.5, max: 1 },
+        pulsar: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
@@ -2075,6 +2212,7 @@ export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   continent: CONTINENT_DIRECTOR,
   globe: GLOBE_DIRECTOR,
   solar_system: SOLAR_DIRECTOR,
+  galaxy: GALAXY_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -2086,10 +2224,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
   globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
   solar_system: { id: 'the_sun', tier: 17, arrivalDelay: 4 },
+  galaxy: { id: 'sagittarius_a', tier: 19, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

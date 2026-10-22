@@ -1,9 +1,9 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-/** Which world a layout describes: the house floor, the street outside, the city, the region, the continent, the globe, then the solar system. */
-export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent' | 'globe' | 'solar_system';
-export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system'];
+/** Which world a layout describes: the house floor, the street outside, the city, the region, the continent, the globe, the solar system, then the galaxy. */
+export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent' | 'globe' | 'solar_system' | 'galaxy';
+export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'];
 
 /** The area after `area` (null for the last one). */
 export function nextArea(area: AreaId): AreaId | null {
@@ -26,7 +26,13 @@ export type GlobeZoneType = 'oceans' | 'shelves' | 'landmasses' | 'archipelagos'
  * asteroid belt, the outer (giant) orbits and the icy Kuiper belt at the edge.
  */
 export type SolarZoneType = 'corona' | 'inner_orbits' | 'asteroid_belt' | 'outer_orbits' | 'kuiper_belt';
-export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType | GlobeZoneType | SolarZoneType;
+/**
+ * Galaxy zones, the galactic disc seen from above: the bulge round Sagittarius A* (`galactic_core`),
+ * the central `bar`, the `inner_arms`, the dark `dust_lanes` between the arms, the `outer_arms`
+ * and the thin stellar `halo` at the edge.
+ */
+export type GalaxyZoneType = 'galactic_core' | 'bar' | 'inner_arms' | 'dust_lanes' | 'outer_arms' | 'halo';
+export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType | GlobeZoneType | SolarZoneType | GalaxyZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
 export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
@@ -34,6 +40,7 @@ export const REGION_ZONE_TYPES: readonly RegionZoneType[] = ['farmland', 'highwa
 export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mountains', 'lakes', 'rivers', 'desert', 'tundra', 'ruins'];
 export const GLOBE_ZONE_TYPES: readonly GlobeZoneType[] = ['oceans', 'shelves', 'landmasses', 'archipelagos', 'icecaps'];
 export const SOLAR_ZONE_TYPES: readonly SolarZoneType[] = ['corona', 'inner_orbits', 'asteroid_belt', 'outer_orbits', 'kuiper_belt'];
+export const GALAXY_ZONE_TYPES: readonly GalaxyZoneType[] = ['galactic_core', 'bar', 'inner_arms', 'dust_lanes', 'outer_arms', 'halo'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
@@ -59,9 +66,13 @@ export function isSolarZone(type: RoomType): type is SolarZoneType {
   return (SOLAR_ZONE_TYPES as readonly string[]).includes(type);
 }
 
+export function isGalaxyZone(type: RoomType): type is GalaxyZoneType {
+  return (GALAXY_ZONE_TYPES as readonly string[]).includes(type);
+}
+
 /** The area a room / zone type belongs to. */
 export function zoneArea(type: RoomType): AreaId {
-  return isSolarZone(type) ? 'solar_system' : isGlobeZone(type) ? 'globe' : isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
+  return isGalaxyZone(type) ? 'galaxy' : isSolarZone(type) ? 'solar_system' : isGlobeZone(type) ? 'globe' : isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
 }
 
 export type FloorMaterialId =
@@ -99,7 +110,12 @@ export type FloorMaterialId =
   | 'solarSpace'
   | 'solarCorona'
   | 'solarBelt'
-  | 'solarKuiper';
+  | 'solarKuiper'
+  // Galaxy (the galactic disc, 1 unit = 100 ly): the glowing bulge, the star-packed arms, the dark dust lanes and the halo.
+  | 'galaxyCore'
+  | 'galaxyArm'
+  | 'galaxyDust'
+  | 'galaxyHalo';
 
 export interface Room {
   id: string;
@@ -170,7 +186,8 @@ export interface DebrisPlacement {
  * the city's highway on-ramp to the region (closed until the Garbage Truck is absorbed) or the
  * region's westbound motorway out to the continent (closed until the Incinerator is absorbed) or
  * the continent's launch corridor up to orbit on the north coast (closed until the Ice Sheet is absorbed) or
- * the globe's escape trajectory over the North Pole (closed until the Orbital Sweeper is absorbed).
+ * the globe's escape trajectory over the North Pole (closed until the Orbital Sweeper is absorbed) or
+ * the solar system's heliopause gate on the north edge of the ecliptic (closed until the Sun is absorbed).
  * While closed it is an obstacle; `rect` is the opening in the outer wall / hedge.
  */
 export interface ExitDoor {
@@ -192,9 +209,9 @@ export interface GroundMarking {
 
 /**
  * A route across the map that lane / trail Hazards can follow (the Continent's rivers and glacier
- * lanes, the Globe's orbit lanes, the Solar System's orbit rings): a polyline in course order (source
- * first), `width` across; axis-aligned except the Solar System's rings, which are closed loops round the
- * Sun (first point repeated last). Data only.
+ * lanes, the Globe's orbit lanes, the Solar System's orbit rings, the Galaxy's orbits round the core): a polyline in course order (source
+ * first), `width` across; axis-aligned except the Solar System's and the Galaxy's rings, which are closed loops round the
+ * Sun / the galactic core (first point repeated last). Data only.
  */
 export interface MapRoute {
   id: string;
@@ -218,7 +235,7 @@ export interface HouseLayout {
   spawn: { x: number; z: number; roomId: string };
   exit?: ExitDoor;
   markings?: GroundMarking[];
-  /** Rivers and glacier lanes (the Continent), orbit lanes (the Globe), orbit rings (the Solar System), for Hazards that follow a course. */
+  /** Rivers and glacier lanes (the Continent), orbit lanes (the Globe), orbit rings (the Solar System, the Galaxy), for Hazards that follow a course. */
   routes?: MapRoute[];
   /**
    * The map wraps east–west (the Globe): rolling off `bounds.maxX` arrives at `bounds.minX`. World

@@ -16,7 +16,7 @@
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, SUNGRAZER, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -262,5 +262,17 @@ export const sungrazerDef = hazardRegistry.register({
   modelId: SUNGRAZER.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, SUNGRAZER);
+  },
+});
+
+/** Galaxy trail-layer: a supernova remnant whose gas trail slows (SUPERNOVA_REMNANT). */
+export const supernovaRemnantDef = hazardRegistry.register({
+  id: 'supernova_remnant',
+  name: 'Supernova Remnant',
+  footprint: tuningFootprint(SUPERNOVA_REMNANT),
+  mass: SUPERNOVA_REMNANT.mass,
+  modelId: SUPERNOVA_REMNANT.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, SUPERNOVA_REMNANT);
   },
 });

@@ -5,7 +5,7 @@
  *   POST /api/leaderboard[?board=…]  body: submission            -> 201 { entry, rank, nameCensored }
  *
  * Boards: `run` (default: whole Runs, body ScoreSubmission, rows LeaderboardEntry) and one Area
- * board per Area, `house` | `neighborhood` | `city` | `region` | `continent` | `globe` | `solar_system` (a Run clearing that Area, body
+ * board per Area, `house` | `neighborhood` | `city` | `region` | `continent` | `globe` | `solar_system` | `galaxy` (a Run clearing that Area, body
  * AreaScoreSubmission, rows AreaLeaderboardEntry). See src/shared/leaderboard.ts.
  *
  * A POST with a valid session cookie (see server/auth.ts) stores the player's user id, and the entry

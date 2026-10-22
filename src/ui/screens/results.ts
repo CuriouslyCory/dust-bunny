@@ -19,7 +19,7 @@ import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { getMeta } from '../../meta/meta';
-import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
 import { formatLength } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
@@ -61,6 +61,7 @@ function fluffBonusLabel(e: RunResult): string {
   const difficulty = getDifficulty(e.stats.difficulty);
   const diff = difficulty.fluff !== 1 ? `${difficulty.name} ×${difficulty.fluff} · ` : '';
   if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · ${diff}`;
+  if (e.stats.solarSystemCleared) return `Solar System cleared ×${SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.globeCleared) return `Globe cleared ×${GLOBE_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.continentCleared) return `Continent cleared ×${CONTINENT_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.regionCleared) return `Region cleared ×${REGION_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
@@ -76,6 +77,8 @@ export function registerResultsSection(section: ResultsSection): void {
 
 /** Results subtitle for a Run that died: where it was swept up, or how close it came to the next Area. */
 function diedLine(s: RunResult['stats']): string | null {
+  if (s.area === 'galaxy') return 'Lost in the galactic dark. The whole solar system was yours, at least.';
+  if (s.solarSystemCleared) return 'So close to the Galaxy!';
   if (s.area === 'solar_system') return 'Blown out of the ecliptic. The whole planet was yours, at least.';
   if (s.globeCleared) return 'So close to the Solar System!';
   if (s.area === 'globe') return 'Netted in orbit. The whole continent was yours, at least.';
@@ -184,6 +187,7 @@ export function registerResultsScreen(): void {
           const inContinent = s.area === 'continent';
           const inGlobe = s.area === 'globe';
           const inSolarSystem = s.area === 'solar_system';
+          const inGalaxy = s.area === 'galaxy';
           card.dataset.variant = e.reason;
           badge.textContent = v.badge;
           title.textContent = v.title;
@@ -205,7 +209,8 @@ export function registerResultsScreen(): void {
           if (s.regionCleared) rows.push(['🗺️', 'Region', inContinent ? 'Cleared · rolled west' : 'Cleared']);
           if (s.continentCleared) rows.push(['🌍', 'Continent', inGlobe ? 'Cleared · reached orbit' : 'Cleared']);
           if (s.globeCleared) rows.push(['🌐', 'Globe', inSolarSystem ? 'Cleared · escaped orbit' : 'Cleared']);
-          if (s.solarSystemCleared) rows.push(['☀️', 'Solar System', 'Cleared']);
+          if (s.solarSystemCleared) rows.push(['☀️', 'Solar System', inGalaxy ? 'Cleared · crossed the heliopause' : 'Cleared']);
+          if (s.galaxyCleared) rows.push(['🌌', 'Galaxy', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

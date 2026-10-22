@@ -98,15 +98,15 @@ export function installAudio(game: Game): GameAudio {
     else if (e.reason === 'expired' || e.reason === 'shot') sfx.decoyPop();
   });
   ev.on('hazardClogged', (e) => sfx.clog(e.boss));
-  // Weather (the Continent, the Globe's Hurricane, the Solar Flare): the gust, the Volcano's, the Ice Sheet's and the Sun's CME rumble.
+  // Weather (the Continent, the Globe's Hurricane, the Solar Flare, the Supernova): the gust, the Volcano's, the Ice Sheet's, the Sun's CME and Sagittarius A*'s charge rumble.
   ev.on('hazardTelegraph', (e) => {
-    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare') sfx.windRoar();
-    else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun') && e.attack === 'charge')) sfx.rumble();
+    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova') sfx.windRoar();
+    else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun' || e.defId === 'sagittarius_a') && e.attack === 'charge')) sfx.rumble();
   });
   // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse).
   ev.on('bossStunned', (e) => {
     const area = game.run?.area;
-    if (e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system')) sfx.rumble(true);
+    if (e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy')) sfx.rumble(true);
   });
   ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
   ev.on('staticFull', () => sfx.staticFull());
