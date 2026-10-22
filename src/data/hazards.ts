@@ -127,6 +127,16 @@ export interface RoombaTuning {
   spinRate: number;
   /** A pull on loose Debris too (the Black Hole); its floor shows rings flowing inward. */
   debrisPull?: DebrisPullTuning;
+  /** Suction ring colour (default: the suction blue). */
+  ringColor?: string;
+  /**
+   * Model node that pulses while it drives (the Quasar's `jets`): scale ± `pulseAmount` at
+   * `pulseRate` rad/s, along Y only (`pulseAxis` 'y') or all axes.
+   */
+  pulseNode?: string;
+  pulseAxis?: 'y' | 'all';
+  pulseAmount?: number;
+  pulseRate?: number;
 }
 
 export const ROOMBA: RoombaTuning = {
@@ -202,6 +212,15 @@ export interface LaneTuning {
   /** Model node turned about Y at `swirlRate` rad/s all the time: the Globular Cluster's `swarm`. */
   swirlNode?: string;
   swirlRate?: number;
+  /** More model nodes turned about Y all the time, each at its own rate (rad/s): the Colliding Galaxy's `galaxy_a` and `galaxy_b`. */
+  swirlNodes?: ReadonlyArray<readonly [node: string, rate: number]>;
+  /**
+   * Filament lanes (the Colliding Galaxy): if the layout has a `routes` entry of kind 'filament'
+   * passing within this distance of the spawn point, the lane runs along that filament (any
+   * direction), centred on the point of it nearest the spawn, up to laneMax long and kept `size`
+   * from its ends. Otherwise the lane is planned through the spawn point as usual.
+   */
+  filamentReach?: number;
 }
 
 export const LINT_ROLLER: LaneTuning = {
@@ -344,6 +363,10 @@ export interface MopTuning {
   burn?: { shedFraction: number; interval: number };
   /** Trail drops are rings rather than discs (the Supernova Remnant's filaments). */
   trailRing?: boolean;
+  /** Trail opacity (default 0.35 for discs, 0.5 for rings and burning trails); the Cosmic Void's dark trail is near opaque. */
+  trailOpacity?: number;
+  /** A faint ring of this colour round each trail drop, so a dark trail reads on a dark floor (the Cosmic Void). */
+  trailRim?: string;
   /** Model node that breathes (scale, ± `pulseAmount`) while it moves: the Supernova Remnant's `shell`. */
   pulseNode?: string;
   pulseAmount?: number;
@@ -408,6 +431,10 @@ export interface AirConeTuning {
   /** Model node that swells by up to `pulseAmount` (scale) through the warm-up and pulses while the air is on (the Solar Flare's `loop`). */
   pulseNode?: string;
   pulseAmount?: number;
+  /** Cone colours through the warm-up and while the air is on (default: amber, then the air white or suction blue), and its opacity (default 0.35). */
+  warmColor?: string;
+  airColor?: string;
+  coneOpacity?: number;
 }
 
 export const UPRIGHT_VACUUM: AirConeTuning = {
@@ -2174,118 +2201,291 @@ export const SAGITTARIUS_A: SagittariusTuning = {
 };
 
 // ── Universe Hazards (Tiers 20–21, 1 world unit = 10 Mly, Bunny radius ≈ 0.85–4.5 units) ──
-// Placeholder (Act 9 groundwork): the Universe repeats the Galaxy's shape (Tiers at 1 and 3 units,
-// arrival at 0.85, boss absorbable at ≈ 4), so these reuse the Galaxy's numbers on the existing
-// behaviours with procedural fallback models (src/hazards/models.ts). The Hazards pass tunes them.
+// The Universe repeats the Galaxy's shape (Tiers at 1 and 3 units, arrival at 0.85), so each
+// Hazard keeps about the size of the Galaxy Hazard whose behaviour it reskins. The Blender models
+// are authored at 1 unit = 100 kly and loaded at scale 0.01 (docs/models.md, Universe scale), so
+// `modelSize` is a catalog radius ÷ 100. The map has no obstacles; `layout.routes` carries the
+// filaments (kind 'filament'), which the Colliding Galaxy rides.
 
-/** Quasar: Roomba behaviour, a black hole feeding loudly: a drifter with a strong pull that also drags in loose Debris (not eating it); spins its `disk`. */
+/**
+ * Quasar: Roomba behaviour, a black hole feeding loudly: a drifter with the strongest Hazard pull
+ * yet (reach 4, 0.6 × the Bunny's speed) that also drags loose Debris round it without eating it;
+ * its `disk` spins, its `jets` pulse, and its pull ring is cyan.
+ */
 export const QUASAR: RoombaTuning = {
   ...BLACK_HOLE,
-  size: 1.1,
-  height: 1.5,
-  speed: universeTiers(2, 3.4),
+  size: 1.2,
+  /** Model top (347: the north jet) × 1.2 / 1.22. */
+  height: 3.4,
+  speed: universeTiers(2.2, 3.6),
+  turnInterval: [2, 4],
+  turnAngle: 1.4,
+  /** The Black Hole's reach (3.2) and pull (0.55), a notch harder. */
+  suctionReach: 4,
+  suctionStrength: 0.6,
   modelId: 'quasar',
-  /** The fallback model's footprint radius (the accretion disc's rim). */
-  modelSize: 1.18,
+  /** The accretion disc's rim (122 model units). */
+  modelSize: 1.22,
   spinNode: 'disk',
-  debrisPull: { reach: 4, speed: 3, swirl: 0.6, maxSize: 1.2, eat: false },
-};
-
-/** Colliding Galaxy: a lane patrol, a galaxy on a collision course along a planned lane; its `discs` turn. A hit knocks the Bunny aside and sheds mass (no sticking). */
-export const COLLIDING_GALAXY: LaneTuning = {
-  ...GLOBULAR_CLUSTER,
-  size: 1.5,
-  height: 0.5,
-  speed: universeTiers(2.8, 4.2),
-  laneMin: 14,
-  laneMax: 50,
-  /** No orbit rings out here: the lane is planned through its spawn point. */
-  ringReach: undefined,
-  modelId: 'colliding_galaxy',
-  modelSize: 1,
-  swirlNode: 'discs',
-  swirlRate: 0.5,
-};
-
-/** Gamma-Ray Burst: a static turret, a collapsing star whose `head` aims along a lane, then fires a short burst of hard bolts. */
-export const GAMMA_RAY_BURST: TurretTuning = {
-  ...SUNSPOT,
-  size: 1.3,
-  height: 0.9,
-  range: universeTiers(10, 14),
-  telegraph: universeTiers(1.2, 1),
-  cooldown: universeTiers(3.8, 3),
-  dropletSpeed: universeTiers(14, 19),
-  nozzleHeight: 0.5,
-  modelId: 'gamma_ray_burst',
-  modelSize: 0.7,
-  aimNode: 'head',
-  idleSpin: 0.6,
-  dropletColor: '#c8f0ff',
-};
-
-/** Cosmic Void: Mop behaviour, an empty bubble drifting across zones; its dark trail slows (0.5 ×), its `shell` breathes. */
-export const COSMIC_VOID: MopTuning = {
-  ...SUPERNOVA_REMNANT,
-  size: 1.4,
-  height: 1.2,
-  speed: universeTiers(1.6, 2.2),
-  modelId: 'cosmic_void',
-  modelSize: 1.05,
-  trailColor: '#1a1030',
-  trailRing: false,
-  pulseNode: 'shell',
-};
-
-/** Dark-Energy Gust: Leaf Blower behaviour, a cone of pure expansion: its `core` swells through the warm-up, then a blast pushes the Bunny and loose Debris away. */
-export const DARK_ENERGY_GUST: AirConeTuning = {
-  ...SUPERNOVA,
-  size: 2.3,
-  height: 1.1,
-  speed: universeTiers(1.6, 2.2),
-  modelId: 'dark_energy_gust',
-  modelSize: 0.78,
-  pulseNode: 'core',
+  spinRate: 2.8,
+  debrisPull: { reach: 5, speed: 3.5, swirl: 0.7, maxSize: 1.4, eat: false },
+  ringColor: '#7fe8ff',
+  pulseNode: 'jets',
+  pulseAxis: 'y',
+  pulseAmount: 0.18,
+  pulseRate: 9,
 };
 
 /**
- * The Expansion (universe boss, Tier 21; src/hazards/theExpansion.ts). Placeholder (Act 9
- * groundwork): the bosses' state machine (`RoboVac9000`) with Sagittarius A*'s numbers, no volley
- * and no minis, so it hunts, charges, crashes into the map edge, is chipped while stunned and is
- * absorbed at r ≈ 4. The real fight replaces it: not a chaser, it pushes every Debris outward and
- * a tug-of-war bar (gravity vs expansion) replaces its health (docs/story.md, Act 9). Absorbing it
- * clears the Universe: the last Area, so the Run is won (`victory`).
+ * Colliding Galaxy: a lane patrol, two galaxies mid-merger on a collision course along the
+ * filament nearest its spawn (`filamentReach`; a planned lane where no filament is in reach),
+ * `galaxy_a` and `galaxy_b` turning opposite ways. Faster than the Globular Cluster; a hit knocks
+ * the Bunny off the lane and sheds 8 % (no sticking).
  */
-export const THE_EXPANSION: BossTuning = {
-  size: 2.8,
-  contactRadius: 2.5,
-  height: 2,
-  mass: 6,
+export const COLLIDING_GALAXY: LaneTuning = {
+  ...GLOBULAR_CLUSTER,
+  size: 1.5,
+  /** Flat: model top (21) × 1.5 / 1.2. */
+  height: 0.3,
+  speed: universeTiers(3.4, 4.8),
+  laneMin: 16,
+  laneMax: 60,
+  endPause: 0.8,
+  ringReach: undefined,
+  filamentReach: 30,
+  modelId: 'colliding_galaxy',
+  /** The merging pair's radius (about 120 model units; the tidal tails trail 190 behind). */
+  modelSize: 1.2,
+  spinNode: null,
+  swirlNode: undefined,
+  swirlRate: undefined,
+  swirlNodes: [
+    ['galaxy_a', 0.9],
+    ['galaxy_b', -1.1],
+  ],
+};
+
+/**
+ * Gamma-ray burst: a still turret (src/hazards/gammaRayBurst.ts). Its `head` (the collapsing star
+ * and its nozzle) tracks the target, sweeping slowly while nothing is in range. When the target is
+ * in range and lined up and the burst is on screen, the aim locks: a thin violet lane runs from
+ * the muzzle to the end of its range and blinks faster for `telegraph` s while the star swells.
+ * Then the burst: a narrow white beam shoots along the locked lane at `beamSpeed` (it crosses the
+ * whole range in about a quarter second) and stays lit for `fire` s: one hit per burst (damage,
+ * knockback sideways off the lane, sheds `shedFraction`). Then `cooldown`. Dodge by stepping off
+ * the lane during the telegraph.
+ */
+export interface BurstTuning {
+  size: number;
+  height: number;
+  mass: number;
+  damage: number;
+  knockbackCm: number;
+  knockbackRadii: number;
+  shedFraction: number;
+  /** Beam length from the muzzle. */
+  range: PerTier;
+  /** Beam width (full). */
+  beamWidth: number;
+  /** Aim turn rate (rad/s) while tracking; `idleSpin` (rad/s) sweeps while nothing is in range. */
+  turnRate: number;
+  idleSpin: number;
+  telegraph: PerTier;
+  /** Speed of the beam's front (units/s). */
+  beamSpeed: number;
+  /** Seconds the beam stays lit once it has reached full length. */
+  fire: number;
+  cooldown: PerTier;
+  /** Muzzle distance from the centre and beam height above the floor (the model's beam tip, scaled). */
+  muzzle: number;
+  beamHeight: number;
+  modelId: HazardModelId;
+  /** Hazard size the unscaled model represents (the model is scaled by size / modelSize). */
+  modelSize: number;
+  /** The model node that aims (the star and its nozzle). */
+  aimNode: string;
+  beamColor: string;
+  laneColor: string;
+}
+
+export const GAMMA_RAY_BURST: BurstTuning = {
+  size: 1.3,
+  /** Model top (81.7) × 1.3 / 0.86. */
+  height: 1.24,
+  mass: 3,
   damage: 1,
-  knockbackCm: 4,
-  knockbackRadii: 3,
-  shedFraction: 0.05,
-  introTime: 3.5,
-  huntSpeed: 4.2,
-  turnRate: 1,
-  huntTime: [3.5, 5],
-  chargeTrigger: 24,
-  telegraph: 1.6,
-  chargeSpeed: 20,
-  chargeDistance: 28,
-  stunTime: 4.2,
-  recover: 1.2,
-  chipFactor: 0.85,
-  chipPieces: 8,
-  suctionReach: 0,
-  suctionStrength: 0,
-  summonInterval: 999,
-  summonCount: 0,
-  maxMinis: 0,
-  brushSpin: 0,
-  onDefeat: 'openExit',
+  knockbackCm: 1.5,
+  knockbackRadii: 1.4,
+  shedFraction: 0.03,
+  /** Long: past the Pulsar's 9 / 12 and the Sunspot's bolts. */
+  range: universeTiers(28, 36),
+  beamWidth: 0.9,
+  turnRate: 1.1,
+  idleSpin: 0.45,
+  telegraph: universeTiers(1.3, 1.1),
+  beamSpeed: 140,
+  fire: 0.35,
+  cooldown: universeTiers(4.2, 3.4),
+  /** The beam tip (model z 160) × 1.3 / 0.86. */
+  muzzle: 2.4,
+  /** Model y 58 × 1.3 / 0.86. */
+  beamHeight: 0.88,
+  modelId: 'gamma_ray_burst',
+  /** The ejecta disc's radius (86 model units). */
+  modelSize: 0.86,
+  aimNode: 'head',
+  beamColor: '#f2f8ff',
+  laneColor: '#e0b8ff',
+};
+
+/** Cosmic Void: Mop behaviour, an empty bubble drifting across zones; its near-black trail swallows the floor's glow and slows (0.5 ×); its `shell` breathes. */
+export const COSMIC_VOID: MopTuning = {
+  ...SUPERNOVA_REMNANT,
+  size: 1.4,
+  /** Model top (164) × 1.4 / 1.0. */
+  height: 2.3,
+  speed: universeTiers(1.8, 2.4),
+  waypoints: 4,
+  patrolRange: 24,
+  trailSpacing: 0.6,
+  trailLife: 9,
+  trailFade: 0.45,
+  trailRadius: 1.2,
+  slowMultiplier: 0.5,
+  modelId: 'cosmic_void',
+  /** The orange glow ring round its foot (r 100 model units). */
+  modelSize: 1,
+  roam: true,
+  trailColor: '#020106',
+  trailRing: false,
+  trailOpacity: 0.85,
+  trailRim: '#6a4ab8',
+  pulseNode: 'shell',
+  pulseAmount: 0.1,
+};
+
+/** Dark-energy gust: Leaf Blower behaviour, a knot of dark energy whose `core` swells through a violet warm-up, then a cone of pure expansion blasts the Bunny and loose Debris away. */
+export const DARK_ENERGY_GUST: AirConeTuning = {
+  ...SUPERNOVA,
+  /** The floor swirl (r 92 model units) at model scale 2.4 / 0.92. */
+  size: 2.4,
+  /** Model top (85.5) × 2.4 / 0.92. */
+  height: 2.2,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  speed: universeTiers(1.8, 2.4),
+  turnRate: 0.5,
+  /** The model's wisps fan out ±22°. */
+  coneHalfAngle: 0.42,
+  coneRange: 16,
+  suctionStrength: 1.4,
+  warmup: 1.5,
+  on: 1.4,
+  off: 2.8,
+  mode: 'blow',
+  blowDebrisSize: 1.4,
+  debrisSpeed: 16,
+  /** The nozzle mouth: model z 64 / 92. */
+  nozzleOffset: 0.7,
+  modelId: 'dark_energy_gust',
+  /** The floor swirl's radius (92 model units); the wisps reach 230 (6 units here). */
+  modelSize: 0.92,
+  pulseNode: 'core',
+  pulseAmount: 0.3,
+  warmColor: '#c49cff',
+  airColor: '#efe4ff',
+  coneOpacity: 0.6,
+};
+
+/**
+ * The Expansion (universe boss, Tier 21; src/hazards/theExpansion.ts). Not a body: a metric
+ * lattice round the Bunny (the `the_expansion` model's hollow drawn at `hollow` × the Bunny's
+ * radius), never touched, never absorbed by size, ignored by Abilities and Spiky Dash. Its health
+ * is a tug-of-war bar, `gravity` in [0, 1]: absorbing anything pulls it up by
+ * `gain` × (size / r₀)³ (r₀: the Bunny's radius when it arrived), the expansion drains it at a rate ramping from `drain[0]` to
+ * `drain[1]` over `ramp` s. At 1 it collapses (`collapse`: every Debris in view rushes into the
+ * Bunny, then `bossDefeated` and `run.clearArea()`, the Universe's `victory`); at 0 the Big Rip
+ * (`rip`) deals 1 damage, sheds 6 %, and the bar restarts at `ripReset` after `ripGrace` s
+ * without drain.
+ *
+ * While it is alive the Hubble flow (`hubble`) pushes every loose Debris within `reach` × the view
+ * radius straight away from the Bunny at H × distance, H ramping from `rate[0]` to `rate[1]` over
+ * `ramp` s, capped at `cap` × the Bunny's max speed so anything near is still catchable; updated
+ * in `slices` interleaved slices. Filament strands (`strands`) drift in from just beyond the view
+ * when meaningful food near the Bunny runs low, so rolling on always wins.
+ */
+export interface ExpansionTuning {
+  /** Placement footprint (the boss arrives on a clear spot, then centres on the Bunny). */
+  footprint: number;
+  height: number;
+  mass: number;
+  modelId: HazardModelId;
+  /** The model's hollow radius at scale 1 (130 model units). */
+  modelHollow: number;
+  /** The hollow is drawn at this × the Bunny's radius. */
+  hollow: number;
+  /** Seconds the lattice unfolds before the flow and the drain start. */
+  introTime: number;
+  /** Seconds over which H and the drain ramp from their start to their end values. */
+  ramp: number;
+  /**
+   * The bar: `start`; absorbing adds `gain` × (size / r₀)³ to a pending pool (at most
+   * `maxPending`) that flows into the bar at up to `maxRise` per s; the drain ramps from
+   * `drain[0]` to `drain[1]` per s; after a Big Rip it restarts at `ripReset` with `ripGrace` s of
+   * no drain.
+   */
+  gravity: { start: number; gain: number; maxRise: number; maxPending: number; drain: readonly [number, number]; ripReset: number; ripGrace: number };
+  hubble: { rate: readonly [number, number]; reach: number; cap: number; slices: number };
+  rip: { damage: number; shedFraction: number };
+  collapse: { duration: number; reach: number };
+  strands: {
+    /** Seconds between checks (the first at the end of the intro). */
+    interval: number;
+    /** A check counts absorbable Debris of at least `meaningful` × the Bunny's radius within `range` × the view radius. */
+    meaningful: number;
+    range: number;
+    /** Fewer than `want` of them (or the bar below `low`): a strand of `count` pieces lands `distance` × the view radius away. */
+    want: number;
+    low: number;
+    count: number;
+    /** Piece size range (× the largest size the Bunny can absorb). */
+    size: readonly [number, number];
+    distance: number;
+    /** The strand drifts in at `speed` × the Bunny's max speed until it is within `stop` × the view radius. */
+    speed: number;
+    stop: number;
+    /** Debris types used (the first one this Run has); otherwise the shed ladder's closest size. */
+    types: readonly string[];
+  };
+}
+
+export const THE_EXPANSION: ExpansionTuning = {
+  footprint: 1.5,
+  /** Model top (67.9) at the hollow's scale for a Tier 21 Bunny (≈ 3 × 3 / 1.3). */
+  height: 1.6,
+  mass: 6,
   modelId: 'the_expansion',
-  modelSize: 2,
+  modelHollow: 1.3,
+  hollow: 3,
+  introTime: 3,
+  ramp: 90,
+  gravity: { start: 0.3, gain: 0.09, maxRise: 0.02, maxPending: 0.35, drain: [0.005, 0.012], ripReset: 0.25, ripGrace: 3 },
+  hubble: { rate: [0.05, 0.15], reach: 1, cap: 0.5, slices: 3 },
+  rip: { damage: 1, shedFraction: 0.06 },
+  collapse: { duration: 2.4, reach: 1.3 },
+  strands: {
+    interval: 2.5,
+    meaningful: 0.3,
+    range: 0.6,
+    want: 10,
+    low: 0.5,
+    count: 5,
+    size: [0.45, 0.8],
+    distance: 1.05,
+    speed: 0.45,
+    stop: 0.3,
+    types: ['filament_knot', 'lint_web', 'galaxy_group', 'galaxy_pair'],
+  },
 };
 
 export interface TierSpawnTable {
@@ -2566,7 +2766,8 @@ export const GALAXY_DIRECTOR = {
 /**
  * Universe director (after the galaxy): spawn tables for Bunny Tiers 20–21, indexed from
  * `firstTier` (the Bunny arrives late in Tier 19 at 0.85 units, the arrival leap, and uses the
- * Tier 20 table). Placeholder budgets copied from the Galaxy's.
+ * Tier 20 table). Tier 21 keeps the budget near the Galaxy's: the Expansion's fight is the main
+ * pressure there.
  */
 export const UNIVERSE_DIRECTOR = {
   firstTier: 20,
@@ -2577,18 +2778,18 @@ export const UNIVERSE_DIRECTOR = {
     {
       budget: [2, 4],
       interval: [8, 6],
-      types: { quasar: { weight: 1, max: 2 }, gamma_ray_burst: { weight: 0.8, max: 2 }, colliding_galaxy: { weight: 0.9, max: 1 }, cosmic_void: { weight: 0.7, max: 1 } },
+      types: { quasar: { weight: 1, max: 2 }, gamma_ray_burst: { weight: 0.8, max: 1 }, colliding_galaxy: { weight: 0.9, max: 2 }, cosmic_void: { weight: 0.7, max: 1 } },
     },
     // Tier 21 (r ≥ 3): dark-energy gusts join, and the Expansion arrives.
     {
-      budget: [4, 5],
-      interval: [6, 5],
+      budget: [3, 4],
+      interval: [7, 6],
       types: {
-        quasar: { weight: 1.2, max: 3 },
-        dark_energy_gust: { weight: 0.9, max: 2 },
+        quasar: { weight: 1, max: 2 },
+        dark_energy_gust: { weight: 0.9, max: 1 },
         colliding_galaxy: { weight: 0.8, max: 2 },
-        cosmic_void: { weight: 0.5, max: 1 },
-        gamma_ray_burst: { weight: 0.4, max: 1 },
+        cosmic_void: { weight: 0.6, max: 1 },
+        gamma_ray_burst: { weight: 0.6, max: 1 },
       },
     },
   ] as readonly TierSpawnTable[],

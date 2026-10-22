@@ -101,14 +101,21 @@ export function installAudio(game: Game): GameAudio {
   ev.on('hazardClogged', (e) => sfx.clog(e.boss));
   // Weather (the Continent, the Globe's Hurricane, the Solar Flare, the Supernova): the gust, the Volcano's, the Ice Sheet's, the Sun's CME and Sagittarius A*'s charge rumble.
   ev.on('hazardTelegraph', (e) => {
-    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova') sfx.windRoar();
+    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova' || e.defId === 'dark_energy_gust') sfx.windRoar();
+    else if (e.defId === 'gamma_ray_burst') sfx.burstCharge(e.duration);
     else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun' || e.defId === 'sagittarius_a') && e.attack === 'charge')) sfx.rumble();
   });
-  // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper), a giant planet (the Sun's eclipse) or the Universe's edge (the Expansion placeholder), or Sagittarius A*'s indigestion.
+  // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse), or Sagittarius A*'s indigestion.
   ev.on('bossStunned', (e) => {
     const area = game.run?.area;
-    if ((e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy' || area === 'universe')) || e.cause === 'indigestion') sfx.rumble(true);
+    if ((e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy')) || e.cause === 'indigestion') sfx.rumble(true);
   });
+  // The Expansion: a stretching drone while it is alive (the swells overlap), a rip, a crunch.
+  ev.on('bossTug', (e) => {
+    if (e.hubble > 0) sfx.expansionDrone(e.gravity);
+  });
+  ev.on('bossRip', () => sfx.rip());
+  ev.on('bossCollapse', (e) => sfx.crunch(e.duration));
   // Sagittarius A* gulps a star cluster.
   ev.on('bossSwallowed', () => sfx.rumble());
   ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));

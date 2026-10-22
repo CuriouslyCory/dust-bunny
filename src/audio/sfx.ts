@@ -222,4 +222,46 @@ export class Sfx {
       a.noise({ filter: 'bandpass', freq: 1300 - i * 70, q: 1.2, at, attack: 0.004, decay: 0.07, gain: 0.1 * fade, pan, dest });
     }
   }
+
+  /**
+   * The Expansion's drone: one long, low, slowly falling swell (about 2.6 s; replayed while it is
+   * alive, the swells overlap into a stretching drone). Lower and louder the more the expansion is
+   * winning (`gravity` near 0).
+   */
+  expansionDrone(gravity: number): void {
+    if (!this.gate('drone', 2.4, 2)) return;
+    const a = this.a;
+    const lose = 1 - Math.min(1, Math.max(0, gravity));
+    const f = 46 + 18 * (1 - lose);
+    a.tone({ type: 'sawtooth', freq: f, freqEnd: f * 0.94, attack: 0.9, hold: 0.8, decay: 1.1, gain: 0.05 + 0.04 * lose, lowpass: 180 + 120 * lose });
+    a.tone({ type: 'sine', freq: f * 1.5, freqEnd: f * 1.38, attack: 1, hold: 0.6, decay: 1, gain: 0.025 });
+    a.noise({ filter: 'bandpass', freq: 220, freqEnd: 120, q: 2, attack: 0.8, hold: 0.6, decay: 1.2, gain: 0.025 + 0.03 * lose });
+  }
+
+  /** The Big Rip: a tearing crack and a sliding groan. */
+  rip(): void {
+    if (!this.gate('rip', 1.2, 1)) return;
+    const a = this.a;
+    a.noise({ filter: 'highpass', freq: 1800, freqEnd: 400, decay: 0.35, gain: 0.16 });
+    for (let i = 0; i < 4; i++) a.noise({ filter: 'bandpass', freq: 2600 - i * 450, q: 3, delay: i * 0.05, decay: 0.08, gain: 0.1 });
+    a.tone({ type: 'sawtooth', freq: 180, freqEnd: 38, attack: 0.02, hold: 0.15, decay: 0.9, gain: 0.1, lowpass: 700 });
+  }
+
+  /** The Expansion collapses: everything rushes in (a rising suck), then a deep crunch. */
+  crunch(duration: number): void {
+    if (!this.gate('crunch', duration + 1, 1)) return;
+    const a = this.a;
+    a.noise({ filter: 'bandpass', freq: 200, freqEnd: 2400, q: 0.9, attack: duration * 0.85, decay: 0.2, gain: 0.12 });
+    a.tone({ type: 'sawtooth', freq: 40, freqEnd: 160, attack: duration * 0.8, decay: 0.25, gain: 0.06, lowpass: 600 });
+    a.tone({ type: 'square', freq: 90, freqEnd: 28, delay: duration, decay: 0.9, gain: 0.14, lowpass: 400 });
+    a.noise({ filter: 'lowpass', freq: 900, freqEnd: 80, delay: duration, decay: 1.1, gain: 0.2 });
+  }
+
+  /** A gamma-ray burst charging: a thin rising whine. */
+  burstCharge(duration: number): void {
+    if (!this.gate('burst', duration, 2, 0.2)) return;
+    const a = this.a;
+    a.tone({ type: 'sine', freq: 600, freqEnd: 2400, attack: duration * 0.9, decay: 0.1, gain: 0.04 });
+    a.tone({ type: 'square', freq: 1200, freqEnd: 4800, delay: duration * 0.5, attack: duration * 0.45, decay: 0.08, gain: 0.015, lowpass: 6000 });
+  }
 }

@@ -21,7 +21,7 @@
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { GAMMA_RAY_BURST, ASAT_LASER, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
+import { ASAT_LASER, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -245,14 +245,3 @@ export const sunspotDef = hazardRegistry.register({
   },
 });
 
-/** Universe turret: a gamma-ray burst firing short bursts of hard bolts (GAMMA_RAY_BURST). */
-export const gammaRayBurstDef = hazardRegistry.register({
-  id: 'gamma_ray_burst',
-  name: 'Gamma-Ray Burst',
-  footprint: tuningFootprint(GAMMA_RAY_BURST),
-  mass: GAMMA_RAY_BURST.mass,
-  modelId: GAMMA_RAY_BURST.modelId,
-  create(_run, x, z, id, rng) {
-    return new SprayBottle(id, this, x, z, rng, GAMMA_RAY_BURST);
-  },
-});
