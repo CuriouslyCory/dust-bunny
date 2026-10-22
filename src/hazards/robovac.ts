@@ -12,18 +12,28 @@
  * Garbage Truck (city, Tier 9, GARBAGE_TRUCK): its compactor sucks the Bunny in while it hunts,
  * buildings and the concrete barrier stun its charges, and it summons mini scrubbers. Absorbing
  * it (onDefeat 'victory') wins the Run (bossDefeated → victory → runEnded 'victory').
+ *
+ * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
+ * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun
+ * (a clog, a Hunker crash, a Discharge): it enters the same `stunned` state as a wall crash, so
+ * one chip lands on contact. `bounceOff` is the crash into a planted Tumble when no stun is
+ * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
 import { GARBAGE_TRUCK, ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
-import { absorbRadiusFor, applySuction, bunnySheltered, canTarget, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
+import { maxSpeedFor } from '../systems/movement';
+import { absorbRadiusFor, activeLure, aimTarget, applySuction, bunnySheltered, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pullLure, randomIn, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
 import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
 import { HazardManager, hazardRegistry, type HazardDef } from './index';
 import { scatterDebris, shedMass } from './shed';
 
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
+
+/** What stunned the boss last: a wall crash, Spiky Dash, or an Ability (src/abilities). */
+export type BossStunCause = 'wall' | 'spiky' | 'decoy' | 'hunker' | 'discharge';
 
 /** Size after `hits` chips. */
 export function bossSizeAfterHits(hits: number, size = ROBOVAC_9000.size, chipFactor = ROBOVAC_9000.chipFactor): number {
@@ -40,6 +50,10 @@ export class RoboVac9000 extends BaseHazard {
   /** Chip already taken during the current stun. */
   private hitThisStun = false;
   hits = 0;
+  /** Cause of the current / last stun (Keepsake effects such as Dead Weight read it on bossHit). */
+  stunCause: BossStunCause | null = null;
+  /** Grounded: seconds after a Discharge during which it can't be Discharged again (counted down by the Ability System). */
+  groundedFor = 0;
   readonly minis = new Set<number>();
   private readonly lane;
   private readonly stunRing;
@@ -85,31 +99,41 @@ export class RoboVac9000 extends BaseHazard {
     this.spin('brush_r', -dt * c.brushSpin);
 
     switch (this.state) {
-      case 'intro':
-        if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+      case 'intro': {
+        const t = aimTarget(run, this.x, this.z, c.chargeTrigger);
+        if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
         if (this.timer <= 0) {
           // First summon comes sooner than the rest (the constructor has no Run for the Difficulty).
           this.summonTimer = this.attackTime(run, c.summonInterval * 0.6);
           this.enter('hunt', randomIn(this.rng, c.huntTime));
         }
         break;
+      }
       case 'hunt': {
-        // Hidden Bunny (Dust Cloud): wander instead of chasing.
-        if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+        // Aim at the Decoy when it is close, else the Bunny; hidden Bunny (Dust Cloud): wander.
+        const t = aimTarget(run, this.x, this.z, c.chargeTrigger);
+        if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
         else this.yaw += Math.sin(this.time * 0.7) * dt;
         this.drive(run, this.speed(run, c.huntSpeed) * dt, radius);
         if (!bunnySheltered(run, c.height)) {
           const reach = radius + suctionReachFor(c.suctionReach, b.stats.get('suctionMultiplier'));
           applySuction(run, this.x, this.z, c.suctionStrength, suctionFalloff(dist - b.radius, radius, reach), dt);
         }
+        const lure = activeLure(run);
+        if (lure) {
+          // The intake drags the Decoy in too (touching it clogs the boss).
+          const ld = Math.hypot(lure.x - this.x, lure.z - this.z) - lure.radius;
+          const falloff = suctionFalloff(ld, radius, radius + c.suctionReach);
+          if (falloff > 0) pullLure(run, this.x, this.z, maxSpeedFor(b) * c.suctionStrength * falloff, dt);
+        }
         this.summonTimer -= dt;
         if (this.summonTimer <= 0) {
           this.summonTimer = this.attackTime(run, c.summonInterval);
           this.summon(run);
         }
-        if (this.timer <= 0 && dist < c.chargeTrigger && canTarget(run) && onScreen(run, this.x, this.z)) {
+        if (this.timer <= 0 && t && Math.hypot(t.x - this.x, t.z - this.z) < c.chargeTrigger && onScreen(run, this.x, this.z)) {
           this.enter('telegraph', this.attackTime(run, c.telegraph));
-          this.yaw = yawOf(dx, dz);
+          this.yaw = yawOf(t.x - this.x, t.z - this.z);
           this.chargeDirX = Math.sin(this.yaw);
           this.chargeDirZ = Math.cos(this.yaw);
           this.lane.visible = true;
@@ -134,8 +158,9 @@ export class RoboVac9000 extends BaseHazard {
         if (m.hit) {
           this.lane.visible = false;
           this.hitThisStun = false;
+          this.stunCause = 'wall';
           this.enter('stunned', c.stunTime);
-          run.events.emit('bossStunned', { hazardId: this.id });
+          run.events.emit('bossStunned', { hazardId: this.id, cause: 'wall' });
         } else if (this.charged >= c.chargeDistance) {
           this.lane.visible = false;
           this.enter('recover', c.recover);
@@ -162,6 +187,35 @@ export class RoboVac9000 extends BaseHazard {
   /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
   override stun(_seconds: number): void {
     this.hitThisStun = false;
+    this.stunCause = 'spiky';
+  }
+
+  /**
+   * External stun from an Ability (Decoy clog, Hunker crash, Discharge): cancels any telegraph or
+   * charge and enters the `stunned` state for `seconds`, so one chip lands on contact. The Ability
+   * System enforces the 6 s boss limit before calling this.
+   */
+  abilityStun(run: Run, seconds: number, cause: Exclude<BossStunCause, 'wall' | 'spiky'>): void {
+    this.lane.visible = false;
+    this.hitThisStun = false;
+    this.stunCause = cause;
+    // Never cut short a stun that is already running.
+    this.enter('stunned', this.state === 'stunned' ? Math.max(this.timer, seconds) : seconds);
+    run.events.emit('bossStunned', { hazardId: this.id, cause });
+  }
+
+  /** True in the states where running into a planted Tumble stuns it (hunting or mid-charge). */
+  get crashesIntoPlanted(): boolean {
+    return this.state === 'hunt' || this.state === 'charge';
+  }
+
+  /** Bounces off a planted Tumble without a stun: a charge ends, and it backs off out of contact. */
+  bounceOff(run: Run): void {
+    if (this.state === 'charge' || this.state === 'hunt') {
+      this.lane.visible = false;
+      this.enter('recover', this.cfg.recover);
+    }
+    separateFromBunny(run, this, this.cfg.contactRadius * this.scale, this.cfg.height);
   }
 
   private enter(state: BossState, time: number): void {
@@ -215,14 +269,14 @@ export class RoboVac9000 extends BaseHazard {
         if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6);
       }
       knockbackCm(b, b.x - this.x, b.z - this.z, b.radius * 2);
-      pushBunnyOut(run, this.x, this.z, radius);
+      separateFromBunny(run, this, radius, c.height);
       return;
     }
     const knock = this.state === 'charge' ? 1.5 : 1;
     if (hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm * knock, knockbackRadii: c.knockbackRadii * knock }) && b.alive) {
       shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
-    pushBunnyOut(run, this.x, this.z, radius);
+    separateFromBunny(run, this, radius, c.height);
   }
 
   override onAbsorbed(run: Run): void {

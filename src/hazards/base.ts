@@ -38,6 +38,11 @@ export abstract class BaseHazard implements Hazard {
     return this.stunnedFor > 0;
   }
 
+  /** Height this Hazard collides at when pushed back (by a planted Tumble, or while recoiling). */
+  get collisionHeight(): number {
+    return this.recoilHeight;
+  }
+
   /** Called by the combat System when stunned; the wobble is driven by `stunnedFor` in sync(). */
   stun(_seconds: number): void {}
   protected readonly decals: Decal[] = [];

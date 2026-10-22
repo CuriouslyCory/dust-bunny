@@ -1,14 +1,18 @@
 /**
  * Touch controls: a dynamic virtual joystick (appears where the thumb lands on the left part of
- * the screen and follows it if dragged past its rim) plus a Dash button with a cooldown ring.
- * Tapping the right half also dashes. Feeds the input abstraction as an InputSource.
+ * the screen and follows it if dragged past its rim) plus a Dash button with a cooldown ring and,
+ * above and to the left of it, the Ability button with its own ring (tap: Decoy / Discharge, hold:
+ * Hunker). Tapping the right half also dashes; the buttons stop propagation, so pressing them never
+ * does. Feeds the input abstraction as an InputSource.
  *
  * Enabled by Settings.touchControls ('auto' = on touch devices / after the first touch).
  * Also blocks page scroll, pinch and double-tap zoom, and re-fits the canvas on orientation change.
  */
 import { screenToWorld, type InputSource, type InputState } from '../core/input';
+import { abilityHud } from '../abilities';
 import { TUNING } from '../data/tuning';
 import type { Game } from '../game/game';
+import { AbilityRing } from '../ui/abilityHud';
 import { h } from '../ui/screens';
 import { settings } from '../ui/settings';
 import './touch.css';
@@ -30,7 +34,12 @@ export class TouchControls implements InputSource {
   private base = h('div', { className: 'stick-base' });
   private knob = h('div', { className: 'stick-knob' });
   readonly dashButton = h('button', { type: 'button', className: 'touch-dash' });
+  readonly abilityButton = h('button', { type: 'button', className: 'touch-ability' });
   private ring: SVGCircleElement;
+  private readonly abilityRing: AbilityRing;
+  private abilityQueued = false;
+  private abilityHeld = false;
+  private abilityPointer: number | null = null;
   private stickId: number | null = null;
   private originX = 0;
   private originY = 0;
@@ -61,6 +70,34 @@ export class TouchControls implements InputSource {
     this.dashButton.addEventListener('pointercancel', release);
     this.dashButton.addEventListener('pointerleave', release);
 
+    this.abilityRing = new AbilityRing(this.abilityButton, 29, 'touch-ability-icon', 'touch-ability-label');
+    this.abilityButton.setAttribute('aria-label', 'Ability');
+    this.abilityButton.dataset.sfx = 'off';
+    this.abilityButton.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.abilityQueued = true;
+      this.abilityHeld = true;
+      this.abilityPointer = e.pointerId;
+      try {
+        this.abilityButton.setPointerCapture(e.pointerId);
+      } catch {
+        // Synthetic pointer: release still arrives via pointerup / pointercancel.
+      }
+      this.abilityButton.classList.add('pressed');
+    });
+    const releaseAbility = (e: PointerEvent): void => {
+      if (this.abilityPointer !== null && e.pointerId !== this.abilityPointer) return;
+      e.stopPropagation();
+      this.abilityHeld = false;
+      this.abilityPointer = null;
+      this.abilityButton.classList.remove('pressed');
+    };
+    this.abilityButton.addEventListener('pointerup', releaseAbility);
+    this.abilityButton.addEventListener('pointercancel', releaseAbility);
+    this.abilityButton.addEventListener('lostpointercapture', releaseAbility);
+    this.abilityButton.addEventListener('contextmenu', (e) => e.preventDefault());
+
     const canvas = game.canvas;
     canvas.addEventListener('pointerdown', this.onDown);
     canvas.addEventListener('pointermove', this.onMove);
@@ -69,7 +106,10 @@ export class TouchControls implements InputSource {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
     game.events.on('screenChanged', (e) => {
-      if (e.to !== 'playing') this.resetStick();
+      if (e.to !== 'playing') {
+        this.resetStick();
+        this.resetAbility();
+      }
     });
     settings.subscribe((s) => this.setEnabled(s.touchControls === 'on' || (s.touchControls === 'auto' && (isTouchDevice() || this.sawTouch))));
   }
@@ -77,7 +117,10 @@ export class TouchControls implements InputSource {
   setEnabled(on: boolean): void {
     this.enabled = on;
     document.documentElement.classList.toggle('touch', on);
-    if (!on) this.resetStick();
+    if (!on) {
+      this.resetStick();
+      this.resetAbility();
+    }
   }
 
   private onDown = (e: PointerEvent): void => {
@@ -132,6 +175,12 @@ export class TouchControls implements InputSource {
     if (e.pointerId === this.stickId) this.resetStick();
   };
 
+  private resetAbility(): void {
+    this.abilityHeld = false;
+    this.abilityPointer = null;
+    this.abilityButton.classList.remove('pressed');
+  }
+
   private resetStick(): void {
     this.stickId = null;
     this.vx = 0;
@@ -141,16 +190,20 @@ export class TouchControls implements InputSource {
 
   sample(): InputState {
     const dash = this.dashQueued;
+    const ability = this.abilityQueued && this.enabled;
+    const abilityHeld = this.abilityHeld && this.enabled;
     this.dashQueued = false;
+    this.abilityQueued = false;
     const mag = Math.hypot(this.vx, this.vy);
-    if (!this.enabled || mag < DEAD_ZONE) return { moveX: 0, moveZ: 0, dash: dash && this.enabled };
+    if (!this.enabled || mag < DEAD_ZONE) return { moveX: 0, moveZ: 0, dash: dash && this.enabled, ability, abilityHeld };
     const scaled = Math.min(1, (mag - DEAD_ZONE) / (1 - DEAD_ZONE));
     const w = screenToWorld(this.vx / mag, -this.vy / mag, TUNING.camera.yaw);
-    return { moveX: w.x * scaled, moveZ: w.z * scaled, dash };
+    return { moveX: w.x * scaled, moveZ: w.z * scaled, dash, ability, abilityHeld };
   }
 
-  /** Per-frame visual update (cooldown ring). */
+  /** Per-frame visual update (cooldown rings). */
   update(): void {
+    this.abilityRing.sync(abilityHud(this.game.run));
     const b = this.game.run?.bunny;
     if (!b) return;
     const cd = b.stats.get('dashCooldown');
@@ -189,6 +242,7 @@ export function installTouchControls(game: Game): TouchControls {
   const touch = new TouchControls(game);
   game.input.add(touch);
   game.hud.el.append(touch.layer);
+  game.hud.addWidget({ id: 'touch-ability', slot: 'bottom-right', el: touch.abilityButton });
   game.hud.addWidget({ id: 'touch-dash', slot: 'bottom-right', el: touch.dashButton, update: () => touch.update() });
   blockBrowserGestures();
 

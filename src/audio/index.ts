@@ -87,6 +87,19 @@ export function installAudio(game: Game): GameAudio {
     music.intensity = 0.1;
   });
   ev.on('dashStarted', () => sfx.dash());
+  // Abilities (src/abilities/events.ts).
+  ev.on('abilityUsed', (e) => {
+    if (e.ability === 'decoy') sfx.decoyShed();
+    else if (e.ability === 'hunker') sfx.hunkerPlant();
+    else sfx.discharge();
+  });
+  ev.on('abilityEnded', (e) => {
+    if (e.ability === 'hunker') sfx.hunkerRelease();
+    else if (e.reason === 'expired' || e.reason === 'shot') sfx.decoyPop();
+  });
+  ev.on('hazardClogged', (e) => sfx.clog(e.boss));
+  ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
+  ev.on('staticFull', () => sfx.staticFull());
   ev.on('pickupCollected', () => sfx.pickup());
   ev.on('perkApplied', () => sfx.perk());
   onLoose(ev, 'perkChosen', () => sfx.perk());

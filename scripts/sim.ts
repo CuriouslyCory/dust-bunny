@@ -10,24 +10,33 @@
  * With --no-hazards a Run stops at the top Tier of the house / neighborhood (no boss to clear),
  * but keeps rolling in the city until --minutes so growth towards the boss size is measured.
  *
- * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
- *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
+ * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, Tumble
+ * hunkers while a telegraphed boss lane crosses it (with --hunker=defend also while a Broom sweep,
+ * vacuum cone or spray lane is about to hit it), Zap discharges at the nearest Hazard
+ * in range once the Static meter is full. --no-ability plays without Abilities (for comparison).
+ * The summary also counts boss fights and boss kills per Character. --boss plays only the house
+ * boss fight: the Run starts at Tier 5 (fresh Bunny, four random Perks) and stops when the
+ * Robo-Vac 9000 is absorbed, so `wins` there is the boss win rate.
+ *
+ * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
+ *                 [--hunker=lane|defend] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
  *                 [--difficulty=casual|arcade|hardcore]
  */
+import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from '../src/abilities';
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
-import { TIERS } from '../src/data/tiers';
+import { getTier, TIERS } from '../src/data/tiers';
 import { TUNING } from '../src/data/tuning';
 import type { Debris } from '../src/entities/debris';
 import { createRun } from '../src/game/assembly';
 import type { Run } from '../src/game/run';
 import type { Hazard } from '../src/hazards';
 import type { RoboVac9000 } from '../src/hazards/robovac';
-import type { SprayBottle } from '../src/hazards/sprayBottle';
-import { inCone, type UprightVacuum } from '../src/hazards/uprightVacuum';
-import type { Broom } from '../src/hazards/broom';
+import { SprayBottle as SprayBottleClass, type SprayBottle } from '../src/hazards/sprayBottle';
+import { inCone, UprightVacuum as UprightVacuumClass, type UprightVacuum } from '../src/hazards/uprightVacuum';
+import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
 import { fluffForRun } from '../src/meta/fluff';
@@ -42,6 +51,11 @@ const opt = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.spli
 const minutes = Number(opt('minutes') ?? 15);
 const chars = (opt('chars') ?? 'lint,tumble,zap').split(',');
 const withHazards = !args.includes('--no-hazards');
+const withAbility = !args.includes('--no-ability');
+/** Tumble's Hunker policy: 'lane' (boss lanes only, the issue's policy) or 'defend' (also Broom / vacuum / spray hits). */
+const hunkerPolicy = opt('hunker') === 'defend' ? 'defend' : 'lane';
+/** Boss fight only: start the house at Tier 5 (the Robo-Vac 9000 arrives 3 s later) and stop when it falls. */
+const bossOnly = args.includes('--boss');
 const quiet = args.includes('--quiet');
 const stalls = args.includes('--stalls');
 /** Hazards hit as usual (knockback, shedding) but can't kill: measures pacing, not survival. */
@@ -369,7 +383,80 @@ class Bot implements InputSource {
     }
   }
 
+  /** True if the boss's telegraphed (or running) charge lane covers the Bunny. */
+  private laneCrosses(boss: RoboVac9000, pad = 1): boolean {
+    const b = this.run.bunny;
+    const fx = Math.sin(boss.yaw);
+    const fz = Math.cos(boss.yaw);
+    const dx = b.x - boss.x;
+    const dz = b.z - boss.z;
+    const along = dx * fx + dz * fz;
+    const side = Math.abs(dx * fz - dz * fx);
+    return along > -b.radius && along < boss.cfg.chargeDistance + b.radius && side < (boss.cfg.contactRadius * boss.scale + b.radius) * pad;
+  }
+
+  /** A Broom sweep, vacuum / blower cone or spray lane is about to hit the Bunny. */
+  private imminentHit(): boolean {
+    const { bunny, hazards } = this.run;
+    const r = bunny.radius;
+    for (const h of hazards.hazards) {
+      if (h.dead || canAbsorb(r, bunny.stats.get('absorbRatio'), h.size) || h.stunnedFor) continue;
+      if (h instanceof UprightVacuumClass && h.state !== 'off') {
+        const c = h.cfg;
+        const it = { x: h.x + Math.sin(h.yaw) * h.size * c.nozzleOffset, z: h.z + Math.cos(h.yaw) * h.size * c.nozzleOffset };
+        if (inCone(it.x, it.z, h.yaw, c.coneHalfAngle, c.coneRange * 1.1, bunny.x, bunny.z, r)) return true;
+      } else if (h instanceof SprayBottleClass && (h.state === 'telegraph' || h.state === 'firing')) {
+        const range = tierValue(h.cfg.range, this.run.tier);
+        const dx = bunny.x - h.x;
+        const dz = bunny.z - h.z;
+        const along = dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw);
+        const side = Math.abs(dx * Math.cos(h.yaw) - dz * Math.sin(h.yaw));
+        if (along > 0 && along < range + r && side < r + h.cfg.dropletRadius * 3) return true;
+      } else if (h instanceof BroomClass && h.state !== 'idle') {
+        if (Math.hypot(bunny.x - h.pivotX, bunny.z - h.pivotZ) < BROOM.sweepRadius + BROOM.headRadius + r) return true;
+      }
+    }
+    return false;
+  }
+
+  /** Ability policy (see file header): the `ability` edge and `abilityHeld` for this tick. */
+  private abilityInput(): { ability: boolean; abilityHeld: boolean } {
+    const sys = getAbilitySystem(this.run);
+    if (!sys) return { ability: false, abilityHeld: false };
+    const { bunny, hazards } = this.run;
+    const bosses = hazards.hazards.filter((h) => !h.dead && h.def.boss) as RoboVac9000[];
+    if (sys.data.id === 'decoy') {
+      const ctl = sys.controller as DecoyAbility;
+      if (!ctl.ready) return { ability: false, abilityHeld: false };
+      const bossAim = bosses.some((b) => b.state === 'telegraph' && this.laneCrosses(b));
+      const broomAim = hazards.hazards.some((h) => {
+        if (h.dead || h.def.id !== 'broom') return false;
+        const br = h as Broom;
+        return br.state === 'telegraph' && Math.hypot(bunny.x - br.pivotX, bunny.z - br.pivotZ) < BROOM.aggroRange + bunny.radius;
+      });
+      return { ability: bossAim || broomAim, abilityHeld: false };
+    }
+    if (sys.data.id === 'hunker') {
+      const ctl = sys.controller as HunkerAbility;
+      const threat = bosses.some((b) => (b.state === 'telegraph' || b.state === 'charge') && this.laneCrosses(b)) || (hunkerPolicy === 'defend' && this.imminentHit());
+      if (ctl.active) {
+        // Hold until the charge is over (the boss crashed into us, or stopped).
+        const keep = threat || bosses.some((b) => b.state === 'stunned' && Math.hypot(b.x - bunny.x, b.z - bunny.z) < b.cfg.contactRadius * b.scale + bunny.radius * 1.5);
+        return { ability: false, abilityHeld: keep };
+      }
+      const go = threat && ctl.canPlant;
+      return { ability: go, abilityHeld: go };
+    }
+    const ctl = sys.controller as DischargeAbility;
+    return { ability: ctl.ready && ctl.target !== null, abilityHeld: false };
+  }
+
   sample(): InputState {
+    const s = this.move();
+    return withHazards ? { ...s, ...this.abilityInput() } : s;
+  }
+
+  private move(): InputState {
     const dt = 1 / 60;
     const { bunny } = this.run;
     this.replan -= dt;
@@ -453,15 +540,20 @@ class Bot implements InputSource {
 }
 
 const fmt = (s: number | undefined) => (s === undefined ? '  -  ' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
-const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number }> = {};
+const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number }> = {};
 const modifiers = upgradeModifiers(upgrades);
 
 for (const characterId of chars) {
-  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0 });
+  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0, fights: {} as Record<string, number>, kills: {} as Record<string, number>, abilityUses: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
-    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards });
+    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
+    events.on('hazardSpawned', (e) => {
+      if (['robovac_9000', 'street_sweeper', 'garbage_truck'].includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
+    });
+    events.on('bossDefeated', (e) => (sum.kills[e.defId] = (sum.kills[e.defId] ?? 0) + 1));
+    events.on('abilityUsed', () => sum.abilityUses++);
     let leaveArea = false;
     events.on('exitOpened', (e) => {
       log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
@@ -469,6 +561,11 @@ for (const characterId of chars) {
     });
     const bot = new Bot(run);
     run.input = bot;
+    let bossWon = false;
+    if (bossOnly) {
+      events.on('bossDefeated', () => (bossWon = true));
+      run.bunny.setRadius(getTier(5).minRadius * 1.02);
+    }
     const log: string[] = [];
     const perkRng = new Rng(`${seed}:perks`);
     let hits = 0;
@@ -499,7 +596,7 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && (withHazards || run.area === 'city' || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
+    for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || run.area === 'city' || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
       run.update(dt);
       if (leaveArea) {
         leaveArea = false;
@@ -526,7 +623,7 @@ for (const characterId of chars) {
     sum.n++;
     const fluff = fluffForRun(run.endReason ?? 'quit', run.getStats());
     sum.fluff.push(fluff);
-    if (run.endReason === 'victory') {
+    if (run.endReason === 'victory' || bossWon) {
       sum.wins++;
       sum.ends.push(run.time);
     }
@@ -541,9 +638,11 @@ for (const characterId of chars) {
 }
 
 const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : undefined);
-console.log(`\nMedian Tier times (runs reaching it), ${difficulty}:`);
+console.log(`\nMedian Tier times (runs reaching it), ${difficulty}${withAbility ? '' : ', no Abilities'}:`);
 for (const [id, s] of Object.entries(summary)) {
   console.log(
     `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  fluff ${Math.min(...s.fluff)}–${med(s.fluff)}–${Math.max(...s.fluff)}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
   );
+  const bosses = ['robovac_9000', 'street_sweeper', 'garbage_truck'].filter((b) => s.fights[b]);
+  console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}`);
 }

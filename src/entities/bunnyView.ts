@@ -25,6 +25,7 @@ import { Disposables } from '../core/events';
 import { lerp } from '../core/math';
 import type { DebrisType } from '../data/debris';
 import { getDebrisType } from '../data/debris';
+import { DISCHARGE } from '../data/abilities';
 import { TUNING } from '../data/tuning';
 import { ContactShadows } from '../fx/contactShadows';
 import { getQuality } from '../fx/quality';
@@ -156,6 +157,8 @@ export class BunnyView {
   private readonly stretch = new Spring(90, 9);
   private readonly squash = new Spring(110, 8);
   private squeezeView = 1;
+  /** 0..1 eased Hunker plant (flattens the ball onto the floor). */
+  private plantView = 0;
   private wasDashing = false;
   private readonly disposables = new Disposables();
 
@@ -403,10 +406,13 @@ export class BunnyView {
     const sq = Math.max(-0.3, Math.min(0.35, this.squash.step(dt) + Math.sin(this.time * 2.4) * 0.012));
     // Squeezing through a doorway: narrower across, longer along the heading (volume kept).
     this.squeezeView = lerp(this.squeezeView, b.squeeze, Math.min(1, dt * 12));
-    const sz = ((1 + st) * (1 + sq * 0.5)) / this.squeezeView;
+    // Hunker: settle low and wide, like a rock.
+    this.plantView = lerp(this.plantView, b.hunkered ? 1 : 0, Math.min(1, dt * 14));
+    const plantWide = 1 + this.plantView * 0.12;
+    const sz = (((1 + st) * (1 + sq * 0.5)) / this.squeezeView) * plantWide;
     const sxy = 1 / Math.sqrt(1 + st);
-    const sy = sxy * (1 - sq);
-    const sx = sxy * (1 + sq * 0.5) * this.squeezeView;
+    const sy = sxy * (1 - sq) * (1 - this.plantView * 0.24);
+    const sx = sxy * (1 + sq * 0.5) * this.squeezeView * plantWide;
     this.body.scale.set(sx, sy, sz);
     this.body.rotation.y = this.heading;
     this.root.position.set(x, r * sy, z);
@@ -426,7 +432,10 @@ export class BunnyView {
     _inv.copy(b.rollQuat).invert();
     (this.furUniforms.uDrag!.value as Vector3).lerp(_v.applyQuaternion(_inv), Math.min(1, dt * 6));
     this.furUniforms.uTime!.value = this.time;
-    this.rimStrength.value = 0.45 + this.look.glow * 0.8;
+    // Zap's glow follows the Static meter (glowBase + glowPerCharge × charge).
+    const glow = b.staticCharge === null ? this.look.glow : DISCHARGE.glowBase + DISCHARGE.glowPerCharge * b.staticCharge;
+    this.furUniforms.uGlow!.value = glow;
+    this.rimStrength.value = 0.45 + glow * 0.8 - this.plantView * 0.15;
 
     // Eyes: blink, pupils follow turns and look ahead when moving.
     this.blinkTimer -= dt;

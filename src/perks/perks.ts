@@ -14,24 +14,28 @@ const stat =
     run.bunny.stats.add({ stat: key, op, value, source: `perk:${id}` });
   };
 
-const def = (data: PerkData, apply: (run: Run, stacks: number) => void): PerkDef => ({ ...data, apply });
+const def = (data: PerkData, apply: (run: Run, stacks: number) => void, capStats?: readonly StatKey[]): PerkDef => ({ ...data, apply, ...(capStats ? { capStats } : {}) });
+
+/** A Perk that only adds one stat modifier per stack (hidden from the draft once that stat is at cap). */
+const statPerk = (data: PerkData, key: StatKey, op: 'add' | 'mul', value: number): PerkDef => def(data, stat(data.id, key, op, value), [key]);
 
 export const PERK_DEFS: PerkDef[] = [
+  // Thick Fur also heals, so it stays on offer at the heart cap.
   def(PERKS.thick_fur, (run) => {
     stat('thick_fur', 'maxHealth', 'add', FX.thickFurHealth)(run);
     run.bunny.heal(FX.thickFurHealth);
   }),
-  def(PERKS.aerodynamic, stat('aerodynamic', 'speed', 'mul', FX.aerodynamicSpeed)),
-  def(PERKS.sticky_fibers, stat('sticky_fibers', 'absorbRatio', 'add', FX.stickyFibersRatio)),
-  def(PERKS.static_field, stat('static_field', 'magnetRadius', 'add', FX.staticFieldMagnet)),
+  statPerk(PERKS.aerodynamic, 'speed', 'mul', FX.aerodynamicSpeed),
+  statPerk(PERKS.sticky_fibers, 'absorbRatio', 'add', FX.stickyFibersRatio),
+  statPerk(PERKS.static_field, 'magnetRadius', 'add', FX.staticFieldMagnet),
   def(PERKS.second_wind, (run) => {
     run.bunny.revives++;
   }),
-  def(PERKS.quick_dash, stat('quick_dash', 'dashCooldown', 'mul', FX.quickDashCooldown)),
-  def(PERKS.hoarder, stat('hoarder', 'pickupDuration', 'add', FX.hoarderDuration)),
-  def(PERKS.slippery, stat('slippery', 'dodgeChance', 'add', FX.slipperyDodge)),
-  def(PERKS.glutton, stat('glutton', 'growthMultiplier', 'mul', FX.gluttonGrowth)),
-  def(PERKS.lucky_find, stat('lucky_find', 'pickupLuck', 'add', FX.luckyFindLuck)),
+  statPerk(PERKS.quick_dash, 'dashCooldown', 'mul', FX.quickDashCooldown),
+  statPerk(PERKS.hoarder, 'pickupDuration', 'add', FX.hoarderDuration),
+  statPerk(PERKS.slippery, 'dodgeChance', 'add', FX.slipperyDodge),
+  statPerk(PERKS.glutton, 'growthMultiplier', 'mul', FX.gluttonGrowth),
+  statPerk(PERKS.lucky_find, 'pickupLuck', 'add', FX.luckyFindLuck),
   // Regrowth heals from CombatSystem, reading run.perkStacks('regrowth').
   def(PERKS.regrowth, () => {}),
   def(PERKS.spiky_dash, (run) => {

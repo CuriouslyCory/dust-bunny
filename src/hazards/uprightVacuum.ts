@@ -8,6 +8,10 @@
  * and blows small Debris along. It only starts a blast while on screen.
  *
  * The Litter Vacuum (city, LITTER_VACUUM) is a street-scale Upright Vacuum in suction mode.
+ *
+ * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
+ * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
+ * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
 import { HAZARD_RECOIL, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, type AirConeTuning } from '../data/hazards';
@@ -16,7 +20,8 @@ import { onScreen } from '../systems/camera';
 import { isFloorFree } from '../systems/spawner';
 import type { Debris } from '../entities/debris';
 import { BaseHazard } from './base';
-import { applyPush, applySuction, bunnySheltered, canTarget, hitBunny, moveCircle, pushBunnyOut, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
+import { maxSpeedFor } from '../systems/movement';
+import { activeLure, aimTarget, applyPush, applySuction, bunnySheltered, hitBunny, moveCircle, pullLure, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 import { shedMass } from './shed';
@@ -63,6 +68,11 @@ export class UprightVacuum extends BaseHazard {
     return this.cfg.mode === 'blow';
   }
 
+  /** The Leaf Blower is a ranged Hazard: it aims at the Decoy but is never clogged. */
+  get ranged(): boolean {
+    return this.blows;
+  }
+
   /** Intake (or nozzle) point at the front. */
   private intake(): { x: number; z: number } {
     const o = this.size * this.cfg.nozzleOffset;
@@ -73,7 +83,9 @@ export class UprightVacuum extends BaseHazard {
     const c = this.cfg;
     const b = run.bunny;
     this.timer -= dt;
-    if (canTarget(run)) this.yaw = turnTowards(this.yaw, yawOf(b.x - this.x, b.z - this.z), c.turnRate * dt);
+    const range = suctionReachFor(c.coneRange, b.stats.get('suctionMultiplier'));
+    const t = aimTarget(run, this.x, this.z, range + this.size);
+    if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
     const speed = this.tierSpeed(run, c.speed) * (this.state === 'on' ? 0.5 : 1);
     const m = moveCircle(run.house, this.x, this.z, this.size, c.height, Math.sin(this.yaw) * speed * dt, Math.cos(this.yaw) * speed * dt);
     this.x = m.x;
@@ -101,7 +113,6 @@ export class UprightVacuum extends BaseHazard {
     }
 
     const it = this.intake();
-    const range = suctionReachFor(c.coneRange, b.stats.get('suctionMultiplier'));
     this.cone.visible = this.state !== 'off';
     this.cone.place(it.x, it.z, this.yaw);
     this.cone.root.scale.setScalar(range / c.coneRange);
@@ -110,6 +121,11 @@ export class UprightVacuum extends BaseHazard {
 
     if (this.state !== 'on') return;
     if (this.blows) this.blowDebris(dt, run, it.x, it.z, range);
+    const lure = activeLure(run);
+    if (lure && inCone(it.x, it.z, this.yaw, c.coneHalfAngle, range, lure.x, lure.z, lure.radius)) {
+      if (this.blows) lure.shot(this);
+      else pullLure(run, it.x, it.z, maxSpeedFor(b) * c.suctionStrength * suctionFalloff(Math.hypot(lure.x - it.x, lure.z - it.z) - lure.radius, 0, range), dt);
+    }
     if (bunnySheltered(run, c.height) || !inCone(it.x, it.z, this.yaw, c.coneHalfAngle, range, b.x, b.z, b.radius)) return;
     const d = Math.hypot(b.x - it.x, b.z - it.z) - b.radius;
     const falloff = suctionFalloff(d, 0, range);
@@ -145,7 +161,7 @@ export class UprightVacuum extends BaseHazard {
       this.recoilFor = HAZARD_RECOIL;
       if (run.bunny.alive && c.shedFraction > 0) shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
-    pushBunnyOut(run, this.x, this.z, this.size);
+    separateFromBunny(run, this, this.size, c.height);
   }
 }
 

@@ -12,6 +12,8 @@ export interface System {
 /** Built-in ordering; leave gaps so other modules can slot systems in between. */
 export const SYSTEM_ORDER = {
   timers: 0,
+  /** The Character's Ability (src/abilities), before movement so Hunker stops the Bunny this tick. */
+  ability: 90,
   movement: 100,
   magnet: 200,
   hazards: 300,

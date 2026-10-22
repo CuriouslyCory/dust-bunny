@@ -24,7 +24,7 @@ export function stepBunnyMovement(bunny: Bunny, input: InputState, dt: number, o
     mz /= mag;
   }
 
-  if (input.dash && bunny.dashCooldownLeft <= 0 && bunny.rooted <= 0) {
+  if (input.dash && bunny.dashCooldownLeft <= 0 && bunny.rooted <= 0 && !bunny.hunkered) {
     const m = Math.hypot(mx, mz);
     if (m > 0.1) {
       bunny.dashDirX = mx / m;
@@ -38,7 +38,12 @@ export function stepBunnyMovement(bunny: Bunny, input: InputState, dt: number, o
     onDash?.(stats.dashCooldown);
   }
 
-  if (bunny.rooted > 0) {
+  if (bunny.hunkered) {
+    // Planted (Hunker): no rolling, Dash or external pushes.
+    bunny.vx = bunny.vz = 0;
+    bunny.impulseX = bunny.impulseZ = 0;
+    bunny.dashTime = 0;
+  } else if (bunny.rooted > 0) {
     bunny.vx = 0;
     bunny.vz = 0;
   } else if (bunny.dashTime > 0) {
@@ -71,7 +76,7 @@ export const movementSystem: System = {
   id: 'movement',
   order: SYSTEM_ORDER.movement,
   update(dt, run) {
-    stepBunnyMovement(run.bunny, run.input.sample(), dt, (cooldown) => run.events.emit('dashStarted', { cooldown }));
+    stepBunnyMovement(run.bunny, run.inputState, dt, (cooldown) => run.events.emit('dashStarted', { cooldown }));
     run.bunny.stats.tick(dt);
   },
 };
