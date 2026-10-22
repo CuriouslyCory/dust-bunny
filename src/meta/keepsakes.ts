@@ -4,8 +4,10 @@
  *
  * Rules (DROP_RULES in src/data/keepsakes.ts):
  * - Every boss kill credits 1 Keepsake with a random type and a rarity rolled from the boss's drop
- *   table (`BOSS_DROP_TABLES`), seeded from the Run seed and the boss, so a seed always drops the
- *   same thing. Hardcore adds 1, with its own rarity roll.
+ *   table (`BOSS_DROP_TABLES`). The type is seeded from the Run seed and the boss, so a seed always
+ *   offers the same types; the rarity roll also mixes in a salt drawn fresh for every Run, so
+ *   replaying a `?seed=` that once rolled Mythic doesn't roll it again. Hardcore adds 1, with its
+ *   own rarity roll.
  * - The Character's first kill of a boss offers 3 types (of one rarity) instead of the random one. The first offer
  *   is credited at once (so nothing is lost if the tab closes); the in-Run Keepsake reveal swaps it
  *   for another offered type, and leaving the reveal locks the choice (`lock`). A drop whose reveal
@@ -57,6 +59,8 @@ export interface DropRoll {
   difficulty?: DifficultyId;
   /** The Character has not beaten this boss before. */
   firstKill: boolean;
+  /** Mixed into the rarity rolls (the tracker draws one per Run); without it they follow the seed alone. */
+  salt?: string;
 }
 
 /** The Keepsakes a boss kill drops (empty for a boss with no drop table or a Character without types). */
@@ -65,9 +69,10 @@ export function rollBossDrops(o: DropRoll): KeepsakeDrop[] {
   const types = keepsakeTypesFor(o.characterId).map((t) => t.id);
   if (!table || types.length === 0) return [];
   const rng = new Rng(o.seed).fork(`keepsake:${o.characterId}:${o.bossId}`);
+  const rarityRng = new Rng(o.seed).fork(`keepsake-rarity:${o.characterId}:${o.bossId}:${o.salt ?? ''}`);
   const drops: KeepsakeDrop[] = [];
   for (let i = 0; i < DROP_RULES.perKill; i++) {
-    const rarity = rollRarity(table, rng.next());
+    const rarity = rollRarity(table, rarityRng.next());
     if (o.firstKill && i === 0) {
       const offer = rng.shuffle([...types]).slice(0, DROP_RULES.firstKillChoices);
       drops.push({ ref: { type: offer[0]!, rarity }, bossId: o.bossId, offer });
@@ -77,7 +82,7 @@ export function rollBossDrops(o: DropRoll): KeepsakeDrop[] {
   }
   if (o.difficulty === 'hardcore') {
     for (let i = 0; i < DROP_RULES.hardcoreBonus; i++) {
-      const rarity = rollRarity(table, rng.next());
+      const rarity = rollRarity(table, rarityRng.next());
       drops.push({ ref: { type: rng.pick(types), rarity }, bossId: o.bossId, bonus: true });
     }
   }
@@ -96,9 +101,13 @@ export interface RunKeepsakes {
   result: GameEvents['runEnded'] | null;
   /** The player left the results screen: first-kill offers are closed. */
   settled: boolean;
+  /** This Run's rarity salt (`DropRoll.salt`). */
+  salt: string;
 }
 
 export type RunStartInfo = Pick<RunKeepsakes, 'seed' | 'characterId' | 'difficulty' | 'ranked'>;
+
+const randomSalt = (): string => Math.random().toString(36).slice(2, 10);
 
 export class KeepsakeTracker {
   current: RunKeepsakes | null = null;
@@ -106,12 +115,14 @@ export class KeepsakeTracker {
   constructor(
     private readonly meta: MetaProgress,
     private readonly emit: (e: GameEvents['keepsakesDropped']) => void = () => undefined,
+    /** Draws each Run's rarity salt (tests pass a fixed one). */
+    private readonly newSalt: () => string = randomSalt,
   ) {}
 
   start(info: RunStartInfo): RunKeepsakes {
     // A Run left on the results screen without choosing keeps its first offers.
     if (this.current) this.current.settled = true;
-    this.current = { ...info, drops: [], result: null, settled: false };
+    this.current = { ...info, drops: [], result: null, settled: false, salt: this.newSalt() };
     return this.current;
   }
 
@@ -120,7 +131,7 @@ export class KeepsakeTracker {
     const run = this.current;
     if (!run || !run.ranked || run.result) return [];
     const firstKill = !this.meta.hasBeaten(run.characterId, bossId);
-    const drops = rollBossDrops({ seed: run.seed, characterId: run.characterId, bossId, difficulty: run.difficulty, firstKill });
+    const drops = rollBossDrops({ seed: run.seed, characterId: run.characterId, bossId, difficulty: run.difficulty, firstKill, salt: run.salt });
     if (!drops.length) return [];
     this.meta.creditKeepsakes(run.characterId, drops.map((d) => d.ref), bossId);
     run.drops.push(...drops);

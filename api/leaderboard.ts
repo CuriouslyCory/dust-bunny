@@ -93,7 +93,9 @@ interface Row {
 
 function common(r: Row) {
   const character = isLeaderboardCharacter(r.character) ? r.character : ('lint' as const);
-  const loadout = r.loadout == null ? null : parseLoadout(character, r.loadout);
+  // `grade` (rarity × 2, on the old 1–10 scale) keeps tabs still running the bundle from before
+  // rarities, which read `grade`, from crashing on new entries. Drop it once those have reloaded.
+  const loadout = r.loadout == null ? null : parseLoadout(character, r.loadout)?.map((k) => ({ ...k, grade: k.rarity * 2 }));
   return {
     id: String(r.id),
     name: r.name,

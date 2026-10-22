@@ -47,6 +47,14 @@ describe('rollBossDrops', () => {
     }
   });
 
+  it('salts the rarity roll per Run, but not the type', () => {
+    const roll = (salt: string) => rollBossDrops({ seed: 'fixed', characterId: 'lint', bossId: 'ice_sheet', firstKill: false, salt })[0]!.ref;
+    expect(roll('a')).toEqual(roll('a'));
+    const runs = Array.from({ length: 200 }, (_, i) => roll(`s${i}`));
+    expect(new Set(runs.map((r) => r.type)).size).toBe(1);
+    expect(new Set(runs.map((r) => r.rarity)).size).toBeGreaterThan(1);
+  });
+
   it('offers three distinct types on a first kill and adds one on Hardcore', () => {
     const first = rollBossDrops({ seed: 'x', characterId: 'tumble', bossId: 'garbage_truck', firstKill: true, difficulty: 'hardcore' });
     expect(first).toHaveLength(2);

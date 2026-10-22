@@ -97,7 +97,8 @@ export function registerKeepsakeRevealScreen(): void {
           params = p;
           armed = ARM_DELAY;
           el.classList.add('arming');
-          const rarity = getRarity(bestRarity(p.drops.map((d) => d.ref)));
+          // A first kill's title names the offer's rarity, not a Hardcore bonus drop's.
+          const rarity = getRarity(p.firstKill ? (p.drops[0]?.ref.rarity ?? 1) : bestRarity(p.drops.map((d) => d.ref)));
           el.style.setProperty('--rarity', rarity.color);
           label.textContent = `${bossNameFor(p.drops[0]?.bossId ?? '')} absorbed`;
           title.textContent = p.firstKill ? `New ${rarity.name} Keepsake` : p.drops.length > 1 ? `${p.drops.length} Keepsakes!` : `${rarity.name} Keepsake!`;
