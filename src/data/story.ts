@@ -130,5 +130,7 @@ export const STORY: Story = {
 
   debris: {
     stadium: ['It has eaten a stadium. The match has been postponed. Both teams are claiming the win.'],
+    metropolis_ruins: ['What is left of a capital city. Its last ordinance concerned littering. It was not enforced.'],
+    small_country: ['It has absorbed a small country. The neighbouring countries issue a joint statement. The statement is absorbed.'],
   },
 };

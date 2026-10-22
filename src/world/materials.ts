@@ -1,6 +1,7 @@
 /** Procedural canvas textures (floors, rugs, fur). Browser only. */
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type MeshStandardMaterial, type Texture } from 'three';
 import { Rng } from '../core/rng';
+import { desertTexture, highlandsTexture, lakeWaterTexture, oceanTexture, ruinsTexture, steppeTexture, tundraTexture } from './continentTextures';
 import type { FloorMaterialId } from './types';
 
 export interface FloorTextureInfo {
@@ -664,24 +665,27 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'landfill':
         info = { texture: toTexture(landfillTexture()), worldSize: 16, roughness: 0.95 };
         break;
-      // Continent floors (1 unit = 10 km). PLACEHOLDERS reusing earlier textures until the Continent look lands.
+      // Continent floors (1 unit = 10 km), seen from the stratosphere: continentTextures.ts.
       case 'steppe':
-        info = { texture: toTexture(grassTexture()), worldSize: 30, roughness: 1 };
+        info = { texture: toTexture(steppeTexture()), worldSize: 40, roughness: 1 };
         break;
       case 'highlands':
-        info = { texture: toTexture(forestTexture()), worldSize: 24, roughness: 1 };
+        info = { texture: toTexture(highlandsTexture()), worldSize: 26, roughness: 0.95 };
         break;
       case 'lakeWater':
-        info = { texture: toTexture(waterTexture()), worldSize: 20, roughness: 0.32 };
+        info = { texture: toTexture(lakeWaterTexture()), worldSize: 20, roughness: 0.3 };
         break;
       case 'desertSand':
-        info = { texture: toTexture(landfillTexture()), worldSize: 30, roughness: 0.95 };
+        info = { texture: toTexture(desertTexture()), worldSize: 28, roughness: 1 };
         break;
       case 'tundraSnow':
-        info = { texture: toTexture(concreteTexture()), worldSize: 24, roughness: 0.9 };
+        info = { texture: toTexture(tundraTexture()), worldSize: 30, roughness: 0.8 };
         break;
       case 'ruinsAsh':
-        info = { texture: toTexture(asphaltTexture()), worldSize: 16, roughness: 0.95 };
+        info = { texture: toTexture(ruinsTexture()), worldSize: 12, roughness: 0.95 };
+        break;
+      case 'ocean':
+        info = { texture: toTexture(oceanTexture()), worldSize: 40, roughness: 0.35 };
         break;
     }
     floorCache.set(id, info);

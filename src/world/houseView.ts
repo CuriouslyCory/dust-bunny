@@ -2,8 +2,9 @@
  * Renders a HouseLayout: floors, rugs, walls with baseboards, furniture and soft contact
  * shadows. The house's front door swings open once `layout.exit.open` is set, with a light
  * shaft marking the way out. Neighborhood layouts render their walls as a hedge, a grass
- * ground plane and painted road markings; the Region and the Continent (seen from altitude: their
- * unit is above 1 cm) a wooded ridge edge and a floor that carries on into the haze. Anything
+ * ground plane and painted road markings; the Region (seen from altitude: its unit is above 1 cm)
+ * a wooded ridge edge and a floor that carries on into the haze; the Continent a coast, with the
+ * sea past it reaching to the horizon (continentCoast.ts). Anything
  * between the camera and the Bunny (walls, the couch above a Speck) fades out so the Bunny stays visible.
  *
  * Draw-call budget: walls + furniture are baked into one StaticBatch (1 call + shadow), floors
@@ -41,6 +42,8 @@ import { createModel } from './models';
 import './outdoorModels';
 import './cityModels';
 import { forestedMound, regionRoadblock } from './regionModels';
+import './continentModels';
+import { buildContinentWater } from './continentCoast';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
 import type { AreaId, FloorMaterialId, HouseLayout } from './types';
@@ -67,11 +70,11 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#7c7a63' };
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3' };
 /** How each Area's edge (`layout.walls`) is drawn. */
-const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges'> = { house: 'walls', neighborhood: 'hedges', city: 'barriers', region: 'ridges', continent: 'ridges' };
-/** Areas seen from altitude: the floor that carries on past the map edge into the haze. */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'steppe' };
+const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast'> = { house: 'walls', neighborhood: 'hedges', city: 'barriers', region: 'ridges', continent: 'coast' };
+/** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across).
@@ -107,6 +110,7 @@ export class HouseView {
     if (edge === 'hedges') this.buildHedges();
     else if (edge === 'barriers') this.buildBarriers();
     else if (edge === 'ridges') this.buildRidges();
+    else if (edge === 'coast') this.root.add(buildContinentWater(layout));
     else this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
@@ -120,7 +124,7 @@ export class HouseView {
     const altitude = fromAltitude(this.layout.area);
     const outer = OUTER_FLOOR[this.layout.area];
     const groundSize = altitude ? (b.maxX - b.minX) * 4 : Math.max(8000, (b.maxX - b.minX) * 4);
-    const groundMat = new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: 1 });
+    const groundMat = new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: outer ? floorTexture(outer).roughness : 1 });
     if (outer) {
       // The land carries on past the edge into the haze (slightly darker, so the map reads as the lit part).
       const info = floorTexture(outer);
@@ -278,7 +282,7 @@ export class HouseView {
   }
 
   /**
-   * Region (and placeholder Continent) edge, in the Area's unit: a dark tree line along each ridge obstacle with rolling wooded
+   * Region edge, in the Area's unit: a dark tree line along each ridge obstacle with rolling wooded
    * hills rising just outside it, a second, higher row behind (none on the south side, where the
    * camera looks over it), in ~18-unit pieces so only the piece between the camera and the Bunny
    * fades. Where a motorway leaves the map: a closed roadblock across the carriageways.
@@ -494,7 +498,8 @@ export class HouseView {
     const cs = new ContactShadows();
     if (fromAltitude(this.layout.area)) {
       // From altitude (Region units, 10 m): a few metres of soft shade at the foot of the edge and of each landmark.
-      for (const wall of this.layout.walls) cs.addRect(wall.rect, 0.8, 0.3, 0, 0.3, 0.015);
+      // (The Continent's walls are the sea: no shade on the water.)
+      if (EDGE[this.layout.area] !== 'coast') for (const wall of this.layout.walls) cs.addRect(wall.rect, 0.8, 0.3, 0, 0.3, 0.015);
       for (const f of this.layout.furniture) cs.addRect(f.rect, 1.2, 0.45, -0.2, 0.6, 0.015);
       const mesh = cs.build();
       mesh.name = 'contactShadows';

@@ -1,7 +1,9 @@
 /**
  * Bunny visuals: a fuzzy dust ball (lumpy core + instanced shell fur with soft rim light) that
  * rolls, eyes that look where it is going, squash & stretch on Dash / absorb / hits, absorbed
- * Debris stuck to the surface (capped at TUNING.stuckCap) and a soft contact shadow.
+ * Debris stuck to the surface (capped at TUNING.stuckCap) and a soft contact shadow. In the
+ * Continent, snow-capped mountain peaks poke out of the fur in a few ranges (they grow in after
+ * the arrival leap and roll with the ball).
  * Appearance comes from a BunnyLook (the Character `look`), see bunnyLook.ts.
  *
  * Hierarchy: root (x, r·squashY, z) → body (yaw = heading, squash scale) → roll (fur, Debris)
@@ -23,6 +25,8 @@ import {
 import type { EventBus } from '../core/events';
 import { Disposables } from '../core/events';
 import { lerp } from '../core/math';
+import { Rng } from '../core/rng';
+import { AREAS } from '../data/areas';
 import type { DebrisType } from '../data/debris';
 import { getDebrisType } from '../data/debris';
 import { DISCHARGE } from '../data/abilities';
@@ -77,6 +81,12 @@ const _v = new Vector3();
 
 /** Fur length at furLength = 1, as a fraction of the radius. */
 const FUR_UNIT = 0.17;
+
+/**
+ * Mountain ranges in the fur (Continent): how many, their footprint radius as a fraction of the
+ * Bunny's radius, how much taller than the model they stand (so they clear the fur), seconds to grow in.
+ */
+const PEAKS = { count: 9, size: [0.42, 0.6] as const, lift: 2, growSeconds: 1.4 };
 
 function furCore(fluffiness: number): IcosahedronGeometry {
   const g = new IcosahedronGeometry(1, 5);
@@ -145,6 +155,10 @@ export class BunnyView {
   private readonly furUniforms: Record<string, { value: unknown }>;
   private readonly rim = { value: new Color() };
   private readonly rimStrength = { value: 0.55 };
+  /** Mountain ranges in the fur (Continent only), in the rolling frame at unit radius. */
+  private peaks: InstancedMesh | null = null;
+  private readonly peakItems: Array<{ dir: Vector3; spin: number; size: number }> = [];
+  private peakGrow = 0;
   private stuck: StuckItem[] = [];
   private stuckMeshes = new Map<string, InstancedMesh>();
   private stuckDirty = true;
@@ -285,6 +299,46 @@ export class BunnyView {
     this.disposables.add(events.on('dashStarted', () => this.stretch.kick(5.5)));
     this.disposables.add(events.on('bunnyDamaged', () => this.squash.kick(-4)));
     this.disposables.add(events.on('tierUp', () => this.squash.kick(5)));
+  }
+
+  /**
+   * Mountain ranges poking out of the fur: the Continent's `mountain_range` Debris (its Blender
+   * model when loaded: foothills, rock, snow caps) stood up along the surface, spread over the ball.
+   * Built on first use, once the models have loaded.
+   */
+  private buildPeaks(): InstancedMesh | null {
+    const type = getDebrisType('mountain_range');
+    if (!type) return null;
+    const rng = new Rng('bunny-peaks');
+    for (let tries = 0; this.peakItems.length < PEAKS.count && tries < 400; tries++) {
+      const dir = new Vector3(rng.range(-1, 1), rng.range(-1, 1), rng.range(-1, 1));
+      if (dir.lengthSq() < 0.05 || dir.lengthSq() > 1) continue;
+      dir.normalize();
+      if (this.peakItems.some((p) => p.dir.angleTo(dir) < 0.7)) continue;
+      this.peakItems.push({ dir, spin: rng.range(0, Math.PI * 2), size: rng.range(...PEAKS.size) });
+    }
+    const mesh = new InstancedMesh(debrisGeometry(type), debrisMaterial(type), this.peakItems.length);
+    const white = new Color('#ffffff');
+    for (let i = 0; i < this.peakItems.length; i++) mesh.setColorAt(i, white);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    this.rollGroup.add(mesh);
+    return mesh;
+  }
+
+  /** Places the ranges at `grow` (0..1) of their height, their foot just inside the fur's outer shell. */
+  private placePeaks(peaks: InstancedMesh, grow: number): void {
+    const out = 1 + FUR_UNIT * this.look.furLength * 0.2;
+    this.peakItems.forEach((p, i) => {
+      _q.setFromUnitVectors(UP, p.dir);
+      _q2.setFromAxisAngle(UP, p.spin);
+      _q.multiply(_q2);
+      _p.copy(p.dir).multiplyScalar(out - p.size * 0.06);
+      _s.set(p.size * (0.5 + grow * 0.5), p.size * PEAKS.lift * grow, p.size * (0.5 + grow * 0.5));
+      peaks.setMatrixAt(i, _m.compose(_p, _q, _s));
+    });
+    peaks.instanceMatrix.needsUpdate = true;
   }
 
   private buildEyes(): void {
@@ -437,6 +491,17 @@ export class BunnyView {
     this.rollGroup.quaternion.copy(_q).multiply(b.rollQuat);
     this.ball.scale.setScalar(r);
     this.shells.scale.setScalar(r);
+    // Mountain peaks in the fur while in the Continent (grow in after the leap).
+    const continent = b.unit >= AREAS.continent.unit;
+    if (continent) this.peaks ??= this.buildPeaks();
+    if (this.peaks) {
+      if (continent && this.peakGrow < 1) {
+        this.peakGrow = Math.min(1, this.peakGrow + dt / PEAKS.growSeconds);
+        this.placePeaks(this.peaks, 1 - (1 - this.peakGrow) ** 3);
+      } else if (!continent && this.peakGrow > 0) this.peakGrow = 0;
+      this.peaks.visible = continent;
+      this.peaks.scale.setScalar(r);
+    }
     if (this.stuckDirty || Math.abs(r - this.lastStuckRadius) > this.lastStuckRadius * 0.01) this.rebuildStuck(r);
 
     // Fur trails behind the motion (in the rolling frame).
@@ -481,6 +546,8 @@ export class BunnyView {
   dispose(): void {
     this.disposables.dispose();
     for (const m of this.stuckMeshes.values()) m.dispose();
+    // The geometry and material are the shared mountain_range Debris ones (debrisGeometry's cache).
+    this.peaks?.dispose();
     this.shells.dispose();
     this.root.removeFromParent();
   }
