@@ -7,6 +7,8 @@ import type { Game } from '../../game/game';
 import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings, type GraphicsQuality, type TouchControlsMode } from '../settings';
+import { requestIntro } from '../../story';
+import { playFromMenu } from './builtin';
 
 export interface BackParams {
   back?: string;
@@ -46,7 +48,15 @@ export function registerMenuScreens(): void {
       const motion = toggle({ label: 'Reduced motion', hint: 'Calmer UI animation', value: s.reducedMotion, onChange: (v) => settings.update({ reducedMotion: v }) });
       const fps = toggle({ label: 'Show FPS', value: s.showFps, onChange: (v) => settings.update({ showFps: v }) });
       const captions = toggle({ label: 'Story captions', hint: 'The narrator: Tier-ups, bosses, Areas, Keepsakes', value: s.storyCaptions, onChange: (v) => settings.update({ storyCaptions: v }) });
-      const replay = button('Replay intro', () => game.go('intro', { done: () => game.go('settings', { back }) }), { size: 'sm', icon: '▶' });
+      // The intro is the opening of a Run: Replay starts a new one (only offered between Runs).
+      const replay = button(
+        'Replay intro',
+        () => {
+          requestIntro();
+          playFromMenu(game);
+        },
+        { size: 'sm', icon: '▶' },
+      );
       const replayRow = h('div', { className: 'field' }, replay);
       const touch = segmented<TouchControlsMode>({
         label: 'Touch controls',
@@ -81,7 +91,8 @@ export function registerMenuScreens(): void {
         el,
         enter(params) {
           back = backTarget(game, params);
-          replayRow.hidden = !screenRegistry.has('intro');
+          // Mid-Run it would end the Run: Replay intro is on the title's Settings only.
+          replayRow.hidden = !screenRegistry.has('intro') || (!!game.run && !game.run.ended);
           focusFirst(el, done);
         },
         onKey(e) {

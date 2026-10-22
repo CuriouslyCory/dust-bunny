@@ -118,6 +118,13 @@ PALETTE = {
     "cloth_blue": ("#7fb7e6", 0.95, 0.0, None, 0),
     "cloth_white": ("#f3f3ef", 0.95, 0.0, None, 0),
     "shoe_blue": ("#3f6fb5", 0.7, 0.0, None, 0),
+    # slipper: the plush upper is tinted per instance in game (its largest
+    # material); the authored colour is the intro's dusty mauve
+    "slipper_plush": ("#9d8189", 0.95, 0.0, None, 0),
+    "slipper_fluff": ("#fbf5ea", 0.95, 0.0, None, 0),
+    "slipper_bed": ("#efe7da", 0.95, 0.0, None, 0),
+    "slipper_sole": ("#b3aca3", 0.85, 0.0, None, 0),
+    "slipper_inside": ("#4e4044", 0.95, 0.0, None, 0),
     "toy_red": ("#e63946", 0.35, 0.0, None, 0),
     "window_blue": ("#a8dcf5", 0.1, 0.0, None, 0),
     "book_blue": ("#2a6f97", 0.7, 0.0, None, 0),

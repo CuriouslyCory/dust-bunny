@@ -266,6 +266,17 @@ export class Hud {
     this.el.hidden = !v;
   }
 
+  /** Shows the HUD, fading it in over `seconds` (the intro's last shot). */
+  fadeIn(seconds: number): void {
+    const el = this.el;
+    el.hidden = false;
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    void el.offsetWidth;
+    el.style.transition = `opacity ${seconds}s ease-out`;
+    el.style.opacity = '1';
+  }
+
   get visible(): boolean {
     return !this.el.hidden;
   }

@@ -1,7 +1,11 @@
 """Furniture and set-piece models. Blender coords: X right, -Y forward (the
 side a person would face / approach), Z up, 1 BU = 1 cm."""
 
+import math
 import random
+
+import bmesh
+from mathutils import Vector
 
 from common import M, Model
 
@@ -309,6 +313,183 @@ def sock():
     return m
 
 
+def _smooth(a, b, t):
+    t = min(1.0, max(0.0, t))
+    return a + (b - a) * t * t * (3 - 2 * t)
+
+
+def _slipper_outline(x):
+    """Right-foot sole outline at x (toe +X, heel -X, 26 cm long): returns
+    (centre y, half-width). The big-toe (medial) side is +Y, so the toe tip
+    sits a little towards +Y."""
+    c = 0.7 * _smooth(0, 1, (x - 1) / 12)
+    if x <= -9.4:  # round heel, radius 3.6
+        w = math.sqrt(max(0.0, 3.6 ** 2 - (x + 9.4) ** 2))
+    elif x <= -3:
+        w = 3.6
+    elif x <= 4.5:
+        w = _smooth(3.6, 5.0, (x + 3) / 7.5)
+    elif x <= 8:
+        w = _smooth(5.0, 4.85, (x - 4.5) / 3.5)
+    else:  # round toe
+        w = 4.85 * math.sqrt(max(0.0, 1 - ((x - 8) / 5) ** 2))
+    return c, w
+
+
+def _slipper_xs(n):
+    """n + 1 stations heel -> toe, denser at the rounded ends."""
+    return [-13 + 26 * (1 - math.cos(math.pi * i / n)) / 2
+            for i in range(n + 1)]
+
+
+def _skin(p, rows, material, wrap=True):
+    """Quads between consecutive rows (a one-point row is a pole); returns
+    the faces and the vertex rows."""
+    bm, mx = p.bm, p._stack[-1]
+    vs = [[bm.verts.new(mx @ Vector(pt)) for pt in row] for row in rows]
+    idx = p._slot(material)
+    faces = []
+    for ra, rb in zip(vs, vs[1:]):
+        n = max(len(ra), len(rb))
+        for j in range(n if wrap else n - 1):
+            j2 = (j + 1) % n
+            if len(ra) == 1:
+                fv = (ra[0], rb[j], rb[j2])
+            elif len(rb) == 1:
+                fv = (ra[j], ra[j2], rb[0])
+            else:
+                fv = (ra[j], ra[j2], rb[j2], rb[j])
+            f = bm.faces.new(fv)
+            f.material_index = idx
+            faces.append(f)
+    return faces, vs
+
+
+def slipper():
+    m = Model("slipper", "Right house slipper, used for both feet. Toe "
+              "along +X like the recipe (not +Z). Thick rounded sole, padded "
+              "plush toe box over the front half with a fluffy rolled trim "
+              "and a pom, open heel. The plush upper is the largest material "
+              "(the one a GLB_TINTED id takes the instance colour on).")
+    b = m.part("body")
+    b.smooth_angle = math.radians(70)  # soft plush shading
+    plush, fluff = M("slipper_plush"), M("slipper_fluff")
+
+    # sole: outsole + cushioned footbed, both following the foot outline
+    xs = _slipper_xs(14)
+    lateral = [(x, _slipper_outline(x)[0] - _slipper_outline(x)[1])
+               for x in xs]
+    medial = [(x, _slipper_outline(x)[0] + _slipper_outline(x)[1])
+              for x in reversed(xs[1:-1])]
+    outline = lateral + medial
+    # Same outline and bevel, so the outsole's top cap and the footbed's
+    # bottom cap coincide: drop both (hidden) and the bevels leave a seam.
+    for (h, zc, mat, up) in ((1.0, 0.5, "slipper_sole", 1),
+                             (1.6, 1.8, "slipper_bed", -1)):
+        b.prism(outline, h, (0, 0, zc), M(mat), bevel=0.45, seg=2)
+        b.bm.normal_update()
+        cap = max((f for f in b.bm.faces if f.normal.z * up > 0.99
+                   and abs(f.calc_center_median().z - 1.0) < 1e-3),
+                  key=lambda f: f.calc_area())
+        bmesh.ops.delete(b.bm, geom=[cap], context="FACES_ONLY")
+
+    # toe box: a padded dome stitched to the outsole (it hides the front of
+    # the footbed), with squarish arched cross-sections; the opening (throat)
+    # leans back from x = -2.5 at the sole to x = 2.5 on top. Its outline is
+    # the sole's stretched to `tip`, so the soft toe bulges just past the sole
+    # and covers the footbed's front.
+    z0, z_bed, x_base, x_top, tip = 1.0, 2.6, -2.5, 2.5, 13.4
+    arch = 12
+
+    def height(x):
+        h = _smooth(5.5, 4.7, (x - x_top) / 7.5)
+        if x > 8.5:
+            h *= math.sqrt(max(0.0, 1 - ((x - 8.5) / (tip - 8.5)) ** 2))
+        return h
+
+    def section(x, k, swell=0.35):
+        a = math.pi * k / arch
+        c, w = _slipper_outline(x * 13 / tip)
+        w += swell * min(1.0, w / 2)
+        ca, sa = math.cos(a), math.sin(a)
+        y = c - w * math.copysign(abs(ca) ** 0.7, ca)
+        z = z0 + height(x) * abs(sa) ** 0.7
+        return y, z
+
+    rows = []
+    n_len = 11
+    for i in range(n_len):
+        s = i / n_len
+        row = []
+        for k in range(arch + 1):
+            sa = math.sin(math.pi * k / arch)
+            x0 = x_base + (x_top - x_base) * sa
+            x = x0 + (tip - x0) * math.sin(math.pi * s / 2)
+            y, z = section(x, k)
+            row.append((x, y, z))
+        rows.append(row)
+    rows.append([(tip, _slipper_outline(13)[0], z0)])
+    faces, vs = _skin(b, rows, plush)
+    throat = vs[0]
+    cap = b.bm.faces.new(list(reversed(throat)))
+    cap.material_index = b._slot(plush)
+    faces.append(cap)
+    bmesh.ops.recalc_face_normals(b.bm, faces=faces)
+
+    # the dark opening, just proud of the throat face, down to the footbed
+    u = Vector((x_top - x_base, 0, height(x_top)))  # up the throat plane
+    n = Vector((-u.z, 0, u.x)).normalized()
+    pts = [Vector(r) for r in rows[0]]
+    base = (pts[0] + pts[-1]) / 2
+    hole = []
+    for p in pts:
+        d = p - base
+        dy = Vector((0, d.y, 0))
+        h = base + dy * 0.8 + (d - dy) * 0.86 + n * 0.06
+        if h.z < z_bed + 0.1:
+            h += u * ((z_bed + 0.1 - h.z) / u.z)
+        hole.append(h)
+    hv = [b.bm.verts.new(h) for h in hole]
+    f = b.bm.faces.new(hv)
+    f.normal_update()
+    if f.normal.dot(n) < 0:
+        f.normal_flip()
+    f.material_index = b._slot(M("slipper_inside"))
+
+    # fluffy rolled trim round the opening: a bobbly tube on the throat edge
+    edge = [Vector(r) + n * 0.3 for r in rows[0]]
+    trim = [edge[0]]
+    for a, c in zip(edge, edge[1:]):
+        trim += [(a + c) / 2, c]
+    rings = []
+    for i, c in enumerate(trim):
+        t = (trim[min(i + 1, len(trim) - 1)] - trim[max(i - 1, 0)]).normalized()
+        side = t.cross(n).normalized()
+        r = 1.1 if i % 2 == 0 else 0.85
+        rings.append([tuple(c + r * (math.cos(2 * math.pi * j / 8) * n
+                                     + math.sin(2 * math.pi * j / 8) * side))
+                      for j in range(8)])
+    tube, tv = _skin(b, rings, fluff)
+    for ring in (tv[0], tv[-1]):
+        e = b.bm.faces.new(ring)
+        e.material_index = b._slot(fluff)
+        tube.append(e)
+    bmesh.ops.recalc_face_normals(b.bm, faces=tube)
+
+    # a pom on the vamp
+    px = 7.6
+    py, pz = section(px, arch // 2)
+    res = bmesh.ops.create_icosphere(b.bm, subdivisions=2, radius=1.0)
+    for v in res["verts"]:
+        d = v.co.normalized()
+        bump = 1 + 0.12 * math.sin(7 * d.x + 3) * math.sin(6 * d.y + 1) \
+            * math.sin(5 * d.z + 2)
+        v.co = Vector((px, py, pz + 0.4)) + Vector(
+            (d.x, d.y, d.z * 0.85)) * 1.6 * bump
+    b._finish(res["verts"], fluff)
+    return m
+
+
 def toy_car():
     m = Model("toy_car", "Front faces +Z.")
     b = m.part("body")
@@ -357,4 +538,4 @@ def tv_remote():
 
 BUILDERS = [couch, armchair, coffee_table, bookshelf, bed, dining_table, chair,
             kitchen_counter, fridge, toilet, bathtub, rug, laundry_basket]
-PROPS = [shoe, sock, toy_car, book, tv_remote]
+PROPS = [shoe, sock, slipper, toy_car, book, tv_remote]

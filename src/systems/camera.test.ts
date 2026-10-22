@@ -1,6 +1,7 @@
+import { Fog, PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { TUNING } from '../data/tuning';
-import { FRAMING, floorPointVisible, framingForAspect } from './camera';
+import { CameraRig, FRAMING, floorPointVisible, framingForAspect } from './camera';
 
 describe('framingForAspect', () => {
   it('leaves landscape desktop framing unchanged', () => {
@@ -44,5 +45,63 @@ describe('floorPointVisible', () => {
     expect(floorPointVisible(0, 50, view, 10)).toBe(true);
     expect(floorPointVisible(70, 0, { ...view, aspect: 0.5 })).toBe(false);
     expect(floorPointVisible(0, -80, { ...view, pitchDeg: 80 })).toBe(false);
+  });
+});
+
+describe('CameraRig script', () => {
+  const rigAt = (): CameraRig => {
+    const rig = new CameraRig(new PerspectiveCamera(TUNING.camera.fov, 16 / 9, 0.1, 1000), new Fog('#000', 1, 2), 1, 1);
+    rig.setAspect(16 / 9);
+    rig.snap(100, 100, 1, 1);
+    return rig;
+  };
+  const chase = (): { position: Vector3; look: Vector3 } => {
+    const rig = rigAt();
+    return { position: rig.camera.position.clone(), look: rig.viewTarget.clone() };
+  };
+
+  it('shows the script alone at weight 0, the chase camera at 1, and swings continuously between', () => {
+    const rig = rigAt();
+    const script = { position: new Vector3(50, 150, 300), look: new Vector3(80, 0, 120), weight: 0, fov: 20 };
+    rig.script = script;
+    rig.update(0, 100, 100, 1, 1);
+    expect(rig.camera.position.distanceTo(script.position)).toBeLessThan(1e-6);
+    expect(rig.viewTarget.distanceTo(script.look)).toBeLessThan(1e-6);
+    expect(rig.camera.fov).toBeCloseTo(20, 6);
+    expect(rig.viewDistance).toBeCloseTo(script.position.distanceTo(script.look), 6);
+    // Fog follows what is actually framed (eye height, not the Tier 1 chase distance).
+    expect(rig.fog.far).toBeCloseTo(rig.viewDistance * TUNING.camera.fogFar, 6);
+    let prev = rig.camera.position.clone();
+    for (let i = 1; i <= 50; i++) {
+      script.weight = i / 50;
+      rig.update(0, 100, 100, 1, 1);
+      expect(rig.camera.position.distanceTo(prev)).toBeLessThan(15);
+      prev = rig.camera.position.clone();
+    }
+    const end = chase();
+    expect(rig.camera.position.distanceTo(end.position)).toBeLessThan(1e-6);
+    expect(rig.camera.fov).toBeCloseTo(TUNING.camera.fov, 6);
+  });
+
+  it('hands back over the release time, then drops the script', () => {
+    const rig = rigAt();
+    rig.script = { position: new Vector3(50, 150, 300), look: new Vector3(80, 0, 120), weight: 0.2 };
+    rig.releaseScript(1);
+    rig.update(0.5, 100, 100, 1, 1);
+    expect(rig.script?.weight).toBeGreaterThan(0.2);
+    expect(rig.script?.weight).toBeLessThan(1);
+    rig.update(0.6, 100, 100, 1, 1);
+    expect(rig.script).toBeNull();
+    expect(rig.camera.position.distanceTo(chase().position)).toBeLessThan(1e-6);
+  });
+
+  it('releases at once with no time, and snap drops a script', () => {
+    const rig = rigAt();
+    rig.script = { position: new Vector3(0, 150, 0), look: new Vector3(), weight: 0 };
+    rig.releaseScript(0);
+    expect(rig.script).toBeNull();
+    rig.script = { position: new Vector3(0, 150, 0), look: new Vector3(), weight: 0 };
+    rig.snap(100, 100, 1, 1);
+    expect(rig.script).toBeNull();
   });
 });

@@ -7,7 +7,8 @@ import { STORY, type StoryLine } from '../data/story';
 import type { Game } from '../game/game';
 import { absorbedName } from '../ui/looseEvents';
 import type { AreaId } from '../world/types';
-import { captionDuration, narrate, setStoryAvailable, storyCaption } from './index';
+import { captionDuration, introDue, narrate, requestIntro, setStoryAvailable, storyCaption } from './index';
+import { introStage } from './introScript';
 import { canShowChapter, registerStoryScreens, type ChapterParams } from './screens';
 
 export interface StoryOptions {
@@ -18,6 +19,18 @@ export interface StoryOptions {
 export function installStory(game: Game, opts: StoryOptions = {}): void {
   setStoryAvailable(opts.available ?? true);
   registerStoryScreens();
+
+  // The intro is a camera move inside the new Run: a first Run (or the one after Replay intro)
+  // opens on the intro screen rather than play, if it starts under the couch.
+  game.runOpening = (run) => {
+    if (!introDue() || run.area !== 'house' || !introStage(run.house)) return null;
+    requestIntro(false);
+    return { screen: 'intro' };
+  };
+  // Backing out to the title before the Run started forgets a Replay intro.
+  game.events.on('screenChanged', (e) => {
+    if (e.to === 'title') requestIntro(false);
+  });
 
   // One-off Debris (docs/story.md: Voyager 1, the Moon…): a line the first time per Run.
   const told = new Set<string>();

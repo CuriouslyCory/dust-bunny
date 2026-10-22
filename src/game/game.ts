@@ -84,6 +84,11 @@ export class Game {
   view: RunView | null = null;
   /** Default config for the next Run (character select / shop write here). */
   nextRunConfig: Partial<RunConfig> = {};
+  /**
+   * Screen a new Run opens on instead of `playing` (null: `playing`). The story claims a first
+   * Run for the diegetic intro (src/story/install.ts).
+   */
+  runOpening: ((run: Run) => { screen: string; params?: unknown } | null) | null = null;
 
   private quality: Quality = 'high';
   private readonly lensing = new LensingPass();
@@ -201,7 +206,7 @@ export class Game {
 
   /**
    * Creates a fresh Run (disposing the old one) with its gameplay rules installed (see
-   * ./assembly.ts), emits runStarted and switches to the playing screen.
+   * ./assembly.ts), emits runStarted and switches to the playing screen (or `runOpening`'s).
    */
   startRun(config: Partial<RunConfig> = {}): Run {
     this.disposeRun();
@@ -223,7 +228,8 @@ export class Game {
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
     this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId });
-    this.go('playing');
+    const opening = this.runOpening?.(run) ?? null;
+    this.go(opening?.screen ?? 'playing', opening?.params);
     return run;
   }
 
@@ -279,7 +285,7 @@ export class Game {
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
-      this.lighting.update(this.rig.target, this.rig.distance);
+      this.lighting.update(this.rig.viewTarget, this.rig.viewDistance);
     }
     this.hud.update(frameDt);
     this.renderer.render(this.scene, this.camera);
