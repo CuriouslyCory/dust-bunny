@@ -218,7 +218,7 @@ Every Run that reached the Incinerator beat it, and all 74 leaderboard submissio
 | Unit | 1,000 km (100,000,000 cm) |
 | Arrival radius | 0.85 units (850 km, 0.13 Earths), the second size leap |
 | Debris Tier band | 14–15 |
-| Growth multiplier | 0.34 (pure growth, see below; to be tuned on full Runs with Hazards) |
+| Growth multiplier | 0.20 (tuned on full Runs with Hazards, see below) |
 | Start scatter / cluster / cluster radius | 2,400 / 120 / 11 units |
 | Map | 480 × 240 units, wraps east–west; open ocean within 14 units of the seam; 5 Moons placed in the open oceans |
 
@@ -231,7 +231,7 @@ Every Run that reached the Incinerator beat it, and all 74 leaderboard submissio
 | 15 (from r ≈ 2.5) | the Moon† 1.74 (an Obstacle until then; also placed by the map and by the Orbital Sweeper) | every zone, lightly |
 | 15 (Dust Planet, r ≥ 3) | polar ice cap 2.0, landmass† 2.2, subcontinent† 2.5, ocean basin† 2.8, a continent† 3.1, an ocean† 3.4 | caps on the ice, land on the landmasses, basins and oceans over the oceans |
 
-**Globe pacing check** (pure growth, `pnpm sim --area=globe --seeds=3 --no-hazards`, starting on the Globe at the arrival size): Tier 15 at Lint 3:15, Tumble 4:17, Zap 2:32 (medians). Growth 0.19 (the Continent's) left the 1 → 3 unit stretch at 6–10 minutes; the Tier 14 masses went up (×1.2–1.3) and the multiplier to 0.34. With Hazards (`pnpm sim --area=globe --seeds=3`, growth 0.3) the Act from arrival to absorbing the Orbital Sweeper took Lint 4:22, Tumble 5:30, Zap 3:32 (median; 8 wins in 9 Runs). The bot needed its path planner to wrap round the seam: without it Runs stalled in Tier 14 at the date line.
+**Globe pacing check** (pure growth, `pnpm sim --area=globe --seeds=3 --no-hazards`, starting on the Globe at the arrival size): Tier 15 at Lint 3:15, Tumble 4:17, Zap 2:32 (medians). Growth 0.19 (the Continent's) left the 1 → 3 unit stretch at 6–10 minutes; the Tier 14 masses went up (×1.2–1.3) and the multiplier to 0.34. Starting on the Globe has no Perks, so the multiplier is tuned on full Runs, like the Continent's: at 0.20, full Runs from the house (`pnpm sim --seeds=6 --minutes=80 --validate`) took Lint 5:55 / 3:42, Tumble 5:34, Zap 3:27 / 3:29 from arrival to absorbing the Orbital Sweeper (per seed group), and every Run and Area board submission validated (the Globe board peaked at 31% of its growth limit, the Run board at 80%). Starting on the Globe (`pnpm sim --area=globe --seeds=6`) the same Act took Lint 4:48, Tumble 5:45, Zap 3:32 at 0.30 (17 boss wins in 18 fights), so at 0.20 an `--area=globe` start runs about 1.5× longer than a real Run. The bot needed its path planner to wrap round the seam: without it Runs stalled in Tier 14 at the date line.
 
 ## Characters
 

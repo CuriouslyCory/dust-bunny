@@ -65,7 +65,7 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     initialScatter: 2400,
     startCluster: 120,
     startClusterRadius: 11,
-    growth: 0.34,
+    growth: 0.2,
     unit: 1e8,
     readout: 'Earths',
     fluffPerUnit: 1.5,
