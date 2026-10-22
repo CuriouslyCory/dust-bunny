@@ -10,6 +10,7 @@ import { AREAS } from '../data/areas';
 import { getCharacter } from '../data/characters';
 import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
+import { isLoadoutFor, type Loadout } from '../data/keepsakes';
 import { tierForRadius } from '../data/tiers';
 import { Bunny } from '../entities/bunny';
 import { DebrisField, type Debris } from '../entities/debris';
@@ -43,6 +44,8 @@ export interface RunConfig {
   modifiers?: StatModifier[];
   /** Perks granted at start (debug / testing). */
   perks?: string[];
+  /** Keepsakes tucked in for this Run (0–2, the Character's own types). Fixed for the Run. */
+  loadout?: Loadout;
 }
 
 /** Layout generator, Debris hash cell and debug start radius per area. */
@@ -76,6 +79,8 @@ export class Run {
   readonly rng: Rng;
   /** Difficulty tuning for this Run (Hazards, director, start stats, area heal, Fluff). */
   readonly difficulty: DifficultyDef;
+  /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped). */
+  readonly loadout: Loadout;
   /** Current area's layout: the house floor, then the neighborhood, then the city (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
@@ -123,6 +128,7 @@ export class Run {
   ) {
     this.rng = new Rng(config.seed);
     this.difficulty = getDifficulty(config.difficulty);
+    this.loadout = config.loadout && isLoadoutFor(config.characterId, config.loadout) ? config.loadout.map((k) => ({ ...k })) : [];
     this.house = generateHouse(config.seed);
 
     const character = getCharacter(config.characterId);
