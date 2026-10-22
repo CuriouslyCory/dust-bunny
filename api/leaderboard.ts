@@ -25,8 +25,9 @@
  * salts the stored IP hashes. Tables are created on first use (server/schema.ts, mirrored in
  * db/schema.sql); columns added later are applied with idempotent `ADD COLUMN IF NOT EXISTS`.
  *
- * Entries carry the Run's Loadout (`loadout`: up to two `{ type, grade }` Keepsakes, column
- * `loadout jsonb`, NULL for older clients that send none).
+ * Entries carry the Run's Loadout (`loadout`: up to two `{ type, rarity }` Keepsakes, column
+ * `loadout jsonb`, NULL for older clients that send none; rows and clients from before rarities use
+ * `{ type, grade }`, 1–10, read and accepted as rarities by `parseLoadout`).
  *
  * Every Difficulty shares one board: submitted scores already include the Difficulty
  * multiplier (see src/shared/score.ts), and each entry carries its `difficulty`.
@@ -79,7 +80,7 @@ interface Row {
   duration_ms: number;
   difficulty: string | null;
   verified: boolean;
-  /** jsonb [{ type, grade }], NULL for entries from clients before Keepsakes. */
+  /** jsonb [{ type, rarity }] (or [{ type, grade }] from before rarities), NULL for entries from clients before Keepsakes. */
   loadout: unknown;
   created_at: string | Date;
   // Run board

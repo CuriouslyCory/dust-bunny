@@ -375,42 +375,59 @@ Fluff earned per Run ≈ `floor(tierReached × 4 + radius term + debrisAbsorbed 
 
 ## Keepsakes and Felting
 
-Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Keepsakes modify that Character's Ability (5 types per Character) and have a **grade** set by the boss: 1 Brush Tangle (Robo-Vac 9000), 2 Gutter Grit (Street Sweeper), 3 Hopper Gunk (Garbage Truck), 4 Cinder Ash (Incinerator), 5 Glacier Silt (Ice Sheet), up to 10 First Dust (Felting only). Data and effect values: `src/data/keepsakes.ts`.
+Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Keepsakes modify that Character's Ability (5 types per Character) and have a **rarity**: Common, Rare, Epic, Legendary or Mythic, rolled from the boss's drop table. Data and effect values: `src/data/keepsakes.ts`.
 
-- **Drops:** every boss kill credits 1 Keepsake of the boss's grade with a random type (seeded from the Run seed); Hardcore adds 1. Shortly after the kill (once the area-cleared banner is done) the Run pauses on a reveal of what the boss left. On a Character's first kill of a boss the player chooses 1 of 3 offered types there instead; the first offer is credited at once, and leaving the reveal locks in the highlighted one. If the Run ends before the reveal shows (a boss that wins the Run), the drop and the choice are on the results screen instead. Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. Chipping doesn't change the reward.
+**Drop tables** (`BOSS_DROP_TABLES`, % per rarity; each row sums to 100):
+
+| Act | Boss | Common | Rare | Epic | Legendary | Mythic |
+|---|---|---|---|---|---|---|
+| 1 | Robo-Vac 9000 | **84** | 10 | 5 | 0.9 | 0.1 |
+| 2 | Street Sweeper | 31.4 | **56.6** | 7.9 | 3.5 | 0.6 |
+| 3 | Garbage Truck | 7.7 | **56.6** | 28 | 5.8 | 1.9 |
+| 4 | Incinerator | 5.6 | 25.7 | **57.5** | 7.7 | 3.5 |
+| 5 | Ice Sheet | 4.4 | 8.8 | **73.6** | 8.8 | 4.4 |
+| 6 | Orbital Sweeper | 3.5 | 7.7 | **57.5** | 25.7 | 5.6 |
+| 7 | The Sun | 1.9 | 5.8 | 28 | **56.6** | 7.7 |
+| 8 | Sagittarius A* | 0.6 | 3.5 | 7.9 | **56.6** | 31.4 |
+| 9 | The Expansion | 0.1 | 0.9 | 5 | 10 | **84** |
+
+How the rows are built: one falloff by distance from a boss's **peak** rarity (84 / 10 / 5 / 0.9 / 0.1 % at 0–4 rarities away, normalised). The peak moves from Common (Act 1) to Mythic (Act 9) along `peak = 3 + 2·sign(x)·|x|^1.5` with `x = (act − 5) / 4` (1.00, 1.70, 2.29, 2.75, 3.00, 3.25, 3.71, 4.30, 5.00), so Acts 4–6 all peak at Epic. A peak between two rarities blends the two neighbouring peak rows (the Incinerator, peak 2.75, is ¼ the Rare row and ¾ the Epic row). Blending rather than sliding the falloff keeps the chance of "this rarity or better" rising from each boss to the next at every rarity; `src/data/keepsakes.test.ts` checks that, the sums and the symmetry. Until Act 9 ships, Sagittarius A* is the best source of Mythic.
+
+- **Drops:** every boss kill credits 1 Keepsake with a random type and a rolled rarity (both seeded from the Run seed); Hardcore adds 1, with its own rarity roll. Shortly after the kill (once the area-cleared banner is done) the Run pauses on a reveal of what the boss left. On a Character's first kill of a boss the player chooses 1 of 3 offered types there instead (one rarity for all three); the first offer is credited at once, and leaving the reveal locks in the highlighted one. If the Run ends before the reveal shows (a boss that wins the Run), the drop and the choice are on the results screen instead. Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. Chipping doesn't change the reward.
 - **Loadout:** on Character select two slots take Keepsakes from that Character's **Hoard** (both may hold the same type; copies add up). It is fixed for the Run, remembered per Character on the device, and sent with leaderboard entries.
-- **Felting** (Under the Couch): 3 of the same type and grade make 1 of the next grade for 40 × g² Fluff (g = the new grade), and only up to one grade above the best boss that Character has beaten. **Shedding** discards one for 10 × g² Fluff. Neither counts as Fluff earned.
+- **Felting** (Under the Couch): 3 of the same type and rarity make 1 of the next rarity for 160 × r² Fluff (r = the new rarity, 1–5: Rare 640, Epic 1,440, Legendary 2,560, Mythic 4,000), and only up to one rarity above the peak of the best boss that Character has beaten (Robo-Vac 9000: Rare; Street Sweeper: Epic; Incinerator: Legendary; The Sun: Mythic). **Shedding** discards one for 40 × r² Fluff (Common 40 … Mythic 1,000). Neither counts as Fluff earned.
+- **Before rarities** Keepsakes had grades 1–10 named after each boss's filth. Saves, cloud saves and leaderboard Loadouts from then are read two grades to a rarity (1–2 Common, 3–4 Rare, 5–6 Epic, 7–8 Legendary, 9–10 Mythic), counts added together.
 - A narrator caption plays when a Keepsake drops and on the first Felting (Settings → Story captions).
 
 ### Keepsake effects
 
-Values run from grade 1 to grade 10 along `v1 + (v10 − v1) × ((g − 1) / 9)^0.7`; grade 4 (the best felt-able today) sits at 46% of the range. Two copies of a type add together. Ranges are in Bunny radii (r).
+Values run from Common to Mythic along `common + (mythic − common) × ((r − 1) / 4)^0.7`: Rare, Epic and Legendary sit at 38%, 62% and 82% of the range. Two copies of a type add together. Ranges are in Bunny radii (r).
 
-| Character | Type | g1 → g10 | g4 | How it plays |
+| Character | Type | Common → Mythic | Rare / Epic / Legendary | How it plays |
 |---|---|---|---|---|
-| Lint | Long Strand | Decoy +1 → +5 s | +2.9 s | Decoy stays out longer (base 4 s). |
-| Lint | Quick Shed | cooldown −10% → −45% | −26% | Of the base 16 s. |
-| Lint | Thick Clog | clog stun +0.4 → +2.0 s | +1.1 s | Bosses get half (+0.6 s at g4). |
-| Lint | Dinner Bell | wanderers 4 → 12 r; lure range +0% → +60% | 7.7 r; +28% | Roomba-type Hazards (Roombas, Robotic Mowers, Floor Scrubbers and the boss minis) within range steer towards the Decoy; every aiming Hazard is lured from its range × (1 + bonus). |
-| Lint | Reclaim | fibre worth 1% → 4% of volume | 2.4% | When the Decoy expires, clogs or is shot, lint fibre lands around it; absorbing all of it gives that volume back. |
-| Tumble | Loose Roots | −0.1 → −0.6 s cooldown per second held | −0.33 s | Base 1 s per second held. |
-| Tumble | Bristle Back | knockback 2 → 5 r, stun 0.5 → 2.0 s | 3.4 r, 1.2 s | Non-boss Hazards that touch a planted Tumble. The Broom, Lint Roller, Lawn Mower and ranged Hazards are stunned but not moved. |
-| Tumble | Snowball | magnet +0.5 → +2.5 while planted | +1.4 | Added after the cap. |
-| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.9 s, +4 parts | A boss chipped during a Hunker stun stays stunned that much longer after the chip, and more parts fall off. |
-| Tumble | Thick Undercoat | knockback resistance +0.02 → +0.20, suction −3% → −20% | +0.10, −11% | Always on, below the cap. |
-| Zap | Live Wire | meter fills +10% → +50% faster | +29% | |
-| Zap | Long Reach | range +1 → +4 r | +2.4 r | Base 4 r. |
-| Zap | Arc | +1 (g1–4), +2 (g5–8), +3 (g9–10) Hazards | +1 | Non-boss Hazards within 4 r of the first target. |
-| Zap | Static Cling | magnet +0.1 → +0.6 while the meter is ≥ 50% | +0.33 | Below the cap. |
-| Zap | Grounding | suction −2.5% → −10% while the meter is full | −6% | Below the cap. |
+| Lint | Long Strand | Decoy +1 → +5 s | +2.5 / +3.5 / +4.3 s | Decoy stays out longer (base 4 s). |
+| Lint | Quick Shed | cooldown −10% → −45% | −23% / −32% / −39% | Of the base 16 s. |
+| Lint | Thick Clog | clog stun +0.4 → +2.0 s | +1.0 / +1.4 / +1.7 s | Bosses get half. |
+| Lint | Dinner Bell | wanderers 4 → 12 r; lure range +0% → +60% | 7.0 / 8.9 / 10.5 r; +23 / +37 / +49% | Roomba-type Hazards (Roombas, Robotic Mowers, Floor Scrubbers and the boss minis) within range steer towards the Decoy; every aiming Hazard is lured from its range × (1 + bonus). |
+| Lint | Reclaim | fibre worth 1% → 4% of volume | 2.1 / 2.8 / 3.5% | When the Decoy expires, clogs or is shot, lint fibre lands around it; absorbing all of it gives that volume back. |
+| Tumble | Loose Roots | −0.1 → −0.6 s cooldown per second held | −0.29 / −0.41 / −0.51 s | Base 1 s per second held. |
+| Tumble | Bristle Back | knockback 2 → 5 r, stun 0.5 → 2.0 s | 3.1 / 3.8 / 4.5 r; 1.1 / 1.4 / 1.7 s | Non-boss Hazards that touch a planted Tumble. The Broom, Lint Roller, Lawn Mower and ranged Hazards are stunned but not moved. |
+| Tumble | Snowball | magnet +0.5 → +2.5 while planted | +1.3 / +1.7 / +2.1 | Added after the cap. |
+| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.8 / +1.0 / +1.3 s; +4 / +4 / +5 parts | A boss chipped during a Hunker stun stays stunned that much longer after the chip, and more parts fall off. |
+| Tumble | Thick Undercoat | knockback resistance +0.02 → +0.20, suction −3% → −20% | +0.09 / +0.13 / +0.17; −9 / −14 / −17% | Always on, below the cap. |
+| Zap | Live Wire | meter fills +10% → +50% faster | +25 / +35 / +43% | |
+| Zap | Long Reach | range +1 → +4 r | +2.1 / +2.8 / +3.5 r | Base 4 r. |
+| Zap | Arc | +1 → +3 Hazards | +1 / +2 / +2 | Non-boss Hazards within 4 r of the first target. |
+| Zap | Static Cling | magnet +0.1 → +0.6 while the meter is ≥ 50% | +0.29 / +0.41 / +0.51 | Below the cap. |
+| Zap | Grounding | suction −2.5% → −10% while the meter is full | −5.3 / −7.1 / −8.6% | Below the cap. |
 
-**Floors** (`KEEPSAKE_FLOORS`), so two copies at any grade leave the Ability playable:
-- The Decoy cooldown is never shorter than the Decoy's duration. Two Quick Sheds pass it from grade 8 (16 s × 0.21 = 3.4 s becomes 4 s); a Quick Shed beside a Long Strand only when both are grade 10.
-- Hunker costs at least 0.2 s of cooldown per second held. Two Loose Roots pass it from grade 6.
+**Floors** (`KEEPSAKE_FLOORS`), so two copies at any rarity leave the Ability playable:
+- The Decoy cooldown is never shorter than the Decoy's duration. Two Legendary Quick Sheds pass it (16 s × 0.23 = 3.7 s becomes 4 s); a Quick Shed beside a Long Strand only when both are Mythic.
+- Hunker costs at least 0.2 s of cooldown per second held. Two Epic Loose Roots pass it.
 
-The stat effects (Thick Undercoat, Static Cling, Grounding) are bounded by the caps instead; every other effect stays reasonable at two grade-10 copies, so it has no floor.
+The stat effects (Thick Undercoat, Static Cling, Grounding) are bounded by the caps instead; every other effect stays reasonable at two Mythic copies, so it has no floor.
 
-**Balance check** (`pnpm sim --seeds=60 --minutes=25`, Casual, October 2026). `--loadout=max` is the pair with the most wins over 30 seeds among all 15 grade-4 pairs per Character: Lint Quick Shed + Reclaim, Tumble Snowball ×2, Zap Static Cling + Grounding.
+**Balance check** (`pnpm sim --seeds=60 --minutes=25`, Casual, October 2026). `--loadout=max` is the pair with the most wins over 30 seeds among all 15 pairs per Character at grade 4 of the old 1–10 scale (between Rare and Epic today): Lint Quick Shed + Reclaim, Tumble Snowball ×2, Zap Static Cling + Grounding.
 
 | Character | No Ability: wins / deaths | Ability: wins / deaths, median win, T4 | Max Loadout: wins / deaths, median win, T4 |
 |---|---|---|---|
@@ -418,7 +435,7 @@ The stat effects (Thick Undercoat, Static Cling, Grounding) are bounded by the c
 | Tumble | 6 / 39 | 7 / 38, 23:18, 6:03 | 13 / 38, 22:03, 6:05 |
 | Zap | 28 / 27 | 43 / 16, 15:01, 3:55 | 48 / 12, 14:02, 3:37 |
 
-- A grade-4 Loadout adds at most 10 points of win rate (Tumble) and wins at most 7% faster (Zap), inside the limits of +25 points and 15%.
+- A grade-4 Loadout (old scale) adds at most 10 points of win rate (Tumble) and wins at most 7% faster (Zap), inside the limits of +25 points and 15%.
 - Every Run board and Area board submission of these Runs passes validation. The closest any came to the growth limit was 66% of the allowance (a Zap City clear).
 - Zap still has the fastest Tier 4. Tumble does **not** have the fewest deaths: the bot dies to Upright Vacuums and Spray Bottles at Tiers 3–4, and Tumble is too slow to leave a vacuum cone. This was already true before Keepsakes and Abilities (no Ability: Lint 38, Tumble 39, Zap 27 deaths).
 - Every Loadout with Thick Undercoat cost the bot deaths (17–21 against 15 per 30 seeds). The likely cause is that with less knockback the bot stays in contact with Hazards longer. Worth watching in real play.

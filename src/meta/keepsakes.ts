@@ -3,9 +3,10 @@
  * and the per-Run record the results screen reads.
  *
  * Rules (DROP_RULES in src/data/keepsakes.ts):
- * - Every boss kill credits 1 Keepsake of the boss's grade (`gradeForBoss`) with a random type,
- *   seeded from the Run seed and the boss, so a seed always drops the same thing. Hardcore adds 1.
- * - The Character's first kill of a boss offers 3 types instead of the random one. The first offer
+ * - Every boss kill credits 1 Keepsake with a random type and a rarity rolled from the boss's drop
+ *   table (`BOSS_DROP_TABLES`), seeded from the Run seed and the boss, so a seed always drops the
+ *   same thing. Hardcore adds 1, with its own rarity roll.
+ * - The Character's first kill of a boss offers 3 types (of one rarity) instead of the random one. The first offer
  *   is credited at once (so nothing is lost if the tab closes); the in-Run Keepsake reveal swaps it
  *   for another offered type, and leaving the reveal locks the choice (`lock`). A drop whose reveal
  *   never showed (the Run ended first) stays open on the results screen until the player leaves it.
@@ -22,7 +23,7 @@
  */
 import type { GameEvents } from '../core/events';
 import { Rng } from '../core/rng';
-import { DROP_RULES, gradeForBoss, keepsakeTypesFor, type KeepsakeRef, type KeepsakeTypeId } from '../data/keepsakes';
+import { bestRarity, DROP_RULES, dropTableFor, keepsakeTypesFor, rollRarity, type KeepsakeRef, type KeepsakeTypeId } from '../data/keepsakes';
 import type { DifficultyId } from '../shared/difficulty';
 import type { MetaProgress } from './meta';
 
@@ -44,7 +45,8 @@ export interface KeepsakeDrop {
 declare module '../core/events' {
   interface GameEvents {
     /** Keepsakes credited to the played Character for a boss (after the save is written). */
-    keepsakesDropped: { characterId: string; bossId: string; grade: number; drops: KeepsakeDrop[]; firstKill: boolean };
+    /** `rarity`: the best among the drops (each drop has its own). */
+    keepsakesDropped: { characterId: string; bossId: string; rarity: number; drops: KeepsakeDrop[]; firstKill: boolean };
   }
 }
 
@@ -57,23 +59,27 @@ export interface DropRoll {
   firstKill: boolean;
 }
 
-/** The Keepsakes a boss kill drops (empty for a boss with no grade or a Character without types). */
+/** The Keepsakes a boss kill drops (empty for a boss with no drop table or a Character without types). */
 export function rollBossDrops(o: DropRoll): KeepsakeDrop[] {
-  const grade = gradeForBoss(o.bossId);
+  const table = dropTableFor(o.bossId);
   const types = keepsakeTypesFor(o.characterId).map((t) => t.id);
-  if (grade === null || types.length === 0) return [];
+  if (!table || types.length === 0) return [];
   const rng = new Rng(o.seed).fork(`keepsake:${o.characterId}:${o.bossId}`);
   const drops: KeepsakeDrop[] = [];
   for (let i = 0; i < DROP_RULES.perKill; i++) {
+    const rarity = rollRarity(table, rng.next());
     if (o.firstKill && i === 0) {
       const offer = rng.shuffle([...types]).slice(0, DROP_RULES.firstKillChoices);
-      drops.push({ ref: { type: offer[0]!, grade }, bossId: o.bossId, offer });
+      drops.push({ ref: { type: offer[0]!, rarity }, bossId: o.bossId, offer });
     } else {
-      drops.push({ ref: { type: rng.pick(types), grade }, bossId: o.bossId });
+      drops.push({ ref: { type: rng.pick(types), rarity }, bossId: o.bossId });
     }
   }
   if (o.difficulty === 'hardcore') {
-    for (let i = 0; i < DROP_RULES.hardcoreBonus; i++) drops.push({ ref: { type: rng.pick(types), grade }, bossId: o.bossId, bonus: true });
+    for (let i = 0; i < DROP_RULES.hardcoreBonus; i++) {
+      const rarity = rollRarity(table, rng.next());
+      drops.push({ ref: { type: rng.pick(types), rarity }, bossId: o.bossId, bonus: true });
+    }
   }
   return drops;
 }
@@ -118,7 +124,7 @@ export class KeepsakeTracker {
     if (!drops.length) return [];
     this.meta.creditKeepsakes(run.characterId, drops.map((d) => d.ref), bossId);
     run.drops.push(...drops);
-    this.emit({ characterId: run.characterId, bossId, grade: drops[0]!.ref.grade, drops, firstKill });
+    this.emit({ characterId: run.characterId, bossId, rarity: bestRarity(drops.map((d) => d.ref)), drops, firstKill });
     return drops;
   }
 
@@ -150,7 +156,7 @@ export class KeepsakeTracker {
   choose(run: RunKeepsakes, dropIndex: number, type: KeepsakeTypeId): boolean {
     const drop = run.drops[dropIndex];
     if (!drop?.offer || drop.locked || run.settled || !drop.offer.includes(type)) return false;
-    const to = { type, grade: drop.ref.grade };
+    const to = { type, rarity: drop.ref.rarity };
     if (!this.meta.swapKeepsake(run.characterId, drop.ref, to)) return false;
     drop.ref = to;
     drop.chosen = true;
@@ -180,7 +186,7 @@ export function setKeepsakeTracker(t: KeepsakeTracker | null): void {
 }
 
 /** Narrator line for a boss's Keepsake drop (docs/design.md, deadpan). */
-export function dropCaption(bossId: string, bossName: string, material: string): string {
+export function dropCaption(bossId: string, bossName: string): string {
   switch (bossId) {
     case 'robovac_9000':
       return 'Inside the Robo-Vac 9000 is a tangle of hair from several previous owners. It keeps some.';
@@ -197,7 +203,7 @@ export function dropCaption(bossId: string, bossName: string, material: string):
     case 'sagittarius_a':
       return 'Caught at the edge of Sagittarius A* is lint that has been falling in for thirteen billion years. It keeps some.';
     default:
-      return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
+      return `${bossName} was full of things somebody dropped. It keeps some.`;
   }
 }
 

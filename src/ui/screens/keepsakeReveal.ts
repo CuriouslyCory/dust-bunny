@@ -7,7 +7,7 @@
  */
 import { getAudio } from '../../audio';
 import { getCharacter } from '../../data/characters';
-import { getGrade } from '../../data/keepsakes';
+import { bestRarity, bossNameFor, getRarity } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
 import { getKeepsakeTracker, type KeepsakeDrop, type RunKeepsakes } from '../../meta/keepsakes';
 import { storyOn } from '../../story';
@@ -97,10 +97,10 @@ export function registerKeepsakeRevealScreen(): void {
           params = p;
           armed = ARM_DELAY;
           el.classList.add('arming');
-          const grade = getGrade(p.drops[0]?.ref.grade ?? 1);
-          el.style.setProperty('--grade', grade.color);
-          label.textContent = `${grade.bossName} absorbed`;
-          title.textContent = p.firstKill ? `New Keepsake · ${grade.material}` : p.drops.length > 1 ? `${p.drops.length} Keepsakes!` : 'Keepsake!';
+          const rarity = getRarity(bestRarity(p.drops.map((d) => d.ref)));
+          el.style.setProperty('--rarity', rarity.color);
+          label.textContent = `${bossNameFor(p.drops[0]?.bossId ?? '')} absorbed`;
+          title.textContent = p.firstKill ? `New ${rarity.name} Keepsake` : p.drops.length > 1 ? `${p.drops.length} Keepsakes!` : `${rarity.name} Keepsake!`;
           story.hidden = !storyOn();
           story.firstElementChild!.textContent = p.caption;
           sub.textContent = `Tangled into ${getCharacter(p.run.characterId).name}'s fur · put it in a Loadout on Character select`;

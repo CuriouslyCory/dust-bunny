@@ -11,16 +11,18 @@ export const SHARED_KEEPSAKE_TYPES: Readonly<Record<string, readonly string[]>> 
   zap: ['live_wire', 'long_reach', 'arc', 'static_cling', 'grounding'],
 };
 
-/** Grades 1..KEEPSAKE_MAX_GRADE (mirrors MAX_GRADE). */
-export const KEEPSAKE_MAX_GRADE = 10;
-/** Most Keepsakes of one type and grade a Hoard holds (mirrors HOARD_STACK_MAX). */
+/** Rarities 1..KEEPSAKE_MAX_RARITY (mirrors MAX_RARITY). */
+export const KEEPSAKE_MAX_RARITY = 5;
+/** Rarity ids in order, common = 1 (mirrors RARITIES[].id). Hoard keys use these ("thick_clog:epic"). */
+export const KEEPSAKE_RARITY_IDS: readonly string[] = ['common', 'rare', 'epic', 'legendary', 'mythic'];
+/** Most Keepsakes of one type and rarity a Hoard holds (mirrors HOARD_STACK_MAX). */
 export const KEEPSAKE_STACK_MAX = 99;
 /** Keepsake slots in a Loadout (mirrors LOADOUT_SLOTS). */
 export const KEEPSAKE_LOADOUT_SLOTS = 2;
 
 export interface SharedKeepsakeRef {
   type: string;
-  grade: number;
+  rarity: number;
 }
 
 /** The Character's mirrored type ids (undefined for an unknown Character). */
@@ -35,29 +37,53 @@ export function isKeepsakeTypeFor(characterId: string, type: unknown): type is s
   return typeof type === 'string' && (keepsakeTypesForCharacter(characterId)?.includes(type) ?? false);
 }
 
-export function isKeepsakeGrade(grade: unknown): grade is number {
-  return typeof grade === 'number' && Number.isInteger(grade) && grade >= 1 && grade <= KEEPSAKE_MAX_GRADE;
+export function isKeepsakeRarity(rarity: unknown): rarity is number {
+  return typeof rarity === 'number' && Number.isInteger(rarity) && rarity >= 1 && rarity <= KEEPSAKE_MAX_RARITY;
 }
 
 /**
- * Validates an untrusted Loadout for a Character: an array of 0–2 `{ type, grade }` with the
- * Character's own types (duplicates allowed) and grades 1–10. Returns a clean copy or null.
+ * A grade 1–10 from before rarities as a rarity (1–2 common … 9–10 mythic), or null. Mirrors
+ * `rarityFromLegacyGrade`; old leaderboard rows, cloud saves and cached clients still send grades.
+ */
+export function rarityFromGrade(grade: unknown): number | null {
+  return typeof grade === 'number' && Number.isInteger(grade) && grade >= 1 && grade <= 10 ? Math.ceil(grade / 2) : null;
+}
+
+/**
+ * Validates an untrusted Loadout for a Character: an array of 0–2 `{ type, rarity }` with the
+ * Character's own types (duplicates allowed) and rarities 1–5. A slot from an older client,
+ * `{ type, grade }` (1–10), is converted. Returns a clean copy or null.
  */
 export function parseLoadout(characterId: string, raw: unknown): SharedKeepsakeRef[] | null {
   if (!Array.isArray(raw) || raw.length > KEEPSAKE_LOADOUT_SLOTS) return null;
   const out: SharedKeepsakeRef[] = [];
   for (const k of raw) {
-    if (!isObj(k) || !isKeepsakeTypeFor(characterId, k.type) || !isKeepsakeGrade(k.grade)) return null;
-    out.push({ type: k.type, grade: k.grade });
+    if (!isObj(k) || !isKeepsakeTypeFor(characterId, k.type)) return null;
+    const rarity = k.rarity !== undefined ? (isKeepsakeRarity(k.rarity) ? k.rarity : null) : rarityFromGrade(k.grade);
+    if (rarity === null) return null;
+    out.push({ type: k.type, rarity });
   }
   return out;
 }
 
-/** Parses a Hoard key ("thick_clog:2") for a Character, or null. */
+/** Hoard key for a type and rarity ("thick_clog:epic"). */
+export function sharedHoardKey(ref: SharedKeepsakeRef): string {
+  return `${ref.type}:${KEEPSAKE_RARITY_IDS[ref.rarity - 1]}`;
+}
+
+/**
+ * Parses a Hoard key ("thick_clog:epic") for a Character, or null. A key from before rarities
+ * ("thick_clog:6") is converted; callers re-key with `sharedHoardKey` and add counts together.
+ */
 export function parseSharedHoardKey(characterId: string, key: string): SharedKeepsakeRef | null {
   const i = key.lastIndexOf(':');
   if (i <= 0) return null;
   const type = key.slice(0, i);
-  const grade = Number(key.slice(i + 1));
-  return isKeepsakeTypeFor(characterId, type) && isKeepsakeGrade(grade) && key.slice(i + 1) === String(grade) ? { type, grade } : null;
+  const r = key.slice(i + 1);
+  if (!isKeepsakeTypeFor(characterId, type)) return null;
+  const id = KEEPSAKE_RARITY_IDS.indexOf(r);
+  if (id >= 0) return { type, rarity: id + 1 };
+  const grade = Number(r);
+  const rarity = /^\d+$/.test(r) && String(grade) === r ? rarityFromGrade(grade) : null;
+  return rarity === null ? null : { type, rarity };
 }

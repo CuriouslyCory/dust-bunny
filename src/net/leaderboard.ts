@@ -27,6 +27,7 @@ import {
   type LeaderboardLoadout,
   type ScoreSubmission,
 } from '../shared/leaderboard';
+import { parseLoadout } from '../shared/keepsakes';
 import { computeAreaScore, computeScore } from '../shared/score';
 
 export type { AreaLeaderboardEntry, AreaScoreSubmission, LeaderboardEntry, ScoreSubmission } from '../shared/leaderboard';
@@ -156,10 +157,16 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
     }
   }
 
+  /** A stored entry's Loadout, re-checked (entries from before rarities hold grades). */
+  function localLoadout(e: { character: string; loadout?: unknown }): { loadout?: LeaderboardLoadout } {
+    const loadout = e.loadout === undefined ? null : parseLoadout(e.character, e.loadout);
+    return loadout ? { loadout } : {};
+  }
+
   function readLocalAreas(): AreaLeaderboardEntry[] {
     return (readList(LOCAL_AREA_KEY) as AreaLeaderboardEntry[])
       .filter((e) => e && typeof e.score === 'number' && isAreaBoardId(e.area))
-      .map((e) => ({ ...e, difficulty: isDifficultyId(e.difficulty) ? e.difficulty : DEFAULT_DIFFICULTY, verified: false }));
+      .map(({ loadout, ...e }) => ({ ...e, ...localLoadout({ character: e.character, loadout }), difficulty: isDifficultyId(e.difficulty) ? e.difficulty : DEFAULT_DIFFICULTY, verified: false }));
   }
 
   /** Keeps the top LOCAL_KEEP of each Area. */
@@ -186,7 +193,7 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
       // Local entries are never verified (only the server can vouch for an account).
       return (parsed as LeaderboardEntry[])
         .filter((e) => e && typeof e.score === 'number')
-        .map((e) => ({ ...e, difficulty: isDifficultyId(e.difficulty) ? e.difficulty : DEFAULT_DIFFICULTY, verified: false }));
+        .map(({ loadout, ...e }) => ({ ...e, ...localLoadout({ character: e.character, loadout }), difficulty: isDifficultyId(e.difficulty) ? e.difficulty : DEFAULT_DIFFICULTY, verified: false }));
     } catch {
       return [];
     }
@@ -317,7 +324,7 @@ export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: s
     victory: reason === 'victory',
     difficulty: stats.difficulty ?? DEFAULT_DIFFICULTY,
   };
-  const loadout = (stats.loadout ?? []).map(({ type, grade }) => ({ type, grade }));
+  const loadout = (stats.loadout ?? []).map(({ type, rarity }) => ({ type, rarity }));
   return { name, character: stats.characterId, ...fields, score: computeScore(fields), ...(runId ? { runId } : {}), loadout };
 }
 
@@ -345,7 +352,7 @@ export function areaSubmission(
     ...fields,
     score: computeAreaScore(fields),
     ...(runId ? { runId } : {}),
-    loadout: loadout.map(({ type, grade }) => ({ type, grade })),
+    loadout: loadout.map(({ type, rarity }) => ({ type, rarity })),
   };
 }
 

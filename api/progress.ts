@@ -11,7 +11,9 @@
  * Errors are JSON `{ error: code, message, field? }`: 401 unauthorized (no session), 400 invalid /
  * bad_json, 405, 413, 503 unavailable. The comparison rule lives in src/shared/progress.ts; the
  * upsert applies it atomically, so two devices can't overwrite each other's newer progress.
- * A body without `characters` (a bundle from before Keepsakes) keeps the stored Hoards.
+ * A body without `characters` (a bundle from before Keepsakes) keeps the stored Hoards. Hoard keys from
+ * before rarities ("arc:6") are converted to rarity ids ("arc:epic") by `validateProgress`, in stored
+ * rows on read and in uploads on write.
  */
 import { validateProgress, type Progress } from '../src/shared/progress.js';
 import { sessionUser } from '../server/auth.js';

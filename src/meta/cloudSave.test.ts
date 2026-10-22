@@ -149,13 +149,13 @@ describe('cloud save', () => {
   });
 
   it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {
-    const s = setup(prog(500, 500, 5));
+    const s = setup(prog(1000, 1000, 5));
     await s.signIn('u1');
     s.server.puts.length = 0;
-    const k = { type: 'reclaim', grade: 1 } as const;
+    const k = { type: 'reclaim', rarity: 1 } as const;
     s.meta.creditKeepsakes('lint', [k, k, k, k], 'robovac_9000');
     await vi.advanceTimersByTimeAsync(150);
-    expect(s.server.rows.get('u1')?.characters).toEqual({ lint: { hoard: { 'reclaim:1': 4 }, bossesBeaten: ['robovac_9000'] } });
+    expect(s.server.rows.get('u1')?.characters).toEqual({ lint: { hoard: { 'reclaim:common': 4 }, bossesBeaten: ['robovac_9000'] } });
     s.server.setDown(true);
     expect(s.meta.felt('lint', k).ok).toBe(true);
     expect(s.meta.shed('lint', k).ok).toBe(true);
@@ -163,9 +163,9 @@ describe('cloud save', () => {
     s.server.setDown(false);
     await vi.advanceTimersByTimeAsync(31_000);
     const row = s.server.rows.get('u1')!;
-    expect(row.characters.lint!.hoard).toEqual({ 'reclaim:2': 1 });
-    expect(row.fluff).toBe(500 - 160 + 10);
-    expect(row.stats.totalFluffEarned).toBe(500);
+    expect(row.characters.lint!.hoard).toEqual({ 'reclaim:rare': 1 });
+    expect(row.fluff).toBe(1000 - 640 + 40);
+    expect(row.stats.totalFluffEarned).toBe(1000);
   });
 
   it('adopts the server copy when another device got further', async () => {

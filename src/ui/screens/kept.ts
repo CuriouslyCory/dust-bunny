@@ -5,7 +5,7 @@
  * already in the Hoard; picking another swaps it. Leaving without choosing keeps the highlighted one.
  */
 import { getCharacter } from '../../data/characters';
-import { describeKeepsake, getGrade, getKeepsakeType } from '../../data/keepsakes';
+import { bossNameFor, describeKeepsake, getRarity, getKeepsakeType } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
 import { getKeepsakeTracker, type KeepsakeDrop, type RunKeepsakes } from '../../meta/keepsakes';
 import { button } from '../components';
@@ -31,10 +31,10 @@ const resultsNote: ChoiceNote = (chosen) => (chosen ? 'Kept. You can still chang
  */
 export function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerender: () => void, note: ChoiceNote = resultsNote): HTMLElement {
   const tracker = getKeepsakeTracker();
-  const grade = getGrade(drop.ref.grade);
+  const rarity = getRarity(drop.ref.rarity);
   const options = drop.offer!.map((type) => {
     const t = getKeepsakeType(type)!;
-    const ref = { type, grade: drop.ref.grade };
+    const ref = { type, rarity: drop.ref.rarity };
     const b = h(
       'button',
       { className: 'kept-option', type: 'button' },
@@ -53,11 +53,11 @@ export function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop,
   const card = h(
     'div',
     { className: 'kept-choice' },
-    h('p', { className: 'kept-choice-head', textContent: `First ${grade.bossName} for ${getCharacter(run.characterId).name}: choose what it left (${grade.material}).` }),
+    h('p', { className: 'kept-choice-head', textContent: `First ${bossNameFor(drop.bossId)} for ${getCharacter(run.characterId).name}: choose what it left (${rarity.name}).` }),
     h('div', { className: 'kept-options' }, ...options),
     h('p', { className: 'kept-choice-note', textContent: note(!!drop.chosen) }),
   );
-  card.style.setProperty('--grade', grade.color);
+  card.style.setProperty('--rarity', rarity.color);
   return card;
 }
 

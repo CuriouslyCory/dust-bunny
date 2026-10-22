@@ -5,7 +5,7 @@
  */
 import type { GameEvents } from '../core/events';
 import type { DifficultyId } from '../data/difficulty';
-import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_GRADE, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
+import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_RARITY, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
 import { fluffForRun } from './fluff';
@@ -30,9 +30,9 @@ export interface RunAward {
 export type BuyResult = { ok: true; level: number; cost: number } | { ok: false; reason: 'maxed' | 'unknown' | 'poor' };
 
 /**
- * Whether three of a Keepsake can be felted into one of the next grade. `count`: fewer than 3;
- * `max`: already grade 10; `ceiling`: the result would pass the Character's ceiling (one grade above
- * its best boss); `poor`: not enough Fluff; `full`: the result's cell already holds 99.
+ * Whether three of a Keepsake can be felted into one of the next rarity. `count`: fewer than 3;
+ * `max`: already mythic; `ceiling`: the result would pass the Character's ceiling (one rarity above
+ * its best boss's peak); `poor`: not enough Fluff; `full`: the result's cell already holds 99.
  */
 export type FeltCheck =
   | { ok: true; result: KeepsakeRef; cost: number; ceiling: number }
@@ -134,7 +134,7 @@ export class MetaProgress {
     return this.hoardOf(characterId).bossesBeaten.includes(bossId);
   }
 
-  /** Highest grade this Character can felt (0 before its first boss). */
+  /** Highest rarity this Character can felt (0 before its first boss). */
   feltCeiling(characterId: string): number {
     return feltCeiling(this.hoardOf(characterId).bossesBeaten);
   }
@@ -145,7 +145,7 @@ export class MetaProgress {
    */
   creditKeepsakes(characterId: string, refs: readonly KeepsakeRef[], bossId?: string): number {
     if (!hasKeepsakes(characterId)) return 0;
-    const own = refs.filter((r) => getKeepsakeType(r.type)?.characterId === characterId && r.grade >= 1 && r.grade <= MAX_GRADE);
+    const own = refs.filter((r) => getKeepsakeType(r.type)?.characterId === characterId && r.rarity >= 1 && r.rarity <= MAX_RARITY);
     let added = 0;
     this.store.update((d) => {
       const h = (d.characters[characterId] ??= emptyCharacterHoard());
@@ -159,7 +159,7 @@ export class MetaProgress {
   /** Replaces one `from` with one `to` (the first-kill choice). False if `from` isn't in the Hoard or `to`'s cell is full. */
   swapKeepsake(characterId: string, from: KeepsakeRef, to: KeepsakeRef): boolean {
     if (getKeepsakeType(to.type)?.characterId !== characterId || this.keepsakeCount(characterId, from) < 1) return false;
-    if (from.type === to.type && from.grade === to.grade) return true;
+    if (from.type === to.type && from.rarity === to.rarity) return true;
     // A full destination cell would swallow the source Keepsake.
     if (this.keepsakeCount(characterId, to) >= HOARD_STACK_MAX) return false;
     this.store.update((d) => {
@@ -174,17 +174,17 @@ export class MetaProgress {
   feltCheck(characterId: string, ref: KeepsakeRef): FeltCheck {
     const ceiling = this.feltCeiling(characterId);
     if (getKeepsakeType(ref.type)?.characterId !== characterId) return { ok: false, reason: 'unknown', ceiling };
-    if (ref.grade >= MAX_GRADE) return { ok: false, reason: 'max', ceiling };
-    const result = { type: ref.type, grade: ref.grade + 1 };
-    const cost = feltCost(result.grade);
+    if (ref.rarity >= MAX_RARITY) return { ok: false, reason: 'max', ceiling };
+    const result = { type: ref.type, rarity: ref.rarity + 1 };
+    const cost = feltCost(result.rarity);
     if (this.keepsakeCount(characterId, ref) < FELT_INPUT) return { ok: false, reason: 'count', result, cost, ceiling };
-    if (result.grade > ceiling) return { ok: false, reason: 'ceiling', result, cost, ceiling };
+    if (result.rarity > ceiling) return { ok: false, reason: 'ceiling', result, cost, ceiling };
     if (this.keepsakeCount(characterId, result) >= 99) return { ok: false, reason: 'full', result, cost, ceiling };
     if (this.fluff < cost) return { ok: false, reason: 'poor', result, cost, ceiling };
     return { ok: true, result, cost, ceiling };
   }
 
-  /** Felts three of `ref` into one of the next grade for its Fluff cost. */
+  /** Felts three of `ref` into one of the next rarity for its Fluff cost. */
   felt(characterId: string, ref: KeepsakeRef): FeltResult {
     const check = this.feltCheck(characterId, ref);
     if (!check.ok) return check;
@@ -201,13 +201,13 @@ export class MetaProgress {
   }
 
   /**
-   * Discards one Keepsake for `shedValue(grade)` Fluff. Like spending, this doesn't count toward
+   * Discards one Keepsake for `shedValue(rarity)` Fluff. Like spending, this doesn't count toward
    * `totalFluffEarned`, so shedding can't win a cloud-save comparison.
    */
   shed(characterId: string, ref: KeepsakeRef): ShedResult {
     if (getKeepsakeType(ref.type)?.characterId !== characterId) return { ok: false, reason: 'unknown' };
     if (this.keepsakeCount(characterId, ref) < 1) return { ok: false, reason: 'none' };
-    const fluff = shedValue(ref.grade);
+    const fluff = shedValue(ref.rarity);
     this.store.update((d) => {
       addToHoard(d.characters[characterId]!, ref, -1);
       d.fluff += fluff;
