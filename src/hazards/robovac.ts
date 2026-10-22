@@ -21,8 +21,9 @@
  * only starts on screen, and a planted Tumble takes nothing (its damage filter and `shedMass`).
  * Absorbing it opens the motorway west to the continent.
  *
- * The Ice Sheet (continent, Tier 13, ICE_SHEET): placeholder until the Continent Hazards land, the
- * Incinerator without its ash volley.
+ * The Ice Sheet (continent, Tier 13, ICE_SHEET) is a subclass in iceSheet.ts: only a charge into a
+ * mountain range stuns it (`crashStuns`), it bulldozes instead of sucking, and it calves icebergs
+ * (`summon`, `scatterChips`, `onCrashStun`) instead of summoning minis.
  *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
@@ -34,7 +35,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, ICE_SHEET, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -97,7 +98,7 @@ export class RoboVac9000 extends BaseHazard {
     def: HazardDef,
     x: number,
     z: number,
-    private readonly rng: Rng,
+    protected readonly rng: Rng,
     readonly cfg: BossTuning = ROBOVAC_9000,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
@@ -201,14 +202,16 @@ export class RoboVac9000 extends BaseHazard {
         const m = this.drive(run, step, radius, this.chargeDirX, this.chargeDirZ);
         this.charged += step;
         this.lane.setOpacity(0.25);
-        if (m.hit) {
+        if (m.hit && this.crashStuns(run, radius)) {
           this.lane.visible = false;
           this.hitThisStun = false;
           this.chipBonus = null;
           this.stunCause = 'wall';
           this.enter('stunned', c.stunTime);
+          this.onCrashStun(run);
           run.events.emit('bossStunned', { hazardId: this.id, cause: 'wall' });
-        } else if (this.charged >= c.chargeDistance) {
+        } else if (m.hit || this.charged >= c.chargeDistance) {
+          // Ran out of charge, or crashed into something that doesn't stun it: it just stops.
           this.lane.visible = false;
           this.enter('recover', c.recover);
         }
@@ -336,6 +339,22 @@ export class RoboVac9000 extends BaseHazard {
     separateFromBunny(run, this, this.cfg.contactRadius * this.scale, this.cfg.height);
   }
 
+  /**
+   * A charge just crashed into something (walls, furniture, the map edge): does it stun? Every
+   * obstacle does by default; the Ice Sheet only yields to mountain ranges.
+   */
+  protected crashStuns(_run: Run, _radius: number): boolean {
+    return true;
+  }
+
+  /** Called right after a crash stun (the Ice Sheet calves icebergs). */
+  protected onCrashStun(_run: Run): void {}
+
+  /** Scatters the absorbable parts a chip knocks loose (the closest-sized Debris valid at the Bunny's Tier). */
+  protected scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
+    scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer);
+  }
+
   private enter(state: BossState, time: number): void {
     this.state = state;
     this.timer = time;
@@ -348,10 +367,13 @@ export class RoboVac9000 extends BaseHazard {
     return m;
   }
 
-  private summon(run: Run): void {
+  /** Summons `summonCount` minis (up to `maxMinis` alive) around the boss; nothing without a `miniId`. */
+  protected summon(run: Run): void {
     const c = this.cfg;
+    const miniId = c.miniId;
+    if (!miniId) return;
     for (const id of [...this.minis]) if (!run.hazards.hazards.some((h) => h.id === id && !h.dead)) this.minis.delete(id);
-    const fp = HazardManager.footprint(c.miniId);
+    const fp = HazardManager.footprint(miniId);
     for (let n = 0; n < c.summonCount && this.minis.size < c.maxMinis; n++) {
       for (let tries = 0; tries < 8; tries++) {
         const a = this.rng.range(0, Math.PI * 2);
@@ -359,7 +381,7 @@ export class RoboVac9000 extends BaseHazard {
         const x = this.x + Math.cos(a) * d;
         const z = this.z + Math.sin(a) * d;
         if (!hazardFloorFree(run.house, x, z, fp.radius, fp.height)) continue;
-        this.minis.add(run.hazards.spawn(c.miniId, x, z).id);
+        this.minis.add(run.hazards.spawn(miniId, x, z).id);
         break;
       }
     }
@@ -383,7 +405,7 @@ export class RoboVac9000 extends BaseHazard {
         this.size = bossSizeAfterHits(this.hits, c.size, c.chipFactor);
         // Parts knocked loose: absorbable Debris around the boss.
         const bonus = this.chipBonus;
-        scatterDebris(run, this.rng, this.x, this.z, c.chipPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
+        this.scatterChips(run, c.chipPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
         run.events.emit('bossHit', { hazardId: this.id, size: this.size, absorbRadius: this.absorbRadius(run) });
         if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6 + (bonus?.hold ?? 0));
       }
@@ -466,19 +488,5 @@ export const incineratorDef = hazardRegistry.register({
   modelId: INCINERATOR.modelId,
   create(_run, x, z, id, rng: Rng) {
     return new RoboVac9000(id, this, x, z, rng, INCINERATOR);
-  },
-});
-
-/** The Continent boss (placeholder: the Incinerator's state machine, numbers and model, see ICE_SHEET). */
-export const iceSheetDef = hazardRegistry.register({
-  id: 'ice_sheet',
-  name: 'Ice Sheet',
-  boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
-  footprint: { radius: ICE_SHEET.contactRadius, height: ICE_SHEET.height },
-  mass: ICE_SHEET.mass,
-  modelId: ICE_SHEET.modelId,
-  create(_run, x, z, id, rng: Rng) {
-    return new RoboVac9000(id, this, x, z, rng, ICE_SHEET);
   },
 });

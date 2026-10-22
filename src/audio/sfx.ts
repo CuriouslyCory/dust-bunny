@@ -165,6 +165,22 @@ export class Sfx {
     for (let i = 0; i < 5; i++) a.noise({ filter: 'highpass', freq: 3000 + i * 600, delay: i * 0.035, decay: 0.04, gain: 0.12 });
   }
 
+  /** Weather warm-up (the Hurricane's wind cone): a rising, roaring gust. */
+  windRoar(): void {
+    if (!this.gate('weather', 1.2, 2, 0.4)) return;
+    const a = this.a;
+    a.noise({ filter: 'bandpass', freq: 300, freqEnd: 1400, q: 0.8, attack: 0.5, hold: 0.3, decay: 0.7, gain: 0.12 });
+    a.noise({ filter: 'lowpass', freq: 500, freqEnd: 250, attack: 0.3, hold: 0.4, decay: 0.6, gain: 0.08 });
+  }
+
+  /** Low ground rumble (a Volcano about to lob, the Ice Sheet's charge or its crash into a mountain). `big` is longer and deeper. */
+  rumble(big = false): void {
+    if (!this.gate('rumble', big ? 1.6 : 0.9, 2, 0.3)) return;
+    const a = this.a;
+    a.tone({ type: 'sawtooth', freq: big ? 48 : 62, freqEnd: big ? 32 : 44, attack: 0.08, hold: big ? 0.5 : 0.2, decay: big ? 0.9 : 0.5, gain: 0.12, lowpass: 220 });
+    a.noise({ filter: 'lowpass', freq: big ? 260 : 380, freqEnd: 90, attack: 0.05, hold: big ? 0.4 : 0.15, decay: big ? 1 : 0.5, gain: big ? 0.16 : 0.1 });
+  }
+
   bossWarning(): void {
     if (!this.gate('boss', 2.5, 1)) return;
     const a = this.a;

@@ -37,7 +37,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–5 exist today (Act 5's map, Debris, look and Hazards are placeholders until #25's content lands), with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; the Region's tuning is in `docs/design.md`). Acts 5–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+Acts 1–5 exist today (Act 5's map, Debris and look are placeholders until #25's World content lands; its weather Hazards and the Ice Sheet are built), with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; the Region's tuning is in `docs/design.md`). Acts 5–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 

@@ -3,7 +3,8 @@
  * Incinerator's chimney ash. Each projectile flies along the floor plane up to its range, stops at
  * walls and furniture no higher than `blockHeight`, pops Lint's Decoy (`lure.shot(owner)`) and
  * calls `onHit` when it reaches the Bunny (unless the Bunny is sheltered from the owner). Visually
- * it arcs down from its launch height towards the Bunny's height. Headless-safe.
+ * it arcs down from its launch height towards the Bunny's height (lobbed higher with `arc`, the
+ * Volcano's lava bombs). Headless-safe.
  */
 import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import type { Run } from '../game/run';
@@ -41,6 +42,8 @@ export interface VolleySpec {
   height: number;
   /** Walls and furniture with clearance up to this stop a projectile. */
   blockHeight: number;
+  /** Extra peak height of the visual arc (a lob, e.g. the Volcano's lava bombs; default 0). */
+  arc?: number;
 }
 
 export class Volley {
@@ -88,7 +91,7 @@ export class Volley {
         continue;
       }
       const k = Math.min(1, p.traveled / p.max);
-      const y = spec.height * (1 - k) + Math.min(b.radius, spec.height) * k;
+      const y = spec.height * (1 - k) + Math.min(b.radius, spec.height) * k + (spec.arc ?? 0) * 4 * k * (1 - k);
       p.mesh.position.set(p.x, Math.max(spec.radius, y), p.z);
     }
   }

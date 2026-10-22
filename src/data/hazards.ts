@@ -13,7 +13,8 @@
  * after one chip, ≈ 578 after two). Region (in its unit, 1 = 10 m): Mini Compactor ≈ 1.07, Landfill
  * Compactor ≈ 1.5, Crop Duster ≈ 1.79, River Barge ≈ 2.14, Snowplow ≈ 2.43, Water Bomber ≈ 3.29,
  * Freight Train ≈ 3.5, Incinerator ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two). Continent (in its
- * unit, 1 = 10 km; placeholders with the Region's numbers): the same ladder, Ice Sheet ≈ 4.
+ * unit, 1 = 10 km): Tornado ≈ 1.57, Volcano ≈ 1.86, River Surge ≈ 2.14, Glacier Tongue ≈ 2.71,
+ * Hurricane ≈ 3.43, Ice Sheet ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two).
  *
  * `mass` is the growth multiplier when absorbed (Debris are ~1), so Hazards are a big gain.
  *
@@ -64,11 +65,6 @@ export function regionTiers(t10: number, t11: number): PerTier {
  */
 export function continentTiers(t12: number, t13: number): PerTier {
   return [t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t13];
-}
-
-/** A Region per-Tier table moved two Tiers up (Tier 10 → 12, 11 → 13): the Continent repeats the Region's shape. */
-function regionToContinent(values: PerTier): PerTier {
-  return continentTiers(values[9]!, values[10]!);
 }
 
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
@@ -228,6 +224,8 @@ export interface TurretTuning {
   spinRate?: number;
   /** Droplet colour (default: water blue). */
   dropletColor?: string;
+  /** Extra peak height of a droplet's flight arc (world units; default 0: a straight fall from the nozzle). The Volcano lobs its lava bombs. */
+  dropletArc?: number;
 }
 
 export const SPRAY_BOTTLE: TurretTuning = {
@@ -335,6 +333,9 @@ export interface AirConeTuning {
   /** Blow mode: while the blast reaches the Bunny it is soaked, speed × wetMultiplier for wetSeconds (default: none). */
   wetSeconds?: number;
   wetMultiplier?: number;
+  /** Model node spun about Y at spinRate rad/s (the Hurricane's `bands`). */
+  spinNode?: string;
+  spinRate?: number;
 }
 
 export const UPRIGHT_VACUUM: AirConeTuning = {
@@ -362,7 +363,7 @@ export const UPRIGHT_VACUUM: AirConeTuning = {
   modelSize: 30,
 };
 
-/** Area boss (Robo-Vac 9000, Street Sweeper, Garbage Truck): hunt, telegraphed charges, stun + chip, summons. */
+/** Area boss (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet): hunt, telegraphed charges, stun + chip, summons. */
 export interface BossTuning {
   /** Absorb size at spawn. */
   size: number;
@@ -395,8 +396,8 @@ export interface BossTuning {
   summonInterval: number;
   summonCount: number;
   maxMinis: number;
-  /** Summoned Hazard def id (placed by its def's footprint). */
-  miniId: string;
+  /** Summoned Hazard def id (placed by its def's footprint); none: the boss summons nothing (the Ice Sheet calves icebergs instead). */
+  miniId?: string;
   /** Spin (rad/s) of the `brush_l` / `brush_r` model nodes. */
   brushSpin: number;
   /**
@@ -992,39 +993,237 @@ export const INCINERATOR: BossTuning = {
   },
 };
 
-// ── Continent Hazards (Tiers 12–13, in Continent units: 1 = 10 km) ──
-// PLACEHOLDERS (Act 5 groundwork): each is the Region Hazard with the same behaviour, its numbers
-// moved two Tiers up (`regionToContinent`) and its Region model, so the Area has weather and a boss
-// that clears it. The Continent Hazards work (#25) replaces these tunings and model ids
-// (tornado, glacier_tongue, volcano, river_surge, hurricane, ice_sheet in public/models/).
+// ── Continent Hazards (Tiers 12–13, 1 world unit = 10 km, Bunny radius ≈ 0.85–4.5 units) ──
+// Weather: the planet has run out of machines. Continent units throughout. The Continent repeats the
+// Region's shape (Tiers at 1 and 3 units, arrival just under 1, boss absorbable at ≈ 4), so sizes
+// keep the Region ladder's ratios to the Bunny and speeds its ratios to the Bunny's max speed
+// (6 × radius units/s). The Blender models are authored at 1 unit = 100 m and loaded at scale 0.01
+// (public/models/manifest.json), so they arrive in Continent units: `modelSize` is the model's
+// footprint radius in Continent units (catalog footprint radius / 100) and heights follow the
+// model (model height × size / modelSize). Tier 12 Hazards are a threat on arrival (r 0.85) and
+// food by early Tier 13; the Tier 13 Hurricane is food before the Ice Sheet is.
 
-/** Tornado (wanderer that pulls): Roomba behaviour. Placeholder: the Landfill Compactor's numbers and model. */
-export const TORNADO: RoombaTuning = { ...LANDFILL_COMPACTOR, speed: regionToContinent(LANDFILL_COMPACTOR.speed) };
-
-/** Glacier tongue (lane patrol): Lint Roller behaviour. Placeholder: the Snowplow's numbers and model. */
-export const GLACIER_TONGUE: LaneTuning = { ...SNOWPLOW, speed: regionToContinent(SNOWPLOW.speed) };
-
-/** Volcano (turret): Spray Bottle behaviour. Placeholder: the Crop Duster's numbers and model. */
-export const VOLCANO: TurretTuning = {
-  ...CROP_DUSTER,
-  range: regionToContinent(CROP_DUSTER.range),
-  telegraph: regionToContinent(CROP_DUSTER.telegraph),
-  cooldown: regionToContinent(CROP_DUSTER.cooldown),
-  dropletSpeed: regionToContinent(CROP_DUSTER.dropletSpeed),
+/** Tornado: Roomba behaviour with a strong vortex pull; erratic turns; spins its `funnel`. */
+export const TORNADO: RoombaTuning = {
+  size: 1.1,
+  /** Model 4.49 tall × 1.1 / 1.48. */
+  height: 3.3,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 1.8,
+  knockbackRadii: 2.5,
+  speed: continentTiers(2.2, 4.4),
+  turnInterval: [1.2, 3],
+  turnAngle: 2.2,
+  /** A wider, stronger pull than the Landfill Compactor's (0.6, 0.2): it is a vortex. */
+  suctionReach: 1.4,
+  suctionStrength: 0.3,
+  modelId: 'tornado',
+  /** The model's footprint radius (148 × 100 m). */
+  modelSize: 1.48,
+  spinNode: 'funnel',
+  spinRate: 5,
 };
 
-/** River surge (trail-layer): Mop behaviour. Placeholder: the River Barge's numbers and model. */
-export const RIVER_SURGE: MopTuning = { ...RIVER_BARGE, speed: regionToContinent(RIVER_BARGE.speed) };
+/** Glacier Tongue: a slow, heavy lane patrol; a hit shoves the Bunny off the lane and scrapes mass off (no sticking). */
+export const GLACIER_TONGUE: LaneTuning = {
+  size: 1.9,
+  /** Model 0.149 tall × 1.9 / 1.28. */
+  height: 0.22,
+  mass: 4,
+  damage: 1,
+  /** About half the Snowplow's speed (2.6, 5): ice creeps, but it does not stop. */
+  speed: continentTiers(1.4, 2.4),
+  laneMin: 8,
+  laneMax: 30,
+  endPause: 1.6,
+  stickSeconds: 0,
+  releaseInvulnerability: 0,
+  shedFraction: 0.08,
+  releaseCm: 3,
+  releaseRadii: 4,
+  hitPause: 1.5,
+  modelId: 'glacier_tongue',
+  /** The model's footprint radius (128 × 100 m; 1.0 × 2.46 units, moving along its length). */
+  modelSize: 1.28,
+  spinNode: null,
+};
 
-/** Hurricane (cone blaster): Leaf Blower behaviour. Placeholder: the Water Bomber's numbers and model. */
-export const HURRICANE: AirConeTuning = { ...WATER_BOMBER, speed: regionToContinent(WATER_BOMBER.speed) };
+/** Volcano: a static turret; its `crater` aims, a lane telegraph, then lobbed lava bombs whose ash slows. */
+export const VOLCANO: TurretTuning = {
+  size: 1.3,
+  /** Model 1.1 tall × 1.3 / 2. */
+  height: 0.72,
+  mass: 3,
+  damage: 1,
+  knockbackCm: 0.8,
+  knockbackRadii: 0.6,
+  range: continentTiers(9, 13),
+  turnRate: 1.8,
+  /** Lobbed bombs: a longer telegraph and slower shots than the Crop Duster's (0.8, 8.5). */
+  telegraph: continentTiers(1.1, 0.9),
+  burst: 3,
+  burstGap: 0.18,
+  cooldown: continentTiers(3.2, 2.6),
+  dropletSpeed: continentTiers(7, 10),
+  dropletRadius: 0.22,
+  spread: 0.1,
+  /** The vent: model (0, 0.96, 0) × 1.3 / 2. */
+  nozzleHeight: 0.62,
+  modelId: 'volcano',
+  /** The model's footprint radius (200 × 100 m). */
+  modelSize: 2,
+  aimNode: 'crater',
+  idleSpin: 0,
+  wetSeconds: 1.2,
+  wetMultiplier: 0.7,
+  dropletColor: '#ff6a1a',
+  dropletArc: 1.6,
+};
+
+/** River Surge: Mop behaviour, a fast flood surge leaving a wide muddy trail that slows. */
+export const RIVER_SURGE: MopTuning = {
+  size: 1.5,
+  /** Model 0.199 tall × 1.5 / 1.288. */
+  height: 0.23,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 2.2,
+  knockbackRadii: 3,
+  /** Faster than the River Barge (1.6, 2.6): a surge, not a boat. */
+  speed: continentTiers(2.2, 3.4),
+  waypoints: 4,
+  patrolRange: 22,
+  trailSpacing: 0.7,
+  trailLife: 9,
+  trailFade: 0.4,
+  trailRadius: 1.25,
+  slowMultiplier: 0.5,
+  modelId: 'river_surge',
+  /** The model's footprint radius (128.8 × 100 m). */
+  modelSize: 1.288,
+};
+
+/** Hurricane: Leaf Blower behaviour; spins its `bands`, then a wind cone that blasts the Bunny away and soaks it. */
+export const HURRICANE: AirConeTuning = {
+  size: 2.4,
+  /** Model 0.39 tall × 2.4 / 2.92. */
+  height: 0.32,
+  mass: 3.5,
+  damage: 1,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  shedFraction: 0,
+  speed: continentTiers(2, 2.8),
+  turnRate: 0.6,
+  coneHalfAngle: 0.5,
+  coneRange: 14,
+  /** Push speed at the eyewall: faster than the Bunny can roll into it. */
+  suctionStrength: 1.2,
+  warmup: 1.1,
+  on: 2,
+  off: 2.6,
+  mode: 'blow',
+  blowDebrisSize: 0.45,
+  debrisSpeed: 11,
+  /** The wind leaves the eyewall at model (0, 0.2, 0.6): 0.6 / 2.92 of the footprint radius. */
+  nozzleOffset: 0.2,
+  modelId: 'hurricane',
+  /** The model's footprint radius (292 × 100 m). */
+  modelSize: 2.92,
+  wetSeconds: 1.5,
+  wetMultiplier: 0.6,
+  spinNode: 'bands',
+  spinRate: 1.5,
+};
 
 /**
- * The Ice Sheet (continent boss, Tier 13). Placeholder: the Incinerator's state machine, numbers
- * and model without the ash volley (needs Bunny radius ≈ 4 units, ≈ 2.89 after two chips; Tier 13
- * starts at 3). Absorbing it clears the Continent (the last built Area, so the Run is won).
+ * The Ice Sheet's bulldozing front: while it moves (hunting or charging), a Bunny whose near edge
+ * is within `reach` of the front cliff, and whose centre is within `halfWidth` (+ half its radius)
+ * of the centre line, is pushed away at `strength` × its max speed (`applyPush`); loose Debris up
+ * to `debrisSize` (world units) in that band is shoved ahead of the cliff. `front`, `halfWidth` and
+ * `reach` are model units at full size (Continent units at model scale 1), scaled with the model
+ * and its chips.
  */
-export const ICE_SHEET: BossTuning = { ...INCINERATOR, ash: undefined };
+export interface BulldozeTuning {
+  /** Front cliff distance ahead of the centre (the model is 4.02 deep). */
+  front: number;
+  /** Half the slab's width (the model is 6 wide). */
+  halfWidth: number;
+  reach: number;
+  strength: number;
+  debrisSize: number;
+}
+
+/**
+ * Icebergs calving off the Ice Sheet (Debris type `calved_iceberg`, src/data/iceSheetDebris.ts):
+ * every `summonInterval` s while it hunts, `summonCount` break off a front corner (the `calving_l`
+ * / `calving_r` node hides for `regrow` s); a mountain crash calves both corners; a chip scatters
+ * `chipPieces` icebergs. A calved iceberg is `sizeRadii` × the Bunny's radius, within
+ * [minSize, maxSize].
+ */
+export interface CalveTuning {
+  /** `calving_r` in model units at full size (`calving_l` mirrors it on −X). */
+  cornerX: number;
+  cornerZ: number;
+  sizeRadii: number;
+  minSize: number;
+  maxSize: number;
+  regrow: number;
+}
+
+export interface IceSheetTuning extends BossTuning {
+  bulldoze: BulldozeTuning;
+  calve: CalveTuning;
+}
+
+/**
+ * The Ice Sheet (continent boss, Tier 13): slow, enormous, and it pushes everything in front of it.
+ * Same state machine as the other bosses (src/hazards/iceSheet.ts), but only a charge into a
+ * mountain range stuns it (the coast and other obstacles just stop it), it calves absorbable
+ * icebergs instead of summoning, and it has no suction: its front bulldozes. Needs Bunny radius ≈ 4
+ * units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 13 starts at 3).
+ * Absorbing it clears the Continent (the last built Area, so the Run is won).
+ */
+export const ICE_SHEET: IceSheetTuning = {
+  size: 2.8,
+  /** The model's footprint radius (3.1) × its scale (2.8 / 2.9). */
+  contactRadius: 3,
+  /** Model 0.627 tall × 2.8 / 2.9. */
+  height: 0.61,
+  mass: 6,
+  damage: 1,
+  knockbackCm: 4,
+  knockbackRadii: 3,
+  shedFraction: 0.05,
+  introTime: 3.5,
+  /** About half the Incinerator's (6): a Tier 13 Bunny (18 units/s) outruns it easily. */
+  huntSpeed: 3.2,
+  turnRate: 0.7,
+  huntTime: [3, 5],
+  chargeTrigger: 30,
+  telegraph: 1.8,
+  /** A surge, not a dash: the Incinerator's charge is 24. */
+  chargeSpeed: 13,
+  chargeDistance: 36,
+  stunTime: 3.5,
+  recover: 1.4,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  suctionReach: 0,
+  suctionStrength: 0,
+  /** Calving interval and icebergs per calving (no minis). */
+  summonInterval: 9,
+  summonCount: 1,
+  maxMinis: 0,
+  brushSpin: 0,
+  onDefeat: 'openExit',
+  modelId: 'ice_sheet',
+  /** Scales the 6 × 4 unit model (footprint radius 3.1) to ≈ 5.8 × 3.9 at full size. */
+  modelSize: 2.9,
+  bulldoze: { front: 2.01, halfWidth: 3, reach: 2.5, strength: 0.6, debrisSize: 1.6 },
+  calve: { cornerX: 2.32, cornerZ: 1.22, sizeRadii: 0.55, minSize: 0.6, maxSize: 2, regrow: 5 },
+};
 
 export interface TierSpawnTable {
   /** Alive Hazard budget at the start / end of the Tier (ramps with Tier progress). */
@@ -1180,7 +1379,7 @@ export const REGION_DIRECTOR = {
 /**
  * Continent director (after the region): spawn tables for Bunny Tiers 12–13, indexed from
  * `firstTier` (the Bunny arrives late in Tier 11 at 0.85 units, the arrival leap, and uses the
- * Tier 12 table). PLACEHOLDER: the Region's tables with the Continent's placeholder Hazards.
+ * Tier 12 table). Continent Hazards are sized for a 0.85–4.5 unit Bunny.
  */
 export const CONTINENT_DIRECTOR = {
   firstTier: 12,

@@ -9,6 +9,7 @@
 import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { CITY_DEBRIS } from './cityDebris';
 import { CONTINENT_DEBRIS } from './continentDebris';
+import { ICE_SHEET_DEBRIS } from './iceSheetDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 import { REGION_DEBRIS } from './regionDebris';
 
@@ -55,6 +56,8 @@ export interface DebrisType {
   tiers: [number, number];
   /** Where it spawns (default 'house'). Room weights only apply in rooms of that area. */
   area?: AreaId;
+  /** Model id whose GLB backs the visual (default: `id`; e.g. `calved_iceberg` renders the `iceberg` prop). */
+  model?: string;
 }
 
 const PI = Math.PI;
@@ -405,6 +408,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
   ...CITY_DEBRIS,
   ...REGION_DEBRIS,
   ...CONTINENT_DEBRIS,
+  ...ICE_SHEET_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

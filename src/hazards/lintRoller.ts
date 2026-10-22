@@ -6,7 +6,9 @@
  * The Lawn Mower (outdoors) reuses the lane patrol with LAWN_MOWER tuning: no sticking; a hit
  * knocks the Bunny off the lane, mows some fluff off (sheds mass) and the mower stops briefly.
  * In the region the Snowplow (SNOWPLOW) and the Freight Train (FREIGHT_TRAIN,
- * long fast lanes) patrol the same way, with real-size models scaled by size / modelSize.
+ * long fast lanes) patrol the same way, with real-size models scaled by size / modelSize. In the
+ * continent the Glacier Tongue (GLACIER_TONGUE) creeps along its lane, slow and heavy; its def
+ * prefers `tundra` and `mountains` zones (GLACIER_ZONES) when the map has them.
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
@@ -15,7 +17,7 @@ import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
 import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
-import type { HouseLayout } from '../world/types';
+import type { HouseLayout, RoomType } from '../world/types';
 import { BaseHazard } from './base';
 import { bunnySheltered, freeDistance, hitBunny, knockbackCm, knockbackDistance, pushBunnyOut, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
@@ -250,11 +252,15 @@ export const freightTrainDef = hazardRegistry.register({
   },
 });
 
-/** Continent lane patrol (placeholder tuning and model, see GLACIER_TONGUE). */
+/** Zones a Glacier Tongue is placed in when the layout has any (anywhere it fits otherwise). */
+export const GLACIER_ZONES: readonly RoomType[] = ['tundra', 'mountains'];
+
+/** Continent lane patrol: a glacier creeping down its valley (GLACIER_TONGUE). */
 export const glacierTongueDef = hazardRegistry.register({
   id: 'glacier_tongue',
   name: 'Glacier Tongue',
   footprint: tuningFootprint(GLACIER_TONGUE),
+  spawnZones: GLACIER_ZONES,
   mass: GLACIER_TONGUE.mass,
   modelId: GLACIER_TONGUE.modelId,
   create(run, x, z, id, rng) {
