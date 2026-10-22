@@ -10,7 +10,7 @@
  *
  * Slots: 'fluff' (Fluff earned, under the stats), 'leaderboard' (name entry + table),
  * 'extra' (anything else, last). Buttons for 'characterSelect' and 'shop' appear when
- * those screens are registered.
+ * those screens are registered. U opens Under the Couch when it is registered.
  */
 import type { GameEvents } from '../../core/events';
 import { CHARACTERS } from '../../data/characters';
@@ -125,12 +125,14 @@ export function registerResultsScreen(): void {
       const card = panel({ className: 'results-panel' }, head, body, actions);
       card.setAttribute('aria-labelledby', 'results-title');
       const cleanups: Array<() => void> = [];
+      let lastResult: RunResult | null = null;
 
       return {
         el: card,
         enter(params) {
           const e = params as RunResult | undefined;
           if (!e) return;
+          lastResult = e;
           const v = VARIANTS[e.reason] ?? VARIANTS.quit;
           const s = e.stats;
           const outside = s.area !== 'house';
@@ -197,6 +199,11 @@ export function registerResultsScreen(): void {
           if (handleMenuKeys(e, card)) return true;
           if (isKey(e, 'Enter') && !focusOnControl()) {
             game.startRun();
+            return true;
+          }
+          if (!e.repeat && isKey(e, 'KeyU') && screenRegistry.has('underTheCouch')) {
+            game.disposeRun();
+            game.go('underTheCouch', { back: 'characterSelect', characterId: (lastResult as RunResult | null)?.stats.characterId });
             return true;
           }
           return false;

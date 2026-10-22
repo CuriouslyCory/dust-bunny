@@ -313,3 +313,18 @@
 .lb-diff-hardcore {
   color: var(--berry-700);
 }
+
+/* Loadout pips beside the Character (one per Keepsake, in its grade colour). */
+.lb-loadout {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+.lb-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--grade);
+  box-shadow: 0 0 0 1px rgba(42, 29, 23, 0.35);
+}

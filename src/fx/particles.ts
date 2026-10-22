@@ -96,6 +96,28 @@ export class PuffParticles {
     this.pos.needsUpdate = this.vel.needsUpdate = this.data.needsUpdate = this.color.needsUpdate = true;
   }
 
+  /**
+   * Particles that start on a ring of `radius` around (x, z) and stream in to the centre (they
+   * travel `vel / k`, so the inward speed is set to land on the centre), e.g. Keepsake fibres
+   * tangling into the Bunny.
+   */
+  emitInward(x: number, y: number, z: number, n: number, size: number, radius: number, color: Color, life = 0.9): void {
+    const k = 3.5;
+    for (let i = 0; i < n; i++) {
+      const slot = this.next;
+      this.next = (this.next + 1) % this.capacity;
+      const a = Math.random() * Math.PI * 2;
+      const d = radius * (0.8 + Math.random() * 0.4);
+      const h = y + (Math.random() - 0.3) * radius * 0.6;
+      this.pos.setXYZ(slot, x + Math.cos(a) * d, h, z + Math.sin(a) * d);
+      this.vel.setXYZ(slot, -Math.cos(a) * d * k, (y - h) * k - size * 0.6, -Math.sin(a) * d * k);
+      this.data.setXYZW(slot, this.time + Math.random() * 0.25, life * (0.8 + Math.random() * 0.4), size * (0.6 + Math.random() * 0.8), 0);
+      const l = 0.9 + Math.random() * 0.2;
+      this.color.setXYZ(slot, color.r * l, color.g * l, color.b * l);
+    }
+    this.pos.needsUpdate = this.vel.needsUpdate = this.data.needsUpdate = this.color.needsUpdate = true;
+  }
+
   /** `viewportHeight` in device pixels, `fov` in degrees: keeps point sizes in world units. */
   update(dt: number, viewportHeight: number, fovDeg: number): void {
     this.time += dt;

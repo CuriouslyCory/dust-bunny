@@ -16,6 +16,7 @@
 import type { GameEvents } from '../../core/events';
 import { CHARACTERS, getCharacter } from '../../data/characters';
 import { getDifficulty, isDifficultyId } from '../../data/difficulty';
+import { getGrade, getKeepsakeType, type KeepsakeTypeId } from '../../data/keepsakes';
 import { getTier } from '../../data/tiers';
 import { account as defaultAccount, type AccountClient } from '../../net/account';
 import { leaderboard as defaultClient, type LeaderboardClient } from '../../net/leaderboard';
@@ -77,6 +78,23 @@ function postLine(p: BoardPost | undefined, board: BoardId): { text: string; err
   // What the server stored, not what the "Posting as" line expected (a failed session lookup posts anonymously).
   const how = r.online ? (r.entry.verified ? ' · ✓ verified' : ' · anonymous') : '';
   return { text: `${r.rank ? `Rank #${r.rank}${where}` : `Saved${where}`} · ${r.entry.score.toLocaleString()} pts${how}${r.nameCensored ? ' (name replaced)' : ''}` };
+}
+
+/** Two small grade-coloured pips for an entry's Loadout (none for entries from older clients). */
+function loadoutPips(loadout: AnyLeaderboardEntry['loadout']): HTMLElement | null {
+  if (!loadout?.length) return null;
+  const labels = loadout.map((k) => `${getKeepsakeType(k.type as KeepsakeTypeId)?.name ?? k.type} · ${getGrade(k.grade).material}`);
+  const el = h(
+    'span',
+    { className: 'lb-loadout', title: `Tucked in: ${labels.join(', ')}` },
+    ...loadout.map((k) => {
+      const pip = h('i', { className: 'lb-pip' });
+      pip.style.setProperty('--grade', getGrade(k.grade).color);
+      return pip;
+    }),
+  );
+  el.setAttribute('aria-label', `Keepsakes: ${labels.join(', ')}`);
+  return el;
 }
 
 export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): LeaderboardPanel {
@@ -188,6 +206,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
 
   function row(e: AnyLeaderboardEntry, rank: number | string, mine: boolean): HTMLTableRowElement {
     const badge = difficultyBadge(e.difficulty);
+    const pips = loadoutPips(e.loadout);
     const mark = marks ? [e.verified ? verifiedMark() : anonymousMark()] : [];
     const area = 'area' in e;
     const run = e as LeaderboardEntry;
@@ -196,7 +215,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       { className: mine ? 'lb-mine' : '' },
       h('td', { textContent: String(rank) }),
       h('td', { className: 'lb-n' }, h('span', { className: 'lb-name-text', textContent: e.name }), ...mark),
-      h('td', { className: 'lb-bunny' }, getCharacter(e.character).name, ...(badge ? [badge] : [])),
+      h('td', { className: 'lb-bunny' }, getCharacter(e.character).name, ...(pips ? [pips] : []), ...(badge ? [badge] : [])),
       h('td', { className: 'lb-score', textContent: e.score.toLocaleString() }),
       area
         ? h('td', { textContent: `${Math.round(e.maxRadius)} cm`, title: `Grew from ${(e as AreaLeaderboardEntry).radiusIn.toFixed(1)} cm` })

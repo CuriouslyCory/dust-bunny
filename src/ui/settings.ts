@@ -1,5 +1,5 @@
 /**
- * Player Settings (volumes, graphics quality, reduced motion, FPS readout, touch controls).
+ * Player Settings (volumes, graphics quality, reduced motion, FPS readout, touch controls, story captions).
  * `settings` is a process-wide store: read `settings.value`, change with `settings.update({ … })`,
  * react with `settings.subscribe(fn)` (called immediately, then on every change).
  * Persistence lives in settingsStorage.ts.
@@ -21,6 +21,8 @@ export interface Settings {
   showFps: boolean;
   /** 'auto' shows the joystick on touch devices. */
   touchControls: TouchControlsMode;
+  /** Narrator captions (e.g. when a boss leaves a Keepsake). */
+  storyCaptions: boolean;
 }
 
 const prefersReducedMotion = (): boolean => {
@@ -47,6 +49,7 @@ export function defaultSettings(): Settings {
     reducedMotion: prefersReducedMotion(),
     showFps: false,
     touchControls: 'auto',
+    storyCaptions: true,
   };
 }
 
@@ -66,6 +69,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = defaultSetti
     reducedMotion: bool(r.reducedMotion, defaults.reducedMotion),
     showFps: bool(r.showFps, defaults.showFps),
     touchControls: oneOf(r.touchControls, ['auto', 'on', 'off'] as const, defaults.touchControls),
+    storyCaptions: bool(r.storyCaptions, defaults.storyCaptions),
   };
 }
 

@@ -10,6 +10,9 @@ describe('settings', () => {
     expect(s.quality).toBe(d.quality);
     expect(s.showFps).toBe(true);
     expect(s.touchControls).toBe('on');
+    expect(s.storyCaptions).toBe(true);
+    expect(sanitizeSettings({ storyCaptions: false }, d).storyCaptions).toBe(false);
+    expect(sanitizeSettings({ storyCaptions: 'no' }, d).storyCaptions).toBe(true);
     expect(sanitizeSettings(null, d)).toEqual(d);
     expect(sanitizeSettings('garbage', d)).toEqual(d);
   });

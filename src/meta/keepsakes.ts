@@ -158,6 +158,17 @@ export class KeepsakeTracker {
   }
 }
 
+let installed: KeepsakeTracker | null = null;
+
+/** The browser's tracker (set by installRoguelike), or null in headless code. */
+export function getKeepsakeTracker(): KeepsakeTracker | null {
+  return installed;
+}
+
+export function setKeepsakeTracker(t: KeepsakeTracker | null): void {
+  installed = t;
+}
+
 /** Narrator line for a boss's Keepsake drop (docs/design.md, deadpan). */
 export function dropCaption(bossId: string, bossName: string, material: string): string {
   switch (bossId) {

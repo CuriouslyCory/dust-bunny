@@ -45,6 +45,7 @@ export function registerMenuScreens(): void {
       });
       const motion = toggle({ label: 'Reduced motion', hint: 'Calmer UI animation', value: s.reducedMotion, onChange: (v) => settings.update({ reducedMotion: v }) });
       const fps = toggle({ label: 'Show FPS', value: s.showFps, onChange: (v) => settings.update({ showFps: v }) });
+      const captions = toggle({ label: 'Story captions', hint: 'Narrator lines, e.g. when a boss leaves a Keepsake', value: s.storyCaptions, onChange: (v) => settings.update({ storyCaptions: v }) });
       const touch = segmented<TouchControlsMode>({
         label: 'Touch controls',
         value: s.touchControls,
@@ -65,12 +66,13 @@ export function registerMenuScreens(): void {
         motion.set(v.reducedMotion);
         fps.set(v.showFps);
         touch.set(v.touchControls);
+        captions.set(v.storyCaptions);
       });
       const done = button('Done', () => game.go(back), { variant: 'primary' });
       const reset = button('Reset to defaults', () => settings.reset(), { variant: 'ghost', size: 'sm' });
       const el = panel(
         { title: 'Settings', className: 'settings-panel' },
-        scrollArea('settings-body', section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el)),
+        scrollArea('settings-body', section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el), section('Story', captions.el)),
         h('div', { className: 'panel-actions' }, reset, done),
       );
       return {
