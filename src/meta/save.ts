@@ -6,7 +6,7 @@
  * is corrupt, SaveStore copies it to `<key>:corrupt` before overwriting it on the next save.
  *
  * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
- * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`) don't need a bump.
+ * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`) don't need a bump.
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
@@ -52,6 +52,8 @@ export interface SaveData {
   characters: Record<string, CharacterHoard>;
   /** Character id → the Loadout last tucked in on this device (repaired against the Hoard). */
   lastLoadout: Record<string, KeepsakeRef[]>;
+  /** Universe victories (endings) so far; the title reads "Universe N" with N = universes + 1. */
+  universes: number;
 }
 
 export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'corrupt';
@@ -67,6 +69,7 @@ export function defaultSave(): SaveData {
     stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0, feltings: 0 },
     characters: {},
     lastLoadout: {},
+    universes: 0,
   };
 }
 
@@ -114,6 +117,7 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
       if (repaired.length) d.lastLoadout[id] = repaired;
     }
   }
+  d.universes = int(o.universes);
   return d;
 }
 

@@ -12,6 +12,8 @@
  * bad_json, 405, 413, 503 unavailable. The comparison rule lives in src/shared/progress.ts; the
  * upsert applies it atomically, so two devices can't overwrite each other's newer progress.
  * A body without `characters` (a bundle from before Keepsakes) keeps the stored Hoards.
+ * `universes` never goes down: the stored count becomes the larger of the two even when the upload
+ * is refused (a body without it, from before Act 9, reads as 0 and keeps the stored count).
  */
 import { validateProgress, type Progress } from '../src/shared/progress.js';
 import { sessionUser } from '../server/auth.js';
@@ -21,19 +23,20 @@ import { errorResponse, HttpError, json, readJson } from '../server/http.js';
 /** Up to 3 Characters × 50 Hoard cells fit in about 4 KB; the rest is headroom. */
 const MAX_BODY_BYTES = 16_384;
 
-const COLUMNS = 'fluff, upgrades, stats, characters, updated_at';
+const COLUMNS = 'fluff, upgrades, stats, characters, universes, updated_at';
 
 interface Row {
   fluff: number;
   upgrades: unknown;
   stats: unknown;
   characters: unknown;
+  universes: number | null;
   updated_at: Date | string;
 }
 
 /** Rows were validated on the way in; re-check anyway so a bad row can't break clients. */
 function toProgress(row: Row): { progress: Progress | null; updatedAt: string } {
-  const v = validateProgress({ fluff: row.fluff, upgrades: row.upgrades, stats: row.stats, characters: row.characters ?? {} });
+  const v = validateProgress({ fluff: row.fluff, upgrades: row.upgrades, stats: row.stats, characters: row.characters ?? {}, universes: row.universes ?? 0 });
   return { progress: v.ok ? v.value : null, updatedAt: new Date(row.updated_at).toISOString() };
 }
 
@@ -64,22 +67,27 @@ async function put(request: Request): Promise<Response> {
   const total = `(player_progress.stats->>'totalFluffEarned')::bigint`;
   const runs = `(player_progress.stats->>'runs')::bigint`;
   const [stored] = await query<Row>(
-    `INSERT INTO player_progress AS player_progress (user_id, fluff, upgrades, stats, characters, updated_at)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, now())
+    `INSERT INTO player_progress AS player_progress (user_id, fluff, upgrades, stats, characters, universes, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $7, now())
      ON CONFLICT (user_id) DO UPDATE
        SET fluff = EXCLUDED.fluff, upgrades = EXCLUDED.upgrades,
            stats = CASE WHEN $6::boolean
              THEN EXCLUDED.stats || jsonb_build_object('keepsakesEarned', COALESCE(player_progress.stats->'keepsakesEarned', '0'::jsonb))
              ELSE EXCLUDED.stats END,
            characters = CASE WHEN $6::boolean THEN player_progress.characters ELSE EXCLUDED.characters END,
+           universes = GREATEST(player_progress.universes, EXCLUDED.universes),
            updated_at = now()
        WHERE ${total} < (EXCLUDED.stats->>'totalFluffEarned')::bigint
           OR (${total} = (EXCLUDED.stats->>'totalFluffEarned')::bigint AND ${runs} <= (EXCLUDED.stats->>'runs')::bigint)
      RETURNING ${COLUMNS}`,
-    [userId, p.fluff, JSON.stringify(p.upgrades), JSON.stringify(p.stats), JSON.stringify(p.characters), keepCharacters],
+    [userId, p.fluff, JSON.stringify(p.upgrades), JSON.stringify(p.stats), JSON.stringify(p.characters), keepCharacters, p.universes],
   );
   if (stored) return json(200, { accepted: true, ...toProgress(stored) });
-  const [current] = await query<Row>(`SELECT ${COLUMNS} FROM player_progress WHERE user_id = $1`, [userId]);
+  // Refused, but a Universe ended on this device still counts.
+  const [current] = await query<Row>(
+    `UPDATE player_progress SET universes = GREATEST(universes, $2) WHERE user_id = $1 RETURNING ${COLUMNS}`,
+    [userId, p.universes],
+  );
   return json(200, { accepted: false, ...toProgress(current!) });
 }
 

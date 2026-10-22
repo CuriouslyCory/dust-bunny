@@ -86,6 +86,8 @@ export const BOUNDS = {
   areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1, universe: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */
   victoryMinTier: 9,
+  /** Run board `universes` (Universe victories so far); a victory counts itself, so it needs at least 1. */
+  universes: { min: 0, max: 100_000 },
 } as const;
 
 /** Largest maxRadius an Area board entry may claim after `sec` seconds in the Area from `radiusIn` (the Area's unit). */
@@ -117,6 +119,11 @@ export interface ScoreSubmission {
   runId?: string;
   /** Keepsakes tucked in; optional for older clients (missing: unknown, stored as NULL). */
   loadout?: LeaderboardLoadout;
+  /**
+   * Universes the player has ended, this Run included (a victory counts itself, so ≥ 1).
+   * Optional for clients from before Act 9 (missing or null: stored as NULL).
+   */
+  universes?: number;
 }
 
 /** What the client POSTs to `/api/leaderboard?board=<area>` when a Run clears an Area. */
@@ -150,6 +157,8 @@ export interface LeaderboardEntry {
   verified: boolean;
   /** Keepsakes tucked in for the Run (missing on entries from older clients). */
   loadout?: LeaderboardLoadout;
+  /** Universes the player had ended when posting (missing on entries from older clients). */
+  universes?: number;
   /** ISO timestamp. */
   createdAt: string;
 }
@@ -320,6 +329,12 @@ export function validateSubmission(body: unknown): ValidationResult {
   if (tierReached > radiusTier || tierReached < radiusTier - 1)
     return fail('tierReached', 'tierReached does not match maxRadius.');
   if (victory && tierReached < BOUNDS.victoryMinTier) return fail('victory', `A victory requires Tier ${BOUNDS.victoryMinTier}.`);
+  const universes = b.universes ?? undefined;
+  if (universes !== undefined) {
+    if (!isInt(universes) || universes < BOUNDS.universes.min || universes > BOUNDS.universes.max)
+      return fail('universes', `universes must be an integer between ${BOUNDS.universes.min} and ${BOUNDS.universes.max}.`);
+    if (victory && universes < 1) return fail('universes', 'A victory ends a Universe, so universes must be at least 1.');
+  }
   const sec = durationMs / 1000;
   if (debrisAbsorbed === 0 && maxRadius > BOUNDS.maxStartRadius)
     return fail('maxRadius', 'Cannot grow without absorbing Debris.');
@@ -333,7 +348,7 @@ export function validateSubmission(body: unknown): ValidationResult {
 
   return {
     ok: true,
-    value: { name, nameCensored: censored, character: c.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}), ...(c.loadout ? { loadout: c.loadout } : {}) },
+    value: { name, nameCensored: censored, character: c.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}), ...(c.loadout ? { loadout: c.loadout } : {}), ...(universes !== undefined ? { universes } : {}) },
   };
 }
 

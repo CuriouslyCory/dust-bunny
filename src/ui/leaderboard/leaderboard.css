@@ -331,6 +331,21 @@
   color: var(--berry-700);
 }
 
+/* Universes badge in the Run board's Tier cell (players who have ended a Universe). */
+.lb-universes {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  vertical-align: 1px;
+  color: var(--accent-700);
+  cursor: help;
+}
+
 /* Loadout pips beside the Character (one per Keepsake, in its grade colour). */
 .lb-loadout {
   display: inline-flex;

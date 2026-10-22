@@ -5,6 +5,7 @@
  * 'intro' (first Play only) and 'characterSelect', only when those screens are registered.
  */
 import type { Game } from '../../game/game';
+import { getMeta } from '../../meta/meta';
 import { introDue } from '../../story';
 import type { IntroParams } from '../../story/screens';
 import { accountChip } from '../account/screen';
@@ -16,6 +17,13 @@ import { registerResultsScreen } from './results';
 import '../screens.css';
 
 /** Starts a Run, via character select when that screen exists, after the intro on a first Play. */
+const TAGLINE = 'Roll. Absorb. Grow. Avoid the cleaning crew.';
+
+/** Title tagline: after the first ending it counts the Universe being played (Universes + 1). */
+function universeTagline(universes: number): string {
+  return universes >= 1 ? `Universe ${universes + 1} · Roll. Absorb. Grow.` : TAGLINE;
+}
+
 export function playFromMenu(game: Game): void {
   const play = (): void => {
     if (screenRegistry.has('characterSelect')) game.go('characterSelect');
@@ -78,6 +86,7 @@ export function registerBuiltinScreens(): void {
       const secondary = h('div', { className: 'menu-grid' }, shop, board, howTo, set);
       const chip = accountChip(game);
       const chipSlot = h('div', {}, chip);
+      const tagline = h('p', { className: 'tagline', textContent: TAGLINE });
       const el = h(
         'div',
         { className: 'title-screen' },
@@ -88,7 +97,7 @@ export function registerBuiltinScreens(): void {
           { className: 'title-card' },
           mascot('title-mascot'),
           logo(),
-          h('p', { className: 'tagline', textContent: 'Roll. Absorb. Grow. Avoid the cleaning crew.' }),
+          tagline,
           menu(play, secondary),
           h('p', { className: 'hint title-hint', textContent: 'Enter to play · WASD / arrows to roll · Space to dash' }),
         ),
@@ -99,6 +108,7 @@ export function registerBuiltinScreens(): void {
           shop.hidden = !screenRegistry.has('shop');
           board.hidden = !screenRegistry.has('leaderboard');
           chipSlot.hidden = !screenRegistry.has('account');
+          tagline.textContent = universeTagline(getMeta().universes);
           focusFirst(el, play);
         },
         onKey(e) {

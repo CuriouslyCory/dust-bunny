@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { UPGRADES } from '../data/upgrades';
 import { defaultSave } from '../meta/save';
 import { BOUNDS as LEADERBOARD_BOUNDS } from './leaderboard';
-import { compareProgress, isEmptyProgress, PROGRESS_BOUNDS, sameProgress, validateProgress, type Progress } from './progress';
+import { compareProgress, isEmptyProgress, mergeUniverses, PROGRESS_BOUNDS, sameProgress, validateProgress, type Progress } from './progress';
 
 const p = (over: Partial<Progress> = {}, stats: Partial<Progress['stats']> = {}): Progress => ({
   fluff: 50,
   upgrades: { fast_feet: 1 },
   characters: {},
+  universes: 0,
   ...over,
   stats: { runs: 3, wins: 0, bestRadius: 12.5, bestTier: 3, totalFluffEarned: 90, keepsakesEarned: 0, ...stats },
 });
@@ -45,6 +46,8 @@ describe('validateProgress', () => {
     ['huge radius', p({}, { bestRadius: PROGRESS_BOUNDS.bestRadius * 1.01 }), 'stats.bestRadius'],
     ['NaN radius', p({}, { bestRadius: Number.NaN }), 'stats.bestRadius'],
     ['string total', p({}, { totalFluffEarned: '9' as unknown as number }), 'stats.totalFluffEarned'],
+    ['negative universes', p({ universes: -1 }), 'universes'],
+    ['fractional universes', p({ universes: 1.5 }), 'universes'],
   ])('rejects %s', (_, body, field) => {
     const v = validateProgress(body);
     expect(v.ok).toBe(false);
@@ -61,11 +64,24 @@ describe('progress comparison', () => {
   });
 
   it('detects empty and equal saves', () => {
-    expect(isEmptyProgress({ fluff: 0, upgrades: {}, characters: {}, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0 } })).toBe(true);
+    expect(isEmptyProgress({ fluff: 0, upgrades: {}, characters: {}, universes: 0, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0 } })).toBe(true);
     expect(isEmptyProgress(p())).toBe(false);
     expect(sameProgress(p({ upgrades: { a: 1, b: 2 } }), p({ upgrades: { b: 2, a: 1 } }))).toBe(true);
     expect(sameProgress(p(), p({ fluff: 51 }))).toBe(false);
     expect(sameProgress(p(), p({ upgrades: { fast_feet: 1, magnetism: 1 } }))).toBe(false);
+  });
+});
+
+describe('universes', () => {
+  it('reads a missing field as 0, compares it in sameProgress but not compareProgress, and merges to the max', () => {
+    const { universes: _, ...old } = p();
+    expect(validateProgress(old)).toEqual({ ok: true, value: p() });
+    expect(validateProgress(p({ universes: 3 }))).toEqual({ ok: true, value: p({ universes: 3 }) });
+    expect(sameProgress(p({ universes: 1 }), p())).toBe(false);
+    expect(compareProgress(p({ universes: 5 }), p())).toBe(0);
+    expect(isEmptyProgress(p({ fluff: 0, upgrades: {}, universes: 1 }, { runs: 0, totalFluffEarned: 0 }))).toBe(false);
+    expect(mergeUniverses(2, 5)).toBe(5);
+    expect(mergeUniverses(4, undefined)).toBe(4);
   });
 });
 
