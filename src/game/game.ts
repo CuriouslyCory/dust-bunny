@@ -136,13 +136,19 @@ export class Game {
     this.resize();
 
     this.events.on('runEnded', (e) => {
-      // Winning in the Solar System: the light goes out first (fx/solar.ts), then the results.
+      // Winning in the Solar System: the light goes out first (fx/solar.ts) and the narrator's
+      // line is read, then the results.
       if (e.reason === 'victory' && this.run?.area === 'solar_system') {
         const run = this.run;
-        this.resultsTimer = window.setTimeout(() => {
+        const show = (): void => {
           this.resultsTimer = null;
-          if (this.run === run) this.go('results', e);
-        }, VICTORY_HOLD_SECONDS * 1000);
+          if (this.run !== run) return;
+          // A throttled tab can fire the caption timers late: wait while it is still playing too.
+          const left = this.hud.bannerLeft;
+          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(show, Math.max(left, 0.1) * 1000);
+          else this.go('results', e);
+        };
+        this.resultsTimer = window.setTimeout(show, VICTORY_HOLD_SECONDS * 1000);
         return;
       }
       this.go('results', e);

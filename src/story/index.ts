@@ -17,7 +17,7 @@ import { settings } from '../ui/settings';
 import { captionHold, captions, pickLine, type StoryBeat } from './narrator';
 import './story.css';
 
-export { captions, chapterOf, type StoryBeat } from './narrator';
+export { captionHold, captions, chapterOf, type StoryBeat } from './narrator';
 
 let available = true;
 
@@ -37,15 +37,15 @@ export function narrate(run: Run | null | undefined, beat: StoryBeat): StoryLine
   return pickLine(run.rng.seed, beat);
 }
 
-/** A line as a banner caption: its parts in turn, each held for the longest part's reading time. */
-export function storyCaption(line: StoryLine): { parts: string[]; hold: number } {
+/** A line as a banner caption: its parts in turn, each held for its own reading time. */
+export function storyCaption(line: StoryLine): { parts: string[]; holds: number[] } {
   const parts = captions(line);
-  return { parts, hold: Math.max(...parts.map(captionHold)) };
+  return { parts, holds: parts.map((p) => captionHold(p)) };
 }
 
 /** Seconds a banner carrying `caption` should stay up in total. */
-export function captionDuration(caption: { parts: readonly string[]; hold: number }): number {
-  return caption.parts.length * caption.hold;
+export function captionDuration(caption: { holds: readonly number[] }): number {
+  return caption.holds.reduce((sum, hold) => sum + hold, 0);
 }
 
 /** The intro plays on the first Play of a device while the story is on. */
