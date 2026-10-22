@@ -10,11 +10,17 @@
  * With --no-hazards a Run stops at the top Tier of the house / neighborhood (no boss to clear),
  * but keeps rolling in the city until --minutes so growth towards the boss size is measured.
  *
- * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards]
+ * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, Tumble
+ * hunkers while a telegraphed boss lane crosses it, Zap discharges at the nearest Hazard in range
+ * once the Static meter is full. --no-ability plays without Abilities (for comparison).
+ * The summary also counts boss fights and boss kills per Character.
+ *
+ * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
  *                 [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
  *                 [--difficulty=casual|arcade|hardcore]
  */
+import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from '../src/abilities';
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
@@ -42,6 +48,7 @@ const opt = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.spli
 const minutes = Number(opt('minutes') ?? 15);
 const chars = (opt('chars') ?? 'lint,tumble,zap').split(',');
 const withHazards = !args.includes('--no-hazards');
+const withAbility = !args.includes('--no-ability');
 const quiet = args.includes('--quiet');
 const stalls = args.includes('--stalls');
 /** Hazards hit as usual (knockback, shedding) but can't kill: measures pacing, not survival. */
@@ -369,7 +376,56 @@ class Bot implements InputSource {
     }
   }
 
+  /** True if the boss's telegraphed (or running) charge lane covers the Bunny. */
+  private laneCrosses(boss: RoboVac9000, pad = 1): boolean {
+    const b = this.run.bunny;
+    const fx = Math.sin(boss.yaw);
+    const fz = Math.cos(boss.yaw);
+    const dx = b.x - boss.x;
+    const dz = b.z - boss.z;
+    const along = dx * fx + dz * fz;
+    const side = Math.abs(dx * fz - dz * fx);
+    return along > -b.radius && along < boss.cfg.chargeDistance + b.radius && side < (boss.cfg.contactRadius * boss.scale + b.radius) * pad;
+  }
+
+  /** Ability policy (see file header): the `ability` edge and `abilityHeld` for this tick. */
+  private abilityInput(): { ability: boolean; abilityHeld: boolean } {
+    const sys = getAbilitySystem(this.run);
+    if (!sys) return { ability: false, abilityHeld: false };
+    const { bunny, hazards } = this.run;
+    const bosses = hazards.hazards.filter((h) => !h.dead && h.def.boss) as RoboVac9000[];
+    if (sys.data.id === 'decoy') {
+      const ctl = sys.controller as DecoyAbility;
+      if (!ctl.ready) return { ability: false, abilityHeld: false };
+      const bossAim = bosses.some((b) => b.state === 'telegraph' && this.laneCrosses(b));
+      const broomAim = hazards.hazards.some((h) => {
+        if (h.dead || h.def.id !== 'broom') return false;
+        const br = h as Broom;
+        return br.state === 'telegraph' && Math.hypot(bunny.x - br.pivotX, bunny.z - br.pivotZ) < BROOM.aggroRange + bunny.radius;
+      });
+      return { ability: bossAim || broomAim, abilityHeld: false };
+    }
+    if (sys.data.id === 'hunker') {
+      const ctl = sys.controller as HunkerAbility;
+      const threat = bosses.some((b) => (b.state === 'telegraph' || b.state === 'charge') && this.laneCrosses(b));
+      if (ctl.active) {
+        // Hold until the charge is over (the boss crashed into us, or stopped).
+        const keep = threat || bosses.some((b) => b.state === 'stunned' && Math.hypot(b.x - bunny.x, b.z - bunny.z) < b.cfg.contactRadius * b.scale + bunny.radius * 1.5);
+        return { ability: false, abilityHeld: keep };
+      }
+      const go = threat && ctl.canPlant;
+      return { ability: go, abilityHeld: go };
+    }
+    const ctl = sys.controller as DischargeAbility;
+    return { ability: ctl.ready && ctl.target !== null, abilityHeld: false };
+  }
+
   sample(): InputState {
+    const s = this.move();
+    return withHazards ? { ...s, ...this.abilityInput() } : s;
+  }
+
+  private move(): InputState {
     const dt = 1 / 60;
     const { bunny } = this.run;
     this.replan -= dt;
@@ -453,15 +509,20 @@ class Bot implements InputSource {
 }
 
 const fmt = (s: number | undefined) => (s === undefined ? '  -  ' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
-const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number }> = {};
+const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number }> = {};
 const modifiers = upgradeModifiers(upgrades);
 
 for (const characterId of chars) {
-  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0 });
+  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0, fights: {} as Record<string, number>, kills: {} as Record<string, number>, abilityUses: 0 });
   for (const seed of seeds) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
-    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards });
+    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
+    events.on('hazardSpawned', (e) => {
+      if (['robovac_9000', 'street_sweeper', 'garbage_truck'].includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
+    });
+    events.on('bossDefeated', (e) => (sum.kills[e.defId] = (sum.kills[e.defId] ?? 0) + 1));
+    events.on('abilityUsed', () => sum.abilityUses++);
     let leaveArea = false;
     events.on('exitOpened', (e) => {
       log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
@@ -541,9 +602,11 @@ for (const characterId of chars) {
 }
 
 const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : undefined);
-console.log(`\nMedian Tier times (runs reaching it), ${difficulty}:`);
+console.log(`\nMedian Tier times (runs reaching it), ${difficulty}${withAbility ? '' : ', no Abilities'}:`);
 for (const [id, s] of Object.entries(summary)) {
   console.log(
     `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  fluff ${Math.min(...s.fluff)}–${med(s.fluff)}–${Math.max(...s.fluff)}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
   );
+  const bosses = ['robovac_9000', 'street_sweeper', 'garbage_truck'].filter((b) => s.fights[b]);
+  console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}`);
 }
