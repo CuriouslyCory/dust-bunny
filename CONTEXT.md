@@ -20,3 +20,10 @@
 - **Verified score** — a leaderboard entry posted while signed in, shown with a ✓. Entries posted without an account are **anonymous**.
 - **Run board** / **Area board** — the leaderboards. The Run board ranks whole Runs; each Area has an Area board that takes an entry whenever a Run clears that Area. Signed-in players' entries post automatically; anonymous players choose to submit them on the results screen.
 - **Dash** — a short speed burst on a cooldown.
+- **Ability** — each Character's own move, unlocked from the first Run and used with E, the right mouse button or the touch Ability button: Lint's **Decoy**, Tumble's **Hunker**, Zap's **Discharge**. An Ability can stun a boss at most once every 6 s, and every chip still needs contact.
+- **Decoy** — Lint's Ability (tap): a lint ball shed on the floor for a few seconds. Hazards that aim at the Bunny aim at it instead while it is in their range, and a Hazard that touches it is **clogged** (briefly stunned). Sprays and blasts pop it.
+- **Hunker** — Tumble's Ability (hold): Tumble plants itself. While planted it can't move, takes no damage, sheds no mass and can't be pushed, pulled or stuck; bosses crash into it as into a wall. The cooldown grows with the time held.
+- **Discharge** — Zap's Ability (tap when the Static meter is full): shorts out the nearest Hazard in range. A normal Hazard is destroyed into scrap; a boss is stunned (not chipped) and then **Grounded**.
+- **Static meter** — Zap's charge for Discharge: it fills while Zap rolls fast (Dash counts double), drains while Zap is slow, and shows as Zap's glow and the HUD ring.
+- **Grounded** — a boss that was just Discharged; it can't be Discharged again for 10 s.
+- **Cap** — a per-Character limit on a stat (for example, Tumble's speed never exceeds 1.05) applied after Shop Upgrades, Keepsakes and Perks but before timed effects such as Pickups and Hazard slows. The Perk draft stops offering a Perk whose stats are all at cap. The **envelope** is the most a stat can reach permanently (base + maxed Shop + the best two Keepsakes).
