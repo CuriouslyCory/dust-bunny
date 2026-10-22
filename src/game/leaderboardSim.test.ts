@@ -1,6 +1,6 @@
 /**
  * Leaderboard plausibility with Keepsakes, as a quick CI smoke check (about 3 s): the balance bot
- * (scripts/sim.ts) plays one seeded Zap Run with the max Loadout (rarity 5) until just after the
+ * (scripts/sim.ts) plays one seeded Zap Run with the max Loadout (Mythic) until just after the
  * house clear, and its Run board and house board submissions must pass validateSubmission /
  * validateAreaSubmission. Zap is the fastest grower and its Discharge scrap and Static Cling add
  * burst growth. The full check (every Character, every Area) is
