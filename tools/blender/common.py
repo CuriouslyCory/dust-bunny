@@ -195,6 +195,23 @@ PALETTE = {
     "booth_red": ("#c8202a", 0.45, 0.0, None, 0),
     "glow_warm": ("#ffd98a", 0.3, 0.0, "#ffc860", 3.0),
     "glow_white": ("#fffaf0", 0.3, 0.0, "#fff4d6", 1.5),
+    # region: hazards
+    "cat_yellow": ("#f2b705", 0.45, 0.05, None, 0),
+    "drum_steel": ("#7b828a", 0.35, 0.8, None, 0),
+    "loco_navy": ("#2e4366", 0.45, 0.1, None, 0),
+    "loco_yellow": ("#f4c430", 0.45, 0.0, None, 0),
+    "sleeper": ("#5b4636", 0.9, 0.0, None, 0),
+    "plow_orange": ("#f26b1d", 0.45, 0.0, None, 0),
+    "salt": ("#e6e4dd", 0.9, 0.0, None, 0),
+    "duster_yellow": ("#ffd21f", 0.4, 0.0, None, 0),
+    "hull_dark": ("#2e3640", 0.6, 0.2, None, 0),
+    "barge_red": ("#a8412f", 0.75, 0.0, None, 0),
+    "bomber_yellow": ("#ffcb1f", 0.4, 0.0, None, 0),
+    "bomber_red": ("#d32630", 0.4, 0.0, None, 0),
+    "plant_grey": ("#9ba3ac", 0.7, 0.1, None, 0),
+    "plant_dark": ("#5b636c", 0.6, 0.2, None, 0),
+    "soot": ("#141414", 0.95, 0.0, None, 0),
+    "glow_furnace": ("#ff6a1a", 0.3, 0.0, "#ff5a10", 6.0),
 }
 
 

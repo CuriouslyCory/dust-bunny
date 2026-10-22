@@ -19,6 +19,7 @@ import common  # noqa: E402
 import furniture  # noqa: E402
 import hazards  # noqa: E402
 import outdoor  # noqa: E402
+import region  # noqa: E402
 
 CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               ("prop", furniture.PROPS),
@@ -27,7 +28,9 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               ("prop", outdoor.PROPS),
               # city (after the neighbourhood)
               ("hazard", city.HAZARDS), ("furniture", city.FURNITURE),
-              ("prop", city.PROPS)]
+              ("prop", city.PROPS),
+              # region (Act 4, after the city)
+              ("hazard", region.HAZARDS)]
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
 
@@ -81,7 +84,8 @@ def write_doc(models):
         "metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp "
         "and power light, street sweeper beacon and headlights, city "
         "vehicle beacons, headlights and signs, street lamp and tower "
-        "crown lights).",
+        "crown lights, region vehicle beacons and light bars, the "
+        "Incinerator's furnace glow).",
         "- Each file has one root node named after the id. Static geometry "
         "is a single `body` mesh child; parts the game may animate are "
         "separate children whose origin is their pivot (listed below).",
