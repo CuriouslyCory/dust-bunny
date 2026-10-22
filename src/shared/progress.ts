@@ -11,6 +11,7 @@
  * Keepsakes change neither counter either: they sync like spending.
  */
 import { KEEPSAKE_STACK_MAX, keepsakeTypesForCharacter, parseSharedHoardKey } from './keepsakes.js';
+import { SCORE_TIER_MIN_RADII } from './score.js';
 
 export interface ProgressStats {
   runs: number;
@@ -43,7 +44,8 @@ export const PROGRESS_BOUNDS = {
   upgradeLevel: 100,
   upgradeCount: 64,
   count: 10_000_000,
-  bestRadius: 100_000,
+  /** Real cm, same ceiling as a leaderboard Run's maxRadius (a Globe Run passes 6,000,000). */
+  bestRadius: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 10,
   bestTier: 100,
   bossesBeaten: 32,
 } as const;
