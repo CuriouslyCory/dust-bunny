@@ -197,16 +197,34 @@ The Moon is the only stun source because the Globe has no obstacles. A real-size
 
 Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptune (2.9) stay too big until r ≈ 4.2, so they and Jupiter (until it is eaten) are what its charges hit, with the Hot Jupiter as the fallback when none is near. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
 
-**The Galaxy (after the Sun; 1 world unit = 100 ly, Bunny r = 0.85 units on arrival; placeholders from the Act 8 groundwork).** Each Hazard spreads the Solar System Hazard with the same behaviour, at the same size and speed, with a procedural fallback model; the hazards pass replaces the numbers and the fight.
+**The Galaxy (after the Sun; 1 world unit = 100 ly, Bunny r = 0.85 units on arrival).** Hazards are the Galaxy's own vacuums, lighthouses and explosions. The Galaxy repeats the Solar System's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps about the size of the Solar System Hazard whose behaviour it reskins. The map has no obstacles.
 
-| Hazard            | From Tier | Size (units, radius) | Absorbable at r | Behaviour (placeholder) | Damage |
-|-------------------|-----------|----------------------|-----------------|-------------------------|--------|
-| Black Hole        | 18        | 1.1                  | ≈ 1.57          | Roomba behaviour: slow drifting wander (2.2 / 3.8 units/s), strong pull (reach 3, 0.55 × max speed), spinning accretion disc | 1 + knockback |
-| Pulsar            | 18        | 1.3                  | ≈ 1.86          | turret: the beam head sweeps at 2.4 rad/s out of range, then the Sunspot's burst in blue | 1 per bolt |
-| Supernova Remnant | 18        | 1.5                  | ≈ 2.14          | the Sungrazer's roaming trail-layer; violet trail slows to 0.55 × | 1 + knockback |
-| Globular Cluster  | 18        | 1.6                  | ≈ 2.29          | rides the orbit round the core nearest its spawn (3 / 4.4 units/s) | 1 + big shove, sheds 8 % |
-| Supernova         | 19        | 2.4                  | ≈ 3.43          | the Solar Flare's blast cone; its shell pulses through the warm-up | 1 on contact |
-| Sagittarius A*    | 19 (boss) | 2.8                  | ≈ 4             | the Sun's state machine with suction (reach 10, 0.45) instead of the solar wind; charges stunned by star clusters the Bunny can't absorb (a star cluster swings round when none is near); violet volleys; chips are relativistic jets | 1, sheds 5 % |
+| Hazard            | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|-------------------|-----------|----------------------|-----------------|-----------|--------|
+| Black Hole        | 18        | 1.1                  | ≈ 1.57          | Roomba behaviour: slow drifting wander (2 / 3.4 units/s, turns every 2–4 s), strong pull (reach 3.2, 0.55 × max speed); loose Debris ≤ 1.2 within 4 units spirals in (3 units/s) and is swallowed; rings flow inward over the pull | 1 + knockback |
+| Pulsar            | 18        | 1.3                  | ≈ 1.86          | static lighthouse: twin beams turn all the time (0.6 / 0.7 rad/s); when a beam is about to reach the Bunny in range (9 / 12) on screen, red lanes and amber wedges (the arc they will sweep) for 1.1 / 0.95 s, then the beams burn 1.3 s, still turning; reload 2.8 / 2.3 s | 1 per burn, knocked onward and out |
+| Supernova Remnant | 18        | 1.4                  | ≈ 2.0           | slow filament shell roaming across zones (1.6 / 2.2 units/s, waypoints within 22 units), its shell breathing; its trail of glowing filament rings (10 s) slows to 0.5 × | 1 + knockback |
+| Globular Cluster  | 18        | 1.5                  | ≈ 2.14          | rides the galactic orbit ring nearest its spawn one way round (2.8 / 4.2 units/s), its star swarm turning | 1 + big shove, sheds 8 % |
+| Supernova         | 19        | 2.3                  | ≈ 3.29          | overheated star: its core swells through the amber warm-up (1.4 s), then a short shock blast (1.1 s, range 14, ±30°, 1.5 × max speed) pushes the Bunny and loose Debris ≤ 1.1 away; off 2.8 s | 1 on contact |
+| Sagittarius A*    | 19 (boss) | 2.8                  | ≈ 4 (≈ 2.89 after two chips) | a pull that bends the camera, eats loose Debris, indigestion from star clusters, jet volleys, lunges; chips are relativistic jets | 1, sheds 5 % (jets 3 %) |
+
+(Per-Tier pairs are Tier 18 / Tier 19.)
+
+| Sagittarius A* (`SAGITTARIUS_A`) | Value | The Sun, for scale |
+|---|---|---|
+| Size / contact radius | 2.8 / 2.5 units; drawn at model scale 1.4 (hole r 1.4, disc r 4.5, 7.6 tall with the north jet) | 2.8 / 2.6 |
+| Hunt speed / turn rate | 4.2 units/s / 1 rad/s | 5 / 1.2 |
+| Lunge (charge): trigger / telegraph / speed / distance | 24 / 1.6 s / 20 units/s / 28; the map edge ends it without a stun | 32 / 1.6 / 22 / 42 |
+| Pull | while it hunts: reach 12 beyond its edge, 0.5 × the Bunny's max speed at the edge (the bosses' suction, scaled by Suction Multiplier; not while hunkered, hidden or able to absorb it) | solar wind push 0.4 |
+| Camera bend | lensing warp round the hole: strength 0.4 idle, up to 1 at full pull (Einstein ring 2 × the hole, fading out by 1.8 × the disc; off while the Bunny is over the disc); at full pull the camera leans 0.22 × the gap towards it (at most a third of the camera distance) and rolls 0.1 rad; reduced motion: no roll, a third of the lean | — |
+| Feeding | while it hunts, telegraphs, lunges or recovers: loose Debris ≤ 8 within 14 units of its edge spirals in at up to 7 units/s and is swallowed at its horizon (not its chips) | blows Debris ≤ 0.6 outward |
+| Indigestion | a `star_cluster` swallowed counts 1, an `open_cluster` ½, any cluster ≥ 4.5 counts 2; 2 within 6 s stuns it for 4.2 s (recover 1.2 s): amber ring, the glow sputters, the north jet coughs, the camera lets go | eclipse: a charge into a giant planet, 3.8 s |
+| Clusters drift in | on arrival and every 9 s of hunting, if less than 2 meals' worth of clusters is within 22 units of it, 2 star clusters land side by side on the line towards the Bunny (2.5 units short of the Bunny's edge, no further than the cluster's size + 7 from the boss's edge, inside its Debris pull), sized max(2.1, 1.2 × the largest the Bunny can absorb) | the Hot Jupiter, same idea |
+| Jets (volley) | every 6.5 s hunting or recovering on screen: violet lane for 1.1 s, then 4 bolts (26 units/s, range 30); the north jet swells while it aims | flares: 7 s, 1.1 s, 3 at 20 |
+| Chips | × 0.85, 8 relativistic jets (0.45 × the Bunny's radius); each chip hides the north jet for 6 s | × 0.85, 8 prominences |
+| Minis | none | none |
+
+Clusters are the only stun source besides Abilities and Spiky Dash: the Galaxy has no obstacles, and natural star clusters (2.1) are food from Tier 19, so the boss's own clusters arrive too big for the Bunny to eat and double as cover against its pull. Leading it across clusters (or waiting behind the ones that drift in) is the fight. Sim check with the Bunny started at Tier 19 (`pnpm sim --area=galaxy --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:28–0:45 per Character, 43 indigestion stuns; without Abilities 18 / 18, 0:31–0:43, 45 indigestion stuns. The whole Act (`--area=galaxy --seeds=6 --minutes=15`, placeholder ladder and growth, before the world pass): 15 / 15 boss kills, no deaths, 29 indigestion stuns; Tier 19 at Lint 9:29, Tumble 12:39, Zap 7:51 (three Tumble Runs still in Tier 18 at 15 minutes), Act median Lint 10:21, Tumble 12:53, Zap 8:37.
 
 A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, the Sun the heliopause to the Galaxy, and absorbing Sagittarius A* wins the Run.
 
