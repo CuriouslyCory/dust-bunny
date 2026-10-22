@@ -16,7 +16,8 @@
  * - The light goes out (`run.solarSystemCleared`): over `OUT_SECONDS` the Sun's glare, every light,
  *   the painted floor and the orbit lanes fade to near black and the Bunny's plasma flares
  *   (`BunnyView.plasmaBoost`), so only the Bunny's own glow is left, under the narrator's cleared
- *   line. Game holds the results screen back for `VICTORY_HOLD_SECONDS` so the moment is seen.
+ *   line. Game holds the results screen back for `VICTORY_HOLD_SECONDS`, or until the line has been
+ *   read, so the moment is seen.
  */
 import {
   AdditiveBlending,
@@ -48,7 +49,7 @@ import type { Lighting } from './lighting';
 
 /** The centre Sun's size (units): the boss model's (sphere radius 2.7, squashed to 0.7 in Y). */
 const SUN = { radius: 2.7, squash: 0.7, footprint: 2.94, height: 3.79 };
-/** Seconds for the light to go out, and how long the results screen waits after the Sun is absorbed. */
+/** Seconds for the light to go out, and how long the results screen waits at least after the Sun is absorbed. */
 export const OUT_SECONDS = 1.8;
 export const VICTORY_HOLD_SECONDS = 3.2;
 const LOCKED = new Color('#ffb347');
@@ -195,7 +196,7 @@ export class SolarSky {
         // The narrator's cleared line over the dark (the results screen repeats it).
         const line = narrate(run, { kind: 'cleared', area: 'solar_system' });
         const caption = line ? storyCaption(line) : undefined;
-        this.hud.banner('The Sun is yours', { variant: 'good', duration: Math.min(VICTORY_HOLD_SECONDS, caption ? captionDuration(caption) : 3), caption });
+        this.hud.banner('The Sun is yours', { variant: 'good', duration: caption ? captionDuration(caption) : 3, caption });
       }
       this.outT = Math.min(1, this.outT + Math.max(dt, 1e-4) / OUT_SECONDS);
     }

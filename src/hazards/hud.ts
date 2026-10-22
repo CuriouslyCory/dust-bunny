@@ -10,8 +10,11 @@ import { formatLength } from '../data/units';
 import { absorbRadiusFor } from './common';
 
 export function installHazardHud(game: Game): void {
-  const announce = (title: string, subtitle: string, duration: number) =>
-    game.hud.banner(title, { subtitle, variant: 'boss', duration });
+  // Fight news is stale a few seconds late: while a narrator caption holds the banner, it is a toast.
+  const announce = (title: string, subtitle: string, duration: number) => {
+    if (game.hud.bannerBusy) game.hud.toast(`${title} ${subtitle}`, { key: `boss:${title}`, tone: 'hazard', short: title });
+    else game.hud.banner(title, { subtitle, variant: 'boss', duration });
+  };
 
   let bossId: number | null = null;
   game.events.on('runStarted', () => {

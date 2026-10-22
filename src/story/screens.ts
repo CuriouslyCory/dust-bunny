@@ -9,11 +9,9 @@ import { button, isKey } from '../ui/components';
 import { h, registerScreen } from '../ui/screens';
 import { dustMotes } from '../ui/screens/builtin';
 import { settings } from '../ui/settings';
-import { captionHold, captions, chapterOf } from './narrator';
+import { CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming } from './narrator';
 import type { AreaId } from '../world/types';
 
-/** Seconds before the end of a panel when its captions start fading out (CSS: 300 ms). */
-const FADE_OUT = 0.3;
 /** Pointer or key held this long skips the whole sequence. */
 const HOLD_TO_SKIP = 0.6;
 /** The chapter card ignores input this long after it opens (a tap or Space meant for play). */
@@ -39,12 +37,15 @@ export function storyCards(): StoryCards {
   let panels: readonly StoryPanel[] = [];
   let index = -1;
   let t = 0;
+  /** The current panel's timing at the reading pace (narrator.ts `panelTiming`). */
+  let timing = { reveal: 0, hold: 0 };
   let finish: (() => void) | null = null;
 
   const show = (i: number): void => {
     index = i;
     t = 0;
     const p = panels[i]!;
+    timing = panelTiming(p);
     first.textContent = p.caption;
     second.textContent = p.caption2 ?? '';
     second.hidden = !p.caption2;
@@ -78,20 +79,23 @@ export function storyCards(): StoryCards {
       if (!finish || index < 0) return;
       t += dt;
       const p = panels[index]!;
-      // The second caption lands after a beat; both fade out together before the next panel.
-      if (p.caption2 && t >= Math.min(1.4, p.hold * 0.4)) second.classList.add('show');
-      if (t >= p.hold - FADE_OUT) {
+      // The second caption lands once the first has been read; both fade out together before the next panel.
+      if (p.caption2 && t >= timing.reveal) second.classList.add('show');
+      if (t >= timing.hold - CAPTION_FADE_OUT) {
         first.classList.remove('show');
         second.classList.remove('show');
       }
-      if (t >= p.hold) advance();
+      if (t >= timing.hold) advance();
     },
   };
 }
 
-/** Panels for a narrator line: one per caption, each held for its reading time. */
-export function linePanels(line: StoryLine): StoryPanel[] {
-  return captions(line).map((caption) => ({ caption, hold: captionHold(caption) + 0.4 }));
+/**
+ * Panels for a narrator line: one per caption, each held for its reading time plus the fade out.
+ * `heading` (the chapter label and title) is read with the first caption.
+ */
+export function linePanels(line: StoryLine, heading = ''): StoryPanel[] {
+  return captions(line).map((caption, i) => ({ caption, hold: captionHold(caption, i === 0 ? heading : '') + CAPTION_FADE_OUT }));
 }
 
 export interface IntroParams {
@@ -223,7 +227,7 @@ export function registerStoryScreens(): void {
           done = p.done;
           armed = CHAPTER_ARM;
           press.reset();
-          cards.play(linePanels(p.line), () => {
+          cards.play(linePanels(p.line, `Chapter ${chapter.number} ${chapter.title}`), () => {
             const d = done;
             done = undefined;
             d?.();
