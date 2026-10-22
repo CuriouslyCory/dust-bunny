@@ -373,7 +373,7 @@ class Bot implements InputSource {
         }
         continue;
       }
-      const spray = h.def.id === 'spray_bottle' || h.def.id === 'pressure_washer' || h.def.id === 'crop_duster' || h.def.id === 'volcano' ? (h as SprayBottle) : null;
+      const spray = h.def.id === 'spray_bottle' || h.def.id === 'pressure_washer' || h.def.id === 'crop_duster' || h.def.id === 'volcano' || h.def.id === 'sunspot' ? (h as SprayBottle) : null;
       const sprayReach = spray && spray.def.id !== 'spray_bottle' ? tierValue(spray.cfg.range, this.run.tier) + r : 300;
       if (spray && d < sprayReach && (spray.state === 'telegraph' || spray.state === 'firing' || spray.droplets.length > 0)) {
         // Sidestep the aim lane (a player sees the red lane).

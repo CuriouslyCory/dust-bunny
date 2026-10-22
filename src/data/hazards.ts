@@ -1632,11 +1632,12 @@ export const SUNSPOT: TurretTuning = {
   range: solarTiers(10, 14),
   turnRate: 1.6,
   telegraph: solarTiers(1.2, 1),
-  /** Pulses: four bolts, further apart than the laser's three. */
-  burst: 4,
+  /** Pulses: three bolts, further apart than the laser's (0.09). */
+  burst: 3,
   burstGap: 0.16,
-  cooldown: solarTiers(3.2, 2.6),
-  dropletSpeed: solarTiers(14, 19),
+  /** A little slower to reload and fire than the laser (3.4 / 2.8 s, 15 / 20 units/s): it sweeps the inner orbits, where the Bunny spends Tier 16. */
+  cooldown: solarTiers(3.8, 3),
+  dropletSpeed: solarTiers(13, 18),
   dropletRadius: 0.22,
   spread: 0.03,
   /** The emitter's muzzle: model (0, 39, 77.3) × 1.3 / 1.359. */
@@ -2049,7 +2050,7 @@ export const SOLAR_DIRECTOR = {
     {
       budget: [2, 4],
       interval: [8, 6],
-      types: { rogue_asteroid: { weight: 1, max: 2 }, sunspot: { weight: 1, max: 2 }, comet: { weight: 0.8, max: 1 }, sungrazer: { weight: 0.7, max: 1 } },
+      types: { rogue_asteroid: { weight: 1, max: 2 }, sunspot: { weight: 0.8, max: 2 }, comet: { weight: 0.9, max: 1 }, sungrazer: { weight: 0.7, max: 1 } },
     },
     // Tier 17 (r ≥ 3): solar flares join, and the Sun arrives.
     {
