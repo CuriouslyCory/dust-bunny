@@ -1,5 +1,5 @@
 {
-  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts). Continent models are authored at 1 unit = 100 m: scale 0.01.",
+  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts). Continent models are authored at 1 unit = 100 m and Globe models at 1 unit = 10 km: both scale 0.01.",
   "couch": { "file": "couch.glb", "fit": "xz" },
   "armchair": { "file": "armchair.glb", "fit": "xz" },
   "coffee_table": { "file": "coffee_table.glb", "fit": "xz" },
@@ -77,5 +77,22 @@
   "lake": { "file": "lake.glb", "fit": "none", "scale": 0.01 },
   "city_ruins": { "file": "city_ruins.glb", "fit": "none", "scale": 0.01 },
   "mesa": { "file": "mesa.glb", "fit": "none", "scale": 0.01 },
-  "forest_patch": { "file": "forest_patch.glb", "fit": "none", "scale": 0.01 }
+  "forest_patch": { "file": "forest_patch.glb", "fit": "none", "scale": 0.01 },
+  "debris_satellite": { "file": "debris_satellite.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "space_station": { "file": "space_station.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "asat_laser": { "file": "asat_laser.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "reentry_burn": { "file": "reentry_burn.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "globe_hurricane": { "file": "globe_hurricane.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "orbital_sweeper": { "file": "orbital_sweeper.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "mini_sweeper": { "file": "mini_sweeper.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "island": { "file": "island.glb", "fit": "none", "scale": 0.01 },
+  "atoll": { "file": "atoll.glb", "fit": "none", "scale": 0.01 },
+  "archipelago": { "file": "archipelago.glb", "fit": "none", "scale": 0.01 },
+  "ocean_patch": { "file": "ocean_patch.glb", "fit": "none", "scale": 0.01 },
+  "landmass": { "file": "landmass.glb", "fit": "none", "scale": 0.01 },
+  "moon": { "file": "moon.glb", "fit": "none", "scale": 0.01 },
+  "satellite": { "file": "satellite.glb", "fit": "none", "scale": 0.01 },
+  "rocket_stage": { "file": "rocket_stage.glb", "fit": "none", "scale": 0.01 },
+  "space_junk": { "file": "space_junk.glb", "fit": "none", "scale": 0.01 },
+  "cloud_swirl": { "file": "cloud_swirl.glb", "fit": "none", "scale": 0.01 }
 }
