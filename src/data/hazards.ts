@@ -779,7 +779,7 @@ export const LANDFILL_COMPACTOR: RoombaTuning = {
   suctionStrength: 0.2,
   modelId: 'landfill_compactor',
   /** The model's footprint radius (cm). */
-  modelSize: 360,
+  modelSize: 355,
   spinNode: 'beacon',
   spinRate: 4,
 };
@@ -813,7 +813,7 @@ export const SNOWPLOW: LaneTuning = {
   releaseRadii: 3.5,
   hitPause: 1,
   modelId: 'snowplow',
-  modelSize: 520,
+  modelSize: 530,
   spinNode: null,
 };
 
@@ -859,7 +859,7 @@ export const CROP_DUSTER: TurretTuning = {
   spread: 0.09,
   nozzleHeight: 0.5,
   modelId: 'crop_duster',
-  modelSize: 560,
+  modelSize: 562,
   aimNode: null,
   idleSpin: 0.5,
   wetSeconds: 2,
@@ -887,7 +887,7 @@ export const RIVER_BARGE: MopTuning = {
   trailRadius: 1.2,
   slowMultiplier: 0.5,
   modelId: 'river_barge',
-  modelSize: 700,
+  modelSize: 706,
 };
 
 /** Water Bomber: amber cone warm-up, then a water drop that blasts the Bunny away (Leaf Blower) and soaks it. */
@@ -914,7 +914,7 @@ export const WATER_BOMBER: AirConeTuning = {
   debrisSpeed: 10,
   nozzleOffset: 0.5,
   modelId: 'water_bomber',
-  modelSize: 1400,
+  modelSize: 1380,
   wetSeconds: 1.5,
   wetMultiplier: 0.6,
 };
@@ -958,7 +958,7 @@ export const INCINERATOR: BossTuning = {
   brushSpin: 10,
   onDefeat: 'openExit',
   modelId: 'incinerator',
-  modelSize: 1800,
+  modelSize: 1781,
   ash: {
     interval: 5.5,
     telegraph: 0.9,
