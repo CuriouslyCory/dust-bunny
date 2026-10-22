@@ -7,13 +7,15 @@
  * Garbage Truck's mini scrubbers (MINI_SCRUBBER); in the region the Landfill Compactor
  * (LANDFILL_COMPACTOR, packer-wheel pull, spins its roof `beacon`) and the Incinerator's mini
  * compactors (MINI_COMPACTOR); in the continent the Tornado (TORNADO: erratic turns, a wide vortex
- * pull, spins its `funnel`).
+ * pull, spins its `funnel`); on the Globe the Debris-Field Satellite (DEBRIS_SATELLITE: tumbling
+ * turns, a debris-field pull, spins its `panels`) and the Orbital Sweeper's Kessler swarm of mini
+ * sweepers (MINI_SWEEPER).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
+import { DEBRIS_SATELLITE, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -201,5 +203,29 @@ export const tornadoDef = hazardRegistry.register({
   modelId: TORNADO.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, TORNADO);
+  },
+});
+
+/** Globe wanderer: a dead satellite tumbling through its debris field, which pulls (DEBRIS_SATELLITE). */
+export const debrisSatelliteDef = hazardRegistry.register({
+  id: 'debris_satellite',
+  name: 'Debris-Field Satellite',
+  footprint: tuningFootprint(DEBRIS_SATELLITE),
+  mass: DEBRIS_SATELLITE.mass,
+  modelId: DEBRIS_SATELLITE.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, DEBRIS_SATELLITE);
+  },
+});
+
+/** The Orbital Sweeper's Kessler swarm (MINI_SWEEPER). */
+export const miniSweeperDef = hazardRegistry.register({
+  id: 'mini_sweeper',
+  name: 'Mini Sweeper',
+  footprint: tuningFootprint(MINI_SWEEPER),
+  mass: MINI_SWEEPER.mass,
+  modelId: MINI_SWEEPER.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, MINI_SWEEPER);
   },
 });

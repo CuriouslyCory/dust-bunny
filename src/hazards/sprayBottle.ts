@@ -9,14 +9,16 @@
  * same way with fast, wide water jets, and the Crop Duster (region, CROP_DUSTER) turns its whole
  * body, spins its `propeller` and dusts a burst of pesticide that soaks the same way. The Volcano
  * (continent, VOLCANO) never moves: only its `crater` node turns to aim, the lane is the floor
- * telegraph, and it lobs a burst of lava bombs (`dropletArc`) whose ash slows like the soak.
+ * telegraph, and it lobs a burst of lava bombs (`dropletArc`) whose ash slows like the soak. The
+ * Anti-Satellite Laser (globe, ASAT_LASER) turns only its `head`, scans while the Bunny is out of
+ * range, and fires fast, narrow red bolts that do not soak; it is placed on landmasses.
  *
  * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
  * clogged by it), and a droplet that reaches the Decoy pops it.
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
+import { ASAT_LASER, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -207,5 +209,18 @@ export const volcanoDef = hazardRegistry.register({
   modelId: VOLCANO.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, VOLCANO);
+  },
+});
+
+/** Globe turret: laser bolts from the turret `head`, emplaced on landmasses when the map has them (ASAT_LASER). */
+export const asatLaserDef = hazardRegistry.register({
+  id: 'asat_laser',
+  name: 'Anti-Satellite Laser',
+  footprint: tuningFootprint(ASAT_LASER),
+  spawnZones: ['landmasses'],
+  mass: ASAT_LASER.mass,
+  modelId: ASAT_LASER.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, ASAT_LASER);
   },
 });

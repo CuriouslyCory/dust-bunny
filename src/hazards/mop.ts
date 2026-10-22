@@ -6,18 +6,25 @@
  * patrol kept near its spawn point (`patrolRange`) and a wide trail. The River Barge (region,
  * RIVER_BARGE) is placed in `river` zones when the map has one (its def's `spawnZones`), so it
  * patrols the river and leaves a slowing wake. The River Surge (continent, RIVER_SURGE) is a fast
- * flood surge across the plains with a wide muddy trail.
+ * flood surge across the plains with a wide muddy trail. The Re-entry Burn (globe, REENTRY_BURN)
+ * roams across zones (`roam`) and its fire trail burns instead of slowing (`burn`: the Bunny sheds
+ * mass every `interval` s on it).
+ *
+ * On a map that wraps east–west the spawn zone's rect is moved to the Mop's lap (rooms are stored
+ * once, in the canonical strip), so the waypoints stay around it.
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MOP, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
+import { canonicalX } from '../world/wrap';
 import { BaseHazard } from './base';
 import { bunnySheltered, hazardFloorFree, hitBunny, moveCircle, separateFromBunny, turnTowards, yawOf } from './common';
 import { DECAL_COLORS } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
+import { shedMass } from './shed';
 
 export const WET_SOURCE = 'hazard:wet';
 
@@ -44,6 +51,9 @@ export class Mop extends BaseHazard {
   readonly puddles: Puddle[] = [];
   private readonly trail: InstancedMesh;
   private readonly maxPuddles: number;
+  /** Burning trail (`cfg.burn`): seconds until it can burn the Bunny again, and burns so far. */
+  private burnTimer = 0;
+  burns = 0;
 
   constructor(
     id: number,
@@ -51,7 +61,7 @@ export class Mop extends BaseHazard {
     run: Run,
     x: number,
     z: number,
-    rng: Rng,
+    private readonly rng: Rng,
     readonly cfg: MopTuning = MOP,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
@@ -61,11 +71,14 @@ export class Mop extends BaseHazard {
     const cm = 1 / run.unit;
     const room = roomAt(run.house, x, z);
     if (room) {
-      const r = room.rect;
+      // Rooms are stored once on a map that wraps east–west: move the rect to the Mop's lap.
+      const lap = x - canonicalX(run.house, x);
+      const r = cfg.roam ? run.house.bounds : room.rect;
       const inset = cfg.size + 4 * cm;
       const reach = cfg.patrolRange;
-      const minX = Math.max(r.minX + inset, x - reach);
-      const maxX = Math.min(r.maxX - inset, x + reach);
+      const wraps = cfg.roam && run.house.wrapX;
+      const minX = wraps ? x - reach : Math.max(r.minX + lap + inset, x - reach);
+      const maxX = wraps ? x + reach : Math.min(r.maxX + lap - inset, x + reach);
       const minZ = Math.max(r.minZ + inset, z - reach);
       const maxZ = Math.min(r.maxZ - inset, z + reach);
       for (let tries = 0; this.waypoints.length < cfg.waypoints && tries < 60; tries++) {
@@ -84,7 +97,7 @@ export class Mop extends BaseHazard {
     this.maxPuddles = Math.ceil((cfg.trailLife * fastest) / cfg.trailSpacing) + 4;
     const geom = new CircleGeometry(1, 20);
     geom.rotateX(-Math.PI / 2);
-    const material = new MeshBasicMaterial({ color: DECAL_COLORS.wet, transparent: true, opacity: 0.35, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const material = new MeshBasicMaterial({ color: cfg.trailColor ?? DECAL_COLORS.wet, transparent: true, opacity: cfg.burn ? 0.5 : 0.35, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.trail = new InstancedMesh(geom, material, this.maxPuddles);
     this.trail.count = 0;
     this.trail.frustumCulled = false;
@@ -130,11 +143,24 @@ export class Mop extends BaseHazard {
       }
       if (!wet && Math.hypot(b.x - p.x, b.z - p.z) < c.size * c.trailRadius * s + b.radius * 0.3) wet = true;
     }
-    if (wet) {
+    if (wet && c.slowMultiplier < 1) {
       b.stats.removeSource(WET_SOURCE);
       b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: 0.25 });
     }
+    if (c.burn) this.burn(dt, run, c.burn, wet);
     this.syncTrail();
+  }
+
+  /**
+   * A burning trail: every `interval` s on it the Bunny sheds `shedFraction` of its volume (the
+   * first time it steps on, then while it stays). Not during i-frames, a hunker or a Dust Cloud.
+   */
+  private burn(dt: number, run: Run, burn: { shedFraction: number; interval: number }, onTrail: boolean): void {
+    this.burnTimer = Math.max(0, this.burnTimer - dt);
+    const b = run.bunny;
+    if (!onTrail || this.burnTimer > 0 || !b.alive || b.invulnerable > 0 || b.hiddenFromHazards) return;
+    this.burnTimer = burn.interval;
+    if (shedMass(run, this.rng, burn.shedFraction, this.def.id).volume > 0) this.burns++;
   }
 
   private syncTrail(): void {
@@ -211,5 +237,17 @@ export const riverSurgeDef = hazardRegistry.register({
   modelId: RIVER_SURGE.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, RIVER_SURGE);
+  },
+});
+
+/** Globe trail-layer: a capsule streaking across the map, leaving a fire trail that burns (REENTRY_BURN). */
+export const reentryBurnDef = hazardRegistry.register({
+  id: 'reentry_burn',
+  name: 'Re-entry Burn',
+  footprint: tuningFootprint(REENTRY_BURN),
+  mass: REENTRY_BURN.mass,
+  modelId: REENTRY_BURN.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, REENTRY_BURN);
   },
 });

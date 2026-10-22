@@ -129,7 +129,35 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 
 Mountain ranges for the map: a furniture Obstacle whose def id starts with `mountain`, or furniture standing in a `mountains` zone (the placeholder massifs).
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, and absorbing the Ice Sheet wins the Run.
+**The Globe (after the Ice Sheet; 1 world unit = 1,000 km, Bunny r = 0.85 units on arrival).** Hazards are what is left in orbit, or falling out of it. The Globe repeats the Continent's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps the size and speed ratios of the Continent Hazard whose behaviour it reskins. The map wraps east–west; every Hazard works across the seam.
+
+| Hazard                 | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|------------------------|-----------|----------------------|-----------------|-----------|--------|
+| Debris-Field Satellite | 14        | 1.1                  | ≈ 1.57          | Roomba behaviour: tumbling wander (2.4 / 4.2 units/s, turns every 1–2.6 s), debris-field pull (reach 1.2, 0.26 × max speed), spinning panels | 1 + knockback |
+| Anti-Satellite Laser   | 14        | 1.3                  | ≈ 1.86          | static turret on landmasses: the head aims (range 10 / 14) and scans out of range, red lane (1.25 / 1.05 s), then 3 fast laser bolts (15 / 20 units/s) | 1 per bolt |
+| Re-entry Burn          | 14        | 1.5                  | ≈ 2.14          | capsule streaking between waypoints within 24 units of its spawn, across zones (2.6 / 3.8 units/s); its fire trail (6 s) burns instead of slowing | 1 + knockback; trail sheds 2.5 % every 0.7 s |
+| Space Station          | 14        | 1.9                  | ≈ 2.71          | lane patrol along the nearest orbit lane (within 20 units, else a lane through its spawn), east–west, 2.4 / 3.8 units/s, lanes 10–40 | 1 + big shove, sheds 8 % |
+| Hurricane              | 15        | 2.4                  | ≈ 3.43          | over oceans and shelf seas; spinning spiral, amber warm-up (1.1 s), then a wind cone (range 14) that blasts the Bunny away and soaks it | 1 on contact; blast slows |
+| Mini sweeper           | boss      | 0.6                  | ≈ 0.86          | the Kessler swarm: fast Roomba behaviour (5.5 / 7 units/s), weak intake pull | 1 + knockback |
+| The Orbital Sweeper    | 15 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | net pull at the front, telegraphed charges, twin laser volleys, stunned only by the Moon, summons the Kessler swarm | 1, sheds 4 % (lasers 3 %) |
+
+(Per-Tier pairs are Tier 14 / Tier 15.)
+
+| The Orbital Sweeper (`ORBITAL_SWEEPER`) | Value | Incinerator, for scale |
+|---|---|---|
+| Size / contact radius | 2.8 / 2.1 units (model 5.5 × 4.3 units, mostly wings and net) | 2.8 / 2.95 |
+| Hunt speed / turn rate | 5 units/s / 1.3 rad/s | 6 / 1.4 |
+| Charge: trigger / telegraph / speed / distance | 32 / 1.5 s / 22 units/s / 40 | 35 / 1.4 / 24 / 45 |
+| Stun / recover | 3.5 s / 1.2 s, only from a charge into a Moon the Bunny can't absorb yet (the poles just end it; Abilities and Spiky Dash still stun it) | 3 / 1, towns and the map edge |
+| Net | Bunny within 0.8 rad of its facing and 3.5 units (× 1.1 model scale) of the net tip, 2.5 units ahead, pulled at 0.35 × its max speed | suction 0.35, all round |
+| Lasers | every 6 s hunting or recovering on screen: red lane for 1 s, then 4 bolts (26 units/s, range 30) from the lenses | ash: 5.5 s, 0.9 s, 5 pellets at 17 |
+| Kessler swarm | 3 mini sweepers every 13 s of hunting, up to 6 alive | 2 mini compactors / 14 s, up to 4 |
+| The Moon | on arrival and every 8 s of hunting, if no Moon the Bunny can't absorb is within 26 units of it, one lands 3 units beyond its edge (between it and the Sweeper the first time), sized max(the `moon` type's size, 1.25 × the largest the Bunny can absorb) | — |
+| Chips | × 0.85, 8 parts | × 0.85, 8 parts |
+
+The Moon is the only stun source because the Globe has no obstacles. A real-size Moon (1.74 units) is food from r ≈ 2.5, before the boss arrives at Tier 15, so the Sweeper brings its own: big enough to block the Bunny (which can still shove it), so standing behind it baits a charge into it. Sim check with the Bunny started at Tier 15 (`pnpm sim --area=globe --radius=3.05`): 12 / 12 wins (4 Moon stuns, the rest Ability stuns and growth); without Abilities 11 / 12 wins, 7 Moon stuns.
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, and absorbing the Orbital Sweeper wins the Run.
 
 ## Pacing and scale (Acts 4–9)
 

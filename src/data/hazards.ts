@@ -67,6 +67,15 @@ export function continentTiers(t12: number, t13: number): PerTier {
   return [t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t13];
 }
 
+/**
+ * Per-Tier values for globe Hazards (Tiers 14, 15), in Globe units (1 = 1,000 km). Tiers 1–13
+ * repeat the Tier 14 value: the Bunny arrives on the Globe at Tier 13 (0.85 units, the arrival
+ * leap) and globe Hazards live only there.
+ */
+export function globeTiers(t14: number, t15: number): PerTier {
+  return [t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t15];
+}
+
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
 export interface RoombaTuning {
   size: number;
@@ -147,6 +156,12 @@ export interface LaneTuning {
   modelSize?: number;
   /** Model node rolled about X while moving (null: none). */
   spinNode: string | null;
+  /**
+   * Orbit lanes (the Space Station): if the layout has a `routes` entry of kind 'orbit' within this
+   * distance of the spawn point, the lane runs along it (east–west, the route's copy nearest the
+   * spawn on a map that wraps). Otherwise the lane is planned through the spawn point as usual.
+   */
+  orbitReach?: number;
 }
 
 export const LINT_ROLLER: LaneTuning = {
@@ -278,6 +293,15 @@ export interface MopTuning {
   modelId: HazardModelId;
   /** Hazard size the unscaled model represents (the model is scaled by size / modelSize). */
   modelSize: number;
+  /** Waypoints anywhere within `patrolRange` of the spawn point, not only in its spawn zone (the Re-entry Burn streaks across zones). */
+  roam?: boolean;
+  /** Trail colour (default: the wet blue). */
+  trailColor?: string;
+  /**
+   * A burning trail (the Re-entry Burn): every `interval` s the Bunny spends on it (outside its
+   * i-frames) it sheds `shedFraction` of its volume. No damage; `slowMultiplier` still applies.
+   */
+  burn?: { shedFraction: number; interval: number };
 }
 
 export const MOP: MopTuning = {
@@ -435,6 +459,11 @@ export interface AshTuning {
   shedFraction: number;
   /** Launch point along the boss's facing, as a fraction of its size (negative: behind the centre). */
   originOffset: number;
+  /** Pellet colour and glow (default: ash grey with an ember glow; the Orbital Sweeper fires red laser bolts). */
+  color?: string;
+  glow?: string;
+  /** Telegraph lane colour (default: amber). */
+  laneColor?: string;
 }
 
 export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
@@ -1225,6 +1254,285 @@ export const ICE_SHEET: IceSheetTuning = {
   calve: { cornerX: 2.32, cornerZ: 1.22, sizeRadii: 0.55, minSize: 0.6, maxSize: 2, regrow: 5 },
 };
 
+// ── Globe Hazards (Tiers 14–15, 1 world unit = 1,000 km, Bunny radius ≈ 0.85–4.5 units) ──
+// Earth from orbit: what is left to clean up is in orbit, or falling out of it. Globe units
+// throughout. The Globe repeats the Continent's shape (Tiers at 1 and 3 units, arrival at 0.85,
+// boss absorbable at ≈ 4), so each Hazard keeps the size and speed ratios of the Continent Hazard
+// whose behaviour it reskins, with its own twist. The Blender models are authored at 1 unit =
+// 10 km and loaded at scale 0.01 (public/models/manifest.json), so they arrive in Globe units:
+// `modelSize` is the catalog footprint radius / 100 and heights follow the model (model top ×
+// size / modelSize). Tier 14 Hazards are a threat on arrival (r 0.85) and food by early Tier 15;
+// the Tier 15 Hurricane is food before the Orbital Sweeper is.
+
+/** Debris-Field Satellite: Roomba behaviour, a dead satellite tumbling through its debris field; the field pulls; spins its `panels`. */
+export const DEBRIS_SATELLITE: RoombaTuning = {
+  size: 1.1,
+  /** Model top (y 0.806) × 1.1 / 1.398. */
+  height: 0.63,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 1.8,
+  knockbackRadii: 2.5,
+  speed: globeTiers(2.4, 4.2),
+  /** Tumbling: frequent, wide turns (the Tornado's are 1.2–3 s, 2.2 rad). */
+  turnInterval: [1, 2.6],
+  turnAngle: 2.4,
+  /** A little shorter and weaker than the Tornado's vortex (1.4, 0.3): a debris field, not a storm. */
+  suctionReach: 1.2,
+  suctionStrength: 0.26,
+  modelId: 'debris_satellite',
+  /** The model's footprint radius (139.8 × 10 km). */
+  modelSize: 1.398,
+  spinNode: 'panels',
+  spinRate: 2.5,
+};
+
+/** Space Station: a lane patrol along an orbit lane; a hit knocks the Bunny off the lane and sheds mass (no sticking). */
+export const SPACE_STATION: LaneTuning = {
+  size: 1.9,
+  /** Top of the hovering model (y 0.462) × 1.9 / 1.294. */
+  height: 0.68,
+  mass: 4,
+  damage: 1,
+  /** Faster than the Glacier Tongue (1.4, 2.4): it is in orbit. */
+  speed: globeTiers(2.4, 3.8),
+  laneMin: 10,
+  laneMax: 40,
+  endPause: 1.2,
+  stickSeconds: 0,
+  releaseInvulnerability: 0,
+  shedFraction: 0.08,
+  releaseCm: 3,
+  releaseRadii: 4,
+  hitPause: 1.5,
+  modelId: 'space_station',
+  /** The model's footprint radius (129.4 × 10 km; 2.56 × 1.38 units, truss across its course). */
+  modelSize: 1.294,
+  spinNode: null,
+  /** Joins an orbit lane (`layout.routes`, kind 'orbit') within this distance of its spawn point. */
+  orbitReach: 20,
+};
+
+/** Anti-Satellite Laser: a static turret; its `head` aims along a red lane, then fires fast, accurate laser bolts. */
+export const ASAT_LASER: TurretTuning = {
+  size: 1.3,
+  /** Model 0.68 tall × 1.3 / 1.527. */
+  height: 0.58,
+  mass: 3,
+  damage: 1,
+  knockbackCm: 0.8,
+  knockbackRadii: 0.6,
+  range: globeTiers(10, 14),
+  turnRate: 1.6,
+  /** A longer lock than the Volcano's (1.1, 0.9): the bolts are fast, so the lane is the warning. */
+  telegraph: globeTiers(1.25, 1.05),
+  burst: 3,
+  burstGap: 0.09,
+  cooldown: globeTiers(3.4, 2.8),
+  /** About twice the Volcano's bombs (7, 10), straight and narrow. */
+  dropletSpeed: globeTiers(15, 20),
+  dropletRadius: 0.18,
+  spread: 0.03,
+  /** The muzzle tip: model (0, 0.50, 1.47) × 1.3 / 1.527. */
+  nozzleHeight: 0.43,
+  modelId: 'asat_laser',
+  /** The model's footprint radius (152.7 × 10 km). */
+  modelSize: 1.527,
+  aimNode: 'head',
+  /** Scans the sky while the Bunny is out of range. */
+  idleSpin: 0.4,
+  wetSeconds: 0,
+  wetMultiplier: 1,
+  dropletColor: '#ff3b30',
+};
+
+/** Re-entry Burn: Mop behaviour, a capsule streaking across the map and leaving a fire trail that burns mass off the Bunny. */
+export const REENTRY_BURN: MopTuning = {
+  size: 1.5,
+  /** Model top (y 0.475) × 1.5 / 1.373. */
+  height: 0.52,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 2.2,
+  knockbackRadii: 3,
+  /** A little faster than the River Surge (2.2, 3.4). */
+  speed: globeTiers(2.6, 3.8),
+  waypoints: 4,
+  patrolRange: 24,
+  trailSpacing: 0.7,
+  /** The fire burns out sooner than mud dries (River Surge 9 s). */
+  trailLife: 6,
+  trailFade: 0.5,
+  trailRadius: 0.9,
+  /** No slow: the trail burns instead. */
+  slowMultiplier: 1,
+  modelId: 'reentry_burn',
+  /** The model's footprint radius (137.3 × 10 km; 0.92 × 2.43 units, capsule at +Z, plasma to −Z). */
+  modelSize: 1.373,
+  roam: true,
+  trailColor: '#ff7a1a',
+  /** 2.5 % of the Bunny's volume every 0.7 s on the trail (a Space Station hit sheds 8 %). */
+  burn: { shedFraction: 0.025, interval: 0.7 },
+};
+
+/** Hurricane (seen from orbit): Leaf Blower behaviour over the oceans; spins its `spiral`, then a wind cone that blasts the Bunny away and soaks it. */
+export const GLOBE_HURRICANE: AirConeTuning = {
+  size: 2.4,
+  /** Model top (y 0.43) × 2.4 / 3.24. */
+  height: 0.32,
+  mass: 3.5,
+  damage: 1,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  shedFraction: 0,
+  speed: globeTiers(2, 2.8),
+  turnRate: 0.6,
+  coneHalfAngle: 0.5,
+  coneRange: 14,
+  /** Push speed at the eyewall: faster than the Bunny can roll into it. */
+  suctionStrength: 1.15,
+  warmup: 1.1,
+  on: 2,
+  off: 2.6,
+  mode: 'blow',
+  blowDebrisSize: 0.45,
+  debrisSpeed: 11,
+  /** The wind leaves the eyewall (the eye is 0.4 of the 3.24 footprint radius). */
+  nozzleOffset: 0.15,
+  modelId: 'globe_hurricane',
+  /** The model's footprint radius (324 × 10 km). */
+  modelSize: 3.24,
+  wetSeconds: 1.5,
+  wetMultiplier: 0.6,
+  spinNode: 'spiral',
+  spinRate: 1.5,
+};
+
+/** Mini sweepers (the Orbital Sweeper's Kessler swarm): Roomba behaviour, small, fast, a weak intake pull. */
+export const MINI_SWEEPER: RoombaTuning = {
+  ...DEBRIS_SATELLITE,
+  size: 0.6,
+  /** Model top (y 0.293) × 0.6 / 0.519. */
+  height: 0.34,
+  mass: 3,
+  knockbackCm: 1.2,
+  /** Faster than the mini compactors (5, 6.5 Region units/s): a swarm. */
+  speed: globeTiers(5.5, 7),
+  turnInterval: [0.8, 2],
+  suctionReach: 0.4,
+  suctionStrength: 0.1,
+  modelId: 'mini_sweeper',
+  /** The model's footprint radius (51.9 × 10 km). */
+  modelSize: 0.519,
+  /** Static model (no animated nodes). */
+  spinNode: '',
+  spinRate: 0,
+};
+
+/**
+ * The Orbital Sweeper's capture net: while it hunts, a Bunny within `reach` of the net tip
+ * (`front` ahead of its centre) and within `halfAngle` of its facing is pulled towards the tip at
+ * `strength` × its max speed (fading with distance). `front` and `reach` are model units at full
+ * size (Globe units at model scale 1), scaled with the model and its chips.
+ */
+export interface NetTuning {
+  front: number;
+  reach: number;
+  halfAngle: number;
+  strength: number;
+}
+
+/**
+ * The Moon near the fight (Debris type `typeId`, src/data/globeDebris.ts). A charge that runs into
+ * a Moon the Bunny can't absorb yet stuns the Orbital Sweeper (the only stun source on the Globe:
+ * the map has no obstacles), and such a Moon blocks it like an obstacle. When it arrives, and
+ * every `interval` s while it hunts, if no such Moon is within `range` of the Bunny, one swings
+ * round: it lands `gap` beyond the Bunny's edge (between the Bunny and the Sweeper the first time,
+ * then at a random bearing), at least the type's own size and `margin` × the largest size the
+ * Bunny can absorb, so it stays out of reach for a while.
+ */
+export interface MoonTuning {
+  typeId: string;
+  interval: number;
+  range: number;
+  margin: number;
+  gap: number;
+}
+
+export interface OrbitalSweeperTuning extends BossTuning {
+  net: NetTuning;
+  moon: MoonTuning;
+}
+
+/**
+ * The Orbital Sweeper (globe boss, Tier 15): a net-and-laser cleanup satellite. Same state machine
+ * as the other bosses (src/hazards/orbitalSweeper.ts): it hunts with its capture net (a pull at
+ * the front only), telegraphs charges with a red lane, fires twin laser volleys (`ash`: red bolts
+ * that shed mass), and summons a Kessler swarm of mini sweepers. Only a charge into the Moon stuns
+ * it. Needs Bunny radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two
+ * (Tier 15 starts at 3). Absorbing it clears the Globe (the last built Area, so the Run is won).
+ */
+export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
+  size: 2.8,
+  /** The bus and the net: the 2.55 footprint radius is mostly wings (5.04 wide), so ≈ 1.9 × 2.8 / 2.55. */
+  contactRadius: 2.1,
+  /** Model top (y 1.389) × 2.8 / 2.55. */
+  height: 1.52,
+  mass: 6,
+  damage: 1,
+  knockbackCm: 4,
+  knockbackRadii: 3,
+  shedFraction: 0.04,
+  introTime: 3.5,
+  /** Below the Incinerator's (6): a Tier 15 Bunny (18 units/s) outruns it. */
+  huntSpeed: 5,
+  turnRate: 1.3,
+  huntTime: [3, 4.5],
+  chargeTrigger: 32,
+  telegraph: 1.5,
+  /** Faster than the Bunny's 18 units/s at Tier 15 entry: sidestep, don't outrun. */
+  chargeSpeed: 22,
+  chargeDistance: 40,
+  stunTime: 3.5,
+  recover: 1.2,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  /** No radial suction: the net pulls at the front only (`net`). */
+  suctionReach: 0,
+  suctionStrength: 0,
+  summonInterval: 13,
+  summonCount: 3,
+  maxMinis: 6,
+  miniId: 'mini_sweeper',
+  brushSpin: 0,
+  onDefeat: 'openExit',
+  modelId: 'orbital_sweeper',
+  /** The model's footprint radius (255 × 10 km): ≈ 5.5 × 4.3 units at full size. */
+  modelSize: 2.55,
+  /** Twin laser volleys from the lenses (model z 0.84 × 2.8 / 2.55 ≈ 0.33 × size ahead of the centre). */
+  ash: {
+    interval: 6,
+    telegraph: 1,
+    count: 4,
+    gap: 0.1,
+    speed: 26,
+    radius: 0.25,
+    range: 30,
+    spread: 0.04,
+    damage: 1,
+    knockbackCm: 1,
+    knockbackRadii: 0.6,
+    shedFraction: 0.03,
+    originOffset: 0.33,
+    color: '#ff8a80',
+    glow: '#ff2a1a',
+    laneColor: '#ff3b30',
+  },
+  /** The net tip is at model z ≈ 2.3. */
+  net: { front: 2.3, reach: 3.5, halfAngle: 0.8, strength: 0.35 },
+  moon: { typeId: 'moon', interval: 8, range: 26, margin: 1.25, gap: 3 },
+};
+
 export interface TierSpawnTable {
   /** Alive Hazard budget at the start / end of the Tier (ramps with Tier progress). */
   budget: readonly [number, number];
@@ -1458,7 +1766,7 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

@@ -89,9 +89,11 @@ export function freeDistance(house: HouseLayout, x: number, z: number, dirX: num
  */
 export function bunnySheltered(run: Run, hazardHeight: number): boolean {
   const b = run.bunny;
+  // Obstacles are stored once on a map that wraps east–west: test the Bunny's canonical copy.
+  const bx = canonicalX(run.house, b.x);
   for (const o of run.house.obstacles) {
     if (o.kind !== 'furniture' || !passesUnder(b.radius, o) || o.clearance > hazardHeight) continue;
-    if (rectContains(o.rect, b.x, b.z)) return true;
+    if (rectContains(o.rect, bx, b.z)) return true;
   }
   return false;
 }
