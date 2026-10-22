@@ -227,9 +227,9 @@ export class LintRoller extends BaseHazard {
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
     this.model.scale.setScalar(cfg.size / (cfg.modelSize ?? cfg.size));
-    this.dir = rng.chance(0.5) ? 1 : -1;
     const ring = cfg.ringReach ? joinRing(run, x, z, cfg.ringReach, cfg.size) : null;
     if (ring) {
+      this.dir = rng.chance(0.5) ? 1 : -1;
       // Rides the ring one way round: no ends, a short telegraph lane slides ahead of it.
       this.lane = null;
       this.ring = ring.path;
@@ -241,6 +241,7 @@ export class LintRoller extends BaseHazard {
     this.ringDecal = null;
     const orbit = cfg.orbitReach ? joinOrbit(run, x, z, cfg.orbitReach, cfg) : null;
     this.lane = orbit?.lane ?? planLane(run.house, x, z, rng, cfg);
+    this.dir = rng.chance(0.5) ? 1 : -1;
     if (!this.lane) {
       this.dead = true;
       return;
