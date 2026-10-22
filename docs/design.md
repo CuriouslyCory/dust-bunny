@@ -84,6 +84,18 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Street Flusher  | 8         | 300               | ≈ 429           | water truck patrolling a street, wide wet trail that slows | 1 + knockback; trail slows |
 | Garbage Truck   | 9 (boss)  | 560               | ≈ 800 (≈ 578 after two chips) | hunts with compactor suction, telegraphed charges, stunned by buildings / the barrier, summons mini scrubbers | 1, sheds mass |
 
+**The Region (after the Garbage Truck; 1 world unit = 10 m, Bunny r ≈ 0.65–0.9 units on arrival):**
+
+| Hazard             | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|--------------------|-----------|----------------------|-----------------|-----------|--------|
+| Landfill Compactor | 10        | 1.05                 | ≈ 1.5           | Roomba behaviour, packer-wheel pull | 1 + knockback |
+| Crop Duster        | 10        | 1.25                 | ≈ 1.8           | turret: circles on the spot, aims a lane, dusts a burst of pesticide | 1 per droplet, 2 s slow |
+| River Barge        | 10        | 1.5                  | ≈ 2.1           | patrols the river (placed in `river` zones), wide wake that slows | 1 + knockback; wake slows |
+| Snowplow           | 10        | 1.7                  | ≈ 2.4           | lane patrol along a road, plows the Bunny aside | 1 + knockback, sheds mass |
+| Water Bomber       | 11        | 2.3                  | ≈ 3.3           | amber cone warm-up, then a water drop that blasts the Bunny away and soaks it | 1 on contact; blast slows |
+| Freight Train      | 11        | 2.45                 | ≈ 3.5           | long, fast lane patrol | 1 + knockback, sheds mass |
+| The Incinerator    | 11 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | hunts with feed-conveyor suction, telegraphed charges, chimney ash volleys, stunned by towns / the map edge, summons mini compactors | 1, sheds mass (ash too) |
+
 A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, and absorbing the Garbage Truck wins the Run.
 
 ## Characters

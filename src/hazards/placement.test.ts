@@ -4,10 +4,13 @@ import {
   AREA_BOSSES,
   AREA_DIRECTORS,
   BROOM,
+  CROP_DUSTER,
   DIRECTOR_EXCLUDE,
   FLOOR_SCRUBBER,
+  FREIGHT_TRAIN,
   GARBAGE_TRUCK,
   INCINERATOR,
+  LANDFILL_COMPACTOR,
   MINI_COMPACTOR,
   LAWN_MOWER,
   LEAF_BLOWER,
@@ -18,16 +21,20 @@ import {
   MINI_SCRUBBER,
   MOP,
   PRESSURE_WASHER,
+  RIVER_BARGE,
   ROBO_MOWER,
   ROBOVAC_9000,
   ROOMBA,
+  SNOWPLOW,
   SPRAY_BOTTLE,
   SPRINKLER,
   STREET_FLUSHER,
   STREET_SWEEPER,
   UPRIGHT_VACUUM,
+  WATER_BOMBER,
   type BossTuning,
 } from '../data/hazards';
+import { areaUnit } from '../data/areas';
 import { getTier } from '../data/tiers';
 import { getHazardDirector, installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
@@ -61,6 +68,12 @@ const TUNING: Record<string, { size: number; height: number }> = {
   pressure_washer: PRESSURE_WASHER,
   litter_vacuum: LITTER_VACUUM,
   street_flusher: STREET_FLUSHER,
+  landfill_compactor: LANDFILL_COMPACTOR,
+  snowplow: SNOWPLOW,
+  freight_train: FREIGHT_TRAIN,
+  crop_duster: CROP_DUSTER,
+  river_barge: RIVER_BARGE,
+  water_bomber: WATER_BOMBER,
   ...BOSSES,
 };
 
@@ -75,7 +88,7 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis. */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();
@@ -93,8 +106,8 @@ const makeRun = (area: AreaId, seed = `placement-${area}`) => {
   return { events, run, director: getHazardDirector(run)! };
 };
 
-/** Bunny radius at the first Tier an area covers (a debug-start sized Bunny). */
-const areaStartRadius = (area: AreaId) => getTier(AREA_DIRECTORS[area].firstTier).minRadius * 1.05;
+/** Bunny radius (in the area's unit) at the first Tier an area covers (a debug-start sized Bunny). */
+const areaStartRadius = (area: AreaId) => (getTier(AREA_DIRECTORS[area].firstTier).minRadius * 1.05) / areaUnit(area);
 
 /**
  * Records every spot passed to run.hazards.spawn (the placement point: a Broom moves x / z to
@@ -217,7 +230,7 @@ describe('Hazard placement knowledge', () => {
         for (let i = 0; i < 60 * seconds && !run.ended; i++) run.update(1 / 60);
       };
       for (let t = firstTier; t < firstTier + tiers.length; t++) {
-        run.bunny.setRadius(getTier(t).minRadius * 1.05);
+        run.bunny.setRadius((getTier(t).minRadius * 1.05) / run.unit);
         step(25);
       }
       step(AREA_BOSSES[area].arrivalDelay + 20);
@@ -244,12 +257,15 @@ function moveToOpenFloor(run: Run): void {
   throw new Error('no open floor');
 }
 
-/** Up to `n` floor spots for the Bunny right next to furniture, so nearby candidates are blocked. */
+/**
+ * Up to `n` floor spots for the Bunny right next to furniture (or walls, in a layout with little
+ * furniture such as the placeholder Region), so nearby candidates are blocked.
+ */
 function obstacleEdges(run: Run, n: number): { x: number; z: number }[] {
   const out: { x: number; z: number }[] = [];
   const r = run.bunny.radius;
-  for (const o of run.house.obstacles) {
-    if (o.kind !== 'furniture') continue;
+  const obstacles = [...run.house.obstacles.filter((o) => o.kind === 'furniture'), ...run.house.obstacles.filter((o) => o.kind === 'wall')];
+  for (const o of obstacles) {
     const x = o.rect.maxX + r + 2;
     const z = (o.rect.minZ + o.rect.maxZ) / 2;
     if (!hazardFloorFree(run.house, x, z, r, 1e4)) continue;

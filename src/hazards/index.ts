@@ -19,6 +19,7 @@ import type { Rng } from '../core/rng';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from '../systems/absorb';
+import type { RoomType } from '../world/types';
 import './events';
 
 export type HazardShape =
@@ -79,6 +80,11 @@ export interface HazardDef {
   name: string;
   /** Placement footprint used by every spawn path. */
   footprint: HazardFootprint;
+  /**
+   * Zone types the director places it in (the River Barge: `river`), when the layout has any of
+   * them; otherwise, and for debug spawns, anywhere it fits.
+   */
+  spawnZones?: readonly RoomType[];
   /** Growth multiplier when absorbed (like Debris mass). */
   mass: number;
   /** Model id for createModel() (procedural fallback + optional GLB). */

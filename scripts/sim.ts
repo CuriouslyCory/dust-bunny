@@ -338,8 +338,8 @@ class Bot implements InputSource {
         }
         continue;
       }
-      const spray = h.def.id === 'spray_bottle' || h.def.id === 'pressure_washer' ? (h as SprayBottle) : null;
-      const sprayReach = spray?.def.id === 'pressure_washer' ? tierValue(spray.cfg.range, this.run.tier) + r : 300;
+      const spray = h.def.id === 'spray_bottle' || h.def.id === 'pressure_washer' || h.def.id === 'crop_duster' ? (h as SprayBottle) : null;
+      const sprayReach = spray && spray.def.id !== 'spray_bottle' ? tierValue(spray.cfg.range, this.run.tier) + r : 300;
       if (spray && d < sprayReach && (spray.state === 'telegraph' || spray.state === 'firing' || spray.droplets.length > 0)) {
         // Sidestep the aim lane (a player sees the red lane).
         const fx = Math.sin(spray.yaw);
@@ -374,16 +374,25 @@ class Bot implements InputSource {
           urgent = true;
         }
       }
+      if (boss && (boss.ashState !== 'idle' || boss.ash.length > 0) && this.inAshLane(boss, 2)) {
+        // Sidestep the Incinerator's ash lane (a player sees the amber lane).
+        const fx = Math.sin(boss.ashYaw);
+        const fz = Math.cos(boss.ashYaw);
+        const side = fx * dz - fz * dx >= 0 ? 1 : -1;
+        x += -fz * side * 2;
+        z += fx * side * 2;
+      }
       if (boss && (boss.state === 'telegraph' || boss.state === 'charge')) {
         const fx = Math.sin(boss.yaw);
         const fz = Math.cos(boss.yaw);
         const side = fx * dz - fz * dx >= 0 ? 1 : -1;
         x += -fz * side * 3;
         z += fx * side * 3;
-        urgent = boss.state === 'charge' || d < 200;
+        urgent = boss.state === 'charge' || d < 200 / this.run.unit;
         continue;
       }
-      const danger = reach + Math.max(30, r * 3);
+      // Real cm floors (30 cm) are divided by the Area's unit (10 m per unit in the Region).
+      const danger = reach + Math.max(30 / this.run.unit, r * 3);
       if (d < danger) this.nearDanger.push({ x: -dx / d, z: -dz / d });
       if (d < danger) {
         const w = (danger - d) / (danger - reach * 0.9);
@@ -456,6 +465,18 @@ class Bot implements InputSource {
     return along > -b.radius && along < boss.cfg.chargeDistance + b.radius && side < (boss.cfg.contactRadius * boss.scale + b.radius) * pad;
   }
 
+  /** True if the boss's locked ash lane (from its centre, `pad` × the pellet + Bunny width) covers the Bunny. */
+  private inAshLane(boss: RoboVac9000, pad = 1): boolean {
+    const a = boss.cfg.ash;
+    if (!a) return false;
+    const b = this.run.bunny;
+    const dx = b.x - boss.x;
+    const dz = b.z - boss.z;
+    const along = dx * Math.sin(boss.ashYaw) + dz * Math.cos(boss.ashYaw);
+    const side = Math.abs(dx * Math.cos(boss.ashYaw) - dz * Math.sin(boss.ashYaw));
+    return along > -b.radius && along < a.range + b.radius && side < (a.radius + b.radius) * pad + along * a.spread;
+  }
+
   /** A Broom sweep, vacuum / blower cone or spray lane (of the given kinds) is about to hit the Bunny. */
   private imminentHit(kinds: ReadonlySet<'vacuum' | 'spray' | 'broom'> = ALL_HITS): boolean {
     const { bunny, hazards } = this.run;
@@ -473,6 +494,8 @@ class Bot implements InputSource {
         const along = dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw);
         const side = Math.abs(dx * Math.cos(h.yaw) - dz * Math.sin(h.yaw));
         if (along > 0 && along < range + r && side < r + h.cfg.dropletRadius * 3) return true;
+      } else if (h.def.boss && kinds.has('spray') && (h as RoboVac9000).ashState !== 'idle' && this.inAshLane(h as RoboVac9000)) {
+        return true;
       } else if (h instanceof BroomClass && h.state !== 'idle' && kinds.has('broom')) {
         if (Math.hypot(bunny.x - h.pivotX, bunny.z - h.pivotZ) < BROOM.sweepRadius + BROOM.headRadius + r) return true;
       }

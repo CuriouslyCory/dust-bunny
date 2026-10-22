@@ -4,15 +4,19 @@
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
  * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
  * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
- * at Tier 9 in the city. Entering a new area resets the director (grace period, boss). The Run's
- * Difficulty scales the budget, spawn interval and grace period.
+ * at Tier 9 in the city, the Incinerator at Tier 11 in the region. Entering a new area resets the
+ * director (grace period, boss). The Run's Difficulty scales the budget, spawn interval and grace
+ * period. Its absolute margins (DIRECTOR.spawnMargin, ringMin, despawnMin and the debug / boss
+ * fallbacks) are real cm, divided by the Area's unit (`run.unit`). A def with `spawnZones` is only
+ * placed in those zones when the layout has one (the River Barge on the river).
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
 import { AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, type TierSpawnTable } from '../data/hazards';
 import { DIFFICULTIES, type DifficultyDef } from '../data/difficulty';
 import { tierProgress } from '../data/tiers';
-import type { AreaId } from '../world/types';
+import type { AreaId, RoomType } from '../world/types';
+import { roomAt } from '../world/house';
 import type { Run } from '../game/run';
 import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
@@ -59,10 +63,13 @@ export function pickHazardType(
   return rng.weighted(ids, (id) => weights[id]!) ?? null;
 }
 
-/** Ring [inner, outer] (cm from the Bunny) just outside the view for a Hazard of `radius`. */
-export function spawnRing(viewRadius: number, hazardRadius: number): [number, number] {
-  const inner = viewRadius + hazardRadius + DIRECTOR.spawnMargin;
-  return [inner, inner + Math.max(viewRadius, DIRECTOR.ringMin)];
+/**
+ * Ring [inner, outer] (world units from the Bunny) just outside the view for a Hazard of `radius`;
+ * `unit` is the Area's cm per world unit (the margins are real cm).
+ */
+export function spawnRing(viewRadius: number, hazardRadius: number, unit = 1): [number, number] {
+  const inner = viewRadius + hazardRadius + DIRECTOR.spawnMargin / unit;
+  return [inner, inner + Math.max(viewRadius, DIRECTOR.ringMin / unit)];
 }
 
 export class HazardDirector {
@@ -102,8 +109,10 @@ export class HazardDirector {
     for (const h of mgr.hazards) if (!h.dead) alive[h.def.id] = (alive[h.def.id] ?? 0) + 1;
     const id = pickHazardType(run.tier, progress, alive, this.rng, DIRECTOR_EXCLUDE, run.area, d.hazardBudget);
     if (!id) return;
-    const fp = HazardManager.footprint(id);
-    const spot = this.findSpot(run, fp.radius, fp.height, ...spawnRing(viewR, fp.radius));
+    const def = hazardRegistry.require(id);
+    const fp = def.footprint;
+    const [inner, outer] = spawnRing(viewR, fp.radius, run.unit);
+    const spot = this.findSpot(run, fp.radius, fp.height, inner, outer, def.spawnZones);
     if (spot) mgr.spawn(id, spot.x, spot.z);
   }
 
@@ -124,8 +133,8 @@ export class HazardDirector {
     if (this.bossSpawned || !hazardRegistry.has(bossId)) return null;
     const fp = HazardManager.footprint(bossId);
     const viewR = viewRadiusFor(run.bunny.radius, run.tier);
-    const [inner, outer] = spawnRing(viewR * 0.6, fp.radius);
-    const spot = this.findSpot(run, fp.radius, fp.height, inner, outer) ?? this.findSpot(run, fp.radius, fp.height, fp.radius + run.bunny.radius + 80, 1e5);
+    const [inner, outer] = spawnRing(viewR * 0.6, fp.radius, run.unit);
+    const spot = this.findSpot(run, fp.radius, fp.height, inner, outer) ?? this.findSpot(run, fp.radius, fp.height, fp.radius + run.bunny.radius + 80 / run.unit, 1e5 / run.unit);
     if (!spot) return null;
     this.bossSpawned = true;
     const h = mgr.spawn(bossId, spot.x, spot.z);
@@ -144,30 +153,36 @@ export class HazardDirector {
     if (def.boss) return this.spawnBoss(run, mgr);
     const fp = def.footprint;
     const b = run.bunny;
-    const inner = b.radius + fp.radius + 20;
+    const cm = 1 / run.unit;
+    const inner = b.radius + fp.radius + 20 * cm;
     let spot: { x: number; z: number } | null = null;
     for (let i = 0; i < 48 && !spot; i++) {
       const a = (i / 48) * Math.PI * 2 * 7;
-      const d = inner + (i % 4) * Math.max(40, fp.radius);
+      const d = inner + (i % 4) * Math.max(40 * cm, fp.radius);
       const x = b.x + Math.cos(a) * d;
       const z = b.z + Math.sin(a) * d;
       if (hazardFloorFree(run.house, x, z, fp.radius, fp.height)) spot = { x, z };
     }
-    spot ??= this.findSpot(run, fp.radius, fp.height, inner, inner + 100);
+    spot ??= this.findSpot(run, fp.radius, fp.height, inner, inner + 100 * cm);
     return spot ? mgr.spawn(defId, spot.x, spot.z) : null;
   }
 
-  /** Random valid spot in the ring around the Bunny; falls back to the farthest valid spot in the house. */
-  findSpot(run: Run, radius: number, height: number, inner: number, outer: number): { x: number; z: number } | null {
+  /**
+   * Random valid spot in the ring around the Bunny; falls back to the farthest valid spot in the
+   * house. With `zones` (a def's `spawnZones`) the spot must be in one of them, if the layout has any.
+   */
+  findSpot(run: Run, radius: number, height: number, inner: number, outer: number, zones?: readonly RoomType[]): { x: number; z: number } | null {
     const b = run.bunny;
     const house = run.house;
+    const only = zones && house.rooms.some((r) => zones.includes(r.type)) ? zones : null;
+    const fits = (x: number, z: number) => hazardFloorFree(house, x, z, radius, height) && (!only || only.includes(roomAt(house, x, z)!.type));
     for (let tries = 0; tries < 24; tries++) {
       const a = this.rng.range(0, Math.PI * 2);
       const d = this.rng.range(inner, outer);
       const x = b.x + Math.cos(a) * d;
       const z = b.z + Math.sin(a) * d;
       // Off screen too: on portrait the view reaches past the ring at the top of the screen.
-      if (hazardFloorFree(house, x, z, radius, height) && !onScreen(run, x, z, radius)) return { x, z };
+      if (fits(x, z) && !onScreen(run, x, z, radius)) return { x, z };
     }
     // The view may cover the whole house (Tier 5): take the farthest valid random spot.
     let best: { x: number; z: number } | null = null;
@@ -179,7 +194,7 @@ export class HazardDirector {
       const d = Math.hypot(x - b.x, z - b.z);
       // Prefer hidden spots (behind the camera); otherwise the farthest one.
       const score = onScreen(run, x, z, radius) ? d : d + 1e4;
-      if (score > bestD && d <= outer && hazardFloorFree(house, x, z, radius, height)) {
+      if (score > bestD && d <= outer && fits(x, z)) {
         best = { x, z };
         bestD = score;
       }
@@ -189,7 +204,7 @@ export class HazardDirector {
 
   private despawn(dt: number, run: Run, mgr: HazardManager, viewR: number): void {
     const b = run.bunny;
-    const far = Math.max(viewR * DIRECTOR.despawnViewMul, DIRECTOR.despawnMin);
+    const far = Math.max(viewR * DIRECTOR.despawnViewMul, DIRECTOR.despawnMin / run.unit);
     for (const h of mgr.hazards) {
       if (h.dead || h.id === this.bossId) continue;
       const d = Math.hypot(h.x - b.x, h.z - b.z);

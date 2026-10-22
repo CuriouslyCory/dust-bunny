@@ -3,11 +3,13 @@
  * out. Standing in the trail slows the Bunny. Contact: 1 damage + knockback.
  *
  * The Street Flusher (city water truck) reuses it with STREET_FLUSHER tuning: a bigger, faster
- * patrol kept near its spawn point (`patrolRange`) and a wide trail.
+ * patrol kept near its spawn point (`patrolRange`) and a wide trail. The River Barge (region,
+ * RIVER_BARGE) is placed in `river` zones when the map has one (its def's `spawnZones`), so it
+ * patrols the river and leaves a slowing wake.
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MOP, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, MOP, RIVER_BARGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -54,10 +56,12 @@ export class Mop extends BaseHazard {
     super(id, def, x, z, cfg.size, cfg.modelId);
     this.recoilHeight = cfg.height;
     this.model.scale.setScalar(cfg.size / cfg.modelSize);
+    // Absolute margins are real cm (4 cm inset, 60 cm fallback leg, 60 cm/s puddle budget).
+    const cm = 1 / run.unit;
     const room = roomAt(run.house, x, z);
     if (room) {
       const r = room.rect;
-      const inset = cfg.size + 4;
+      const inset = cfg.size + 4 * cm;
       const reach = cfg.patrolRange;
       const minX = Math.max(r.minX + inset, x - reach);
       const maxX = Math.min(r.maxX - inset, x + reach);
@@ -70,12 +74,12 @@ export class Mop extends BaseHazard {
       }
     }
     if (this.waypoints.length < 2) {
-      const d = Math.max(60, cfg.size * 3);
+      const d = Math.max(60 * cm, cfg.size * 3);
       this.waypoints.push({ x: x + d, z }, { x: x - d, z });
     }
 
     // Enough puddles to cover the trail at the fastest patrol speed (the house Mop keeps 60 cm/s).
-    const fastest = Math.max(60, Math.max(...cfg.speed) * 1.2) * run.difficulty.hazardSpeed;
+    const fastest = Math.max(60 * cm, Math.max(...cfg.speed) * 1.2) * run.difficulty.hazardSpeed;
     this.maxPuddles = Math.ceil((cfg.trailLife * fastest) / cfg.trailSpacing) + 4;
     const geom = new CircleGeometry(1, 20);
     geom.rotateX(-Math.PI / 2);
@@ -181,5 +185,17 @@ export const streetFlusherDef = hazardRegistry.register({
   modelId: STREET_FLUSHER.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, STREET_FLUSHER);
+  },
+});
+
+export const riverBargeDef = hazardRegistry.register({
+  id: 'river_barge',
+  name: 'River Barge',
+  footprint: tuningFootprint(RIVER_BARGE),
+  spawnZones: ['river'],
+  mass: RIVER_BARGE.mass,
+  modelId: RIVER_BARGE.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, RIVER_BARGE);
   },
 });
