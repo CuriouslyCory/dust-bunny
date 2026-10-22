@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CAPTION_FADE_OUT, captionHold, panelTiming, readingSeconds } from '../story/narrator';
 import { AREA_ORDER } from '../world/types';
 import { getDebrisType } from './debris';
 import { STORY, STORY_CAPTION_MAX, type StoryLine } from './story';
@@ -54,5 +55,15 @@ describe('story data', () => {
   it('gives every intro panel time on screen', () => {
     expect(STORY.intro.length).toBeGreaterThan(0);
     for (const p of STORY.intro) expect(p.hold).toBeGreaterThan(1);
+  });
+
+  it('leaves every caption up long enough to read at 100 WPM', () => {
+    for (const [where, text] of allCaptions()) expect(captionHold(text), `${where}: ${text}`).toBeGreaterThanOrEqual(readingSeconds(text));
+    for (const p of STORY.intro) {
+      const { reveal, hold } = panelTiming(p);
+      const readable = p.caption2 ? reveal : hold - CAPTION_FADE_OUT;
+      expect(readable, p.caption).toBeGreaterThanOrEqual(readingSeconds(p.caption));
+      if (p.caption2) expect(hold - CAPTION_FADE_OUT - reveal, p.caption2).toBeGreaterThanOrEqual(readingSeconds(p.caption2));
+    }
   });
 });

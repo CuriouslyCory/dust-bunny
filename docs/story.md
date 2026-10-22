@@ -21,6 +21,7 @@ Rules for every story element:
 - **Skippable and silenceable.** A `Story captions` toggle in Settings (default on). Speedrunners and `?autostart` see none of it.
 - **Variations, not repeats.** Each beat has 2–4 alternate lines; the Run's seeded RNG picks one, so a tenth run still reads fresh.
 - **Captions appear whole.** No typewriter effect (deadpan arrives all at once). Fade in 200 ms, hold, fade out 300 ms. Respect `reduced motion`.
+- **Paced for a 10-year-old reader.** Narration that leaves the screen without input stays up for at least 100 words per minute (0.6 s a word) plus 0.5 s to find it, never less than 2.5 s and with no upper cap (`captionHold` in `src/story/narrator.ts`). A chapter card's first caption also covers its title; an intro panel's second caption waits until the first has been read. Status text (absorb toasts, Pickups, combat banners) is not narration and keeps its own timing.
 
 ## The arc at a glance
 
@@ -43,7 +44,7 @@ Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun
 
 ## Intro sequence
 
-Plays once per save on the first `Play` (stored as `introSeen` in settings), and from `Settings → Replay intro`. Skipped by `?autostart`. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~22 s unskipped.
+Plays once per save on the first `Play` (stored as `introSeen` in settings), and from `Settings → Replay intro`. Skipped by `?autostart`. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~38 s unskipped (the ~s column below is the authored minimum; panels hold longer when their captions need it to be read at 100 WPM).
 
 **It is diegetic.** The intro is a scripted camera move inside the real Run, not a separate cutscene: the Run is created, the camera starts at human eye height, and it dives under the couch to the actual spawn point where the Bunny's eyes open and the player gets control. The transition from story to gameplay is a single continuous shot.
 

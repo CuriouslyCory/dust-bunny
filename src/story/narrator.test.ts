@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STORY, type Story } from '../data/story';
-import { beatLines, captionHold, captions, chapterOf, pickLine } from './narrator';
+import { beatLines, CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming, pickLine, readingSeconds, wordCount } from './narrator';
 
 const story: Story = {
   ...STORY,
@@ -37,12 +37,32 @@ describe('narrator', () => {
     expect(pickLine('x', { kind: 'debris', typeId: 'sock' }, story)).toEqual(['First caption.', 'Second caption.']);
   });
 
-  it('splits lines into captions and holds each long enough to read', () => {
+  it('splits lines into captions', () => {
     expect(captions('One.')).toEqual(['One.']);
     expect(captions(['One.', 'Two.'])).toEqual(['One.', 'Two.']);
+  });
+
+  it('counts words, not separators', () => {
+    expect(wordCount('Chapter 3 · Where People Drop Things')).toBe(6);
+    expect(wordCount("  It's 4.6 billion years. ")).toBe(4);
+    expect(wordCount('')).toBe(0);
+  });
+
+  it('holds a caption for its reading time at 100 WPM, with no upper cap', () => {
+    expect(readingSeconds('one two three four five')).toBe(3);
     expect(captionHold('Short.')).toBe(2.5);
-    expect(captionHold('x'.repeat(140))).toBe(7);
-    expect(captionHold('x'.repeat(60))).toBeGreaterThan(captionHold('x'.repeat(30)));
+    const long = Array.from({ length: 30 }, () => 'word').join(' ');
+    expect(captionHold(long)).toBeGreaterThanOrEqual(18);
+    expect(captionHold('One two three.', 'Chapter 2 Title')).toBeGreaterThanOrEqual(readingSeconds('Chapter 2 Title One two three.'));
+  });
+
+  it('reveals a second caption once the first is read and holds the panel until both are', () => {
+    const p = { caption: 'one two three four five six seven eight nine ten', caption2: 'one two three four five', hold: 3 };
+    const { reveal, hold } = panelTiming(p);
+    expect(reveal).toBeGreaterThanOrEqual(6);
+    expect(hold - CAPTION_FADE_OUT - reveal).toBeGreaterThanOrEqual(3);
+    // An authored hold longer than the reading time is kept.
+    expect(panelTiming({ caption: 'Hi.', hold: 9 }).hold).toBe(9);
   });
 
   it('numbers chapters by Area order', () => {

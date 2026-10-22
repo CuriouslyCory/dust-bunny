@@ -101,6 +101,17 @@ export function installAreaHud(game: Game): void {
     game.hud.flash('door-compass');
   });
 
+  // Winning in the last built Area (the Galaxy): its cleared line plays over the victory hold (the
+  // Bunny turning into a black hole), and Game waits until it has been read.
+  game.events.on('runEnded', (e) => {
+    const run = game.run;
+    if (e.reason !== 'victory' || !run || EXITS[run.area]) return;
+    const line = narrate(run, { kind: 'cleared', area: run.area });
+    if (!line) return;
+    const caption = storyCaption(line);
+    game.hud.banner(`${AREAS[run.area].name} is yours`, { variant: 'good', duration: Math.max(3, captionDuration(caption)), caption });
+  });
+
   const fade = h('div', { className: 'area-fade' });
   game.uiLayer.append(fade);
   const playFade = (dark: boolean) => {

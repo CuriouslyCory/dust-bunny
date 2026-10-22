@@ -17,7 +17,7 @@ import {
 } from '../data/keepsakes';
 import type { Game } from '../game/game';
 import { h } from './screens';
-import { storyOn } from '../story';
+import { captionHold, storyOn } from '../story';
 import './keepsakes.css';
 
 const n1 = (x: number): string => (Math.round(x * 10) / 10).toString();
@@ -110,10 +110,10 @@ let captionEl: HTMLElement | null = null;
 let captionTimer = 0;
 
 /**
- * Shows a narrator caption line at the bottom of the screen (over any screen) for a few seconds,
+ * Shows a narrator caption line at the bottom of the screen (over any screen) for its reading time,
  * unless the story is off ("Story captions" in Settings, or `?autostart`).
  */
-export function narrate(game: Pick<Game, 'uiLayer'>, text: string, seconds = 6): void {
+export function narrate(game: Pick<Game, 'uiLayer'>, text: string, seconds = captionHold(text)): void {
   if (!storyOn()) return;
   if (!captionEl) {
     captionEl = h('p', { className: 'story-caption' });

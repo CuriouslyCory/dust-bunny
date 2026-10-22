@@ -64,10 +64,17 @@ export interface BannerOptions {
   /** Seconds on screen (default 2.4). */
   duration?: number;
   /**
-   * Narrator caption under the subtitle (src/story/): its parts show in turn, `hold` seconds
+   * Narrator caption under the subtitle (src/story/): its parts show in turn, `holds[i]` seconds
    * each, and the banner stays up until the last one has had its time (or `duration`, if longer).
+   * While it plays, later banners wait their turn instead of cutting it off.
    */
-  caption?: { parts: readonly string[]; hold: number };
+  caption?: { parts: readonly string[]; holds: readonly number[] };
+}
+
+/** Seconds a banner stays up: `duration`, or its caption's total hold if longer. */
+function bannerSeconds(opts: BannerOptions): number {
+  const hold = opts.caption?.holds.reduce((sum, h) => sum + h, 0) ?? 0;
+  return Math.max(opts.duration ?? 2.4, hold);
 }
 
 export interface ToastOptions {
@@ -151,6 +158,10 @@ export class Hud {
   private bannerTimer: number | undefined;
   /** performance.now() when the current banner is due to hide (0: none showing). */
   private bannerUntil = 0;
+  /** True while the current banner is playing a narrator caption (later banners queue). */
+  private narrating = false;
+  /** Banners waiting for a narrator caption to finish, in order. */
+  private bannerQueue: Array<{ title: string; opts: BannerOptions }> = [];
   private toastLayer = h('div', { className: 'hud-toasts' });
   private toastEls = new Map<number, HTMLElement>();
   private clock = 0;
@@ -270,20 +281,38 @@ export class Hud {
     this.toasts.clear();
   }
 
-  /** Seconds until the current banner hides (0 when none is up), so a later banner can wait its turn. */
+  /**
+   * Seconds until the current banner and any queued behind it have hidden (0 when none is up),
+   * so a later banner can wait its turn.
+   */
   get bannerLeft(): number {
-    return Math.max(0, (this.bannerUntil - performance.now()) / 1000);
+    const queued = this.bannerQueue.reduce((sum, q) => sum + bannerSeconds(q.opts), 0);
+    return Math.max(0, (this.bannerUntil - performance.now()) / 1000) + queued;
+  }
+
+  /** True while a narrator caption is on the banner or a banner is queued behind one. */
+  get bannerBusy(): boolean {
+    return this.narrating || this.bannerQueue.length > 0;
   }
 
   clearBanner(): void {
     this.bannerUntil = 0;
+    this.narrating = false;
+    this.bannerQueue = [];
     clearTimeout(this.bannerTimer);
     this.bannerEl.classList.remove('show');
   }
 
+  /** Shows a banner, replacing the current one, or queues it while a narrator caption plays. */
   banner(title: string, opts: BannerOptions = {}): void {
+    if (this.bannerBusy) this.bannerQueue.push({ title, opts });
+    else this.showBanner(title, opts);
+  }
+
+  private showBanner(title: string, opts: BannerOptions): void {
     const b = this.bannerEl;
     const parts = opts.caption?.parts ?? [];
+    const holds = opts.caption?.holds ?? [];
     const caption = h('div', { className: 'hud-banner-caption', textContent: parts[0] ?? '' });
     b.className = `hud-banner variant-${opts.variant ?? 'info'}`;
     b.replaceChildren(
@@ -294,27 +323,38 @@ export class Hud {
     void b.offsetWidth;
     b.classList.add('show');
     clearTimeout(this.bannerTimer);
-    const duration = opts.duration ?? 2.4;
-    const hold = opts.caption?.hold ?? 0;
-    this.bannerUntil = performance.now() + Math.max(duration, hold * parts.length) * 1000;
+    const total = bannerSeconds(opts);
+    this.bannerUntil = performance.now() + total * 1000;
+    this.narrating = parts.length > 0;
+    // Hidden: the next queued banner, if any, takes its place.
+    const hide = (): void => {
+      this.narrating = false;
+      const queued = this.bannerQueue.shift();
+      if (queued) this.showBanner(queued.title, queued.opts);
+      else b.classList.remove('show');
+    };
     let shown = 0;
-    // One timer at a time, so a newer banner (or clearBanner) cancels the rest of the caption.
+    let elapsed = 0;
+    // One timer at a time, so clearBanner cancels the rest of the caption.
     const next = (): void => {
+      elapsed += holds[shown] ?? 0;
       shown++;
+      const left = total - elapsed;
+      // A timer that fired late (throttled tab) pushes the deadline out, so bannerLeft still covers the rest.
+      this.bannerUntil = Math.max(this.bannerUntil, performance.now() + left * 1000);
       if (shown >= parts.length) {
-        const left = duration - hold * Math.max(1, parts.length);
-        if (left > 0.05) this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), left * 1000);
-        else b.classList.remove('show');
+        if (left > 0.05) this.bannerTimer = window.setTimeout(hide, left * 1000);
+        else hide();
         return;
       }
       caption.textContent = parts[shown]!;
       caption.classList.remove('next');
       void caption.offsetWidth;
       caption.classList.add('next');
-      this.bannerTimer = window.setTimeout(next, hold * 1000);
+      this.bannerTimer = window.setTimeout(next, (holds[shown] ?? 0) * 1000);
     };
-    if (parts.length) this.bannerTimer = window.setTimeout(next, hold * 1000);
-    else this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), duration * 1000);
+    if (parts.length) this.bannerTimer = window.setTimeout(next, (holds[0] ?? 0) * 1000);
+    else this.bannerTimer = window.setTimeout(hide, total * 1000);
   }
 
   /** Replays the highlight animation on a widget (e.g. 'tier' on Tier-up). */

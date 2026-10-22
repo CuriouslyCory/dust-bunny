@@ -18,7 +18,8 @@
  *   (`BunnyView.plasmaBoost`), so only the Bunny's own glow is left, under the narrator's cleared
  *   line (the exit's cleared banner, ui/areaHud.ts). The heliopause gate opens at the same time
  *   (it glows without light, HouseView.buildEscapeTrajectory) and the compass points to it.
- *   `VICTORY_HOLD_SECONDS`: how long Game holds the results screen back after a victory.
+ *   Game holds the results screen back for `VICTORY_HOLD_SECONDS` after a victory, or until the
+ *   narrator's line has been read, so the moment is seen.
  */
 import {
   AdditiveBlending,
@@ -49,7 +50,7 @@ import type { Lighting } from './lighting';
 
 /** The centre Sun's size (units): the boss model's (sphere radius 2.7, squashed to 0.7 in Y). */
 const SUN = { radius: 2.7, squash: 0.7, footprint: 2.94, height: 3.79 };
-/** Seconds for the light to go out, and how long the results screen waits after the Sun is absorbed. */
+/** Seconds for the light to go out, and how long the results screen waits at least after the Sun is absorbed. */
 export const OUT_SECONDS = 1.8;
 export const VICTORY_HOLD_SECONDS = 3.2;
 const LOCKED = new Color('#ffb347');
