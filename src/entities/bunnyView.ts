@@ -5,6 +5,9 @@
  * Continent, snow-capped mountain peaks poke out of the fur in a few ranges (they grow in after
  * the arrival leap and roll with the ball). On the Globe a faint blue atmosphere glows round the
  * ball (a fresnel shell) and, from Dust Moon (Tier 14) on, the Moon sits half-buried in the fur.
+ * In the Solar System the Bunny glows from within (plasma): the fur's roots and core shine warm,
+ * a pulsing orange corona shell surrounds it and a point light on it lights what it rolls past
+ * (`plasmaBoost` brightens it all when the Sun's light goes out, src/fx/solar.ts).
  * Appearance comes from a BunnyLook (the Character `look`), see bunnyLook.ts.
  *
  * Hierarchy: root (x, r·squashY, z) → body (yaw = heading, squash scale) → roll (fur, Debris)
@@ -17,6 +20,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  PointLight,
   MeshStandardMaterial,
   Quaternion,
   ShaderMaterial,
@@ -93,6 +97,8 @@ const FUR_UNIT = 0.17;
 const PEAKS = { count: 9, size: [0.42, 0.6] as const, lift: 2, growSeconds: 1.4 };
 /** The Globe's look: the atmosphere shell (radius in ball radii, colour) and the Moon lump (radius, direction in the rolling frame). */
 const ORBIT = { glowRadius: 1.3, glow: '#8fd2ff', moonSize: 0.36, moonDir: [0.55, 0.62, -0.56] as const, growSeconds: 1.2 };
+/** The Solar System's plasma: colour, inner glow (fur roots, core), corona shell strength, point light (intensity, reach in ball radii). */
+const PLASMA = { color: '#ff9a3c', inner: 0.55, core: 0.35, shell: 1.25, light: 1.6, reach: 9 };
 
 /** Fresnel rim shader: transparent face-on, glowing towards the silhouette (additive). */
 function atmosphereMaterial(color: string): ShaderMaterial {
@@ -160,6 +166,7 @@ uniform float uDensity;
 uniform float uFluff;
 uniform float uTime;
 uniform float uGlow;
+uniform vec3 uPlasma;
 uniform vec3 uRoot;
 uniform vec3 uTip;
 varying float vShellH;
@@ -184,6 +191,12 @@ export class BunnyView {
   private readonly furUniforms: Record<string, { value: unknown }>;
   private readonly rim = { value: new Color() };
   private readonly rimStrength = { value: 0.55 };
+  /** Solar System only: the plasma glow, 0 elsewhere (fur roots and core), and its light. */
+  private readonly plasma = new Color(PLASMA.color);
+  private readonly coreMat: MeshStandardMaterial;
+  private plasmaLight: PointLight | null = null;
+  /** 0..1: extra plasma while the Sun's light goes out (set by the Solar System's look, src/fx/solar.ts). */
+  plasmaBoost = 0;
   /** Mountain ranges in the fur (Continent only), in the rolling frame at unit radius. */
   private peaks: InstancedMesh | null = null;
   private readonly peakItems: Array<{ dir: Vector3; spin: number; size: number }> = [];
@@ -226,6 +239,7 @@ export class BunnyView {
     // Core: lumpy ball in the darker root colour (shows between strands).
     const coreMat = new MeshStandardMaterial({ color: rootCol, map: fur.map, roughness: 1 });
     coreMat.onBeforeCompile = (s) => addRim(s, this.rim, { value: 0.25 });
+    this.coreMat = coreMat;
     this.ball = new Mesh(furCore(L.fluffiness), coreMat);
     this.ball.castShadow = true;
     this.rollGroup.add(this.ball);
@@ -240,6 +254,7 @@ export class BunnyView {
       uFluff: { value: L.fluffiness },
       uTime: { value: 0 },
       uGlow: { value: L.glow },
+      uPlasma: { value: new Color(0, 0, 0) },
       uRoot: { value: rootCol.clone().lerp(base, 0.4) },
       uTip: { value: tip },
     };
@@ -282,7 +297,8 @@ export class BunnyView {
           '#include <emissivemap_fragment>',
           `#include <emissivemap_fragment>
           float spark = step(0.9, fract(rnd.y * 17.0 + uTime * (2.0 + rnd.z * 3.0))) * hh;
-          totalEmissiveRadiance += uTip * uGlow * (0.4 + spark * 5.0) * vShellH;`,
+          totalEmissiveRadiance += uTip * uGlow * (0.4 + spark * 5.0) * vShellH;
+          totalEmissiveRadiance += uPlasma * (1.0 - vShellH * 0.75) * (0.7 + 0.6 * rnd.x);`,
         );
     };
     shellMat.customProgramCacheKey = () => 'bunny-shell-fur';
@@ -381,6 +397,16 @@ export class BunnyView {
     mesh.name = 'atmosphere';
     this.body.add(mesh);
     return mesh;
+  }
+
+  /** The plasma's light: warm, no shadows, a little above the ball, fading out at `PLASMA.reach` ball radii. */
+  private buildPlasmaLight(): PointLight {
+    const light = new PointLight(PLASMA.color, PLASMA.light, 10, 0);
+    light.castShadow = false;
+    light.position.set(0, 0.6, 0);
+    light.name = 'plasmaLight';
+    this.root.add(light);
+    return light;
   }
 
   /** The Moon (the `moon` Debris: its Blender prop when loaded) half-buried in the fur, rolling with the ball. */
@@ -574,11 +600,26 @@ export class BunnyView {
     }
     // The Globe: the atmosphere glow, and the Moon in the fur from Dust Moon (Tier 14) on.
     const orbit = b.unit === AREAS.globe.unit;
-    if (orbit) this.atmosphere ??= this.buildAtmosphere();
+    // The Solar System: plasma glowing from within, a pulsing corona shell and a light on the Bunny.
+    const solar = b.unit === AREAS.solar_system.unit;
+    const pulse = solar ? 1 + Math.sin(this.time * 2.3) * 0.12 + Math.sin(this.time * 5.1) * 0.05 : 0;
+    const boost = solar ? this.plasmaBoost : 0;
+    if (orbit || solar) this.atmosphere ??= this.buildAtmosphere();
     if (this.atmosphere) {
-      this.atmosphere.visible = orbit;
-      (this.atmosphere.material as ShaderMaterial).uniforms.uStrength!.value = 0.9;
-      this.atmosphere.scale.setScalar(r);
+      this.atmosphere.visible = orbit || solar;
+      const u = (this.atmosphere.material as ShaderMaterial).uniforms;
+      (u.uColor!.value as Color).set(solar ? PLASMA.color : ORBIT.glow);
+      u.uStrength!.value = solar ? PLASMA.shell * pulse * (1 + boost) : 0.9;
+      this.atmosphere.scale.setScalar(r * (solar ? 1.08 + boost * 0.15 : 1));
+    }
+    (this.furUniforms.uPlasma!.value as Color).copy(this.plasma).multiplyScalar(solar ? PLASMA.inner * pulse * (1 + boost * 1.5) : 0);
+    this.coreMat.emissive.copy(this.plasma).multiplyScalar(solar ? PLASMA.core * pulse * (1 + boost) : 0);
+    if (solar) this.plasmaLight ??= this.buildPlasmaLight();
+    if (this.plasmaLight) {
+      this.plasmaLight.visible = solar;
+      this.plasmaLight.intensity = PLASMA.light * pulse * (1 + boost * 1.5);
+      this.plasmaLight.distance = r * PLASMA.reach * (1 + boost * 0.5);
+      this.plasmaLight.position.y = r * 0.4;
     }
     const moonOn = orbit && b.realRadius >= getTier(14).minRadius;
     if (moonOn) this.moon ??= this.buildMoon();

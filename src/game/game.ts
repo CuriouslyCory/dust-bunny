@@ -21,6 +21,7 @@ import { Lighting } from '../fx/lighting';
 import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
 import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
+import { SolarSky, VICTORY_HOLD_SECONDS } from '../fx/solar';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
 import { FixedLoop } from '../core/loop';
@@ -45,9 +46,10 @@ const BACKGROUND = '#3b2f2a';
  * Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze, overcast
  * altitude haze, blue-violet dusk from the stratosphere (where the horizon overlay curves the
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
- * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space.
+ * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
+ * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts).
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#05040a' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205' };
 
 export class Game {
   readonly events = new EventBus();
@@ -61,6 +63,10 @@ export class Game {
   readonly screens: ScreenManager;
   readonly hud: Hud;
   readonly lighting: Lighting;
+  /** The Solar System's Sun, glare, light and the light going out (fx/solar.ts). */
+  readonly solarSky: SolarSky;
+  /** Pending results screen after a Solar System victory (held so the light can go out). */
+  private resultsTimer: number | null = null;
   /** Continent horizon overlay (null without a canvas container). */
   private horizon: HTMLElement | null = null;
   /** The Globe's limb, starfield and sun overlay (null without a canvas container). */
@@ -114,6 +120,7 @@ export class Game {
     );
 
     this.hud = new Hud(this);
+    this.solarSky = new SolarSky(this.scene, this.lighting, this.hud);
     addDefaultHudWidgets(this.hud, this);
     this.hud.visible = false;
     this.uiLayer.append(this.hud.el);
@@ -128,7 +135,18 @@ export class Game {
     window.addEventListener('resize', () => this.resize());
     this.resize();
 
-    this.events.on('runEnded', (e) => this.go('results', e));
+    this.events.on('runEnded', (e) => {
+      // Winning in the Solar System: the light goes out first (fx/solar.ts), then the results.
+      if (e.reason === 'victory' && this.run?.area === 'solar_system') {
+        const run = this.run;
+        this.resultsTimer = window.setTimeout(() => {
+          this.resultsTimer = null;
+          if (this.run === run) this.go('results', e);
+        }, VICTORY_HOLD_SECONDS * 1000);
+        return;
+      }
+      this.go('results', e);
+    });
     this.events.on('areaEntered', () => {
       const run = this.run;
       if (!run) return;
@@ -201,6 +219,9 @@ export class Game {
   }
 
   disposeRun(): void {
+    if (this.resultsTimer !== null) window.clearTimeout(this.resultsTimer);
+    this.resultsTimer = null;
+    this.solarSky.attach(null);
     this.view?.dispose();
     this.run?.dispose();
     this.view = null;
@@ -214,6 +235,7 @@ export class Game {
     (this.scene.background as Color).set(c);
     this.fog.color.set(c);
     this.lighting.setArea(area);
+    this.solarSky.attach(this.run);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
     if (this.limb) showHorizon(this.limb, area === 'globe');
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
@@ -236,6 +258,7 @@ export class Game {
     this.screens.update(frameDt);
     if (this.view) {
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
+      this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.lighting.update(this.rig.target, this.rig.distance);
     }
     this.hud.update(frameDt);
