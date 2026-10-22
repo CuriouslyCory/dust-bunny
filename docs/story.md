@@ -244,8 +244,8 @@ World units are centimetres and the Bunny ends the City at r ≈ 800 cm. Acts 4�
 
 | Area | 1 world unit = | Arrival radius (units) | Tier thresholds (units) | HUD readout |
 |---|---|---|---|---|
-| Region | 10 m | ~1 | 10: 1 · 11: 3 | `12 m` → `1.2 km` |
-| Continent | 10 km | 0.85 (the size leap) | 12: 1 · 13: 3 | `40 km` → `800 km` |
+| Region | 10 m | ~0.85 (re-based, same real size) | 10: 1 · 11: 3 | `8.5 m` → `40 m` |
+| Continent | 10 km | 0.85 (the size leap) | 12: 1 · 13: 3 | `8.5 km` → `45 km` |
 | Globe | 1,000 km | ~1 | 14: 1 · 15: 3 | `0.3 Earths` → `2 Earths` |
 | Solar System | 0.01 AU | ~1 | 16: 1 · 17: 3 | `0.02 AU` → `1 AU` |
 | Galaxy | 100 ly | ~1 | 18: 1 · 19: 3 | `300 ly` → `60,000 ly` |
