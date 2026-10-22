@@ -112,7 +112,9 @@ export function installAreaHud(game: Game): void {
   game.events.on('areaEntered', (e) => {
     const boss = AREA_BOSSES[e.area];
     const bossName = hazardRegistry.get(boss.id)?.name;
-    const sub = bossName ? `Keep growing · the ${bossName} comes at ${getTier(boss.tier).name}` : 'Keep growing';
+    // "The Sun" keeps its own article; proper names (Sagittarius A*) take none.
+    const named = bossName && (/^The /.test(bossName) ? `the ${bossName.slice(4)}` : /^Sagittarius/.test(bossName) ? bossName : `the ${bossName}`);
+    const sub = named ? `Keep growing · ${named} comes at ${getTier(boss.tier).name}` : 'Keep growing';
     const arrive = (delay: number) => setTimeout(() => game.hud.banner(AREAS[e.area].name, { subtitle: sub, variant: 'tier', duration: 3.4 }), delay);
     // Chapter card first (the Run waits behind it), then the dark card lifts off the new Area.
     const card = showChapterCard(game, e.area, () => {
