@@ -261,14 +261,18 @@
   width: min(520px, 100%);
 }
 
-@media (max-width: 420px) {
-  /* Six boards (Full run and five Areas): two rows of three on phones, so no name is cut short. */
-  .lb-boards {
-    flex-wrap: wrap;
-  }
+/* Six boards (Full run and five Areas): two rows of three, so no name is cut short (the results
+   screen's leaderboard column is narrow on desktop too). */
+.lb-boards {
+  flex-wrap: wrap;
+}
 
+.lb-board {
+  flex: 1 1 30%;
+}
+
+@media (max-width: 420px) {
   .lb-board {
-    flex: 1 1 30%;
     font-size: 12px;
   }
 }

@@ -200,6 +200,7 @@ export function registerResultsScreen(): void {
           if (s.neighborhoodCleared) rows.push(['🌳', 'Neighborhood', inCity ? 'Cleared · made it downtown' : 'Cleared']);
           if (s.cityCleared) rows.push(['🏙️', 'City', inRegion ? 'Cleared · took the highway' : 'Cleared']);
           if (s.regionCleared) rows.push(['🗺️', 'Region', inContinent ? 'Cleared · rolled west' : 'Cleared']);
+          if (s.continentCleared) rows.push(['🌍', 'Continent', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

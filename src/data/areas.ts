@@ -50,7 +50,7 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     initialScatter: 2000,
     startCluster: 120,
     startClusterRadius: 11,
-    growth: 0.17,
+    growth: 0.19,
     unit: 1e6,
     readout: 'km',
     fluffPerUnit: 1.5,
