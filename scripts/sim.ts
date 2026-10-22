@@ -68,6 +68,7 @@ import { canAbsorb } from '../src/systems/absorb';
 import { viewRadiusFor } from '../src/systems/camera';
 import { passesUnder } from '../src/systems/collision';
 import { reachableBy } from '../src/systems/spawner';
+import { wrapWidth } from '../src/world/wrap';
 
 const args = process.argv.slice(2);
 const opt = (name: string) => args.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
@@ -131,9 +132,15 @@ function loadoutFor(characterId: string): Loadout {
   return own;
 }
 
-/** Occupancy grid for a Bunny of a given radius, with BFS path distances from the Bunny. */
+/**
+ * Occupancy grid for a Bunny of a given radius, with BFS path distances from the Bunny. On a map
+ * that wraps east–west (the Globe) the grid is one lap centred on the Bunny when it was built
+ * (`originX`), columns wrap, and only the poles are a rim.
+ */
 class Planner {
   cell = 4;
+  private originX = 0;
+  private lapW = 0;
   private builtLayout: unknown = null;
   cols = 0;
   rows = 0;
@@ -159,7 +166,10 @@ class Planner {
     const altitude = AREAS[house.area].unit > 1;
     const cap = altitude ? 4 : { house: 8, neighborhood: 60, city: 200 }[house.area as 'house' | 'neighborhood' | 'city'];
     this.cell = Math.min(cap, Math.max(altitude ? 0.5 : 2, r * 0.6));
-    this.cols = Math.ceil((bd.maxX - bd.minX) / this.cell);
+    this.lapW = wrapWidth(house);
+    this.originX = this.lapW ? this.run.bunny.x - this.lapW / 2 : 0;
+    if (this.lapW) this.cell = this.lapW / Math.ceil(this.lapW / this.cell);
+    this.cols = Math.round((bd.maxX - bd.minX) / this.cell);
     this.rows = Math.ceil((bd.maxZ - bd.minZ) / this.cell);
     const n = this.cols * this.rows;
     this.blocked = new Uint8Array(n);
@@ -167,10 +177,16 @@ class Planner {
     this.parent = new Int32Array(n);
     let pad = r * 0.95;
     const mark = (minX: number, minZ: number, maxX: number, maxZ: number) => {
-      const c0 = Math.max(0, Math.floor((minX - pad) / this.cell));
-      const c1 = Math.min(this.cols - 1, Math.floor((maxX + pad) / this.cell));
       const r0 = Math.max(0, Math.floor((minZ - pad) / this.cell));
       const r1 = Math.min(this.rows - 1, Math.floor((maxZ + pad) / this.cell));
+      if (this.lapW) {
+        const c0 = Math.floor((this.localX(minX) - pad) / this.cell);
+        const n = Math.min(this.cols, Math.floor((maxX - minX + 2 * pad) / this.cell) + 1);
+        for (let row = r0; row <= r1; row++) for (let k = 0; k < n; k++) this.blocked[row * this.cols + (((c0 + k) % this.cols) + this.cols) % this.cols] = 1;
+        return;
+      }
+      const c0 = Math.max(0, Math.floor((minX - pad) / this.cell));
+      const c1 = Math.min(this.cols - 1, Math.floor((maxX + pad) / this.cell));
       for (let row = r0; row <= r1; row++) for (let c = c0; c <= c1; c++) this.blocked[row * this.cols + c] = 1;
     };
     for (const o of house.obstacles) {
@@ -188,7 +204,20 @@ class Planner {
     });
     // Keep the outer rim blocked (bounds clamp).
     const rim = Math.ceil(r / this.cell);
-    for (let row = 0; row < this.rows; row++) for (let c = 0; c < this.cols; c++) if (row < rim || c < rim || row >= this.rows - rim || c >= this.cols - rim) this.blocked[row * this.cols + c] = 1;
+    const side = this.lapW ? -1 : rim;
+    for (let row = 0; row < this.rows; row++) for (let c = 0; c < this.cols; c++) if (row < rim || c < side || row >= this.rows - rim || c >= this.cols - side) this.blocked[row * this.cols + c] = 1;
+  }
+
+  /** x in the grid's frame: [0, lap) on a wrapping map (any lap), plain x otherwise. */
+  private localX(x: number): number {
+    if (!this.lapW) return x;
+    return (((x - this.originX) % this.lapW) + this.lapW) % this.lapW;
+  }
+
+  /** World x of a grid column's centre, on the copy nearest the Bunny. */
+  private worldX(c: number): number {
+    const x = this.originX + (c + 0.5) * this.cell;
+    return this.lapW ? x + Math.round((this.run.bunny.x - x) / this.lapW) * this.lapW : x;
   }
 
   debugStart(): string {
@@ -199,7 +228,7 @@ class Planner {
   }
 
   index(x: number, z: number): number {
-    const c = Math.min(this.cols - 1, Math.max(0, Math.floor(x / this.cell)));
+    const c = Math.min(this.cols - 1, Math.max(0, Math.floor(this.localX(x) / this.cell)));
     const row = Math.min(this.rows - 1, Math.max(0, Math.floor(z / this.cell)));
     return row * this.cols + c;
   }
@@ -240,7 +269,7 @@ class Planner {
         for (let dc = -1; dc <= 1; dc++) {
           if (!dr && !dc) continue;
           const rr = row + dr;
-          const cc = c + dc;
+          const cc = this.lapW ? (c + dc + this.cols) % this.cols : c + dc;
           if (rr < 0 || cc < 0 || rr >= this.rows || cc >= this.cols) continue;
           const j = rr * this.cols + cc;
           if (this.blocked[j] || this.dist[j]! >= 0) continue;
@@ -269,7 +298,7 @@ class Planner {
     for (let dr = -k; dr <= k; dr++) {
       for (let dc = -k; dc <= k; dc++) {
         const rr = sr + dr;
-        const cc = sc + dc;
+        const cc = this.lapW ? (sc + dc + this.cols) % this.cols : sc + dc;
         if (rr < 0 || cc < 0 || rr >= this.rows || cc >= this.cols) continue;
         const j = rr * this.cols + cc;
         if (this.dist[j]! >= 0 && (best < 0 || this.dist[j]! < this.dist[best]!)) best = j;
@@ -292,7 +321,7 @@ class Planner {
     const c = pick % this.cols;
     const row = (pick - c) / this.cols;
     if (path.length <= 2) return { x, z };
-    return { x: (c + 0.5) * this.cell, z: (row + 0.5) * this.cell };
+    return { x: this.worldX(c), z: (row + 0.5) * this.cell };
   }
 }
 

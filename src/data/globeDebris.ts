@@ -1,7 +1,7 @@
 /**
  * Globe Debris (area 'globe'), Tiers 13–15. Same format as DEBRIS_TYPES in debris.ts, but sizes
  * are in Globe units (1 = 1,000 km, `AREAS.globe.unit`). The ladder repeats the Continent's shape
- * (both Acts arrive at 0.85 units and end past ≈4): Tier 13 types (0.1–0.34) feed the arrival size
+ * (both Acts arrive at 0.85 units and end past ≈4): Tier 13 types (0.11–0.34) feed the arrival size
  * (absorbable up to ≈0.6, meaningful from ≈0.1): satellites, rocket stages, space junk, weather,
  * ice floes, volcanic islands, reefs, atolls, islands; Tier 14 types (0.45–1.4) the Dust Moon: great
  * deserts, patches of ocean, ice shelves, the Great Barrier Reef, storm systems, archipelagos,
@@ -82,18 +82,18 @@ const ICE_TINTS = ['#ffffff', '#eef6fb', '#e4eef6'];
 export const GLOBE_DEBRIS: DebrisType[] = [
   // ── Arrival (Bunny r = 0.85 units after the leap; Tier 14 starts at 1) ──────────────
   {
-    id: 'satellite', name: 'Satellite', size: 0.1, mass: 1.0, tiers: [13, 14], area: 'globe',
+    id: 'satellite', name: 'Satellite', size: 0.11, mass: 1.0, tiers: [13, 14], area: 'globe',
     colors: TINTS,
     recipe: satellite(0.5),
     material: { roughness: 0.5, metalness: 0.4 },
-    rooms: { oceans: 1, shelves: 1, landmasses: 1, archipelagos: 1, icecaps: 0.7 },
+    rooms: { oceans: 0.6, shelves: 0.6, landmasses: 0.6, archipelagos: 0.6, icecaps: 0.42 },
   },
   {
     id: 'cloud_swirl', name: 'Weather System', size: 0.12, mass: 0.9, tiers: [13, 14], area: 'globe',
     colors: [CLOUD, '#e8edf2'],
     recipe: swirl(0.4),
     material: { roughness: 1 },
-    rooms: { oceans: 1.6, shelves: 1, landmasses: 0.8, archipelagos: 1, icecaps: 0.5 },
+    rooms: { oceans: 0.96, shelves: 0.6, landmasses: 0.48, archipelagos: 0.6, icecaps: 0.3 },
   },
   {
     id: 'rocket_stage', name: 'Spent Rocket Stage', size: 0.13, mass: 1.1, tiers: [13, 14], area: 'globe',
@@ -104,7 +104,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'cone', radius: 0.24, height: 0.3, pos: [0, 0.26, -0.85], rot: [-Math.PI / 2, 0, 0], color: '#3a3a3a' },
     ],
     material: { roughness: 0.6, metalness: 0.3 },
-    rooms: { any: 1 },
+    rooms: { any: 0.6 },
   },
   {
     id: 'space_junk', name: 'Space Junk', size: 0.15, mass: 1.2, tiers: [13, 14], area: 'globe',
@@ -116,7 +116,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'sphere', radius: 0.14, pos: [0.45, 0.14, 0.4], color: '#d6c27a' },
     ],
     material: { roughness: 0.6, metalness: 0.3 },
-    rooms: { any: 1 },
+    rooms: { any: 0.6 },
   },
   {
     id: 'ice_floe', name: 'Ice Floe', size: 0.17, mass: 1.1, tiers: [13, 14], area: 'globe',
@@ -127,14 +127,14 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'blob', radius: 0.25, noise: 0.35, pos: [0.4, 0, 0.5], scale: [1, 0.12, 0.8], color: ICE_BLUE },
     ],
     material: { roughness: 0.45 },
-    rooms: { icecaps: 2.6, shelves: 0.35 },
+    rooms: { icecaps: 1.56, shelves: 0.21 },
   },
   {
     id: 'volcanic_island', name: 'Volcanic Island', size: 0.2, mass: 1.2, tiers: [13, 14], area: 'globe',
     colors: TINTS,
     recipe: [pad(1, LAGOON), { shape: 'cone', radius: 0.75, height: 0.55, segments: 12, pos: [0, 0, 0], color: '#4c4a46' }, { shape: 'blob', radius: 0.8, noise: 0.2, pos: [0, 0, 0], scale: [1, 0.15, 1], color: JUNGLE }, { shape: 'sphere', radius: 0.1, pos: [0, 0.52, 0], color: '#e8572a' }],
     material: { roughness: 0.9, emissive: '#3a0d00', emissiveIntensity: 0.4 },
-    rooms: { oceans: 0.7, archipelagos: 1.6, shelves: 0.5 },
+    rooms: { oceans: 0.42, archipelagos: 0.96, shelves: 0.3 },
   },
   {
     id: 'rainforest', name: 'Rainforest', size: 0.21, mass: 1.2, tiers: [13, 14], area: 'globe',
@@ -145,7 +145,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'blob', radius: 0.4, noise: 0.4, pos: [-0.4, 0.06, -0.2], scale: [1, 0.3, 0.9], color: '#285c2c' },
     ],
     material: { roughness: 1 },
-    rooms: { landmasses: 2.2, archipelagos: 0.5 },
+    rooms: { landmasses: 1.32, archipelagos: 0.3 },
   },
   {
     id: 'coral_reef', name: 'Coral Reef', size: 0.24, mass: 1.1, tiers: [13, 14], area: 'globe',
@@ -157,32 +157,32 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'blob', radius: 0.18, noise: 0.4, pos: [-0.35, 0.02, -0.1], scale: [1, 0.4, 1], color: '#c86fb0' },
     ],
     material: { roughness: 0.6 },
-    rooms: { shelves: 1.6, archipelagos: 1.6, oceans: 0.2 },
+    rooms: { shelves: 0.96, archipelagos: 0.96, oceans: 0.12 },
   },
   {
     id: 'atoll', name: 'Atoll', size: 0.28, mass: 1.2, tiers: [13, 14], area: 'globe',
     colors: TINTS,
     recipe: [{ shape: 'torus', radius: 0.7, tube: 0.18, pos: [0, 0.02, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 0.2], color: SAND }, pad(0.6, '#4fb3c8')],
     material: { roughness: 0.5 },
-    rooms: { oceans: 1, shelves: 0.8, archipelagos: 2 },
+    rooms: { oceans: 0.6, shelves: 0.48, archipelagos: 1.2 },
   },
   {
     id: 'cloud_bank', name: 'Cloud Bank', size: 0.3, mass: 1.0, tiers: [13, 14], area: 'globe', model: 'cloud_swirl',
     colors: [CLOUD, '#e8edf2'],
     recipe: swirl(0.55),
     material: { roughness: 1 },
-    rooms: { oceans: 1.2, shelves: 0.8, landmasses: 0.8, archipelagos: 0.8, icecaps: 0.4 },
+    rooms: { oceans: 0.72, shelves: 0.48, landmasses: 0.48, archipelagos: 0.48, icecaps: 0.24 },
   },
   {
     id: 'island', name: 'Island', size: 0.34, mass: 1.3, tiers: [13, 14], area: 'globe',
     colors: TINTS,
     recipe: island(GREEN),
     material: { roughness: 0.9 },
-    rooms: { oceans: 0.8, shelves: 1.4, archipelagos: 2 },
+    rooms: { oceans: 0.48, shelves: 0.84, archipelagos: 1.2 },
   },
   // ── Tier 14: Dust Moon (r 1–3) ──────────────
   {
-    id: 'great_desert', name: 'A Great Desert', size: 0.48, mass: 1.5, tiers: [14, 14], area: 'globe',
+    id: 'great_desert', name: 'A Great Desert', size: 0.48, mass: 1.8, tiers: [14, 14], area: 'globe',
     colors: ['#ffffff', '#f6ead8'],
     recipe: [
       { shape: 'blob', radius: 1, noise: 0.3, pos: [0, 0, 0], scale: [1, 0.12, 0.7], color: DESERT },
@@ -193,14 +193,14 @@ export const GLOBE_DEBRIS: DebrisType[] = [
     rooms: { landmasses: 1.8 },
   },
   {
-    id: 'ocean_patch', name: 'Patch of Ocean', size: 0.55, mass: 1.4, tiers: [14, 15], area: 'globe',
+    id: 'ocean_patch', name: 'Patch of Ocean', size: 0.55, mass: 1.7, tiers: [14, 15], area: 'globe',
     colors: ['#ffffff', '#e6eef6'],
     recipe: ocean(),
     material: { roughness: 0.2 },
-    rooms: { oceans: 2, shelves: 0.8 },
+    rooms: { oceans: 1.1, shelves: 0.6 },
   },
   {
-    id: 'ice_shelf', name: 'Ice Shelf', size: 0.62, mass: 1.5, tiers: [14, 14], area: 'globe',
+    id: 'ice_shelf', name: 'Ice Shelf', size: 0.62, mass: 1.8, tiers: [14, 14], area: 'globe',
     colors: ICE_TINTS,
     recipe: [
       { shape: 'box', size: [1.8, 0.16, 1.2], pos: [0, 0.08, 0], rot: [0, 0.2, 0], color: ICE },
@@ -211,7 +211,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
     rooms: { icecaps: 2.4, shelves: 0.4 },
   },
   {
-    id: 'great_reef', name: 'The Great Barrier Reef', size: 0.68, mass: 1.6, tiers: [14, 15], area: 'globe',
+    id: 'great_reef', name: 'The Great Barrier Reef', size: 0.68, mass: 2.0, tiers: [14, 15], area: 'globe',
     colors: TINTS,
     recipe: [
       { shape: 'cylinder', radiusTop: 0.35, height: 0.02, segments: 14, pos: [0, 0.01, 0], scale: [2.8, 1, 0.8], rot: [0, 0.5, 0], color: '#57c7c9' },
@@ -221,21 +221,21 @@ export const GLOBE_DEBRIS: DebrisType[] = [
     rooms: { shelves: 1.5, archipelagos: 1 },
   },
   {
-    id: 'storm_system', name: 'Storm System', size: 0.75, mass: 1.5, tiers: [14, 15], area: 'globe', model: 'cloud_swirl',
+    id: 'storm_system', name: 'Storm System', size: 0.75, mass: 1.9, tiers: [14, 15], area: 'globe', model: 'cloud_swirl',
     colors: [CLOUD, '#e3e8ee'],
     recipe: swirl(0.5),
     material: { roughness: 1 },
     rooms: { oceans: 1.4, shelves: 0.7, landmasses: 0.6, archipelagos: 0.8, icecaps: 0.3 },
   },
   {
-    id: 'archipelago', name: 'Archipelago', size: 0.9, mass: 1.8, tiers: [14, 15], area: 'globe',
+    id: 'archipelago', name: 'Archipelago', size: 0.9, mass: 2.2, tiers: [14, 15], area: 'globe',
     colors: TINTS,
     recipe: chain([[-0.65, -0.2, 0.28], [-0.2, 0.15, 0.33], [0.3, -0.1, 0.27], [0.7, 0.25, 0.2]]),
     material: { roughness: 0.9 },
     rooms: { archipelagos: 2.5, shelves: 1, oceans: 0.6 },
   },
   {
-    id: 'cordillera', name: 'Cordillera', size: 1.0, mass: 2.0, tiers: [14, 15], area: 'globe',
+    id: 'cordillera', name: 'Cordillera', size: 1.0, mass: 2.4, tiers: [14, 15], area: 'globe',
     colors: TINTS,
     recipe: [
       { shape: 'blob', radius: 1, noise: 0.25, pos: [0, 0, 0], scale: [1, 0.12, 0.4], color: '#7c7a5a' },
@@ -248,21 +248,21 @@ export const GLOBE_DEBRIS: DebrisType[] = [
     rooms: { landmasses: 1.8, icecaps: 0.3 },
   },
   {
-    id: 'big_island', name: 'Large Island', size: 1.1, mass: 2.0, tiers: [14, 15], area: 'globe', model: 'island',
+    id: 'big_island', name: 'Large Island', size: 1.1, mass: 2.4, tiers: [14, 15], area: 'globe', model: 'island',
     colors: TINTS,
     recipe: island(JUNGLE),
     material: { roughness: 0.9 },
     rooms: { oceans: 0.6, shelves: 1, archipelagos: 1.4 },
   },
   {
-    id: 'inland_sea', name: 'Inland Sea', size: 1.25, mass: 2.1, tiers: [14, 15], area: 'globe', model: 'ocean_patch',
+    id: 'inland_sea', name: 'Inland Sea', size: 1.25, mass: 2.5, tiers: [14, 15], area: 'globe', model: 'ocean_patch',
     colors: ['#ffffff', '#e6eef6'],
     recipe: ocean(),
     material: { roughness: 0.2 },
     rooms: { shelves: 1.2, landmasses: 1, oceans: 0.4 },
   },
   {
-    id: 'island_arc', name: 'Island Arc', size: 1.4, mass: 2.3, tiers: [14, 15], area: 'globe', model: 'archipelago',
+    id: 'island_arc', name: 'Island Arc', size: 1.4, mass: 2.7, tiers: [14, 15], area: 'globe', model: 'archipelago',
     colors: TINTS,
     recipe: chain([[-0.75, 0.3, 0.2], [-0.4, 0.05, 0.25], [0, -0.1, 0.28], [0.4, 0.05, 0.25], [0.75, 0.3, 0.2]]),
     material: { roughness: 0.9 },
@@ -270,7 +270,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
   },
   // ── Tier 15: Dust Planet (r ≥ 3); the Moon from late Tier 14 ──────────────
   {
-    id: 'moon', name: 'The Moon', size: 1.74, mass: 2.6, tiers: [14, 15], area: 'globe',
+    id: 'moon', name: 'The Moon', size: 1.74, mass: 3.0, tiers: [14, 15], area: 'globe',
     colors: ['#ffffff', '#ecebe8'],
     recipe: [
       { shape: 'blob', radius: 1, noise: 0.06, detail: 2, pos: [0, 1, 0], color: '#b9b6b0' },
@@ -278,10 +278,10 @@ export const GLOBE_DEBRIS: DebrisType[] = [
       { shape: 'sphere', radius: 0.22, pos: [-0.35, 1.8, -0.3], scale: [1, 0.35, 1], color: '#8e8b86' },
     ],
     material: { roughness: 1 },
-    rooms: { oceans: 1, shelves: 0.6, landmasses: 0.5, archipelagos: 0.5, icecaps: 0.4 },
+    rooms: { oceans: 0.35, shelves: 0.2, landmasses: 0.15, archipelagos: 0.2, icecaps: 0.15 },
   },
   {
-    id: 'polar_cap', name: 'Polar Ice Cap', size: 2.0, mass: 2.8, tiers: [15, 15], area: 'globe',
+    id: 'polar_cap', name: 'Polar Ice Cap', size: 2.0, mass: 3.2, tiers: [15, 15], area: 'globe',
     colors: ICE_TINTS,
     recipe: [
       { shape: 'blob', radius: 1, noise: 0.22, detail: 1, pos: [0, 0, 0], scale: [1, 0.12, 0.85], color: ICE },
@@ -292,35 +292,35 @@ export const GLOBE_DEBRIS: DebrisType[] = [
     rooms: { icecaps: 2.6, shelves: 0.3 },
   },
   {
-    id: 'landmass', name: 'Landmass', size: 2.2, mass: 3.0, tiers: [15, 15], area: 'globe',
+    id: 'landmass', name: 'Landmass', size: 2.2, mass: 3.3, tiers: [15, 15], area: 'globe',
     colors: TINTS,
     recipe: land(0),
     material: { roughness: 1 },
     rooms: { landmasses: 2, shelves: 0.8, oceans: 0.3, archipelagos: 0.4 },
   },
   {
-    id: 'subcontinent', name: 'Subcontinent', size: 2.5, mass: 3.2, tiers: [15, 15], area: 'globe', model: 'landmass',
+    id: 'subcontinent', name: 'Subcontinent', size: 2.5, mass: 3.5, tiers: [15, 15], area: 'globe', model: 'landmass',
     colors: ['#ffffff', '#f6f0e2'],
     recipe: land(1),
     material: { roughness: 1 },
     rooms: { landmasses: 1.6, shelves: 0.5 },
   },
   {
-    id: 'ocean_basin', name: 'Ocean Basin', size: 2.8, mass: 3.4, tiers: [15, 15], area: 'globe', model: 'ocean_patch',
+    id: 'ocean_basin', name: 'Ocean Basin', size: 2.8, mass: 3.6, tiers: [15, 15], area: 'globe', model: 'ocean_patch',
     colors: ['#ffffff', '#e2ebf5'],
     recipe: ocean(),
     material: { roughness: 0.2 },
     rooms: { oceans: 2, shelves: 0.4, archipelagos: 0.5 },
   },
   {
-    id: 'continent_whole', name: 'A Continent', size: 3.1, mass: 3.7, tiers: [15, 15], area: 'globe', model: 'landmass',
+    id: 'continent_whole', name: 'A Continent', size: 3.1, mass: 3.9, tiers: [15, 15], area: 'globe', model: 'landmass',
     colors: TINTS,
     recipe: land(2),
     material: { roughness: 1 },
     rooms: { landmasses: 1.4, oceans: 0.3, shelves: 0.4 },
   },
   {
-    id: 'an_ocean', name: 'An Ocean', size: 3.4, mass: 3.9, tiers: [15, 15], area: 'globe', model: 'ocean_patch',
+    id: 'an_ocean', name: 'An Ocean', size: 3.4, mass: 4.0, tiers: [15, 15], area: 'globe', model: 'ocean_patch',
     colors: ['#ffffff', '#dfe8f2'],
     recipe: ocean(),
     material: { roughness: 0.2 },

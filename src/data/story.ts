@@ -146,5 +146,8 @@ export const STORY: Story = {
     stadium: ['It has eaten a stadium. The match has been postponed. Both teams are claiming the win.'],
     metropolis_ruins: ['What is left of a capital city. Its last ordinance concerned littering. It was not enforced.'],
     small_country: ['It has absorbed a small country. The neighbouring countries issue a joint statement. The statement is absorbed.'],
+    great_reef: ['The Great Barrier Reef is absorbed. It was going anyway.'],
+    moon: ['The Moon is gone. Somewhere, a werewolf has an unexpectedly quiet evening.'],
+    continent_whole: ['A whole continent. Its tectonic plate is still moving, slightly, out of habit.'],
   },
 };

@@ -229,7 +229,7 @@ function cloudTexture(): Texture {
     const t = n(u + (streak(u, v) - 0.5) * 0.12, v);
     const a = smooth(0.54, 0.74, t);
     o[0] = o[1] = o[2] = 236 + a * 19;
-    o[3] = Math.round(a * 0.78 * 255);
+    o[3] = Math.round(a * 0.62 * 255);
   });
   return repeatTexture(c);
 }
@@ -404,6 +404,7 @@ export function buildGlobeSurface(layout: HouseLayout): GlobeSurfaceView {
   const n3 = periodicNoise(rng.fork('n3'), W, D + 2 * M, 1200);
   const dry = periodicNoise(rng.fork('dry'), W, D + 2 * M, 40);
   const col = [0, 0, 0];
+  const sand = [0, 0, 0];
   paint(cctx, tw, th, (px, py, o) => {
     const x = (px + 0.5) / PX;
     const z = (py + 0.5) / PX - M;
@@ -447,7 +448,10 @@ export function buildGlobeSurface(layout: HouseLayout): GlobeSurfaceView {
       ramp(LAND_STOPS, alat + (b - 0.5) * 6, col);
       const belt = 1 - smooth(5, 13, Math.abs(alat - 24));
       const dryness = belt * smooth(0.8, 7, inland) * 1.25 + (dry(x, zz) - 0.5) * 0.9 - 0.1;
-      if (dryness > 0) lerpTo(col, b > 0.5 ? DESERT : DESERT_RED, smooth(0, 0.45, dryness));
+      if (dryness > 0) {
+        mixInto(sand, DESERT_RED, DESERT, smooth(0.2, 0.8, a * 0.6 + b * 0.4));
+        lerpTo(col, sand as unknown as RGB, smooth(0, 0.45, dryness));
+      }
       const steppe = (1 - smooth(4, 10, Math.abs(alat - 46))) * smooth(4, 14, inland) + (dry(x + 37, zz) - 0.5) * 0.5;
       if (steppe > 0.2) lerpTo(col, STEPPE, smooth(0.2, 0.6, steppe) * 0.7);
       const rd = sample(toRange, x, z) + (a - 0.5) * 1.2 + (c - 0.5) * 0.5;
@@ -483,7 +487,7 @@ export function buildGlobeSurface(layout: HouseLayout): GlobeSurfaceView {
   const ripples = rippleNormals();
   ripples.repeat.set(W / RIPPLE_TILE, (D + 2 * M) / RIPPLE_TILE);
   const grain = landGrain();
-  const mat = new MeshStandardMaterial({ map, roughnessMap, roughness: 1, metalness: 0, normalMap: ripples, normalScale: new Vector2(0.35, 0.35) });
+  const mat = new MeshStandardMaterial({ map, roughnessMap, roughness: 1, metalness: 0, normalMap: ripples, normalScale: new Vector2(0.28, 0.28) });
   const grainRepeat = new Vector2(W / GRAIN_TILE, (D + 2 * M) / GRAIN_TILE);
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.grainMap = { value: grain };

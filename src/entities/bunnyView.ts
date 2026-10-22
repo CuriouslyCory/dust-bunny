@@ -3,7 +3,8 @@
  * rolls, eyes that look where it is going, squash & stretch on Dash / absorb / hits, absorbed
  * Debris stuck to the surface (capped at TUNING.stuckCap) and a soft contact shadow. In the
  * Continent, snow-capped mountain peaks poke out of the fur in a few ranges (they grow in after
- * the arrival leap and roll with the ball).
+ * the arrival leap and roll with the ball). On the Globe a faint blue atmosphere glows round the
+ * ball (a fresnel shell) and, from Dust Moon (Tier 14) on, the Moon sits half-buried in the fur.
  * Appearance comes from a BunnyLook (the Character `look`), see bunnyLook.ts.
  *
  * Hierarchy: root (x, r·squashY, z) → body (yaw = heading, squash scale) → roll (fur, Debris)
@@ -18,6 +19,8 @@ import {
   Mesh,
   MeshStandardMaterial,
   Quaternion,
+  ShaderMaterial,
+  AdditiveBlending,
   SphereGeometry,
   Vector3,
   type WebGLProgramParametersWithUniforms,
@@ -31,6 +34,7 @@ import type { DebrisType } from '../data/debris';
 import { getDebrisType } from '../data/debris';
 import { DISCHARGE } from '../data/abilities';
 import { TUNING } from '../data/tuning';
+import { getTier } from '../data/tiers';
 import { ContactShadows } from '../fx/contactShadows';
 import { getQuality } from '../fx/quality';
 import { furTextures } from '../world/materials';
@@ -87,6 +91,31 @@ const FUR_UNIT = 0.17;
  * Bunny's radius, how much taller than the model they stand (so they clear the fur), seconds to grow in.
  */
 const PEAKS = { count: 9, size: [0.42, 0.6] as const, lift: 2, growSeconds: 1.4 };
+/** The Globe's look: the atmosphere shell (radius in ball radii, colour) and the Moon lump (radius, direction in the rolling frame). */
+const ORBIT = { glowRadius: 1.3, glow: '#8fd2ff', moonSize: 0.36, moonDir: [0.55, 0.62, -0.56] as const, growSeconds: 1.2 };
+
+/** Fresnel rim shader: transparent face-on, glowing towards the silhouette (additive). */
+function atmosphereMaterial(color: string): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: { uColor: { value: new Color(color) }, uStrength: { value: 0 } },
+    vertexShader: `varying vec3 vN; varying vec3 vV;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uStrength; varying vec3 vN; varying vec3 vV;
+      void main() {
+        float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+        float a = pow(f, 2.6) * uStrength;
+        gl_FragColor = vec4(uColor * a, a);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  });
+}
 
 function furCore(fluffiness: number): IcosahedronGeometry {
   const g = new IcosahedronGeometry(1, 5);
@@ -159,6 +188,10 @@ export class BunnyView {
   private peaks: InstancedMesh | null = null;
   private readonly peakItems: Array<{ dir: Vector3; spin: number; size: number }> = [];
   private peakGrow = 0;
+  /** The Globe's atmosphere shell (in the squashing body) and the Moon in the fur (rolling frame). */
+  private atmosphere: Mesh | null = null;
+  private moon: Group | null = null;
+  private moonGrow = 0;
   private stuck: StuckItem[] = [];
   private stuckMeshes = new Map<string, InstancedMesh>();
   private stuckDirty = true;
@@ -341,6 +374,43 @@ export class BunnyView {
     peaks.instanceMatrix.needsUpdate = true;
   }
 
+  /** The atmosphere: a fresnel shell a little outside the fur, faint blue at the silhouette. */
+  private buildAtmosphere(): Mesh {
+    const mesh = new Mesh(new SphereGeometry(ORBIT.glowRadius, 48, 24), atmosphereMaterial(ORBIT.glow));
+    mesh.renderOrder = 3;
+    mesh.name = 'atmosphere';
+    this.body.add(mesh);
+    return mesh;
+  }
+
+  /** The Moon (the `moon` Debris: its Blender prop when loaded) half-buried in the fur, rolling with the ball. */
+  private buildMoon(): Group | null {
+    const type = getDebrisType('moon');
+    if (!type) return null;
+    const pivot = new Group();
+    const dir = new Vector3(...ORBIT.moonDir).normalize();
+    pivot.quaternion.setFromUnitVectors(UP, dir);
+    const mesh = new Mesh(debrisGeometry(type), debrisMaterial(type));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    pivot.add(mesh);
+    pivot.name = 'moonLump';
+    // A holder at the ball's radius (the rolling frame is in world units, like the peaks' mesh).
+    const holder = new Group();
+    holder.add(pivot);
+    this.rollGroup.add(holder);
+    return pivot;
+  }
+
+  /** Places the Moon at `grow` (0..1): its centre just outside the fur, so a little more than half shows. */
+  private placeMoon(moon: Group, grow: number): void {
+    const s = ORBIT.moonSize * grow;
+    const out = 1 + FUR_UNIT * this.look.furLength * 0.2;
+    const dir = new Vector3(0, 1, 0).applyQuaternion(moon.quaternion);
+    moon.position.copy(dir).multiplyScalar(out - s * 0.8);
+    moon.scale.setScalar(Math.max(1e-3, s));
+  }
+
   private buildEyes(): void {
     const L = this.look;
     const sparkly = L.eyeStyle === 'sparkly';
@@ -502,6 +572,24 @@ export class BunnyView {
       this.peaks.visible = continent;
       this.peaks.scale.setScalar(r);
     }
+    // The Globe: the atmosphere glow, and the Moon in the fur from Dust Moon (Tier 14) on.
+    const orbit = b.unit === AREAS.globe.unit;
+    if (orbit) this.atmosphere ??= this.buildAtmosphere();
+    if (this.atmosphere) {
+      this.atmosphere.visible = orbit;
+      (this.atmosphere.material as ShaderMaterial).uniforms.uStrength!.value = 0.9;
+      this.atmosphere.scale.setScalar(r);
+    }
+    const moonOn = orbit && b.realRadius >= getTier(14).minRadius;
+    if (moonOn) this.moon ??= this.buildMoon();
+    if (this.moon) {
+      if (moonOn && this.moonGrow < 1) {
+        this.moonGrow = Math.min(1, this.moonGrow + dt / ORBIT.growSeconds);
+        this.placeMoon(this.moon, 1 - (1 - this.moonGrow) ** 3);
+      } else if (!moonOn) this.moonGrow = 0;
+      this.moon.visible = moonOn;
+      this.moon.parent!.scale.setScalar(r);
+    }
     if (this.stuckDirty || Math.abs(r - this.lastStuckRadius) > this.lastStuckRadius * 0.01) this.rebuildStuck(r);
 
     // Fur trails behind the motion (in the rolling frame).
@@ -548,6 +636,10 @@ export class BunnyView {
     for (const m of this.stuckMeshes.values()) m.dispose();
     // The geometry and material are the shared mountain_range Debris ones (debrisGeometry's cache).
     this.peaks?.dispose();
+    if (this.atmosphere) {
+      this.atmosphere.geometry.dispose();
+      (this.atmosphere.material as ShaderMaterial).dispose();
+    }
     this.shells.dispose();
     this.root.removeFromParent();
   }

@@ -17,6 +17,7 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
   Color,
   CylinderGeometry,
   DoubleSide,
@@ -87,9 +88,10 @@ const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' 
 const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
- * city avenue (3.5×) and a Region motorway (6 units of 10 m across).
+ * city avenue (3.5×) and a Region motorway (6 units of 10 m across). The Continent's exit is a
+ * launch pad and a beam of light instead (buildLaunchCorridor).
  */
-const GATE_SCALE: Partial<Record<AreaId, number>> = { neighborhood: 1, city: 3.5, region: 0.008, continent: 0.03 };
+const GATE_SCALE: Partial<Record<AreaId, number>> = { neighborhood: 1, city: 3.5, region: 0.008 };
 
 /** The Area is seen from altitude (its unit is above 1 cm): Region-style floors, markings and shadows. */
 function fromAltitude(area: AreaId): boolean {
@@ -112,6 +114,10 @@ export class HouseView {
   private time = 0;
   /** On a map that wraps east–west: the map drawn three times (laps −1, 0, +1), moved to the camera's lap each frame. */
   private lap: Group | null = null;
+  /** The Continent's launch corridor: pad lights (amber, green once open), rings climbing the beam, the beam's height. */
+  private launchLights: MeshStandardMaterial | null = null;
+  private readonly launchRings: Mesh[] = [];
+  private launchHeight = 0;
   /** The Globe's painted Earth and drifting clouds (globeTextures.ts). */
   private globe: GlobeSurfaceView | null = null;
 
@@ -130,6 +136,7 @@ export class HouseView {
     this.root.add(this.batch.build());
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
+    else if (layout.area === 'continent') this.buildLaunchCorridor();
     else this.buildRoadGate();
     if (layout.wrapX) this.buildLaps();
   }
@@ -456,6 +463,138 @@ export class HouseView {
     this.beacon = beam;
   }
 
+  /**
+   * The Continent's exit, the launch corridor up to orbit (in Continent units): a launch pad on
+   * the Arctic shore (a concrete apron with a hazard ring, a small gantry with a warning light and
+   * a ring of lights round the pad, amber while closed) where the gate strip meets the land. When
+   * the exit opens the lights turn green and a tall beam of light climbs out of the corridor with
+   * rings rising up it (`updateLaunch`).
+   */
+  private buildLaunchCorridor(): void {
+    const exit = this.layout.exit;
+    if (!exit) return;
+    const r = exit.rect;
+    const width = r.maxX - r.minX;
+    const cx = (r.minX + r.maxX) / 2;
+    const cz = (r.minZ + r.maxZ) / 2;
+    const padR = width * 0.42;
+    const pad = new Group();
+    pad.name = 'launchPad';
+    // The apron sits just inland of the gate (south of it: the exit faces north, −z).
+    const px = cx - exit.dir.x * padR * 0.9;
+    const pz = r.maxZ - exit.dir.z * padR * 0.9;
+    pad.position.set(px, 0, pz);
+    const concrete = new MeshStandardMaterial({ color: '#b8b4ab', roughness: 0.9 });
+    const dark = new MeshStandardMaterial({ color: '#3a3d42', roughness: 0.6, metalness: 0.3 });
+    const yellow = new MeshStandardMaterial({ color: '#e0b224', roughness: 0.6 });
+    const apron = new Mesh(new CylinderGeometry(padR, padR * 1.04, 0.12, 40), concrete);
+    apron.position.y = 0.06;
+    const ring = new Mesh(new CylinderGeometry(padR * 0.62, padR * 0.62, 0.14, 40, 1, true), yellow);
+    ring.position.y = 0.07;
+    const flame = new Mesh(new CylinderGeometry(padR * 0.28, padR * 0.28, 0.16, 24), dark);
+    flame.position.y = 0.08;
+    pad.add(apron, ring, flame);
+    // Gantry: a lattice-ish tower on the inland side of the pad, with a warning light on top.
+    const towerH = padR * 1.5;
+    const tower = new Group();
+    for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      const leg = new Mesh(new BoxGeometry(0.12, towerH, 0.12), dark);
+      leg.position.set(dx * 0.3, towerH / 2, dz * 0.3);
+      tower.add(leg);
+    }
+    for (let i = 1; i <= 4; i++) {
+      const brace = new Mesh(new BoxGeometry(0.72, 0.08, 0.72), dark);
+      brace.position.y = (towerH * i) / 4.4;
+      tower.add(brace);
+    }
+    const arm = new Mesh(new BoxGeometry(0.1, 0.1, padR * 0.55), dark);
+    arm.position.set(0, towerH * 0.8, -padR * 0.3 * Math.sign(-exit.dir.z || 1));
+    tower.add(arm);
+    tower.position.set(padR * 0.75, 0, 0);
+    pad.add(tower);
+    const lights = new MeshStandardMaterial({ color: '#2a1a08', emissive: '#ffae1a', emissiveIntensity: 1.6, roughness: 0.4 });
+    const beaconLight = new Mesh(new BoxGeometry(0.26, 0.26, 0.26), lights);
+    beaconLight.position.set(padR * 0.75, towerH + 0.15, 0);
+    pad.add(beaconLight);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const lamp = new Mesh(new BoxGeometry(0.18, 0.12, 0.18), lights);
+      lamp.position.set(Math.cos(a) * padR * 0.9, 0.18, Math.sin(a) * padR * 0.9);
+      pad.add(lamp);
+    }
+    pad.traverse((o) => {
+      o.castShadow = true;
+      o.receiveShadow = true;
+    });
+    this.root.add(pad);
+    this.launchLights = lights;
+
+    // The corridor: a tall beam of light up out of the gate, and rings climbing it.
+    const beamH = width * 9;
+    // Bright at the pad, fading out as it climbs (a vertical alpha gradient).
+    const fade = document.createElement('canvas');
+    fade.width = 4;
+    fade.height = 128;
+    const fctx = fade.getContext('2d');
+    if (fctx) {
+      const grad = fctx.createLinearGradient(0, 0, 0, 128);
+      grad.addColorStop(0, '#fff');
+      grad.addColorStop(0.4, '#666');
+      grad.addColorStop(1, '#000');
+      fctx.fillStyle = grad;
+      fctx.fillRect(0, 0, 4, 128);
+    }
+    const beamMat = new MeshBasicMaterial({ color: '#7cc8ff', alphaMap: new CanvasTexture(fade), transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false });
+    const beam = new Mesh(new CylinderGeometry(width * 0.34, width * 0.42, beamH, 32, 1, true), beamMat);
+    beam.position.set(cx, beamH / 2, cz);
+    beam.visible = false;
+    beam.name = 'exitBeacon';
+    // After the coast overlay (renderOrder 1), which would otherwise paint the sea over it.
+    beam.renderOrder = 3;
+    this.root.add(beam);
+    this.beacon = beam;
+    const core = new Mesh(new CylinderGeometry(width * 0.1, width * 0.14, beamH, 16, 1, true), beamMat);
+    core.renderOrder = 3;
+    beam.add(core);
+    for (let i = 0; i < 5; i++) {
+      const hoop = new Mesh(new CylinderGeometry(width * 0.46, width * 0.46, width * 0.05, 32, 1, true), new MeshBasicMaterial({ color: '#9fdcff', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }));
+      hoop.visible = false;
+      hoop.renderOrder = 3;
+      hoop.position.set(cx, 0, cz);
+      this.root.add(hoop);
+      this.launchRings.push(hoop);
+    }
+    this.launchHeight = beamH;
+  }
+
+  private updateLaunch(frameDt: number): void {
+    const exit = this.layout.exit;
+    if (!exit || !this.launchLights) return;
+    this.time += frameDt;
+    if (!exit.open) {
+      // Closed: the pad lights blink amber.
+      this.launchLights.emissiveIntensity = 0.8 + 0.8 * (Math.sin(this.time * 4) > 0 ? 1 : 0);
+      return;
+    }
+    this.doorOpen = Math.min(1, this.doorOpen + frameDt / 1.4);
+    const ease = 1 - (1 - this.doorOpen) ** 3;
+    this.launchLights.emissive.set('#3dff7a');
+    this.launchLights.emissiveIntensity = 2;
+    const beam = this.beacon!;
+    beam.visible = true;
+    beam.scale.y = Math.max(0.01, ease);
+    beam.position.y = (this.launchHeight * ease) / 2;
+    (beam.material as MeshBasicMaterial).opacity = ease * (0.75 + 0.1 * Math.sin(this.time * 3));
+    const n = this.launchRings.length;
+    this.launchRings.forEach((hoop, i) => {
+      const t = (this.time * 0.25 + i / n) % 1;
+      hoop.visible = true;
+      hoop.position.y = t * this.launchHeight * 0.6 * ease;
+      hoop.scale.setScalar(1 - t * 0.35);
+      (hoop.material as MeshBasicMaterial).opacity = ease * 0.45 * (1 - t);
+    });
+  }
+
   private updateRoadGate(frameDt: number): void {
     const exit = this.layout.exit;
     if (!exit || this.booms.length === 0 || !exit.open) return;
@@ -592,6 +731,7 @@ export class HouseView {
     this.globe?.update(frameDt);
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
+    this.updateLaunch(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
     // the bottom half still fades); in the city and from altitude also to its left and right edges, since a tower
     // can hide half of a giant Bunny without covering its centre.
