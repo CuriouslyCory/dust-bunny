@@ -496,6 +496,21 @@ describe('the Expansion', () => {
     expect(boss.rips).toBe(1);
   });
 
+  it('a Big Rip that does not land (i-frames) sheds nothing', () => {
+    const { run, events, boss, b } = fight('expansion-rip-blocked', { clear: 60 });
+    noStrands(boss);
+    const rips: Array<{ damaged: boolean; volume: number }> = [];
+    events.on('bossRip', (e) => rips.push(e));
+    const hp = b.health;
+    const r0 = b.radius;
+    b.invulnerable = 10;
+    boss.gravity = 0.001;
+    for (let i = 0; i < 30; i++) run.hazards.update(STEP, run);
+    expect(rips).toMatchObject([{ damaged: false, volume: 0 }]);
+    expect(b.health).toBe(hp);
+    expect(b.radius).toBe(r0);
+  });
+
   it('ignored, it eventually kills the Bunny', () => {
     const { run, boss, b } = fight('expansion-ignore', { clear: 60 });
     noStrands(boss);

@@ -288,12 +288,13 @@ export class TheExpansion extends BaseHazard {
   private rip(run: Run): void {
     const c = this.cfg;
     const damaged = run.bunny.damage(c.rip.damage, this.def.id);
-    const plan = shedMass(run, this.rng, c.rip.shedFraction, this.def.id);
+    // Like every Hazard hit, only a hit that lands sheds (i-frames, Bubble Wrap, Hunker, a revive).
+    const volume = damaged && run.bunny.alive ? shedMass(run, this.rng, c.rip.shedFraction, this.def.id).volume : 0;
     this.gravity = c.gravity.ripReset;
     this.ripGrace = c.gravity.ripGrace;
     this.ripFlash = 1;
     this.rips++;
-    run.events.emit('bossRip', { hazardId: this.id, damaged, volume: plan.volume });
+    run.events.emit('bossRip', { hazardId: this.id, damaged, volume });
   }
 
   private startCollapse(run: Run): void {

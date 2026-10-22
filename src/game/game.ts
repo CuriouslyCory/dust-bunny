@@ -174,10 +174,15 @@ export class Game {
       // A victory in the last Area plays the ending first (then the results); not with ?autostart.
       if (this.run && afterRunEnded(e.reason, this.run.area, storyAvailable()) === 'ending') {
         const run = this.run;
-        this.resultsTimer = window.setTimeout(() => {
+        // The Universe's cleared line plays first (ui/areaHud.ts); the ending waits until it has been read.
+        const open = (): void => {
           this.resultsTimer = null;
-          if (this.run === run) this.go('ending', { result: e } satisfies EndingParams);
-        }, ENDING_LEAD_SECONDS * 1000);
+          if (this.run !== run) return;
+          const left = this.hud.bannerLeft;
+          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(open, Math.min(Math.max(left, 0.1), 0.25) * 1000);
+          else this.go('ending', { result: e } satisfies EndingParams);
+        };
+        this.resultsTimer = window.setTimeout(open, ENDING_LEAD_SECONDS * 1000);
         return;
       }
       if (e.reason === 'victory') {
