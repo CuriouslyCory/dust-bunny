@@ -188,3 +188,67 @@
     animation: none;
   }
 }
+
+/* ── The ending: the canvas shows through; a veil for black and the Bang's white ── */
+.screen-ending {
+  pointer-events: auto;
+  user-select: none;
+  touch-action: manipulation;
+  padding: 0;
+}
+
+.story-ending {
+  justify-content: flex-end;
+}
+
+.ending-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 1;
+  pointer-events: none;
+}
+
+.ending-title {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font: 700 clamp(40px, 8vw, 84px) / 1 var(--font-display);
+  color: var(--story-cream);
+  letter-spacing: 0.01em;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ending-words {
+  position: relative;
+}
+
+.ending-after {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  white-space: nowrap;
+}
+
+.ending-mark {
+  opacity: 0;
+}
+
+.ending-captions {
+  position: relative;
+  margin-bottom: clamp(48px, 11vh, 120px);
+}
+
+.story-ending .story-card-caption {
+  font-size: clamp(18px, 2.8vw, 28px);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8), 0 0 3px rgba(0, 0, 0, 0.6);
+}
+
+.ending-hint {
+  position: absolute;
+  bottom: calc(16px + var(--safe-bottom));
+}

@@ -26,6 +26,11 @@ export function setStoryAvailable(on: boolean): void {
   available = on;
 }
 
+/** True unless this page turned the story off (`?autostart`); the ending plays even with captions off. */
+export function storyAvailable(): boolean {
+  return available;
+}
+
 /** True when the narrator speaks: the page allows it and the Story captions setting is on. */
 export function storyOn(): boolean {
   return available && settings.value.storyCaptions;

@@ -209,4 +209,17 @@ export class Sfx {
     for (const m of [48, 60, 64, 67, 72]) a.tone({ type: 'sawtooth', freq: N(m), delay: 1.25, attack: 0.1, hold: 0.6, decay: 1.4, gain: 0.03, lowpass: 2000 });
     a.noise({ filter: 'highpass', freq: 5000, delay: 1.25, attack: 0.05, decay: 1.5, gain: 0.05 });
   }
+
+  /** Footsteps walking away on sand, `delay` s from now (docs/story.md: intro shot 3 and ending shot 6). */
+  footstepsReceding(delay = 0, dest?: AudioNode): void {
+    if (!this.a.ready) return;
+    const a = this.a;
+    for (let i = 0; i < 9; i++) {
+      const fade = 0.78 ** i;
+      const at = a.now + delay + i * 0.38 + (i % 2) * 0.03;
+      const pan = -0.1 - i * 0.06;
+      a.tone({ type: 'sine', freq: 130, freqEnd: 70, at, attack: 0.004, decay: 0.1, gain: 0.22 * fade, pan, dest });
+      a.noise({ filter: 'bandpass', freq: 1300 - i * 70, q: 1.2, at, attack: 0.004, decay: 0.07, gain: 0.1 * fade, pan, dest });
+    }
+  }
 }

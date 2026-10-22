@@ -11,6 +11,7 @@ import type { Game } from '../game/game';
 import { areaStartRadius } from '../game/run';
 import { nextArea, type AreaId } from '../world/types';
 import { h } from '../ui/screens';
+import type { EndingParams } from '../story/endingScreen';
 
 export interface DebugTools {
   grow(factor?: number): void;
@@ -41,6 +42,11 @@ export interface DebugTools {
   setBunnyForm(form: BunnyForm): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
+  /**
+   * Ends the Run as a victory without the Game's routing (no runEnded: nothing is saved) and plays
+   * the ending, from shot `from` (0-based, default the first), then the results.
+   */
+  playEnding(from?: number): void;
 }
 
 declare global {
@@ -107,6 +113,15 @@ export function installDebug(game: Game): DebugTools {
     nextArea() {
       const next = game.run && nextArea(game.run.area);
       if (next) goTo(next);
+    },
+    playEnding(from = 0) {
+      const run = game.run;
+      if (!run) return;
+      run.bunny.form = 'black_hole';
+      run.ended = true;
+      run.endReason = 'victory';
+      const params: EndingParams = { result: { reason: 'victory', stats: run.getStats() }, from };
+      game.go('ending', params);
     },
     advance(seconds) {
       const run = game.run;

@@ -188,6 +188,8 @@ The cosmic web as a floor: filaments of galaxies, dark voids between. The Bunny 
 
 Triggers on absorbing the Expansion, before the results screen. ~30 s, skippable after shot 3 (the Bang should land once).
 
+Status: built (`ending` screen, `STORY.ending`, `src/fx/ending.ts`, `src/audio/ending.ts`; see Story in `docs/architecture.md`), playable with `__game.debugTools.playEnding()` until the Universe and its victory land.
+
 | # | Shot | Caption | Sound | ~s |
 |---|---|---|---|---|
 | 1 | The last galaxy filament is absorbed. The Bunny fills the frame; the starfield behind it is empty. Camera slowly pushes in. | *Everything is in one place.* | Music thins to a single held note. | 4 |
