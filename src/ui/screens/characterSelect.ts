@@ -9,7 +9,8 @@
  * Keys: ←/→ (A/D) or 1–3 to choose, ↑/↓ for the Difficulty, Enter/Space to start, S for the
  * Shop, U for Under the Couch, Esc for the title.
  * Phone-sized viewports show the cards as small picker chips plus one detail card for the
- * selected Character (.char-detail), so nothing has to scroll.
+ * selected Character (.char-detail). There the Ability card and Keepsake slots move into the
+ * scrolling body, so the details keep their height on short (landscape) screens.
  */
 import { CHARACTERS, DEFAULT_CHARACTER_ID, type CharacterDef } from '../../data/characters';
 import { getGrade, keepsakeLabel, LOADOUT_SLOTS, type KeepsakeRef } from '../../data/keepsakes';
@@ -18,7 +19,7 @@ import { BASE_BUNNY_STATS, computeStats, type BunnyStatValues, type StatKey } fr
 import type { Game } from '../../game/game';
 import { hoardEntries } from '../../meta/hoard';
 import { getMeta } from '../../meta/meta';
-import { handleMenuKeys, isCompact, scrollArea, segmented } from '../components';
+import { COMPACT_QUERY, handleMenuKeys, isCompact, scrollArea, segmented } from '../components';
 import { abilityCard, keepsakeChip } from '../keepsakeUi';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
@@ -255,6 +256,10 @@ export function registerCharacterSelectScreen(): void {
         );
       };
 
+      const body = scrollArea('char-body', cardsEl, detailEl);
+      const placeLoadout = () => (isCompact() ? body.append(loadoutEl) : body.after(loadoutEl));
+      if (typeof matchMedia === 'function') matchMedia(COMPACT_QUERY).addEventListener('change', placeLoadout);
+
       start.onclick = play;
       back.onclick = () => game.go('title');
       shop.onclick = () => game.go('shop', { back: 'characterSelect' });
@@ -264,14 +269,19 @@ export function registerCharacterSelectScreen(): void {
           'div',
           { className: 'panel rl-panel char-select' },
           h('h2', { textContent: 'Choose your Bunny' }),
-          scrollArea('char-body', cardsEl, detailEl),
+          body,
           loadoutEl,
           picker,
-          h('div', { className: 'char-diff-row' }, diffPicker.el, diffDesc),
-          h('div', { className: 'rl-row char-actions' }, back, shop, start),
+          h(
+            'div',
+            { className: 'char-foot' },
+            h('div', { className: 'char-diff-row' }, diffPicker.el, diffDesc),
+            h('div', { className: 'rl-row char-actions' }, back, shop, start),
+          ),
           h('p', { className: 'hint key-hint', textContent: '←/→ or 1–3 to choose · ↑/↓ difficulty · Enter to start · S Shop · U Under the Couch' }),
         ),
         enter() {
+          placeLoadout();
           difficulty = getDifficulty(game.nextRunConfig.difficulty ?? meta.data.lastDifficulty);
           game.nextRunConfig.difficulty = difficulty.id;
           diffPicker.set(difficulty.id);
