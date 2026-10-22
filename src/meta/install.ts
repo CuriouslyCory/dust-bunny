@@ -1,6 +1,6 @@
 /**
  * Wires the browser side of the roguelike layer into a Game (call once at boot, after URL params
- * are applied): registers the characterSelect / perkDraft / shop / underTheCouch screens and the
+ * are applied): registers the characterSelect / perkDraft / keepsakeReveal / shop / underTheCouch screens and the
  * results "Kept" section; feeds owned Upgrades, the last Character and Difficulty and that
  * Character's last Loadout into game.nextRunConfig; opens the Perk draft modal on tierUp; awards
  * Fluff on runEnded and Keepsakes on bossDefeated; adds HUD widgets and the Keepsake reward moment.
@@ -15,6 +15,7 @@ import { isRankedRun } from '../ui/leaderboard/posting';
 import { installRoguelikeHud } from '../ui/roguelikeHud';
 import { registerCharacterSelectScreen } from '../ui/screens/characterSelect';
 import { openPerkDraft, registerPerkDraftScreen } from '../ui/screens/perkDraft';
+import { registerKeepsakeRevealScreen } from '../ui/screens/keepsakeReveal';
 import { registerKeptSection } from '../ui/screens/kept';
 import { registerShopScreen } from '../ui/screens/shop';
 import { registerUnderTheCouchScreen } from '../ui/screens/underTheCouch';
@@ -25,6 +26,7 @@ export function installRoguelike(game: Game): void {
   registerGameplayContent();
   registerCharacterSelectScreen();
   registerPerkDraftScreen();
+  registerKeepsakeRevealScreen();
   registerShopScreen();
   registerUnderTheCouchScreen();
   registerKeptSection();

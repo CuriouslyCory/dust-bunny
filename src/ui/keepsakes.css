@@ -532,3 +532,49 @@
 .utc .btn.utc-compact-btn.utc-felt {
   flex: 1;
 }
+
+/* --- Keepsake reveal (Run paused after a boss drop) --- */
+
+.screen-keepsakeReveal {
+  pointer-events: auto;
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--honey) 22%, transparent), rgba(30, 18, 12, 0.6));
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.keepsake-reveal {
+  width: min(560px, 100%);
+  border-top: 6px solid var(--grade, var(--honey));
+}
+.keepsake-reveal.arming {
+  pointer-events: none;
+}
+.kr-label {
+  margin: 0;
+  font: 700 var(--fs-xs) / 1.2 var(--font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.keepsake-reveal > h2 {
+  margin-top: 4px;
+}
+.kr-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0;
+}
+.kr-items > .kept-item {
+  justify-content: center;
+}
+.keepsake-reveal .kept-item .ks-chip-icon {
+  width: 44px;
+  height: 44px;
+  font-size: 24px;
+}
+.keepsake-reveal .kept-item .ks-chip-name {
+  font-size: var(--fs-md);
+}
+.kr-sub {
+  margin: 6px 0 10px;
+}
