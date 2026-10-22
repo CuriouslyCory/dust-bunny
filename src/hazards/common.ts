@@ -1,11 +1,13 @@
 /**
  * Shared Hazard helpers: movement with wall/furniture collision, shelter checks, suction,
- * damage + knockback, angles. Headless-safe (no DOM / WebGL).
+ * damage + knockback, aim targets (the Bunny, or Lint's Decoy as a Lure), angles.
+ * Headless-safe (no DOM / WebGL).
  */
 import { circleVsCircle, circleVsRect, clamp, rectContains } from '../core/math';
 import type { Rng } from '../core/rng';
 import type { Bunny } from '../entities/bunny';
 import type { Run } from '../game/run';
+import type { Hazard } from './index';
 import { canAbsorb } from '../systems/absorb';
 import { passesUnder } from '../systems/collision';
 import { maxSpeedFor } from '../systems/movement';
@@ -113,7 +115,7 @@ export function suctionSpeed(bunnyMaxSpeed: number, strength: number, falloff: n
 /** Displaces the Bunny towards (sx, sz) for one tick. Returns the pull speed applied. */
 export function applySuction(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
   const b = run.bunny;
-  if (falloff <= 0 || b.hiddenFromHazards) return 0;
+  if (falloff <= 0 || b.hiddenFromHazards || b.hunkered) return 0;
   const dx = sx - b.x;
   const dz = sz - b.z;
   const d = Math.hypot(dx, dz);
@@ -132,7 +134,7 @@ export function applySuction(run: Run, sx: number, sz: number, strength: number,
  */
 export function applyPush(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
   const b = run.bunny;
-  if (falloff <= 0 || b.hiddenFromHazards) return 0;
+  if (falloff <= 0 || b.hiddenFromHazards || b.hunkered) return 0;
   const dx = b.x - sx;
   const dz = b.z - sz;
   const d = Math.hypot(dx, dz);
@@ -163,6 +165,24 @@ export function pushBunnyOut(run: Run, x: number, z: number, radius: number): vo
   b.z += p.z;
 }
 
+/**
+ * Separates a Hazard body (circle of `radius` at h.x, h.z) from the Bunny: normally the Bunny is
+ * pushed out, but a planted (hunkered) Bunny is a wall, so the Hazard is pushed back instead
+ * (resolved against walls and furniture at `height`).
+ */
+export function separateFromBunny(run: Run, h: { x: number; z: number }, radius: number, height: number): void {
+  const b = run.bunny;
+  if (!b.hunkered) {
+    pushBunnyOut(run, h.x, h.z, radius);
+    return;
+  }
+  const p = circleVsCircle(h.x, h.z, radius, b.x, b.z, b.radius);
+  if (!p) return;
+  const m = moveCircle(run.house, h.x, h.z, radius, height, p.x, p.z);
+  h.x = m.x;
+  h.z = m.z;
+}
+
 export interface HitSpec {
   damage: number;
   source: string;
@@ -183,9 +203,69 @@ export function hitBunny(run: Run, fromX: number, fromZ: number, hit: HitSpec): 
   return true;
 }
 
-/** False while the Bunny is hidden (Dust Cloud): Hazards must not target, chase, aim or pull. */
-export function canTarget(run: Run): boolean {
-  return !run.bunny.hiddenFromHazards;
+/**
+ * A stand-in target for Hazards that aim (Lint's Decoy). Installed per Run by src/abilities with
+ * setLure; Hazards only read it through aimTarget / activeLure.
+ */
+export interface Lure {
+  x: number;
+  z: number;
+  radius: number;
+  /** Multiplies each Hazard's own aggro / trigger range when checking the Lure (1 = base). */
+  rangeMul: number;
+  /** Wanderers (Roomba family) within this distance (cm) of the Lure steer towards it (0 = off). */
+  wanderRange: number;
+  /** A ranged attack (spray burst, blower blast) reached the Lure. */
+  shot(h: Hazard): void;
+}
+
+const lures = new WeakMap<Run, Lure>();
+
+/** Sets (or clears, with null) the Run's Lure. */
+export function setLure(run: Run, lure: Lure | null): void {
+  if (lure) lures.set(run, lure);
+  else lures.delete(run);
+}
+
+/** The Run's active Lure (Decoy on the floor), if any. */
+export function activeLure(run: Run): Lure | undefined {
+  return lures.get(run);
+}
+
+/** Where a Hazard aims: the Bunny or a Lure standing in for it. */
+export interface AimTarget {
+  x: number;
+  z: number;
+  radius: number;
+  /** True when this is the Lure, not the Bunny. */
+  lure: boolean;
+}
+
+/**
+ * The point a Hazard at (fromX, fromZ) with aggro / trigger range `range` (cm) aims at: the Lure
+ * while it is within range × lure.rangeMul (plus its radius), otherwise the Bunny unless it is
+ * hidden (Dust Cloud), else null. The Bunny is returned at any distance: callers keep their own
+ * range checks for it. Suction and contact still act on the Bunny by distance; only aim changes.
+ */
+export function aimTarget(run: Run, fromX: number, fromZ: number, range: number): AimTarget | null {
+  const lure = lures.get(run);
+  if (lure && Math.hypot(lure.x - fromX, lure.z - fromZ) <= range * lure.rangeMul + lure.radius) return { x: lure.x, z: lure.z, radius: lure.radius, lure: true };
+  const b = run.bunny;
+  if (b.hiddenFromHazards) return null;
+  return { x: b.x, z: b.z, radius: b.radius, lure: false };
+}
+
+/** Drags the Lure towards a suction intake at (sx, sz) by `speed` cm/s (vacuums pull the Decoy in). */
+export function pullLure(run: Run, sx: number, sz: number, speed: number, dt: number): void {
+  const lure = lures.get(run);
+  if (!lure || speed <= 0) return;
+  const dx = sx - lure.x;
+  const dz = sz - lure.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-3) return;
+  const step = Math.min(d, speed * dt);
+  lure.x += (dx / d) * step;
+  lure.z += (dz / d) * step;
 }
 
 export function bunnyCanAbsorb(run: Run, size: number): boolean {

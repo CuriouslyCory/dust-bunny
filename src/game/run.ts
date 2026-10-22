@@ -4,7 +4,7 @@
  */
 import { Group } from 'three';
 import { Disposables, type EventBus, type Vec3Like } from '../core/events';
-import { NO_INPUT, type InputSource } from '../core/input';
+import { NO_INPUT, type InputSource, type InputState } from '../core/input';
 import { Rng } from '../core/rng';
 import { AREAS } from '../data/areas';
 import { CAP_PRIORITY, getCharacter } from '../data/characters';
@@ -104,6 +104,8 @@ export class Run {
   readonly disposables = new Disposables();
 
   input: InputSource = { sample: () => NO_INPUT };
+  /** This tick's input, sampled once at the start of update() (movement, the Ability System). */
+  inputState: InputState = NO_INPUT;
   /** Live camera framing, refreshed by RunView each frame; null headless (spawners assume a default). */
   viewInfo: ViewInfo | null = null;
   /** Current Tier (1-based); only increases. */
@@ -278,6 +280,7 @@ export class Run {
     if (this.ended) return;
     this.bunny.snapshot();
     this.time += dt;
+    this.inputState = this.input.sample();
     for (const s of this.systems) {
       s.update(dt, this);
       if (this.ended) break;

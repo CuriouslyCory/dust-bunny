@@ -7,6 +7,8 @@
  * object3d under run.entityRoot, and resolves Bunny contact generically:
  *   - hazard.size <= Bunny radius × absorbRatio → absorbed (growth via run.absorbMass,
  *     hazard.onAbsorbed, hazardRemoved {absorbed: true})
+ *   - otherwise, while the Bunny is planted (Hunker) and `manager.plantedContact` is set →
+ *     plantedContact(run, hazard) (src/abilities: bosses crash as into a wall, others recoil)
  *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call)
  * Spawning policy is pluggable via `manager.director`.
  */
@@ -38,8 +40,15 @@ export interface Hazard {
   /** Set true to have the manager remove it. */
   dead?: boolean;
   update(dt: number, run: Run): void;
+  /** Ranged Hazards (turrets, Leaf Blower) aim at Lint's Decoy but are never clogged by touching it. */
+  readonly ranged?: boolean;
   /** Bunny touches the Hazard and is too small to absorb it. */
   onContact?(run: Run): void;
+  /**
+   * The Hazard ran into a planted (hunkered) Bunny. Optional: without it a BaseHazard recoils
+   * (`recoilFor`). Bosses are handled by the Ability System.
+   */
+  onPlanted?(run: Run): void;
   onAbsorbed?(run: Run): void;
   dispose?(): void;
 }
@@ -84,11 +93,16 @@ export const hazardRegistry = new Registry<HazardDef>('hazard');
 /** Pluggable spawn policy, called every tick before Hazards update. */
 export type HazardDirector = (dt: number, run: Run, manager: HazardManager) => void;
 
+/** Contact with a planted (hunkered) Bunny, replacing onContact (installed by src/abilities). */
+export type PlantedContact = (run: Run, hazard: Hazard) => void;
+
 export class HazardManager implements System {
   readonly id = 'hazards';
   readonly order = SYSTEM_ORDER.hazards;
   readonly hazards: Hazard[] = [];
   director: HazardDirector | null = null;
+  /** Called instead of onContact while the Bunny is hunkered (see file header). */
+  plantedContact: PlantedContact | null = null;
   private nextId = 1;
 
   constructor(
@@ -138,6 +152,8 @@ export class HazardManager implements System {
         run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: !!h.def.boss });
         h.onAbsorbed?.(run);
         if (run.ended) break;
+      } else if (b.hunkered && this.plantedContact) {
+        this.plantedContact(run, h);
       } else {
         h.onContact?.(run);
       }

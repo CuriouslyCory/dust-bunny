@@ -5,6 +5,9 @@
  *
  * The Lawn Mower (outdoors) reuses the lane patrol with LAWN_MOWER tuning: no sticking; a hit
  * knocks the Bunny off the lane, mows some fluff off (sheds mass) and the mower stops briefly.
+ *
+ * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
+ * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { LAWN_MOWER, LINT_ROLLER, type LaneTuning } from '../data/hazards';
@@ -75,6 +78,27 @@ export class LintRoller extends BaseHazard {
     const ux = (l.bx - l.ax) / l.length;
     const uz = (l.bz - l.az) / l.length;
     decal.place(l.ax - ux * this.size, l.az - uz * this.size, yawOf(ux, uz));
+  }
+
+  override update(dt: number, run: Run): void {
+    // Stunned (clog, Discharge, Spiky Dash) while carrying the Bunny: let go at once.
+    if (this.stuck > 0 && this.stunned) {
+      this.stuck = 0;
+      this.release(run);
+    }
+    super.update(dt, run);
+  }
+
+  /** Bounces off a planted Tumble: turns back along the lane (only if heading into it) and pauses. */
+  onPlanted(run: Run): void {
+    const l = this.lane;
+    if (!l) return;
+    const b = run.bunny;
+    const towards = ((l.bx - l.ax) * (b.x - this.x) + (l.bz - l.az) * (b.z - this.z)) * this.dir > 0;
+    if (towards) {
+      this.dir = this.dir === 1 ? -1 : 1;
+      this.pause = Math.max(this.pause, this.cfg.endPause);
+    }
   }
 
   protected tick(dt: number, run: Run): void {

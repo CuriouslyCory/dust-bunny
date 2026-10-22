@@ -55,6 +55,15 @@ export class Bunny {
   /** Spiky Dash: while `dashing`, Hazard contact stuns the Hazard instead of hurting the Bunny. */
   spikyDash = false;
 
+  // Ability hooks (set by src/abilities; see docs/architecture.md "Hooks").
+  /**
+   * Hunker (Tumble): planted. No movement or Dash, no damage (combat filter), no mass shed,
+   * and knockback, suction, push and sticking do nothing. Debris is still absorbed.
+   */
+  hunkered = false;
+  /** Zap's Static meter, 0..1 (null for Characters without one). Drives Zap's glow. */
+  staticCharge: number | null = null;
+
   constructor(
     private readonly events: EventBus,
     readonly stats: StatBlock,
@@ -138,6 +147,7 @@ export class Bunny {
 
   /** Knockback away from a point/direction; `strength` is in Bunny radii per second. */
   knockback(dirX: number, dirZ: number, strength: number): void {
+    if (this.hunkered) return;
     const d = Math.hypot(dirX, dirZ) || 1;
     const k = strength * this.radius * (1 - this.stats.get('knockbackResistance'));
     this.impulseX += (dirX / d) * k;

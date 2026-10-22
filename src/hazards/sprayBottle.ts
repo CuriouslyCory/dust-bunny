@@ -7,6 +7,9 @@
  * sweeps idly while the Bunny is out of range, and a water hit also soaks the Bunny (a brief
  * `hazard:wet` slow, like the Mop's trail). The Pressure Washer (city, PRESSURE_WASHER) works the
  * same way with fast, wide water jets.
+ *
+ * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
+ * clogged by it), and a droplet that reaches the Decoy pops it.
  */
 import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import type { Rng } from '../core/rng';
@@ -15,7 +18,7 @@ import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
-import { bunnySheltered, canTarget, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
+import { activeLure, aimTarget, bunnySheltered, hazardFloorFree, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 import { WET_SOURCE } from './mop';
@@ -36,6 +39,7 @@ interface Droplet {
 type SprayState = 'idle' | 'telegraph' | 'firing' | 'cooldown';
 
 export class SprayBottle extends BaseHazard {
+  readonly ranged = true;
   state: SprayState = 'idle';
   private timer = 0;
   private shotsLeft = 0;
@@ -64,23 +68,24 @@ export class SprayBottle extends BaseHazard {
 
   protected tick(dt: number, run: Run): void {
     const c = this.cfg;
-    const b = run.bunny;
-    const dx = b.x - this.x;
-    const dz = b.z - this.z;
-    const dist = Math.hypot(dx, dz);
     const range = tierValue(c.range, run.tier);
+    // The Bunny, or the Decoy while it is in range.
+    const t = aimTarget(run, this.x, this.z, range);
+    const dx = (t?.x ?? this.x) - this.x;
+    const dz = (t?.z ?? this.z) - this.z;
+    const dist = Math.hypot(dx, dz);
     // Only shoot from on screen, so the player can always see the turret and its aim lane.
-    const inRange = canTarget(run) && dist < range + b.radius && !bunnySheltered(run, c.nozzleHeight) && onScreen(run, this.x, this.z);
+    const inRange = !!t && dist < range + t.radius && (t.lure || !bunnySheltered(run, c.nozzleHeight)) && onScreen(run, this.x, this.z);
     this.timer -= dt;
 
-    if (this.state === 'telegraph' && !canTarget(run)) {
+    if (this.state === 'telegraph' && !t) {
       // Lost sight of the Bunny (Dust Cloud): cancel the shot.
       this.state = 'idle';
       this.aimDecal.visible = false;
     }
     const sweeping = c.idleSpin > 0 && !inRange;
     if (this.state === 'idle' && sweeping) this.yaw = wrapAngle(this.yaw + c.idleSpin * dt);
-    else if (canTarget(run) && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
+    else if (t && (this.state === 'idle' || this.state === 'telegraph')) this.yaw = turnTowards(this.yaw, yawOf(dx, dz), c.turnRate * dt);
     if (this.state === 'idle' && inRange && Math.abs(wrapAngle(yawOf(dx, dz) - this.yaw)) < 0.25) {
       this.state = 'telegraph';
       this.timer = this.attackTime(run, tierValue(c.telegraph, run.tier));
@@ -129,12 +134,18 @@ export class SprayBottle extends BaseHazard {
   private updateDroplets(dt: number, run: Run): void {
     const c = this.cfg;
     const b = run.bunny;
+    const lure = activeLure(run);
     for (let i = this.droplets.length - 1; i >= 0; i--) {
       const d = this.droplets[i]!;
       d.x += d.vx * dt;
       d.z += d.vz * dt;
       d.traveled += Math.hypot(d.vx, d.vz) * dt;
       let gone = d.traveled >= d.max || !hazardFloorFree(run.house, d.x, d.z, c.dropletRadius, c.nozzleHeight);
+      if (!gone && lure && Math.hypot(lure.x - d.x, lure.z - d.z) < lure.radius + c.dropletRadius) {
+        // The spray reaches the Decoy and pops it.
+        lure.shot(this);
+        gone = true;
+      }
       if (!gone && Math.hypot(b.x - d.x, b.z - d.z) < b.radius + c.dropletRadius && !bunnySheltered(run, c.nozzleHeight)) {
         const hit = hitBunny(run, d.x, d.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii, dirX: d.vx, dirZ: d.vz });
         if (hit && c.wetSeconds > 0 && b.alive) {
