@@ -29,6 +29,9 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   // The galactic disc: a dim, cool blue-magenta fill (the nebulae) and a warm light from the core
   // (its direction follows the core, or Sagittarius A* while it is alive: `setSolar`, src/fx/galaxy.ts).
   galaxy: { sky: '#34337a', ground: '#4a1c52', sun: '#ffd6a8', intensity: 2.6, dir: [0, 0.8, -1] },
+  // The cosmic web (placeholder, Act 9 groundwork): near black, a faint cool fill and a dim warm
+  // key from overhead (CMB-orange); the look pass adds the filaments' light.
+  universe: { sky: '#1a1830', ground: '#2a1810', sun: '#ffd0a0', intensity: 1.8, dir: [-0.3, 1.2, 0.4] },
 };
 
 export class Lighting {

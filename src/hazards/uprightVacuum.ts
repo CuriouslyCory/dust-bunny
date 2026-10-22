@@ -22,7 +22,7 @@
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { GLOBE_HURRICANE, SOLAR_FLARE, SUPERNOVA, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { DARK_ENERGY_GUST, GLOBE_HURRICANE, SOLAR_FLARE, SUPERNOVA, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -281,5 +281,17 @@ export const supernovaDef = hazardRegistry.register({
   modelId: SUPERNOVA.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, SUPERNOVA);
+  },
+});
+
+/** Universe cone blaster: a dark-energy gust that blows the Bunny and loose Debris away (DARK_ENERGY_GUST). */
+export const darkEnergyGustDef = hazardRegistry.register({
+  id: 'dark_energy_gust',
+  name: 'Dark-Energy Gust',
+  footprint: tuningFootprint(DARK_ENERGY_GUST),
+  mass: DARK_ENERGY_GUST.mass,
+  modelId: DARK_ENERGY_GUST.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, DARK_ENERGY_GUST);
   },
 });

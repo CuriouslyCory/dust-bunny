@@ -376,8 +376,10 @@ describe('Sagittarius A*', () => {
   });
 
   it('two star clusters swallowed within the window stun it (indigestion); two far apart do not', () => {
-    const { run, events, boss } = hunting('indigestion', 30);
+    const { run, events, boss, b } = hunting('indigestion', 30);
     quiet(boss);
+    // No hits: a shed open cluster (the shed ladder is the Galaxy's own) would be half a meal.
+    b.invulnerable = 1e9;
     const stuns: Array<string | undefined> = [];
     events.on('bossStunned', (e) => stuns.push(e.cause));
     feedCluster(run, boss);
@@ -500,12 +502,13 @@ describe('Sagittarius A*', () => {
     expect(shed).toBeGreaterThan(0);
   });
 
-  it('absorbing Sagittarius A* clears the Galaxy and wins the Run (bossDefeated → victory)', () => {
+  it('absorbing Sagittarius A* clears the Galaxy and opens the intergalactic gate (bossDefeated → exitOpened)', () => {
     const { run, events } = makeRun('sgr-win');
     const p = moveToOpen(run);
     const b = run.bunny;
     const order: string[] = [];
     events.on('bossDefeated', (e) => order.push(`bossDefeated:${e.defId}`));
+    events.on('exitOpened', (e) => order.push(`exitOpened:${e.area}`));
     events.on('victory', () => order.push('victory'));
     events.on('runEnded', (e) => order.push(`runEnded:${e.reason}`));
     b.setRadius(absorbRadiusFor(SAGITTARIUS_A.size, b.stats.get('absorbRatio')) + 0.05);
@@ -513,7 +516,9 @@ describe('Sagittarius A*', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(STEP);
-    expect(order).toEqual(['bossDefeated:sagittarius_a', 'victory', 'runEnded:victory']);
+    expect(order).toEqual(['bossDefeated:sagittarius_a', 'exitOpened:galaxy']);
     expect(run.getStats()).toMatchObject({ galaxyCleared: true });
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.canLeaveArea).toBe(true);
   });
 });

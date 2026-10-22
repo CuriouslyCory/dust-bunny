@@ -1,8 +1,9 @@
 /**
  * The Galaxy (Act 8), in Galaxy units (1 = 100 ly, `AREAS.galaxy.unit`): the galactic disc seen
  * from above, flat, with Sagittarius A* at the centre of the map. Pure data, same shape as a house
- * floor (HouseLayout); the map does not wrap and has no exit yet (Act 9, the Universe, does not
- * exist: Sagittarius A* wins the Run).
+ * floor (HouseLayout); the map does not wrap. The exit (`layout.exit`) is the intergalactic gate: a
+ * strip of the north bound out of the halo, north-west of the core, barred by the
+ * `intergalactic_gate` obstacle until Sagittarius A* is absorbed; it leads to the Universe.
  *
  * Zones are painted on a coarse grid (`cell` units per cell, merged into rects) by distance from
  * the centre and by `armPhase`, a logarithmic spiral (`pitch`) of four arms: two major arms
@@ -28,7 +29,7 @@
  */
 import { rect, rectContains } from '../core/math';
 import { Rng } from '../core/rng';
-import type { DebrisPlacement, FloorMaterialId, GalaxyZoneType, HouseLayout, MapRoute } from './types';
+import type { DebrisPlacement, ExitDoor, FloorMaterialId, GalaxyZoneType, HouseLayout, MapRoute, Obstacle } from './types';
 import { ZoneGrid } from './zoneGrid';
 
 export const GALAXY = {
@@ -62,6 +63,10 @@ export const GALAXY = {
   orbits: [30, 60, 90, 120, 150] as readonly number[],
   laneWidth: 3,
   ringSegments: 96,
+  /** Width of the intergalactic gate on the north bound (the exit to the Universe, units). */
+  exitWidth: 16,
+  /** The gate's centre is this many units west of the core (seeded), out of the halo. */
+  exitWest: [20, 90] as const,
   /** Debris spatial hash cell (units). */
   debrisCellSize: 1.5,
   /**
@@ -228,6 +233,16 @@ export function generateGalaxy(seed: number | string): HouseLayout {
     return { id: `orbit${i}`, kind: 'orbit', points, width: G.laneWidth };
   });
 
+  // ── The exit: the intergalactic gate, a strip of the north bound north-west of the core ──
+  const exit: ExitDoor = (() => {
+    const erng = root.fork('galaxy:exit');
+    const ex = Math.round(cx - erng.range(G.exitWest[0], G.exitWest[1]));
+    const hw = G.exitWidth / 2;
+    return { rect: rect(ex - hw, 0, ex + hw, 1.5), dir: { x: 0, z: -1 }, obstacleId: 'intergalactic_gate', open: false };
+  })();
+  // Bars the gate until Sagittarius A* falls (an obstacle, not a wall: the map edge is the bounds).
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: 0.3, clearance: 0 };
+
   return {
     area: 'galaxy',
     seed: root.seed,
@@ -236,10 +251,11 @@ export function generateGalaxy(seed: number | string): HouseLayout {
     doorways: [],
     walls: [],
     furniture: [],
-    obstacles: [],
+    obstacles: [gate],
     rugs: [],
     debrisPlacements,
     spawn,
+    exit,
     routes,
   };
 }

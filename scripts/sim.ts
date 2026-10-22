@@ -8,7 +8,7 @@
  * how the Run ended, and boss stuns by cause.
  *
  * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet, Orbital Sweeper, the Sun) the bot does not walk to
- * the exit: the Run moves straight to the next area (logged), so outdoor, city, region, continent, globe, solar system and galaxy pacing
+ * the exit: the Run moves straight to the next area (logged), so outdoor, city, region, continent, globe, solar system, galaxy and universe pacing
  * are measured too. The summary prints each Area's median time from entry to its clear (the Act).
  * With --no-hazards a Run stops at each Area's boss Tier (no boss to clear), but keeps rolling in
  * the last Area until --minutes so growth towards the boss size is measured.
@@ -35,7 +35,7 @@
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
  *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
- *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy]   start in a later area (as after its previous boss)
+ *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe]   start in a later area (as after its previous boss)
  *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
  *                 [--difficulty=casual|arcade|hardcore]
  *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]

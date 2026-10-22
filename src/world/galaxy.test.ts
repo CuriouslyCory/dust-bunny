@@ -30,7 +30,7 @@ describe('galaxy generation', () => {
     const g = generateGalaxy(seed);
     const c = galacticCentre(g);
 
-    it(`tiles the disc with the six galaxy zones round Sagittarius A*, no walls and no exit (seed ${seed})`, () => {
+    it(`tiles the disc with the six galaxy zones round Sagittarius A*, no walls (seed ${seed})`, () => {
       expect(g.area).toBe('galaxy');
       expect(new Set(g.rooms.map((r) => r.type))).toEqual(new Set(GALAXY_ZONE_TYPES));
       for (const r of g.rooms) expect(zoneArea(r.type)).toBe('galaxy');
@@ -38,9 +38,20 @@ describe('galaxy generation', () => {
       expect(roomAt(g, 2, 2)?.type).toBe('halo');
       for (let z = 1; z < GALAXY.depth; z += 23) for (let x = 1; x < GALAXY.width; x += 23) expect(roomAt(g, x, z), `${x},${z}`).toBeTruthy();
       expect(g.walls).toHaveLength(0);
-      expect(g.obstacles).toHaveLength(0);
       expect(g.wrapX).toBeFalsy();
-      expect(g.exit).toBeUndefined();
+    });
+
+    it(`puts the intergalactic gate on the north bound, north-west of the core, barred until Sagittarius A* falls (seed ${seed})`, () => {
+      const exit = g.exit!;
+      expect(exit.open).toBe(false);
+      expect(exit.dir).toEqual({ x: 0, z: -1 });
+      expect(exit.rect.minZ).toBe(0);
+      expect(exit.rect.maxX - exit.rect.minX).toBe(GALAXY.exitWidth);
+      const mid = (exit.rect.minX + exit.rect.maxX) / 2;
+      expect(mid).toBeGreaterThanOrEqual(c.x - GALAXY.exitWest[1] - 1);
+      expect(mid).toBeLessThanOrEqual(c.x - GALAXY.exitWest[0] + 1);
+      expect(roomAt(g, mid, 1)?.type).toBe('halo');
+      expect(g.obstacles.map((o) => o.id)).toEqual([exit.obstacleId]);
     });
 
     it(`has arms and dust lanes in about equal parts, inner and outer (seed ${seed})`, () => {
@@ -122,7 +133,11 @@ describe('galaxy generation', () => {
     const run = new Run(new EventBus(), { seed: 'galaxy-hole', characterId: 'dusty', area: 'galaxy' });
     expect(run.bunny.form).toBe('dust');
     run.clearArea();
-    expect(run.endReason).toBe('victory');
+    expect(run.endReason).toBeNull();
+    expect(run.bunny.form).toBe('black_hole');
+    // It stays a black hole in the Universe.
+    run.leaveArea();
+    expect(run.area).toBe('universe');
     expect(run.bunny.form).toBe('black_hole');
     // Earlier Areas' bosses leave it dust.
     const solar = new Run(new EventBus(), { seed: 'solar-dust', characterId: 'dusty', area: 'solar_system' });

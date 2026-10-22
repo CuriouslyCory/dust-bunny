@@ -76,7 +76,7 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#030308', galaxy: '#030308' };
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#030308', galaxy: '#030308', universe: '#020204' };
 /**
  * How the map's edge is drawn; `wrap`: none east–west (the map repeats) and nothing past the poles
  * but the outer floor; `space`: painted into the floor (the Solar System's heliopause,
@@ -91,9 +91,10 @@ const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' 
   globe: 'wrap',
   solar_system: 'space',
   galaxy: 'space',
+  universe: 'space',
 };
 /** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarSpace', galaxy: 'galaxyHalo' };
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarSpace', galaxy: 'galaxyHalo', universe: 'universeVoid' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across). The Continent's exit is a
@@ -154,7 +155,7 @@ export class HouseView {
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
     else if (layout.area === 'continent') this.buildLaunchCorridor();
-    else if (layout.area === 'globe' || layout.area === 'solar_system') this.buildEscapeTrajectory();
+    else if (layout.area === 'globe' || layout.area === 'solar_system' || layout.area === 'galaxy') this.buildEscapeTrajectory();
     else this.buildRoadGate();
     if (layout.wrapX) this.buildLaps();
   }
@@ -608,7 +609,8 @@ export class HouseView {
    *
    * The Solar System's exit, the heliopause gate on its north bound, reuses it as a placeholder
    * (Act 8 groundwork): the same ribbon, bar and beam, drawn without fog or lights, so they still
-   * show after the Sun's light goes out.
+   * show after the Sun's light goes out. The Galaxy's intergalactic gate (north bound, out of the
+   * halo) reuses it too (Act 9 groundwork).
    */
   private buildEscapeTrajectory(): void {
     const exit = this.layout.exit;

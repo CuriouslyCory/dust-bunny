@@ -21,7 +21,7 @@ import { getDebrisType } from '../data/debris';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
 import { AREAS, pastNextArrival } from '../data/areas';
-import { formatAmount, lengthUnitFor } from '../data/units';
+import { EVERYTHING_TIER, formatAmount, lengthUnitFor } from '../data/units';
 import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
@@ -470,7 +470,7 @@ function tierWidget(hud: Hud, game: Game): void {
         unit = lengthUnitFor(n ? n.minRadius : Math.max(r, t.minRadius), from);
         const goalText = n ? `${Number((n.minRadius / unit.cm).toPrecision(3))} ${unit.id}` : '';
         next.textContent = n ? `${n.name} at ${goalText}` : after ? 'Absorb the boss' : 'Max size!';
-        goal.textContent = n ? ` / ${goalText}` : ` ${unit.id}`;
+        goal.textContent = n ? ` / ${goalText}` : t.index >= EVERYTHING_TIER ? '' : ` ${unit.id}`;
         nextShort.textContent = n ? `→ ${n.name}` : after ? 'Boss next' : 'Max size!';
       }
       const pct = top ? 100 : Math.round(tierProgress(r) * 1000) / 10;
@@ -479,8 +479,9 @@ function tierWidget(hud: Hud, game: Game): void {
         fill.style.width = `${pct}%`;
         bar.setAttribute('aria-valuenow', String(Math.round(pct)));
       }
-      const size = formatAmount(r / unit.cm);
-      radius.textContent = hud.compact ? size : `${size} ${unit.id}`;
+      // Tier 21 (Everything): the readout is the word, not a length.
+      const size = t.index >= EVERYTHING_TIER ? 'everything' : formatAmount(r / unit.cm);
+      radius.textContent = hud.compact || t.index >= EVERYTHING_TIER ? size : `${size} ${unit.id}`;
     },
   });
   // Phones: a one-line pill at the top centre instead of the card under the hearts.

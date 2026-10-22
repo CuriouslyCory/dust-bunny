@@ -58,6 +58,12 @@ import {
   SAGITTARIUS_A,
   SUPERNOVA,
   SUPERNOVA_REMNANT,
+  COLLIDING_GALAXY,
+  COSMIC_VOID,
+  DARK_ENERGY_GUST,
+  GAMMA_RAY_BURST,
+  QUASAR,
+  THE_EXPANSION,
 } from '../data/hazards';
 import { areaUnit } from '../data/areas';
 import { getTier } from '../data/tiers';
@@ -69,7 +75,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ORBITAL_SWEEPER, the_sun: THE_SUN, sagittarius_a: SAGITTARIUS_A };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ORBITAL_SWEEPER, the_sun: THE_SUN, sagittarius_a: SAGITTARIUS_A, the_expansion: THE_EXPANSION };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -120,6 +126,11 @@ const TUNING: Record<string, { size: number; height: number }> = {
   pulsar: PULSAR,
   supernova_remnant: SUPERNOVA_REMNANT,
   supernova: SUPERNOVA,
+  quasar: QUASAR,
+  colliding_galaxy: COLLIDING_GALAXY,
+  gamma_ray_burst: GAMMA_RAY_BURST,
+  cosmic_void: COSMIC_VOID,
+  dark_energy_gust: DARK_ENERGY_GUST,
   ...BOSSES,
 };
 
@@ -134,7 +145,7 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis (if it summons any). */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();

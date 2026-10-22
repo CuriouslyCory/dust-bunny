@@ -104,6 +104,23 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     fluffPerUnit: 1.5,
     arrivalRadius: 0.85,
   },
+  // 1 world unit = 10 megalight-years (9.461e24 cm, 10 × the `Mly` rung in units.ts). The Galaxy
+  // ends at ≈400 ly (≈4e-5 units), so the Bunny leaps a fifth time, to 0.85 units (8.5 Mly;
+  // galaxies and clusters are drawn at play size, not to scale): Tier 20 starts at 1 and Tier 21
+  // (Everything) at 3. The readout is in Mly. The cosmic web is flat; the last Area.
+  // Placeholder growth (Act 9 groundwork): the world pass tunes it to a 4–6 minute Act.
+  universe: {
+    name: 'The Universe',
+    tiers: [20, 21],
+    initialScatter: 2400,
+    startCluster: 120,
+    startClusterRadius: 11,
+    growth: 0.2,
+    unit: 9.461e24,
+    readout: 'Mly',
+    fluffPerUnit: 1.5,
+    arrivalRadius: 0.85,
+  },
 };
 
 /** Centimetres per world unit in `area`. */

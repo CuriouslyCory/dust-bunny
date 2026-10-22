@@ -94,11 +94,11 @@ describe('fluffForRun', () => {
     const win = stats({ maxRadius: 650, debrisAbsorbed: 3500, tierReached: 9, houseCleared: true, neighborhoodCleared: true });
     const casual = fluffForRun('victory', win);
     expect(casual).toBeGreaterThanOrEqual(40);
-    expect(casual).toBeLessThanOrEqual(85);
-    expect(fluffForRun('victory', { ...win, difficulty: 'arcade' })).toBeLessThanOrEqual(170);
+    expect(casual).toBeLessThanOrEqual(90);
+    expect(fluffForRun('victory', { ...win, difficulty: 'arcade' })).toBeLessThanOrEqual(180);
     const hardcore = fluffForRun('victory', { ...win, difficulty: 'hardcore' });
     expect(hardcore).toBeGreaterThanOrEqual(300);
-    expect(hardcore).toBeLessThanOrEqual(420);
+    expect(hardcore).toBeLessThanOrEqual(450);
   });
 
   it('scales the radius term per Area, in each Area\'s own unit (no cap)', () => {

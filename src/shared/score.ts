@@ -9,15 +9,16 @@
 import { DEFAULT_DIFFICULTY, DIFFICULTY_SCORE_MULTIPLIER, type DifficultyId } from './difficulty.js';
 
 /** Tier start radii (real cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
-export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11, 9.461e19, 2.8383e20];
+export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11, 9.461e19, 2.8383e20, 9.461e24, 2.8383e25];
 export const SCORE_MAX_TIER = SCORE_TIER_MIN_RADII.length;
 
 /**
  * Arrival radius (in the Area's unit) of the Areas the Bunny leaps into on entry, mirrored from
  * `AREAS[area].arrivalRadius` (test-synced): the Continent's 0.85 units (8.5 km), the Globe's
- * 0.85 units (850 km), the Solar System's 0.85 units (0.0085 AU) and the Galaxy's 0.85 units (85 ly).
+ * 0.85 units (850 km), the Solar System's 0.85 units (0.0085 AU), the Galaxy's 0.85 units (85 ly)
+ * and the Universe's 0.85 units (8.5 Mly).
  */
-export const SCORE_ARRIVAL_RADIUS = { continent: 0.85, globe: 0.85, solar_system: 0.85, galaxy: 0.85 } as const;
+export const SCORE_ARRIVAL_RADIUS = { continent: 0.85, globe: 0.85, solar_system: 0.85, galaxy: 0.85, universe: 0.85 } as const;
 
 /** The Continent's arrival radius in real cm (8.5 km): where the Run board's Continent band starts. */
 const CONTINENT_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.continent * 1e6;
@@ -31,13 +32,17 @@ const SOLAR_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.solar_system * SOLAR_UNIT_CM;
 const GALAXY_UNIT_CM = 9.461e19;
 /** The Galaxy's arrival radius in real cm (85 ly): where the Run board's Galaxy band starts. */
 const GALAXY_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.galaxy * GALAXY_UNIT_CM;
+/** Centimetres per Universe unit (10 Mly). */
+const UNIVERSE_UNIT_CM = 9.461e24;
+/** The Universe's arrival radius in real cm (8.5 Mly): where the Run board's Universe band starts. */
+const UNIVERSE_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.universe * UNIVERSE_UNIT_CM;
 
 /**
  * The Run board's radius scale: each Act counts its growth in its own unit. Up to the City
  * (1 cm units) a centimetre is a centimetre; from `fromCm` on, a cm counts `perCm`, so one Region
  * unit (10 m) is worth 100 "cm", and so are one Continent unit (10 km), one Globe unit (1,000 km),
- * one Solar System unit (0.01 AU) and one Galaxy unit (100 ly). Later Acts add a band each, keeping
- * scores in plain float range.
+ * one Solar System unit (0.01 AU), one Galaxy unit (100 ly) and one Universe unit (10 Mly). Each Act
+ * adds a band, keeping scores in plain float range.
  *
  * The size leap into the Continent (≈40 m → 8.5 km, docs/design.md) is not growth: the band from
  * 50 m (about the most a Region Bunny reaches; the Incinerator falls at ≈30–45 m) to the arrival
@@ -46,7 +51,8 @@ const GALAXY_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.galaxy * GALAXY_UNIT_CM;
  * (about the most a Continent Bunny reaches; the Ice Sheet falls at ≈30–45 km) to 850 km, and so
  * does the leap into the Solar System (≈4,500 km → 0.0085 AU): nothing from 6,000 km (about the
  * most a Globe Bunny reaches) to 0.0085 AU, and the leap into the Galaxy (≈0.045 AU → 85 ly):
- * nothing from 0.06 AU (about the most a Solar System Bunny reaches) to 85 ly.
+ * nothing from 0.06 AU (about the most a Solar System Bunny reaches) to 85 ly, and the leap into
+ * the Universe (≈400 ly → 8.5 Mly): nothing from 600 ly (about the most a Galaxy Bunny reaches) to 8.5 Mly.
  */
 export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }> = [
   { fromCm: 0, perCm: 1 },
@@ -59,6 +65,8 @@ export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }
   { fromCm: SOLAR_ARRIVAL_CM, perCm: 100 / SOLAR_UNIT_CM },
   { fromCm: 6 * SOLAR_UNIT_CM, perCm: 0 },
   { fromCm: GALAXY_ARRIVAL_CM, perCm: 100 / GALAXY_UNIT_CM },
+  { fromCm: 6 * GALAXY_UNIT_CM, perCm: 0 },
+  { fromCm: UNIVERSE_ARRIVAL_CM, perCm: 100 / UNIVERSE_UNIT_CM },
 ];
 
 /** A real radius (cm) on the Run board's progress scale (see SCORE_RADIUS_BANDS). */
@@ -126,7 +134,7 @@ export function scoreTierForRadius(radius: number): number {
 // Area boards: one entry per Area a Run clears (see docs/architecture.md, Leaderboard).
 
 /** Area ids, in Run order, mirrored from `AREA_ORDER` in `src/world/types.ts` (test-synced). */
-export const SCORE_AREAS = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'] as const;
+export const SCORE_AREAS = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe'] as const;
 export type ScoreArea = (typeof SCORE_AREAS)[number];
 
 export function isScoreArea(v: unknown): v is ScoreArea {
@@ -134,22 +142,22 @@ export function isScoreArea(v: unknown): v is ScoreArea {
 }
 
 /** Tier at which each Area's boss arrives, mirrored from `AREA_BOSSES` (test-synced): a clear needs it. */
-export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11, continent: 13, globe: 15, solar_system: 17, galaxy: 19 };
+export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11, continent: 13, globe: 15, solar_system: 17, galaxy: 19, universe: 21 };
 
 /**
  * Centimetres per world unit in each Area, mirrored from `AREAS[area].unit` (test-synced). Area
  * board radii are in the Area's own unit.
  */
-export const SCORE_AREA_UNIT: Readonly<Record<ScoreArea, number>> = { house: 1, neighborhood: 1, city: 1, region: 1000, continent: 1e6, globe: 1e8, solar_system: SOLAR_UNIT_CM, galaxy: GALAXY_UNIT_CM };
+export const SCORE_AREA_UNIT: Readonly<Record<ScoreArea, number>> = { house: 1, neighborhood: 1, city: 1, region: 1000, continent: 1e6, globe: 1e8, solar_system: SOLAR_UNIT_CM, galaxy: GALAXY_UNIT_CM, universe: UNIVERSE_UNIT_CM };
 
 export const AREA_SCORE = {
   /** Points per unit (the Area's own unit) the Bunny grew in the Area: 100 per cm up to the City. */
-  perRadiusUnit: { house: 100, neighborhood: 100, city: 100, region: 10_000, continent: 10_000, globe: 10_000, solar_system: 10_000, galaxy: 10_000 } as Readonly<Record<ScoreArea, number>>,
+  perRadiusUnit: { house: 100, neighborhood: 100, city: 100, region: 10_000, continent: 10_000, globe: 10_000, solar_system: 10_000, galaxy: 10_000, universe: 10_000 } as Readonly<Record<ScoreArea, number>>,
   perDebris: 2,
   clearBonus: 3000,
   /** Points per second under the Area's par. */
   perSecUnderPar: 10,
-  parSec: { house: 720, neighborhood: 600, city: 900, region: 360, continent: 360, globe: 360, solar_system: 360, galaxy: 360 } as Readonly<Record<ScoreArea, number>>,
+  parSec: { house: 720, neighborhood: 600, city: 900, region: 360, continent: 360, globe: 360, solar_system: 360, galaxy: 360, universe: 360 } as Readonly<Record<ScoreArea, number>>,
 } as const;
 
 export interface AreaScoreInput {
@@ -168,9 +176,9 @@ export interface AreaScoreInput {
 /**
  * base  = round((maxRadius − radiusIn) × perRadiusUnit) + debrisAbsorbed × 2 + 3000
  *         + round(max(0, par − seconds) × 10)   (par: house 720 s, neighborhood 600 s, city 900 s, region,
- *                                                continent, globe, solar system and galaxy 360 s; perRadiusUnit
- *                                                100 per cm up to the City, 10,000 per Region, Continent,
- *                                                Globe, Solar System or Galaxy unit)
+ *                                                continent, globe, solar system, galaxy and universe 360 s;
+ *                                                perRadiusUnit 100 per cm up to the City, 10,000 per Region,
+ *                                                Continent, Globe, Solar System, Galaxy or Universe unit)
  * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])
  */
 export function computeAreaScore(s: AreaScoreInput): number {

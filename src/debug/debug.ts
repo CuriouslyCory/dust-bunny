@@ -35,6 +35,8 @@ export interface DebugTools {
   enterSolarSystem(): void;
   /** Moves the Run to the galaxy, growing the Bunny to Sun-beaten size (then the arrival leap). */
   enterGalaxy(): void;
+  /** Moves the Run to the universe, growing the Bunny to Sagittarius-A*-beaten size (then the arrival leap). */
+  enterUniverse(): void;
   /** Switches the Bunny's look (`black_hole`: as after Sagittarius A*), without ending the Run. */
   setBunnyForm(form: BunnyForm): void;
   /** Clears the current area and rolls on to the next one. */
@@ -95,6 +97,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterGalaxy() {
       goTo('galaxy');
+    },
+    enterUniverse() {
+      goTo('universe');
     },
     setBunnyForm(form) {
       if (game.run) game.run.bunny.form = form;

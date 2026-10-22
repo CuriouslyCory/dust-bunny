@@ -99,6 +99,12 @@ export const STORY: Story = {
     // Act 8 · The Galaxy
     dust_nebula: ['It is now mostly hydrogen, lint, and a sock.'],
     dust_cluster: ['The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.'],
+    // Act 9 · The Universe
+    dust_singularity: [
+      'It has stopped being a dust bunny in any sense a dust bunny would recognise. It does not recognise anything. It has one instinct.',
+      "A galaxy with 300 billion stars and, probably, someone's couch.",
+    ],
+    everything: ['Everything that was ever dropped is here now. Everything that was ever dropped is it.'],
   },
 
   areas: {
@@ -170,6 +176,17 @@ export const STORY: Story = {
         [
           'At the centre of the galaxy is a hole four million times heavier than the Sun.',
           'It has been quietly cleaning the galactic core for thirteen billion years. It is the biggest vacuum there is. It is not big enough.',
+        ],
+      ],
+    },
+    universe: {
+      title: 'One Place',
+      entered: ['Everything that was ever dropped is out here somewhere. It intends to check.'],
+      cleared: ['Nothing is anywhere else now. Everything is in one place.'],
+      boss: [
+        [
+          'The universe has one cleaning method left: spread everything out so thin that nothing is anywhere.',
+          'Given enough time it always works. It does not have enough time.',
         ],
       ],
     },

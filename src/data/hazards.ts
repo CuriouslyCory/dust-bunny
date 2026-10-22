@@ -94,6 +94,15 @@ export function galaxyTiers(t18: number, t19: number): PerTier {
   return [t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t19];
 }
 
+/**
+ * Per-Tier values for universe Hazards (Tiers 20, 21), in Universe units (1 = 10 Mly). Tiers 1–19
+ * repeat the Tier 20 value: the Bunny arrives in the Universe at Tier 19 (0.85 units, the arrival
+ * leap) and universe Hazards live only there.
+ */
+export function universeTiers(t20: number, t21: number): PerTier {
+  return [t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t21];
+}
+
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
 export interface RoombaTuning {
   size: number;
@@ -2086,7 +2095,7 @@ export interface SagittariusTuning extends BossTuning {
  * (`clusters`). Its charges are lunges (the map edge ends one without a stun); its volley is a
  * relativistic jet (`ash`); chips are `relativistic_jet` Debris. Needs Bunny radius 4 units at
  * absorbRatio 0.7, 3.4 after one chip and 2.89 after two (Tier 19 starts at 3). Absorbing it
- * clears the Galaxy (the last built Area, so the Run is won).
+ * clears the Galaxy: the intergalactic gate opens onto the Universe.
  */
 export const SAGITTARIUS_A: SagittariusTuning = {
   size: 2.8,
@@ -2162,6 +2171,121 @@ export const SAGITTARIUS_A: SagittariusTuning = {
   chipTypeId: 'relativistic_jet',
   jetRegrow: 6,
   lens: { idle: 0.4, full: 1, lean: 0.22, roll: 0.1 },
+};
+
+// ── Universe Hazards (Tiers 20–21, 1 world unit = 10 Mly, Bunny radius ≈ 0.85–4.5 units) ──
+// Placeholder (Act 9 groundwork): the Universe repeats the Galaxy's shape (Tiers at 1 and 3 units,
+// arrival at 0.85, boss absorbable at ≈ 4), so these reuse the Galaxy's numbers on the existing
+// behaviours with procedural fallback models (src/hazards/models.ts). The Hazards pass tunes them.
+
+/** Quasar: Roomba behaviour, a black hole feeding loudly: a drifter with a strong pull that also drags in loose Debris (not eating it); spins its `disk`. */
+export const QUASAR: RoombaTuning = {
+  ...BLACK_HOLE,
+  size: 1.1,
+  height: 1.5,
+  speed: universeTiers(2, 3.4),
+  modelId: 'quasar',
+  /** The fallback model's footprint radius (the accretion disc's rim). */
+  modelSize: 1.18,
+  spinNode: 'disk',
+  debrisPull: { reach: 4, speed: 3, swirl: 0.6, maxSize: 1.2, eat: false },
+};
+
+/** Colliding Galaxy: a lane patrol, a galaxy on a collision course along a planned lane; its `discs` turn. A hit knocks the Bunny aside and sheds mass (no sticking). */
+export const COLLIDING_GALAXY: LaneTuning = {
+  ...GLOBULAR_CLUSTER,
+  size: 1.5,
+  height: 0.5,
+  speed: universeTiers(2.8, 4.2),
+  laneMin: 14,
+  laneMax: 50,
+  /** No orbit rings out here: the lane is planned through its spawn point. */
+  ringReach: undefined,
+  modelId: 'colliding_galaxy',
+  modelSize: 1,
+  swirlNode: 'discs',
+  swirlRate: 0.5,
+};
+
+/** Gamma-Ray Burst: a static turret, a collapsing star whose `head` aims along a lane, then fires a short burst of hard bolts. */
+export const GAMMA_RAY_BURST: TurretTuning = {
+  ...SUNSPOT,
+  size: 1.3,
+  height: 0.9,
+  range: universeTiers(10, 14),
+  telegraph: universeTiers(1.2, 1),
+  cooldown: universeTiers(3.8, 3),
+  dropletSpeed: universeTiers(14, 19),
+  nozzleHeight: 0.5,
+  modelId: 'gamma_ray_burst',
+  modelSize: 0.7,
+  aimNode: 'head',
+  idleSpin: 0.6,
+  dropletColor: '#c8f0ff',
+};
+
+/** Cosmic Void: Mop behaviour, an empty bubble drifting across zones; its dark trail slows (0.5 ×), its `shell` breathes. */
+export const COSMIC_VOID: MopTuning = {
+  ...SUPERNOVA_REMNANT,
+  size: 1.4,
+  height: 1.2,
+  speed: universeTiers(1.6, 2.2),
+  modelId: 'cosmic_void',
+  modelSize: 1.05,
+  trailColor: '#1a1030',
+  trailRing: false,
+  pulseNode: 'shell',
+};
+
+/** Dark-Energy Gust: Leaf Blower behaviour, a cone of pure expansion: its `core` swells through the warm-up, then a blast pushes the Bunny and loose Debris away. */
+export const DARK_ENERGY_GUST: AirConeTuning = {
+  ...SUPERNOVA,
+  size: 2.3,
+  height: 1.1,
+  speed: universeTiers(1.6, 2.2),
+  modelId: 'dark_energy_gust',
+  modelSize: 0.78,
+  pulseNode: 'core',
+};
+
+/**
+ * The Expansion (universe boss, Tier 21; src/hazards/theExpansion.ts). Placeholder (Act 9
+ * groundwork): the bosses' state machine (`RoboVac9000`) with Sagittarius A*'s numbers, no volley
+ * and no minis, so it hunts, charges, crashes into the map edge, is chipped while stunned and is
+ * absorbed at r ≈ 4. The real fight replaces it: not a chaser, it pushes every Debris outward and
+ * a tug-of-war bar (gravity vs expansion) replaces its health (docs/story.md, Act 9). Absorbing it
+ * clears the Universe: the last Area, so the Run is won (`victory`).
+ */
+export const THE_EXPANSION: BossTuning = {
+  size: 2.8,
+  contactRadius: 2.5,
+  height: 2,
+  mass: 6,
+  damage: 1,
+  knockbackCm: 4,
+  knockbackRadii: 3,
+  shedFraction: 0.05,
+  introTime: 3.5,
+  huntSpeed: 4.2,
+  turnRate: 1,
+  huntTime: [3.5, 5],
+  chargeTrigger: 24,
+  telegraph: 1.6,
+  chargeSpeed: 20,
+  chargeDistance: 28,
+  stunTime: 4.2,
+  recover: 1.2,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  suctionReach: 0,
+  suctionStrength: 0,
+  summonInterval: 999,
+  summonCount: 0,
+  maxMinis: 0,
+  brushSpin: 0,
+  onDefeat: 'openExit',
+  modelId: 'the_expansion',
+  modelSize: 2,
 };
 
 export interface TierSpawnTable {
@@ -2439,6 +2563,37 @@ export const GALAXY_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Universe director (after the galaxy): spawn tables for Bunny Tiers 20–21, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 19 at 0.85 units, the arrival leap, and uses the
+ * Tier 20 table). Placeholder budgets copied from the Galaxy's.
+ */
+export const UNIVERSE_DIRECTOR = {
+  firstTier: 20,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 20 (arrival, r ≈ 0.85–3): quasars, gamma-ray bursts, colliding galaxies and voids.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { quasar: { weight: 1, max: 2 }, gamma_ray_burst: { weight: 0.8, max: 2 }, colliding_galaxy: { weight: 0.9, max: 1 }, cosmic_void: { weight: 0.7, max: 1 } },
+    },
+    // Tier 21 (r ≥ 3): dark-energy gusts join, and the Expansion arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        quasar: { weight: 1.2, max: 3 },
+        dark_energy_gust: { weight: 0.9, max: 2 },
+        colliding_galaxy: { weight: 0.8, max: 2 },
+        cosmic_void: { weight: 0.5, max: 1 },
+        gamma_ray_burst: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
@@ -2448,6 +2603,7 @@ export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   globe: GLOBE_DIRECTOR,
   solar_system: SOLAR_DIRECTOR,
   galaxy: GALAXY_DIRECTOR,
+  universe: UNIVERSE_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -2460,10 +2616,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
   solar_system: { id: 'the_sun', tier: 17, arrivalDelay: 4 },
   galaxy: { id: 'sagittarius_a', tier: 19, arrivalDelay: 4 },
+  universe: { id: 'the_expansion', tier: 21, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a', 'the_expansion'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

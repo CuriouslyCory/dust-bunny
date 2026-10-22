@@ -21,7 +21,7 @@
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COLLIDING_GALAXY, COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -507,5 +507,17 @@ export const globularClusterDef = hazardRegistry.register({
   modelId: GLOBULAR_CLUSTER.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, GLOBULAR_CLUSTER);
+  },
+});
+
+/** Universe lane patrol: a galaxy on a collision course (COLLIDING_GALAXY). */
+export const collidingGalaxyDef = hazardRegistry.register({
+  id: 'colliding_galaxy',
+  name: 'Colliding Galaxy',
+  footprint: tuningFootprint(COLLIDING_GALAXY),
+  mass: COLLIDING_GALAXY.mass,
+  modelId: COLLIDING_GALAXY.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, COLLIDING_GALAXY);
   },
 });

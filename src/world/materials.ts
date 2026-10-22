@@ -756,6 +756,19 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'galaxyHalo':
         info = { texture: toTexture(starfieldTexture('#030308', '#2a2a5a', '#c9d4ff', 90)), worldSize: 50, roughness: 1 };
         break;
+      // Universe floors (1 unit = 10 Mly): placeholder starfields until the cosmic web is painted.
+      case 'universeNode':
+        info = { texture: toTexture(starfieldTexture('#1a1020', '#ffcf9a', '#fff4e0', 1200)), worldSize: 30, roughness: 1 };
+        break;
+      case 'universeFilament':
+        info = { texture: toTexture(starfieldTexture('#0a0c22', '#8aa0ff', '#e8f0ff', 700)), worldSize: 40, roughness: 1 };
+        break;
+      case 'universeSheet':
+        info = { texture: toTexture(starfieldTexture('#05060f', '#3a3a6a', '#b8c0e8', 220)), worldSize: 40, roughness: 1 };
+        break;
+      case 'universeVoid':
+        info = { texture: toTexture(starfieldTexture('#010103', '#1a1428', '#8a7aa8', 30)), worldSize: 50, roughness: 1 };
+        break;
     }
     floorCache.set(id, info);
   }

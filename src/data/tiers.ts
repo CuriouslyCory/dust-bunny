@@ -42,6 +42,9 @@ export const TIERS: readonly TierDef[] = [
   // Galaxy (after the Sun; 1 world unit = 100 ly, so these are 1 and 3 units: 100 ly and 300 ly).
   { index: 18, id: 'dust_nebula', name: 'Dust Nebula', minRadius: 9.461e19, cameraScale: 32, growth: 1 },
   { index: 19, id: 'dust_cluster', name: 'Dust Cluster', minRadius: 2.8383e20, cameraScale: 33, growth: 1 },
+  // Universe (after Sagittarius A*; 1 world unit = 10 Mly, so these are 1 and 3 units: 10 Mly and 30 Mly).
+  { index: 20, id: 'dust_singularity', name: 'Dust Singularity', minRadius: 9.461e24, cameraScale: 34, growth: 1 },
+  { index: 21, id: 'everything', name: 'Everything', minRadius: 2.8383e25, cameraScale: 35, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

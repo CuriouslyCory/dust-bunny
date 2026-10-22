@@ -104,10 +104,14 @@ describe('Run (headless)', () => {
     run.openExit(); // the Sun fell: the heliopause opens onto the Galaxy
     expect(run.leaveArea()).toBe(true);
     expect(run.area).toBe('galaxy');
-    run.openExit(); // no exit in the last area: Sagittarius A* wins the Run instead
+    expect(run.canLeaveArea).toBe(false); // the intergalactic gate is still shut
+    run.openExit(); // Sagittarius A* fell: the intergalactic gate opens onto the Universe
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('universe');
+    run.openExit(); // no exit in the last area: the Expansion wins the Run instead
     expect(run.canLeaveArea).toBe(false);
     expect(run.leaveArea()).toBe(false);
-    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy']);
+    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe']);
   });
 
   it('re-bases the Bunny into the Region unit on entry, keeping its real size', () => {
@@ -197,8 +201,17 @@ describe('Run (headless)', () => {
     expect(run.endReason).toBeNull();
     run.leaveArea();
     run.clearArea();
-    expect(order).toEqual(['exit:region', 'exit:continent', 'exit:globe', 'exit:solar_system', 'victory', 'end:victory']);
-    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, globeCleared: true, solarSystemCleared: true, galaxyCleared: true, area: 'galaxy' });
+    expect(run.galaxyCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.endReason).toBeNull();
+    expect(run.bunny.form).toBe('black_hole');
+    run.leaveArea();
+    expect(run.area).toBe('universe');
+    expect(run.bunny.form).toBe('black_hole');
+    expect(run.canLeaveArea).toBe(false);
+    run.clearArea();
+    expect(order).toEqual(['exit:region', 'exit:continent', 'exit:globe', 'exit:solar_system', 'exit:galaxy', 'victory', 'end:victory']);
+    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, globeCleared: true, solarSystemCleared: true, galaxyCleared: true, universeCleared: true, area: 'universe' });
   });
 
   it('records each Area it plays and emits areaCompleted on leaving a cleared one', () => {
@@ -226,7 +239,7 @@ describe('Run (headless)', () => {
     expect(completed).toHaveLength(1); // dying mid-Area completes nothing
   });
 
-  it('counts the City, the Region, the Continent, the Globe and the Solar System as cleared once their exits open, and the Galaxy only on victory', () => {
+  it('counts the City, the Region, the Continent, the Globe and the Solar System and the Galaxy as cleared once their exits open, and the Universe only on victory', () => {
     const events = new EventBus();
     const run = new Run(events, { seed: 'city', characterId: 'zap', area: 'city' });
     expect(run.getStats().areas!.map((a) => a.area)).toEqual(['city']); // a debug start skips the earlier Areas
@@ -272,9 +285,20 @@ describe('Run (headless)', () => {
     expect(galaxy.bunny.radius).toBeCloseTo(0.85);
     expect(galaxy.tier).toBe(17);
     expect(galaxy.house.wrapX).toBeFalsy();
-    expect(galaxy.house.exit).toBeUndefined();
     galaxy.clearArea();
-    expect(galaxy.endReason).toBe('victory');
+    expect(galaxy.endReason).toBeNull();
+    expect(galaxy.house.exit?.open).toBe(true);
     expect(galaxy.getStats().areas![0]!.cleared).toBe(true);
+    // A debug start in the Universe begins at the Sagittarius-A*-beaten size (400 ly), then leaps to 8.5 Mly.
+    const universe = new Run(new EventBus(), { seed: 'universe', characterId: 'zap', area: 'universe' });
+    expect(universe.bunny.realRadius).toBeCloseTo(0.85 * 9.461e24, -19);
+    expect(universe.bunny.radius).toBeCloseTo(0.85);
+    expect(universe.tier).toBe(19);
+    expect(universe.house.wrapX).toBeFalsy();
+    expect(universe.house.exit).toBeUndefined();
+    expect(universe.bunny.form).toBe('black_hole');
+    universe.clearArea();
+    expect(universe.endReason).toBe('victory');
+    expect(universe.getStats().areas![0]!.cleared).toBe(true);
   });
 });

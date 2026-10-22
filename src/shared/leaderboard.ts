@@ -4,7 +4,7 @@
  * Pure and dependency-free (see the note in `./score.ts` about imports).
  *
  * Boards: the Run board ('run', whole Runs) and one Area board per Area ('house',
- * 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'), which takes an entry each time a Run clears that Area.
+ * 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe'), which takes an entry each time a Run clears that Area.
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
 import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
@@ -44,7 +44,7 @@ export const FALLBACK_NAME = 'Anonymous Bunny';
 /** Plausibility bounds. Generous on purpose: they reject impossible runs, not good ones. */
 export const BOUNDS = {
   /**
-   * Run board: real cm, up to 10× the last Tier's threshold (3,000 ly). Area boards: the Area's unit
+   * Run board: real cm, up to 10× the last Tier's threshold (300 Mly). Area boards: the Area's unit
    * (a Region radius of 4 is 40 m), each further capped by AREA_RADIUS.
    */
   maxRadius: { min: 0.2, max: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 10 },
@@ -78,11 +78,12 @@ export const BOUNDS = {
    * Continent's curve and allows the same, and so does the Solar System (0.01 AU units). The
    * Galaxy (100 ly units) allows 0.1: a perk-loaded Zap clears it 0.85 → 5.8–7.1 units in 52–62 s
    * (`pnpm sim --seeds=3 --minutes=80 --validate`: 103–111% of 0.08/s, Sagittarius A*'s mass
-   * landing at the end of a short Act).
+   * landing at the end of a short Act). The Universe (10 Mly units) repeats the Galaxy's curve and
+   * allows the same until its content is tuned.
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1, universe: 0.1 },
   /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
-  areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1 },
+  areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1, universe: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */
   victoryMinTier: 9,
 } as const;
@@ -195,7 +196,7 @@ const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 /**
  * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's Tier (Tier 5 = 45,
  * Tier 7 = 160, Tier 9 = 600 cm = 0.6 Region units), or for an Area the Bunny leaps into, its
- * arrival radius (the Continent, the Globe, the Solar System and the Galaxy: 0.85 units, the radius after the leap); the cap is two
+ * arrival radius (the Continent, the Globe, the Solar System, the Galaxy and the Universe: 0.85 units, the radius after the leap); the cap is two
  * Tiers above the Area's last Debris Tier (the Region and later Areas: 10× their last Tier), which no real
  * Run approaches.
  */
@@ -208,6 +209,7 @@ const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>>
   globe: { minIn: SCORE_ARRIVAL_RADIUS.globe, max: (SCORE_TIER_MIN_RADII[14]! * 10) / SCORE_AREA_UNIT.globe },
   solar_system: { minIn: SCORE_ARRIVAL_RADIUS.solar_system, max: (SCORE_TIER_MIN_RADII[16]! * 10) / SCORE_AREA_UNIT.solar_system },
   galaxy: { minIn: SCORE_ARRIVAL_RADIUS.galaxy, max: (SCORE_TIER_MIN_RADII[18]! * 10) / SCORE_AREA_UNIT.galaxy },
+  universe: { minIn: SCORE_ARRIVAL_RADIUS.universe, max: (SCORE_TIER_MIN_RADII[20]! * 10) / SCORE_AREA_UNIT.universe },
 };
 
 export function isLeaderboardCharacter(id: unknown): id is LeaderboardCharacter {

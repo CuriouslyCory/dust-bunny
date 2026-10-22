@@ -17,7 +17,7 @@
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D, RingGeometry } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { COSMIC_VOID, HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -277,5 +277,17 @@ export const supernovaRemnantDef = hazardRegistry.register({
   modelId: SUPERNOVA_REMNANT.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, SUPERNOVA_REMNANT);
+  },
+});
+
+/** Universe trail-layer: a cosmic void drifting across zones; its trail slows (COSMIC_VOID). */
+export const cosmicVoidDef = hazardRegistry.register({
+  id: 'cosmic_void',
+  name: 'Cosmic Void',
+  footprint: tuningFootprint(COSMIC_VOID),
+  mass: COSMIC_VOID.mass,
+  modelId: COSMIC_VOID.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, COSMIC_VOID);
   },
 });

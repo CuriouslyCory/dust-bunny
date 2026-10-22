@@ -40,7 +40,7 @@
  * bends the camera.
  *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
- * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
+ * Area (the Universe) the Run is won (bossDefeated → victory → runEnded 'victory').
  *
  * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
  * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun

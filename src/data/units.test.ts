@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLength, lengthUnitFor } from './units';
+import { formatLength, formatSize, lengthUnitFor } from './units';
 
 describe('length unit ladder', () => {
   it('starts at the Area rung and steps up at 1,000', () => {
@@ -19,5 +19,16 @@ describe('length unit ladder', () => {
     expect(formatLength(0.85 * 9.461e19, 'ly')).toBe('85.0 ly');
     expect(formatLength(3 * 9.461e19, 'ly')).toBe('300.0 ly');
     expect(formatLength(45 * 9.461e19, 'ly')).toBe('4500 ly');
+    // ly steps up to Mly only from 0.01 Mly (10,000 ly); the Universe's readout starts in Mly (1 unit = 10 Mly).
+    expect(lengthUnitFor(9999 * 9.461e17, 'ly').id).toBe('ly');
+    expect(lengthUnitFor(1e4 * 9.461e17, 'ly').id).toBe('Mly');
+    expect(formatLength(0.85 * 9.461e24, 'Mly')).toBe('8.50 Mly');
+    expect(formatLength(3 * 9.461e24, 'Mly')).toBe('30.0 Mly');
+  });
+
+  it('reads `everything` from Tier 21 on', () => {
+    expect(formatSize(1.5 * 9.461e24, 20, 'Mly')).toBe('15.0 Mly');
+    expect(formatSize(3.2 * 9.461e24, 21, 'Mly')).toBe('everything');
+    expect(formatSize(1.47, 1)).toBe('1.47 cm');
   });
 });

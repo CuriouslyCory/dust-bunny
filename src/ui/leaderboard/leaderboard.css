@@ -261,9 +261,9 @@
   width: min(520px, 100%);
 }
 
-/* Nine boards (Full run and eight Areas): three rows of three, Full run first, on desktop and
-   phones alike, so "Neighborhood" and "Solar System" fit (the results screen's leaderboard column
-   is narrow on desktop too, so the labels shrink a little). */
+/* Ten boards (Full run and nine Areas): Full run on its own row, then the Areas in three rows of
+   three, on desktop and phones alike, so "Neighborhood" and "Solar System" fit (the results
+   screen's leaderboard column is narrow on desktop too, so the labels shrink a little). */
 .lb-boards {
   flex-wrap: wrap;
 }
@@ -272,6 +272,10 @@
   flex: 1 1 30%;
   padding: 4px 3px;
   font-size: 12.5px;
+}
+
+.lb-board:first-child {
+  flex-basis: 100%;
 }
 
 @media (max-width: 480px) {

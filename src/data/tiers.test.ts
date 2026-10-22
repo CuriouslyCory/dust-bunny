@@ -3,7 +3,7 @@ import { getTier, MAX_TIER, TIERS, tierForRadius, tierProgress } from './tiers';
 
 describe('tiers', () => {
   it('has the five house thresholds and two per later Area (real cm)', () => {
-    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11, 9.461e19, 2.8383e20]);
+    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11, 9.461e19, 2.8383e20, 9.461e24, 2.8383e25]);
     expect(TIERS.map((t) => t.name)).toEqual([
       'Speck',
       'Fluff',
@@ -24,8 +24,10 @@ describe('tiers', () => {
       'Dust Star',
       'Dust Nebula',
       'Dust Cluster',
+      'Dust Singularity',
+      'Everything',
     ]);
-    expect(MAX_TIER).toBe(19);
+    expect(MAX_TIER).toBe(21);
   });
 
   it('looks up the Tier for a radius (thresholds inclusive)', () => {
@@ -53,6 +55,10 @@ describe('tiers', () => {
     expect(tierForRadius(0.85 * 9.461e19).index).toBe(17);
     expect(tierForRadius(9.461e19).index).toBe(18);
     expect(tierForRadius(2.8383e20).index).toBe(19);
+    // The Universe's 10 Mly units: the arrival leap (8.5 Mly) is still Tier 19; Tier 20 at 1 unit, Tier 21 at 3.
+    expect(tierForRadius(0.85 * 9.461e24).index).toBe(19);
+    expect(tierForRadius(9.461e24).index).toBe(20);
+    expect(tierForRadius(2.8383e25).index).toBe(21);
   });
 
   it('reports progress towards the next Tier', () => {
@@ -65,12 +71,13 @@ describe('tiers', () => {
     expect(tierProgress(2e8)).toBeCloseTo(0.5);
     expect(tierProgress(2.992e11)).toBeCloseTo(0.5);
     expect(tierProgress(1.8922e20)).toBeCloseTo(0.5);
-    expect(tierProgress(5e20)).toBe(1);
+    expect(tierProgress(1.8922e25)).toBeCloseTo(0.5);
+    expect(tierProgress(5e25)).toBe(1);
   });
 
   it('camera scale rises each Tier so Tier-up pulls the camera back', () => {
     for (let i = 1; i < TIERS.length; i++) expect(TIERS[i]!.cameraScale).toBeGreaterThan(TIERS[i - 1]!.cameraScale);
-    expect(getTier(99).index).toBe(19);
+    expect(getTier(99).index).toBe(21);
     expect(getTier(0).index).toBe(1);
   });
 });

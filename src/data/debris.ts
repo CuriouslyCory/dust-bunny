@@ -13,6 +13,7 @@ import { GALAXY_DEBRIS } from './galaxyDebris';
 import { GLOBE_DEBRIS } from './globeDebris';
 import { SOLAR_DEBRIS } from './solarDebris';
 import { SUN_DEBRIS } from './sunDebris';
+import { UNIVERSE_DEBRIS } from './universeDebris';
 import { ICE_SHEET_DEBRIS } from './iceSheetDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 import { REGION_DEBRIS } from './regionDebris';
@@ -432,6 +433,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
   ...SOLAR_DEBRIS,
   ...SUN_DEBRIS,
   ...GALAXY_DEBRIS,
+  ...UNIVERSE_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

@@ -23,7 +23,7 @@
  *   north jet (`jet_n`) swells while it aims. Chips are `relativistic_jet` Debris, and each chip
  *   hides `jet_n` for `jetRegrow` s.
  *
- * Absorbing it clears the Galaxy (`run.clearArea()`: the last built Area, so the Run is won).
+ * Absorbing it clears the Galaxy (`run.clearArea()`): the intergalactic gate opens onto the Universe.
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';

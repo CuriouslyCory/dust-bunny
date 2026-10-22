@@ -18,7 +18,7 @@
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { BLACK_HOLE, DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type DebrisPullTuning, type RoombaTuning } from '../data/hazards';
+import { QUASAR, BLACK_HOLE, DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type DebrisPullTuning, type RoombaTuning } from '../data/hazards';
 import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
@@ -299,5 +299,17 @@ export const blackHoleDef = hazardRegistry.register({
   modelId: BLACK_HOLE.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, BLACK_HOLE);
+  },
+});
+
+/** Universe wanderer: a quasar, a feeding black hole with a strong pull that drags loose Debris in (QUASAR). */
+export const quasarDef = hazardRegistry.register({
+  id: 'quasar',
+  name: 'Quasar',
+  footprint: tuningFootprint(QUASAR),
+  mass: QUASAR.mass,
+  modelId: QUASAR.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, QUASAR);
   },
 });
