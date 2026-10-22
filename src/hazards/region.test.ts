@@ -108,8 +108,9 @@ describe('region Hazards', () => {
     run.bunny.health = 999;
     step(run, 30);
     expect(spawned.length).toBeGreaterThan(0);
-    run.bunny.setRadius(tierRadius(run, 10) * 1.3);
-    step(run, 30);
+    // Late in Tier 10 the alive budget is up to 4 (2 at its start).
+    run.bunny.setRadius(tierRadius(run, 10) * 2.6);
+    step(run, 60);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
 
@@ -128,9 +129,10 @@ describe('region Hazards', () => {
     const { run } = makeRun('barge-zone');
     installGameplay(run);
     const director = getHazardDirector(run)!;
-    // A river strip across the placeholder field.
+    // A single river strip across the map (the map's own river reaches are taken out).
     const bd = run.house.bounds;
     const river = rect(bd.minX, 60, bd.maxX, 80);
+    run.house.rooms = run.house.rooms.filter((r) => r.type !== 'river');
     run.house.rooms.unshift({ id: 'river', type: 'river', rect: river, floor: 'water' } as (typeof run.house.rooms)[number]);
     run.bunny.teleport(100, 40);
     const fp = hazardRegistry.require('river_barge').footprint;
