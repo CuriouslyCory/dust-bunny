@@ -4,10 +4,10 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 
 ## Conventions
 
-- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world.
+- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. Exception: the Continent models (`tools/blender/continent.py`, rows whose notes start with "Continent scale") use 1 unit = 100 m, because one Continent world unit is 10 km = 100 units; load them at scale 0.01 (`"scale": 0.01` in `manifest.json`). Their sizes in the table are in those 100 m units, and their catalog entries carry `"units": "100 m"`.
 - Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).
 - Origin: bottom centre at the floor contact point (y = 0). The broom is the exception: see its row.
-- No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light, street sweeper beacon and headlights, city vehicle beacons, headlights and signs, street lamp and tower crown lights, region vehicle beacons and light bars, the Incinerator's furnace glow).
+- No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light, street sweeper beacon and headlights, city vehicle beacons, headlights and signs, street lamp and tower crown lights, region vehicle beacons and light bars, the Incinerator's furnace glow, volcano lava, Ice Sheet crevasses and eyes, storm lightning).
 - Each file has one root node named after the id. Static geometry is a single `body` mesh child; parts the game may animate are separate children whose origin is their pivot (listed below).
 - Footprint radius is the largest horizontal distance from the origin to any vertex; height is the vertical extent.
 - `public/models/catalog.json` holds the same numbers in machine-readable form (plus X/Z extents and node pivots).
@@ -18,13 +18,15 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 blender -b --factory-startup --python tools/blender/build_all.py
 # only some models:
 blender -b --factory-startup --python tools/blender/build_all.py -- roomba broom
-# contact sheet -> docs/models-preview.png
+# contact sheets -> docs/models-preview.png (cm models) and docs/models-preview-continent.png
 blender -b --factory-startup --python tools/blender/render_preview.py
+# only the Continent sheet:
+blender -b --factory-startup --python tools/blender/render_preview.py -- --continent
 ```
 
 ## Catalogue
 
-| id | category | file | footprint radius (cm) | height (cm) | size X × Z (cm) | forward | pivot / notes | triangles | KB |
+| id | category | file | footprint radius (cm*) | height (cm*) | size X × Z (cm*) | forward | pivot / notes | triangles | KB |
 |---|---|---|---|---|---|---|---|---|---|
 | `roomba` | hazard | `public/models/roomba.glb` | 18.3 | 9.7 | 34.5 × 33.9 | +Z | side_brush node spins about its local Y (up) axis. Animated nodes: `side_brush` at (7.71, 0.6, 9.19). | 1456 | 50.5 |
 | `lint_roller` | hazard | `public/models/lint_roller.glb` | 22.6 | 10.2 | 13.8 × 25.7 | +Z | Roller axis along X. drum node pivots on the roller axis at y = 3 cm; spin it about local X while rolling along Z. Animated nodes: `drum` at (0.0, 3.0, 0.0). | 688 | 25.6 |
@@ -93,7 +95,25 @@ blender -b --factory-startup --python tools/blender/render_preview.py
 | `river_barge` | hazard | `public/models/river_barge.glb` | 706.1 | 302 | 302 × 1382 | +Z | River barge, bow +Z: long dark hull with four red covered-hopper loads, push-tug at the stern (-Z) with push knees against the barge, a white three-deck house and a tall wheelhouse. Hull bottom on the floor (no water). | 1016 | 53.7 |
 | `water_bomber` | hazard | `public/models/water_bomber.glb` | 1380.5 | 700 | 2740 × 1917 | +Z | Amphibious water-bomber (Canadair CL-415 style), nose +Z, standing on its wheels: yellow upper body, red boat hull, high straight wing with two turboprops, red wingtip floats, high tailplane on the fin. | 2070 | 73.0 |
 | `incinerator` | hazard | `public/models/incinerator.glb` | 1780.8 | 2600 | 1443.9 × 3450 | +Z | Boss. The Incinerator: rail-mounted waste-to-energy plant, front +Z. Grey plant hall on four rail bogies (rails at x = +/-460 along Z), boiler house and a brick and steel chimney with a soot-black rim (top centre at (0, 2600, -600)), feed conveyor rising into an intake mouth that glows orange (emissive furnace). brush_l / brush_r are the two upright intake roller drums at the front corners; they spin about local Y, pivots at their centres. Animated nodes: `brush_l` at (-560.0, 240.0, 1500.0), `brush_r` at (560.0, 240.0, 1500.0). | 3798 | 169.2 |
+| `tornado` | hazard | `public/models/tornado.glb` | 148 | 449 | 287.1 × 284.4 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Wanderer that pulls. Twisting funnel under a wall-cloud cap (r 130); the funnel node (funnel, cap, flying debris and a lightning bolt) spins about its local Y axis through the origin (positive = counter-clockwise from above). Static debris skirt and dust puffs (r 150) in body. Animated nodes: `funnel` at (0.0, 0.0, 0.0). | 2326 | 72.2 |
+| `glacier_tongue` | hazard | `public/models/glacier_tongue.glb` | 128 | 14.9 | 100.4 × 246 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Lane patrol: moves along its long axis (+Z). Tongue of ice about 230 long x 80 wide (246 x 100 with the terminal moraine) with curved transverse crevasses, lateral and medial moraine stripes, and a terminal moraine of rubble at the snout (+Z end). | 1466 | 56.9 |
+| `volcano` | hazard | `public/models/volcano.glb` | 200 | 110 | 400 × 400 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Turret that fires. Cone with a breached rim, glowing lava streaks down the flanks and a lava pool in the crater: the crater node (emissive) sits at the vent, so projectiles launch from about (0, 96, 0) in model space (upwards out of the crater). Animated nodes: `crater` at (0.0, 96.0, 0.0). | 1410 | 40.8 |
+| `river_surge` | hazard | `public/models/river_surge.glb` | 128.8 | 19.9 | 220 × 190 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Trail-layer that leaves a wet trail. Flood-surge head moving +Z: a curling brown wave front with a foam crest along the leading edge, churning muddy water with blue streaks and floating logs behind (the trail continues from the -Z end). | 1160 | 36.4 |
+| `hurricane` | hazard | `public/models/hurricane.glb` | 292 | 39 | 575.1 × 575.1 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Cone blaster. Flat spiral cloud bands (r 300) around a clear eye (r 38, open to the ground). bands node (dense overcast, four spiral arms, lightning) spins about its local Y axis through the origin (positive = counter-clockwise from above, the way the arms trail). body is the eyewall. The wind cone blows +Z from the front of the eyewall at about (0, 20, 60) in model space. Animated nodes: `bands` at (0.0, 0.0, 0.0). | 2132 | 69.5 |
+| `ice_sheet` | hazard | `public/models/ice_sheet.glb` | 309.9 | 62.7 | 599.8 × 402 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Boss. A slab of continental ice 600 wide pushing a bulldozed ridge of rubble at its front (+Z) cliff. Cracked blue-white surface; crevasses glow faintly (emissive); two glowing crevasse eyes with pressure-ridge brows near the front edge and a glowing crack mouth along the cliff. calving_l / calving_r are ice chunks at the front corners; their origin is their base centre on the ground, so they can tip or slide off when they calve. Animated nodes: `calving_l` at (-232.0, 0.0, 122.0), `calving_r` at (232.0, 0.0, 122.0). | 3028 | 118.1 |
+| `iceberg` | prop | `public/models/iceberg.glb` | 40.9 | 33.6 | 73.3 × 59.5 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Chip that calves off the Ice Sheet: jagged ice block with a dirty blue base and a smaller chunk beside it. | 156 | 10.5 |
+| `mountain_range` | prop | `public/models/mountain_range.glb` | 92.9 | 46.2 | 184 × 66.3 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Elongated ridge of peaks, long axis along X: green foothills, brown and grey rock, snow caps above about 22 units. | 1568 | 43.1 |
+| `lake` | prop | `public/models/lake.glb` | 128.5 | 6.2 | 221.7 × 229.1 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Nearly flat lake: deep and shallow water set just below a sandy shore ring and a grass ring, with a small wooded island. | 760 | 25.0 |
+| `city_ruins` | prop | `public/models/city_ruins.glb` | 67 | 23.6 | 122.2 × 124.3 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. What is left of a city: a cracked grey pad with a cluster of tiny broken grey towers, scorched blocks and rubble piles. | 1058 | 54.6 |
+| `mesa` | prop | `public/models/mesa.glb` | 77.7 | 35.6 | 130.5 × 137.7 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Red flat-topped plateau: banded cliff strata over a tan talus apron, scrubby flat top, a small butte beside it and fallen boulders. | 1196 | 41.8 |
+| `forest_patch` | prop | `public/models/forest_patch.glb` | 75.7 | 15.1 | 131.2 × 135.8 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Dense clump of tiny dark-green conifer cones on a forest-floor patch. | 1490 | 80.6 |
 
-Total: 67 models, 91592 triangles, 3905 KB.
+\* Continent models: units of 100 m (see Conventions).
+
+Total: 79 models, 109342 triangles, 4554 KB.
 
 ![Contact sheet](models-preview.png)
+
+Continent models (Act 5):
+
+![Continent contact sheet](models-preview-continent.png)

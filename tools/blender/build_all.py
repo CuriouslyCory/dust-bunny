@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import city  # noqa: E402
 import common  # noqa: E402
+import continent  # noqa: E402
 import furniture  # noqa: E402
 import hazards  # noqa: E402
 import outdoor  # noqa: E402
@@ -30,7 +31,12 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               ("hazard", city.HAZARDS), ("furniture", city.FURNITURE),
               ("prop", city.PROPS),
               # region (Act 4, after the city)
-              ("hazard", region.HAZARDS)]
+              ("hazard", region.HAZARDS),
+              # continent (Act 5; 1 unit = 100 m, loaded at scale 0.01)
+              ("hazard", continent.HAZARDS), ("prop", continent.PROPS)]
+# ids authored in other units than cm (catalog "units" field)
+UNITS = {fn.__name__: continent.UNITS
+         for fn in continent.HAZARDS + continent.PROPS}
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
 
@@ -50,6 +56,8 @@ def main():
             common.reset_scene()
             info = common.export(fn())
             info["category"] = cat
+            if fn.__name__ in UNITS:
+                info["units"] = UNITS[fn.__name__]
             manifest[info["id"]] = info
             print(f"BUILT {info['id']:16s} tris={info['triangles']:5d} "
                   f"r={info['footprintRadius']:6.1f} h={info['height']:6.1f} "
@@ -57,7 +65,7 @@ def main():
     models = [manifest[i] for i in order if i in manifest]
     with open(MANIFEST, "w") as f:
         json.dump({
-            "units": "cm",
+            "units": "cm (models with a \"units\" field: that unit)",
             "up": "+Y",
             "forward": "+Z",
             "origin": "bottom centre at floor contact (broom: top of handle)",
@@ -76,7 +84,13 @@ def write_doc(models):
         "",
         "## Conventions",
         "",
-        "- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world.",
+        "- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. "
+        "Exception: the Continent models (`tools/blender/continent.py`, "
+        "rows whose notes start with \"Continent scale\") use 1 unit = 100 m, because one "
+        "Continent world unit is 10 km = 100 units; load them at scale 0.01 "
+        "(`\"scale\": 0.01` in `manifest.json`). Their sizes in the table "
+        "are in those 100 m units, and their catalog entries carry "
+        "`\"units\": \"100 m\"`.",
         "- Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).",
         "- Origin: bottom centre at the floor contact point (y = 0). "
         "The broom is the exception: see its row.",
@@ -85,7 +99,8 @@ def write_doc(models):
         "and power light, street sweeper beacon and headlights, city "
         "vehicle beacons, headlights and signs, street lamp and tower "
         "crown lights, region vehicle beacons and light bars, the "
-        "Incinerator's furnace glow).",
+        "Incinerator's furnace glow, volcano lava, Ice Sheet crevasses and "
+        "eyes, storm lightning).",
         "- Each file has one root node named after the id. Static geometry "
         "is a single `body` mesh child; parts the game may animate are "
         "separate children whose origin is their pivot (listed below).",
@@ -101,14 +116,18 @@ def write_doc(models):
         "# only some models:",
         "blender -b --factory-startup --python tools/blender/build_all.py -- "
         "roomba broom",
-        "# contact sheet -> docs/models-preview.png",
+        "# contact sheets -> docs/models-preview.png (cm models) and "
+        "docs/models-preview-continent.png",
         "blender -b --factory-startup --python tools/blender/render_preview.py",
+        "# only the Continent sheet:",
+        "blender -b --factory-startup --python tools/blender/render_preview.py"
+        " -- --continent",
         "```",
         "",
         "## Catalogue",
         "",
-        "| id | category | file | footprint radius (cm) | height (cm) | "
-        "size X × Z (cm) | forward | pivot / notes | triangles | KB |",
+        "| id | category | file | footprint radius (cm*) | height (cm*) | "
+        "size X × Z (cm*) | forward | pivot / notes | triangles | KB |",
         "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for m in models:
@@ -124,11 +143,17 @@ def write_doc(models):
             f"{m['triangles']} | {m['bytes'] / 1024:.1f} |")
     lines += [
         "",
+        "\\* Continent models: units of 100 m (see Conventions).",
+        "",
         f"Total: {len(models)} models, "
         f"{sum(m['triangles'] for m in models)} triangles, "
         f"{total / 1024:.0f} KB.",
         "",
         "![Contact sheet](models-preview.png)",
+        "",
+        "Continent models (Act 5):",
+        "",
+        "![Continent contact sheet](models-preview-continent.png)",
         "",
     ]
     with open(DOC, "w") as f:

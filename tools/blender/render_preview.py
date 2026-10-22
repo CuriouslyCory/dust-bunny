@@ -1,7 +1,14 @@
-"""Render a contact sheet of every exported model to docs/models-preview.png.
+"""Render contact sheets of the exported models: docs/models-preview.png
+(the cm-scale models) and docs/models-preview-continent.png (the Continent
+models, authored at 1 unit = 100 m).
 
 Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py
+    # only the Continent sheet:
+    blender -b --factory-startup --python tools/blender/render_preview.py -- --continent
+    # debug: bigger tiles of some models to /tmp (add --top for a steep,
+    # game-camera-like view)
+    blender -b --factory-startup --python tools/blender/render_preview.py -- roomba --top
 
 Each model is imported from its .glb (so the sheet shows what the game gets),
 rendered with Workbench from a high three-quarter front view, and the tiles
@@ -52,7 +59,7 @@ def flat_mat(name, hex_color):
     return m
 
 
-def render_tile(scene, path, label, out, out_label):
+def render_tile(scene, path, label, out, out_label, view_dir=VIEW_DIR):
     common.reset_scene()
     bpy.ops.import_scene.gltf(filepath=path)
     meshes = [o for o in scene.objects if o.type == "MESH"]
@@ -75,8 +82,8 @@ def render_tile(scene, path, label, out, out_label):
     cam = bpy.data.objects.new("cam", cam_data)
     scene.collection.objects.link(cam)
     scene.camera = cam
-    cam.location = center + VIEW_DIR * size * 3
-    cam.rotation_euler = (-VIEW_DIR).to_track_quat("-Z", "Y").to_euler()
+    cam.location = center + view_dir * size * 3
+    cam.rotation_euler = (-view_dir).to_track_quat("-Z", "Y").to_euler()
     bpy.context.view_layer.update()
 
     # fit the ortho frame to the projected bounding box
@@ -129,25 +136,19 @@ def load_px(path, w, h):
     return px.reshape(h, w, 4)
 
 
-def main():
-    global TILE_W, TILE_H
-    only = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    scene = bpy.context.scene
-    with open(os.path.join(common.OUT_DIR, "catalog.json")) as f:
-        models = json.load(f)["models"]
-    if only:  # debug: bigger tiles of just these models, written to /tmp
-        models = [m for m in models if m["id"] in only]
-        TILE_W, TILE_H = TILE_W * 2, TILE_H * 2
-    setup_render(scene)
-    tmp = tempfile.mkdtemp(prefix="dustbunny_preview_")
+def render_sheet(scene, models, out_path, tmp, view_dir=VIEW_DIR):
     tiles = []
     for m in models:
         out = os.path.join(tmp, f"{m['id']}.png")
         out_label = os.path.join(tmp, f"{m['id']}_label.png")
-        label = (f"{m['id']}  r{m['footprintRadius']:g} h{m['height']:g} cm  "
-                 f"{m['triangles']} tris")
+        if m.get("units", "cm") == "cm":
+            label = (f"{m['id']}  r{m['footprintRadius']:g} "
+                     f"h{m['height']:g} cm  {m['triangles']} tris")
+        else:  # Continent: 100 m units, rounded so the label fits the tile
+            label = (f"{m['id']}  r{m['footprintRadius']:.0f} "
+                     f"h{m['height']:.0f} (100 m)  {m['triangles']} tris")
         render_tile(scene, os.path.join(common.REPO, "public", m["file"]),
-                    label, out, out_label)
+                    label, out, out_label, view_dir)
         tiles.append((out, out_label))
 
     cols = min(COLS, len(tiles))
@@ -164,11 +165,39 @@ def main():
         sheet[y0:y0 + TILE_H, col * TILE_W:(col + 1) * TILE_W] = px
     out = bpy.data.images.new("sheet", cols * TILE_W, rows * TILE_H)
     out.pixels.foreach_set(sheet.ravel())
-    out.filepath_raw = (os.path.join(tmp, "debug.png") if only else
-                        os.path.join(common.DOCS_DIR, "models-preview.png"))
+    out.filepath_raw = out_path
     out.file_format = "PNG"
     out.save()
-    print("PREVIEW", out.filepath_raw)
+    bpy.data.images.remove(out)
+    print("PREVIEW", out_path)
+
+
+def main():
+    global TILE_W, TILE_H
+    args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    flags = {a for a in args if a.startswith("--")}
+    only = [a for a in args if not a.startswith("--")]
+    scene = bpy.context.scene
+    with open(os.path.join(common.OUT_DIR, "catalog.json")) as f:
+        models = json.load(f)["models"]
+    tmp = tempfile.mkdtemp(prefix="dustbunny_preview_")
+    if only:  # debug: bigger tiles of just these models, written to /tmp
+        TILE_W, TILE_H = TILE_W * 2, TILE_H * 2
+        setup_render(scene)
+        view = (Vector((0.15, -0.45, 1.0)).normalized() if "--top" in flags
+                else VIEW_DIR)
+        render_sheet(scene, [m for m in models if m["id"] in only],
+                     os.path.join(tmp, "debug.png"), tmp, view)
+        return
+    setup_render(scene)
+    cm = [m for m in models if m.get("units", "cm") == "cm"]
+    big = [m for m in models if m.get("units", "cm") != "cm"]
+    if "--continent" not in flags:
+        render_sheet(scene, cm, os.path.join(common.DOCS_DIR,
+                                             "models-preview.png"), tmp)
+    if big:
+        render_sheet(scene, big, os.path.join(
+            common.DOCS_DIR, "models-preview-continent.png"), tmp)
 
 
 main()

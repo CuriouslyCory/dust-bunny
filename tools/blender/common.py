@@ -212,6 +212,49 @@ PALETTE = {
     "plant_dark": ("#5b636c", 0.6, 0.2, None, 0),
     "soot": ("#141414", 0.95, 0.0, None, 0),
     "glow_furnace": ("#ff6a1a", 0.3, 0.0, "#ff5a10", 6.0),
+    # continent: ice (glacier tongue, Ice Sheet, icebergs)
+    "ice_white": ("#eef6fb", 0.35, 0.0, None, 0),
+    "ice_blue": ("#a6cfe8", 0.25, 0.0, None, 0),
+    "ice_deep": ("#3f7fb3", 0.2, 0.0, None, 0),
+    "glow_ice": ("#a6f2ff", 0.3, 0.0, "#5fdcff", 5.0),
+    "crevasse_glow": ("#3a96d6", 0.3, 0.0, "#3fb0ff", 1.5),
+    "moraine": ("#857a6c", 0.95, 0.0, None, 0),
+    "moraine_dark": ("#5b524a", 0.95, 0.0, None, 0),
+    # continent: volcano
+    "basalt": ("#433836", 0.9, 0.0, None, 0),
+    "ash_brown": ("#6e5a4b", 0.9, 0.0, None, 0),
+    "lava_crust": ("#2a2120", 0.9, 0.0, None, 0),
+    "lava_glow": ("#ff8a1f", 0.3, 0.0, "#ff6a00", 6.0),
+    "lava_flow": ("#f0501c", 0.4, 0.0, "#ff3c10", 2.5),
+    # continent: water and weather
+    "mud_brown": ("#7b5b3b", 0.3, 0.0, None, 0),
+    "silt": ("#a68558", 0.4, 0.0, None, 0),
+    "flood_blue": ("#4f86b0", 0.2, 0.0, None, 0),
+    "foam": ("#f6f3ea", 0.6, 0.0, None, 0),
+    "cloud_white": ("#f4f6f8", 0.9, 0.0, None, 0),
+    "cloud_grey": ("#b7bfc9", 0.9, 0.0, None, 0),
+    "cloud_dark": ("#6c7581", 0.9, 0.0, None, 0),
+    "storm_dust": ("#8c7b66", 0.95, 0.0, None, 0),
+    "glow_lightning": ("#eef6ff", 0.3, 0.0, "#cfe6ff", 6.0),
+    # continent: terrain Debris
+    "rock_brown": ("#7d6853", 0.9, 0.0, None, 0),
+    "snow": ("#f8fafc", 0.6, 0.0, None, 0),
+    "foothill_green": ("#6f8f4a", 0.9, 0.0, None, 0),
+    "lake_blue": ("#2f78b8", 0.1, 0.0, None, 0),
+    "lake_shallow": ("#62afd6", 0.1, 0.0, None, 0),
+    "sand": ("#e2cd96", 0.9, 0.0, None, 0),
+    "grass_green": ("#79a84f", 0.9, 0.0, None, 0),
+    "ruin_grey": ("#a3a3a0", 0.85, 0.0, None, 0),
+    "ruin_dark": ("#66676a", 0.85, 0.0, None, 0),
+    "scorch": ("#3b3836", 0.95, 0.0, None, 0),
+    "mesa_red": ("#b0502e", 0.9, 0.0, None, 0),
+    "mesa_orange": ("#cd7944", 0.9, 0.0, None, 0),
+    "mesa_tan": ("#dcae7a", 0.9, 0.0, None, 0),
+    "mesa_top": ("#a86a40", 0.9, 0.0, None, 0),
+    "scrub": ("#8c8a50", 0.9, 0.0, None, 0),
+    "forest_dark": ("#21482b", 0.85, 0.0, None, 0),
+    "forest_mid": ("#2d6438", 0.85, 0.0, None, 0),
+    "forest_floor": ("#3c4a2b", 0.95, 0.0, None, 0),
 }
 
 
@@ -244,6 +287,8 @@ class Part:
         self.bm = bmesh.new()
         self.mats = []
         self._stack = [Matrix.Identity(4)]
+        # edges sharper than this are flat-shaded (lower = more faceted)
+        self.smooth_angle = SMOOTH_ANGLE
 
     # -- transform stack ---------------------------------------------------
     @contextmanager
@@ -460,7 +505,7 @@ class Model:
             for m in p.mats:
                 me.materials.append(m)
             me.shade_smooth()
-            me.set_sharp_from_angle(angle=SMOOTH_ANGLE)
+            me.set_sharp_from_angle(angle=p.smooth_angle)
             ob = bpy.data.objects.new(p.name, me)
             ob.location = p.pivot
             ob.parent = root
