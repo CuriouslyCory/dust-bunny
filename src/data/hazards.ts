@@ -1559,16 +1559,16 @@ export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
 // so each Hazard keeps the size and speed of the Globe Hazard whose behaviour it reskins, with its
 // own twist. The Blender models are authored at 1 model unit = 0.0001 AU and loaded at scale 0.01,
 // so they arrive in Solar System units: `modelSize` is the catalog footprint radius / 100 (the
-// Comet's is its coma, so its tail streams far behind it) and heights follow the model. Footprints
-// are the models brief's estimates until the GLBs land (reconcile with public/models/catalog.json).
+// Comet's is about its coma, so its tail streams far behind it) and heights follow the model
+// (public/models/catalog.json).
 // Tier 16 Hazards are a threat on arrival (r 0.85) and food by early Tier 17; the Tier 17 Solar
 // Flare is food before the Sun is.
 
 /** Rogue Asteroid: Roomba behaviour, a tumbling rock whose gravity pulls; spins its `rock`. */
 export const ROGUE_ASTEROID: RoombaTuning = {
   size: 1.1,
-  /** Model top (≈ 80) × 1.1 / 1.1. */
-  height: 0.8,
+  /** Model top (80.4) × 1.1 / 1.096. */
+  height: 0.81,
   mass: 4,
   damage: 1,
   knockbackCm: 1.8,
@@ -1581,8 +1581,8 @@ export const ROGUE_ASTEROID: RoombaTuning = {
   suctionReach: 1.5,
   suctionStrength: 0.3,
   modelId: 'rogue_asteroid',
-  /** Footprint radius ≈ 110 model units. */
-  modelSize: 1.1,
+  /** The model's footprint radius (109.6 model units). */
+  modelSize: 1.096,
   spinNode: 'rock',
   spinRate: 1.8,
 };
@@ -1594,8 +1594,8 @@ export const ROGUE_ASTEROID: RoombaTuning = {
  */
 export const COMET: LaneTuning = {
   size: 1.6,
-  /** The coma, about 0.6 tall at model scale 2. */
-  height: 0.6,
+  /** Model top (119.8) × 2: the nucleus (centre y 60) at model scale 2. */
+  height: 2.4,
   mass: 4,
   damage: 1,
   speed: solarTiers(3.2, 4.6),
@@ -1610,7 +1610,10 @@ export const COMET: LaneTuning = {
   releaseRadii: 4,
   hitPause: 1.2,
   modelId: 'comet',
-  /** The coma's radius (≈ 80 model units), not the footprint: the ≈ 380-unit tail streams 7.6 units behind. */
+  /**
+   * About the coma's radius (the nucleus is 60 model units), not the 383.8 footprint (the tail):
+   * model scale 2, so the nucleus is 1.2 across the 1.6 contact disc and the tails stream 7.5 behind.
+   */
   modelSize: 0.8,
   spinNode: null,
   ringReach: 20,
@@ -1620,8 +1623,8 @@ export const COMET: LaneTuning = {
 /** Sunspot: a turret whose flux-tube `head` sweeps like a pulsar beam, locks a lane, then fires a pulsed burst of flare bolts. */
 export const SUNSPOT: TurretTuning = {
   size: 1.3,
-  /** Model ≈ 70 tall × 1.3 / 1.3. */
-  height: 0.7,
+  /** Model 77.4 tall × 1.3 / 1.359. */
+  height: 0.74,
   mass: 3,
   damage: 1,
   knockbackCm: 0.8,
@@ -1636,11 +1639,11 @@ export const SUNSPOT: TurretTuning = {
   dropletSpeed: solarTiers(14, 19),
   dropletRadius: 0.22,
   spread: 0.03,
-  /** The emitter's muzzle (≈ 50 model units up). */
-  nozzleHeight: 0.5,
+  /** The emitter's muzzle: model (0, 39, 77.3) × 1.3 / 1.359. */
+  nozzleHeight: 0.37,
   modelId: 'sunspot',
-  /** Footprint radius ≈ 130 model units. */
-  modelSize: 1.3,
+  /** The model's footprint radius (135.9 model units). */
+  modelSize: 1.359,
   aimNode: 'head',
   /** The pulsar sweep while the Bunny is out of range (the laser's scan is 0.4). */
   idleSpin: 0.9,
@@ -1652,7 +1655,7 @@ export const SUNSPOT: TurretTuning = {
 /** Sungrazer: Mop behaviour, a comet diving past the Sun across zones; its icy tail trail slows. */
 export const SUNGRAZER: MopTuning = {
   size: 1.5,
-  /** Model ≈ 50 tall × 1.5 / 1.5. */
+  /** Model 51 tall × 1.5 / 1.521. */
   height: 0.5,
   mass: 4,
   damage: 1,
@@ -1668,8 +1671,8 @@ export const SUNGRAZER: MopTuning = {
   trailRadius: 1,
   slowMultiplier: 0.55,
   modelId: 'sungrazer',
-  /** Footprint radius ≈ 150 model units (head at +Z, tail to −Z). */
-  modelSize: 1.5,
+  /** The model's footprint radius (152.1 model units; head at +Z, tail to −Z). */
+  modelSize: 1.521,
   roam: true,
   trailColor: '#bfe8ff',
 };
@@ -1677,8 +1680,8 @@ export const SUNGRAZER: MopTuning = {
 /** Solar Flare: Leaf Blower behaviour, a plasma arch that flares up (`loop` spins and pulses) and blasts the Bunny away. */
 export const SOLAR_FLARE: AirConeTuning = {
   size: 2.4,
-  /** Model ≈ 120 tall × 2.4 / 2.4. */
-  height: 1.2,
+  /** Model 120.7 tall × 2.4 / 2.303. */
+  height: 1.26,
   mass: 3.5,
   damage: 1,
   knockbackCm: 3,
@@ -1699,8 +1702,8 @@ export const SOLAR_FLARE: AirConeTuning = {
   /** The blast leaves the arch's front foot. */
   nozzleOffset: 0.3,
   modelId: 'solar_flare',
-  /** Footprint radius ≈ 240 model units. */
-  modelSize: 2.4,
+  /** The model's footprint radius (230.3 model units). */
+  modelSize: 2.303,
   spinNode: 'loop',
   spinRate: 0.5,
   pulseNode: 'loop',
@@ -1759,10 +1762,10 @@ export interface SunTuning extends BossTuning {
  */
 export const THE_SUN: SunTuning = {
   size: 2.8,
-  /** The photosphere (radius ≈ 270 model units) × 2.8 / 2.9; the corona fringe reaches the 290 footprint. */
+  /** The photosphere (radius 270 model units) × 2.8 / 2.944; the corona fringe reaches the 294.4 footprint. */
   contactRadius: 2.6,
-  /** A sphere squashed in Y (≈ 300 model units tall) × 2.8 / 2.9. */
-  height: 2.9,
+  /** Model 379.1 tall (the sphere squashed to 0.7 in Y) × 2.8 / 2.944. */
+  height: 3.6,
   mass: 6,
   damage: 1,
   knockbackCm: 4,
@@ -1792,8 +1795,8 @@ export const THE_SUN: SunTuning = {
   brushSpin: 0,
   onDefeat: 'openExit',
   modelId: 'the_sun',
-  /** The model's footprint radius (≈ 290 model units). */
-  modelSize: 2.9,
+  /** The model's footprint radius (294.4 model units). */
+  modelSize: 2.944,
   /** Flare volleys from the limb facing the target: fewer, slower bolts than the Sweeper's lasers. */
   ash: {
     interval: 7,

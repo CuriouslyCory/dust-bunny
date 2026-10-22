@@ -62,14 +62,13 @@ export const HAZARD_MODEL_SIZES = {
   globe_hurricane: { w: 6.22, d: 6.16, h: 0.42 },
   orbital_sweeper: { w: 5.04, d: 3.9, h: 1.35 },
   mini_sweeper: { w: 1, d: 0.54, h: 0.29 },
-  // Solar System (the models brief's footprints in 0.0001 AU ÷ 100: Solar System units, as loaded at
-  // scale 0.01); reconcile with public/models/catalog.json when the GLBs land.
-  rogue_asteroid: { w: 2.2, d: 2, h: 0.8 },
-  comet: { w: 1.8, d: 4.6, h: 1.4 },
-  sunspot: { w: 2.6, d: 2.6, h: 0.7 },
-  sungrazer: { w: 1.1, d: 3, h: 0.6 },
-  solar_flare: { w: 4.8, d: 4.4, h: 1.4 },
-  the_sun: { w: 5.8, d: 5.8, h: 3 },
+  // Solar System (public/models/catalog.json in 0.0001 AU units ÷ 100: Solar System units, as loaded at scale 0.01).
+  rogue_asteroid: { w: 1.8, d: 2.01, h: 0.8 },
+  comet: { w: 2.51, d: 4.86, h: 1.2 },
+  sunspot: { w: 2.49, d: 2.45, h: 0.77 },
+  sungrazer: { w: 1.36, d: 2.04, h: 0.51 },
+  solar_flare: { w: 1.91, d: 3.15, h: 1.21 },
+  the_sun: { w: 5.83, d: 5.85, h: 3.79 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -1106,56 +1105,56 @@ function comet(): Object3D {
 
 function sunspot(): Object3D {
   // A dark umbra disc in an orange penumbra, flat on the floor; the `head` node (a twisted
-  // flux-tube arch along Z with a glowing muzzle at (0, 0.45, 1.0)) turns about Y.
+  // flux-tube arch along Z with a glowing muzzle at (0, 0.39, 0.77)) turns about Y.
   const g = new Group();
   addCylinder(g, 1.3, 1.3, 0.02, 0, 0, 0, glow('#ff8a1a', 1.2), 24);
   addCylinder(g, 0.75, 0.75, 0.03, 0, 0, 0, mat('#3a1c0e', 0.9), 20);
   addCylinder(g, 0.45, 0.45, 0.035, 0, 0, 0, mat('#140a06', 1), 18);
-  const head = node(g, 'head', 0, 0.03, 0);
-  arch(head, 0.42, 0.09, 0, 0, 0.55, glow('#ffb347', 1.8), Math.PI / 2);
-  arch(head, 0.36, 0.05, 0.08, 0, 0.55, glow('#ff6a1a', 1.6), Math.PI / 2 + 0.3);
-  ball(head, 0.12, 0, 0.45, 1.0, glow('#fff1c8', 2.6), 1, 0);
+  const head = node(g, 'head', 0, 0, 0);
+  arch(head, 0.36, 0.08, 0, 0.03, 0.4, glow('#ffb347', 1.8), Math.PI / 2);
+  arch(head, 0.3, 0.05, 0.08, 0.03, 0.4, glow('#ff6a1a', 1.6), Math.PI / 2 + 0.3);
+  ball(head, 0.1, 0, 0.39, 0.77, glow('#fff1c8', 2.6), 1, 0);
   return g;
 }
 
 function sungrazer(): Object3D {
-  // A small white-hot comet head at +Z with a short, wide tail streaming to −Z.
+  // A small white-hot comet head (r 0.2) at (0, 0.22, 0.46) with a short, wide tail streaming to −Z.
   const g = new Group();
-  ball(g, 0.32, 0, 0.3, 0.9, glow('#fff6e0', 2.6), 0.9);
-  ball(g, 0.42, 0, 0.3, 0.9, glow('#ffd27a', 1.2), 0.7, 1).scale.set(1, 0.7, 0.8);
-  streamer(g, 0.75, 2.2, 0, 0.3, 0.75, '#fff1d0', 0.4);
-  streamer(g, 0.5, 2.4, 0, 0.3, 0.75, '#bfe8ff', 0.35);
+  ball(g, 0.2, 0, 0.22, 0.46, glow('#fff6e0', 2.6), 0.9);
+  ball(g, 0.3, 0, 0.22, 0.46, glow('#ffd27a', 1.2), 0.7, 1).scale.set(1, 0.7, 0.8);
+  streamer(g, 0.6, 1.5, 0, 0.22, 0.4, '#fff1d0', 0.4);
+  streamer(g, 0.4, 1.6, 0, 0.22, 0.4, '#bfe8ff', 0.35);
   return g;
 }
 
 function solarFlare(): Object3D {
-  // A bright patch on the floor and an arching plasma loop rooted in it (feet at x = ±1.2, top
+  // A bright patch on the floor and an arching plasma loop rooted in it (feet at z = ±1.2, top
   // y ≈ 1.2); the `loop` node pulses and spins about Y. The blast faces +Z.
   const g = new Group();
-  addCylinder(g, 2.2, 2.2, 0.02, 0, 0, 0, glow('#ff8a1a', 1), 24);
-  addCylinder(g, 1.4, 1.4, 0.03, 0, 0, 0.3, glow('#ffd27a', 1.6), 20);
+  addCylinder(g, 0.95, 0.95, 0.02, 0, 0, 0, glow('#ff8a1a', 1), 24).scale.set(1, 1, 1.6);
   const loop = node(g, 'loop', 0, 0, 0);
-  arch(loop, 1.2, 0.2, 0, 0, 0, glow('#ffb347', 2.2));
-  arch(loop, 1.0, 0.1, 0, 0, 0.25, glow('#fff1c8', 2.4), 0.25);
-  for (const s of [-1, 1]) ball(loop, 0.3, s * 1.2, 0.1, 0, glow('#fff6e0', 2.6), 0.6, 0);
+  arch(loop, 1.2, 0.2, 0, 0, 0, glow('#ffb347', 2.2), Math.PI / 2);
+  arch(loop, 1.0, 0.1, 0.2, 0, 0, glow('#fff1c8', 2.4), Math.PI / 2 + 0.25);
+  for (const s of [-1, 1]) ball(loop, 0.3, 0, 0.1, s * 1.2, glow('#fff6e0', 2.6), 0.6, 0);
   return g;
 }
 
 function theSun(): Object3D {
-  // The boss, front +Z: a glowing granulated sphere (r 2.7, squashed to 3 tall), two dark sunspot
-  // eyes on the +Z side, the `corona` node (a fringe of flames round the equator) turning about Y,
-  // and `prominence_l` / `prominence_r` (arcs on the −X / +X sides) that hide when chipped.
+  // The boss, front +Z: a glowing granulated sphere (r 2.7, squashed to 0.7: 3.78 tall, centre
+  // y 1.89), two dark sunspot eyes on the +Z side (centres (±0.98, 2.86, 2.1)), the `corona` node
+  // (a fringe of flames round the equator, pivot at the centre) turning about Y, and
+  // `prominence_l` / `prominence_r` (loops over the −X / +X shoulders) that hide when chipped.
   const g = new Group();
-  ball(g, 2.7, 0, 1.5, 0, glow('#ffb03a', 1.6), 0.556, 2);
+  ball(g, 2.7, 0, 1.89, 0, glow('#ffb03a', 1.6), 0.7, 2);
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2;
-    ball(g, 0.5, Math.cos(a) * 1.9, 2.15, Math.sin(a) * 1.9, glow('#ffd27a', 1.8), 0.3, 0);
+    ball(g, 0.5, Math.cos(a) * 1.9, 2.9, Math.sin(a) * 1.9, glow('#ffd27a', 1.8), 0.3, 0);
   }
   for (const s of [-1, 1]) {
-    ball(g, 0.38, s * 0.8, 1.9, 2.25, mat('#2a1206', 0.9), 0.6, 1);
-    ball(g, 0.16, s * 0.8, 1.95, 2.45, mat('#0c0503', 1), 0.6, 0);
+    ball(g, 0.38, s * 0.98, 2.86, 2.1, mat('#2a1206', 0.9), 0.6, 1);
+    ball(g, 0.16, s * 0.98, 2.9, 2.3, mat('#0c0503', 1), 0.6, 0);
   }
-  const corona = node(g, 'corona', 0, 1.5, 0);
+  const corona = node(g, 'corona', 0, 1.89, 0);
   const ring = new Mesh(new TorusGeometry(2.75, 0.18, 8, 40), glow('#ff7a1a', 2));
   ring.rotation.x = -Math.PI / 2;
   corona.add(ring);
@@ -1168,7 +1167,7 @@ function theSun(): Object3D {
     corona.add(flame);
   }
   for (const [name, s] of [['prominence_l', -1], ['prominence_r', 1]] as const) {
-    const p = node(g, name, s * 2.5, 1.2, 0);
+    const p = node(g, name, s * 2.26, 2.92, 0);
     arch(p, 0.6, 0.13, 0, 0, 0, glow('#ff8a3a', 2.2), Math.PI / 2).scale.set(1, 1.3, 1);
   }
   return g;

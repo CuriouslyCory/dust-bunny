@@ -18,13 +18,14 @@ export const HOT_JUPITER_ID = 'hot_jupiter';
 export const SUN_DEBRIS: DebrisType[] = [
   {
     id: PROMINENCE_ID, name: 'Prominence', size: 1.4, mass: 2.2, tiers: [17, 17], area: 'solar_system',
-    colors: ['#ffd27a', '#ffb347', '#ff9a3a'],
+    colors: ['#fff1c8', '#ffe2a0', '#ffd27a'],
     recipe: [
       { shape: 'torus', radius: 0.7, tube: 0.18, arc: Math.PI, pos: [0, 0.05, 0] },
       { shape: 'sphere', radius: 0.28, pos: [-0.7, 0.12, 0], scale: [1, 0.5, 1] },
       { shape: 'sphere', radius: 0.28, pos: [0.7, 0.12, 0], scale: [1, 0.5, 1] },
     ],
-    material: { roughness: 0.5, emissive: '#ff7a1a', emissiveIntensity: 1.2 },
+    // Debris rendering ignores emission: bright base colours carry the glow.
+    material: { roughness: 0.5 },
     rooms: {},
   },
   {
@@ -34,7 +35,6 @@ export const SUN_DEBRIS: DebrisType[] = [
       { shape: 'sphere', radius: 1, pos: [0, 1, 0], color: '#d9945e' },
       { shape: 'sphere', radius: 0.18, pos: [0.45, 0.85, 0.8], scale: [1.4, 0.7, 0.5], color: '#b5532f' },
     ],
-    material: { emissive: '#ff5a1a', emissiveIntensity: 0.25 },
     rooms: {},
   },
 ];
