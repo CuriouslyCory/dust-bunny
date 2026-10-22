@@ -161,7 +161,35 @@ Mountain ranges for the map: a furniture Obstacle whose def id starts with `moun
 
 The Moon is the only stun source because the Globe has no obstacles. A real-size Moon (1.74 units) is food from r ≈ 2.5, before the boss arrives at Tier 15, so the Sweeper brings its own: big enough to block the Bunny (which can still shove it), so standing behind it baits a charge into it. Sim check with the Bunny started at Tier 15 (`pnpm sim --area=globe --radius=3.05`): 12 / 12 wins (4 Moon stuns, the rest Ability stuns and growth); without Abilities 11 / 12 wins, 7 Moon stuns.
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, and absorbing the Orbital Sweeper wins the Run.
+**The Solar System (after the Orbital Sweeper; 1 world unit = 0.01 AU, Bunny r = 0.85 units on arrival).** Hazards are rocks, ice and the Sun's own weather. The Solar System repeats the Globe's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps the size and speed of the Globe Hazard whose behaviour it reskins. The map has no obstacles.
+
+| Hazard         | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|----------------|-----------|----------------------|-----------------|-----------|--------|
+| Rogue Asteroid | 16        | 1.1                  | ≈ 1.57          | Roomba behaviour: tumbling wander (2.4 / 4.2 units/s, turns every 1–2.6 s), gravity pull (reach 1.5, 0.3 × max speed), spinning rock | 1 + knockback |
+| Sunspot        | 16        | 1.3                  | ≈ 1.86          | static turret sunward of the Kuiper belt: the flux-tube head sweeps like a pulsar beam out of range (0.9 rad/s), aims (range 10 / 14), lane (1.2 / 1 s), then 3 flare bolts 0.16 s apart (13 / 18 units/s), reload 3.8 / 3 s | 1 per bolt |
+| Sungrazer      | 16        | 1.5                  | ≈ 2.14          | comet streaking between waypoints within 24 units of its spawn, across zones (2.8 / 4 units/s); its icy tail trail (7 s, wide) slows to 0.55 × | 1 + knockback |
+| Comet          | 16        | 1.6                  | ≈ 2.29          | rides the orbit ring nearest its spawn (within 20 units) one way round, no ends (3.2 / 4.6 units/s), a short lane sliding ahead of it, its tail streaming 7.5 units behind | 1 + big shove, sheds 8 % |
+| Solar Flare    | 17        | 2.4                  | ≈ 3.43          | plasma arch: its loop swells through the amber warm-up (1.1 s), then a dry blast cone (range 15, 1.25 × max speed) | 1 on contact |
+| The Sun        | 17 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | solar wind push, CMEs (telegraphed charges), flare volleys, stunned only by a giant planet (an eclipse), chips are prominences | 1, sheds 5 % (flares 3 %) |
+
+(Per-Tier pairs are Tier 16 / Tier 17.)
+
+| The Sun (`THE_SUN`) | Value | Orbital Sweeper, for scale |
+|---|---|---|
+| Size / contact radius | 2.8 / 2.6 units (the 270 photosphere × 2.8 / 2.944; model 5.8 across, 3.6 tall) | 2.8 / 2.1 |
+| Hunt speed / turn rate | 5 units/s / 1.2 rad/s | 5 / 1.3 |
+| CME (charge): trigger / telegraph / speed / distance | 32 / 1.6 s / 22 units/s / 42 | 32 / 1.5 / 22 / 40 |
+| Stun / recover | 3.8 s / 1.2 s, only from a charge into a giant planet the Bunny can't absorb yet (Jupiter, also while locked until Tier 17; Saturn, Uranus, Neptune; the Hot Jupiter); the map edge just ends it; Abilities and Spiky Dash still stun it | 3.5 / 1.2, the Moon |
+| Solar wind | while it hunts, telegraphs or recovers: a Bunny within 9 units of its surface is pushed away at up to 0.4 × its max speed (fading out; not when hunkered, hidden or able to absorb it); loose Debris ≤ 0.6 there is blown outward at up to 8 units/s | net pull 0.35, front only |
+| Flare volleys | every 7 s hunting or recovering on screen: orange lane for 1.1 s, then 3 flares (20 units/s, range 28) from its limb | lasers: 6 s, 1 s, 4 bolts at 26 |
+| Eclipse | glow ×0.15 while stunned, no wind | — |
+| Hot Jupiter | on arrival and every 8 s of hunting, if no blocking giant is within 26 units of the Bunny, one lands 3 units beyond its edge (between it and the Sun the first time), sized max(2.4, 1.25 × the largest the Bunny can absorb) | the Moon, same rule |
+| Minis | none | 3 mini sweepers / 13 s, up to 6 |
+| Chips | × 0.85, 8 prominences (0.45 × the Bunny's radius); each chip hides a prominence arc for 8 s | × 0.85, 8 parts |
+
+Jupiter unlocks at Tier 17 and the Sun arrives 4 s later, and Saturn (2.1) is food from Tier 17, so the Hot Jupiter is what its charges usually hit. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, and absorbing the Sun wins the Run.
 
 ## Pacing and scale (Acts 4–9)
 
