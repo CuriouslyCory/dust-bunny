@@ -75,6 +75,15 @@ describe('validateSubmission', () => {
     expect(err(submission({ maxRadius: 820, tierReached: 9, debrisAbsorbed: 9000, durationMs: 1_900_000, victory: true }))).toBeNull();
   });
 
+  it('accepts a Run through the Continent: the arrival leap is no growth on the progress scale', () => {
+    // A full Run won on the Ice Sheet: 42 km after ~38 minutes.
+    expect(err(submission({ maxRadius: 4_200_000, tierReached: 13, debrisAbsorbed: 16_000, durationMs: 2_300_000, victory: true }))).toBeNull();
+    // Dying just after the leap (8.5 km, Tier 11) is as plausible as a 50 m Region Bunny.
+    expect(err(submission({ maxRadius: 850_000, tierReached: 11, debrisAbsorbed: 13_000, durationMs: 1_900_000 }))).toBeNull();
+    // ...but not in the time a House Run takes.
+    expect(err(submission({ maxRadius: 850_000, tierReached: 11, debrisAbsorbed: 13_000, durationMs: 300_000 }))).toBe('maxRadius');
+  });
+
   it('rejects malformed bodies', () => {
     expect(err(null)).toBe('body');
     expect(err([])).toBe('body');
@@ -95,7 +104,7 @@ describe('validateSubmission', () => {
   it('rejects wrong types and out-of-range numbers', () => {
     expect(err({ ...submission(), maxRadius: '12' })).toBe('maxRadius');
     expect(err(submission({ maxRadius: Number.NaN }))).toBe('maxRadius');
-    expect(err(submission({ maxRadius: 99_999 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 99_999_999 }))).toBe('maxRadius');
     expect(err(submission({ debrisAbsorbed: 1.5 }))).toBe('debrisAbsorbed');
     expect(err(submission({ debrisAbsorbed: -1 }))).toBe('debrisAbsorbed');
     expect(err(submission({ tierReached: 6 }))).toBe('tierReached');
@@ -112,7 +121,7 @@ describe('validateSubmission', () => {
     // Growth without Debris.
     expect(err(submission({ maxRadius: 10, debrisAbsorbed: 0 }))).toBe('maxRadius');
     // Growth too fast for the duration.
-    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 20_000 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 15_000 }))).toBe('maxRadius');
     // Absorbing too fast.
     expect(err(submission({ debrisAbsorbed: 100_000, durationMs: 60_000 }))).toBe('debrisAbsorbed');
   });
@@ -171,6 +180,9 @@ describe('validateAreaSubmission', () => {
     expect(areaErr(area())).toBeNull();
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBeNull();
     expect(areaErr(area({ area: 'city', radiusIn: 190, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBeNull();
+    expect(areaErr(area({ area: 'region', radiusIn: 0.82, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 270_000 }))).toBeNull();
+    // The Continent counts from the radius after the arrival leap (0.85 units of 10 km).
+    expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBeNull();
     const r = validateAreaSubmission(area());
     expect(r.ok && r.value.runId).toBe('run-12345678');
   });
@@ -192,6 +204,10 @@ describe('validateAreaSubmission', () => {
     expect(areaErr(area({ maxRadius: 0.5 }))).toBe('maxRadius'); // below radiusIn
     expect(areaErr(area({ durationMs: 10_000 }))).toBe('maxRadius'); // too fast
     expect(areaErr(area({ debrisAbsorbed: 100_000 }))).toBe('debrisAbsorbed');
+    // Continent: a real-size re-base (≈0.004 units) never arrives; the Ice Sheet comes at Tier 13 (3 units).
+    expect(areaErr(area({ area: 'continent', radiusIn: 0.0042, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBe('radiusIn');
+    expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: 2.5, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBe('maxRadius');
+    expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 30_000 }))).toBe('maxRadius');
   });
 
   it('allows the City its faster growth (a fast bot clear: 177 → 680 cm in 146 s), but not the House', () => {

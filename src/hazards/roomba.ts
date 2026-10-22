@@ -12,7 +12,7 @@
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
+import { FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -188,5 +188,17 @@ export const miniCompactorDef = hazardRegistry.register({
   modelId: MINI_COMPACTOR.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_COMPACTOR);
+  },
+});
+
+/** Continent wanderer (placeholder tuning and model, see TORNADO). */
+export const tornadoDef = hazardRegistry.register({
+  id: 'tornado',
+  name: 'Tornado',
+  footprint: tuningFootprint(TORNADO),
+  mass: TORNADO.mass,
+  modelId: TORNADO.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, TORNADO);
   },
 });

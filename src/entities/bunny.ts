@@ -117,6 +117,19 @@ export class Bunny {
     this.events.emit('bunnyRebased', { factor: f, unit });
   }
 
+  /**
+   * The size leap between Areas (`AREAS[area].arrivalRadius`): scales the Bunny up to `radius`
+   * world units without growth (no bunnyGrew); radius, the interpolated radius and the Run's max
+   * radius follow. Emits bunnyLeapt. No-op if the Bunny is already that big.
+   */
+  leapTo(radius: number): void {
+    if (radius <= this.radius) return;
+    const previousRadius = this.radius;
+    this.radius = this.prevRadius = radius;
+    this.maxRadius = Math.max(this.maxRadius, radius);
+    this.events.emit('bunnyLeapt', { radius, previousRadius });
+  }
+
   get maxHealth(): number {
     return Math.round(this.stats.get('maxHealth'));
   }

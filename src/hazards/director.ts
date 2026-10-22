@@ -4,10 +4,10 @@
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
  * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
  * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
- * at Tier 9 in the city, the Incinerator at Tier 11 in the region. Entering a new area resets the
- * director (grace period, boss). The Run's Difficulty scales the budget, spawn interval and grace
- * period. Its absolute margins (DIRECTOR.spawnMargin, ringMin, despawnMin and the debug / boss
- * fallbacks) are real cm, divided by the Area's unit (`run.unit`). A def with `spawnZones` is only
+ * at Tier 9 in the city, the Incinerator at Tier 11 in the region, the Ice Sheet at Tier 13 in the
+ * continent. Entering a new area resets the director (grace period, boss). The Run's Difficulty
+ * scales the budget, spawn interval and grace period. Its absolute margins (DIRECTOR.spawnMargin,
+ * ringMin, despawnMin and the debug / boss fallbacks) are real cm, divided by the Area's unit (`run.unit`). A def with `spawnZones` is only
  * placed in those zones when the layout has one (the River Barge on the river).
  */
 import { lerp } from '../core/math';

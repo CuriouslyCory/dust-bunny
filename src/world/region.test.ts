@@ -74,7 +74,12 @@ describe('region generation', () => {
     it(`builds a valid layout (seed ${seed})`, () => {
       const g = generateRegion(seed);
       expect(g.area).toBe('region');
-      expect(g.exit).toBeUndefined();
+      // The exit west to the Continent: M1's west end, barred until the Incinerator falls.
+      expect(g.exit).toMatchObject({ dir: { x: -1, z: 0 }, open: false });
+      expect(g.exit!.rect.minX).toBeLessThan(0);
+      expect(roomAt(g, 0.5, (g.exit!.rect.minZ + g.exit!.rect.maxZ) / 2)?.id).toBe('m1');
+      expect(g.obstacles.some((o) => o.id === g.exit!.obstacleId)).toBe(true);
+      expect(g.walls.some((w) => w.id === g.exit!.obstacleId)).toBe(false);
       expect(g.bounds).toEqual({ minX: 0, minZ: 0, maxX: REGION.width, maxZ: REGION.depth });
       for (const r of g.rooms) expect(isRegionZone(r.type)).toBe(true);
       expect(new Set(g.rooms.map((r) => r.type))).toEqual(new Set(REGION_ZONE_TYPES));

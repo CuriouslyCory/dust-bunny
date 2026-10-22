@@ -30,6 +30,9 @@ export const TIERS: readonly TierDef[] = [
   // Region (after the Garbage Truck; 1 world unit = 10 m, so these are 1 and 3 units).
   { index: 10, id: 'dust_sprawl', name: 'Dust Sprawl', minRadius: 1000, cameraScale: 24, growth: 1 },
   { index: 11, id: 'dust_front', name: 'Dust Front', minRadius: 3000, cameraScale: 25, growth: 1 },
+  // Continent (after the Incinerator; 1 world unit = 10 km, so these are 1 and 3 units).
+  { index: 12, id: 'dustmass', name: 'Dustmass', minRadius: 1e6, cameraScale: 26, growth: 1 },
+  { index: 13, id: 'dust_pangaea', name: 'Dust Pangaea', minRadius: 3e6, cameraScale: 27, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

@@ -12,13 +12,14 @@
  * Floor Scrubber ≈ 271, Litter Vacuum ≈ 314, Street Flusher ≈ 429, Garbage Truck ≈ 800 (≈ 680
  * after one chip, ≈ 578 after two). Region (in its unit, 1 = 10 m): Mini Compactor ≈ 1.07, Landfill
  * Compactor ≈ 1.5, Crop Duster ≈ 1.79, River Barge ≈ 2.14, Snowplow ≈ 2.43, Water Bomber ≈ 3.29,
- * Freight Train ≈ 3.5, Incinerator ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two).
+ * Freight Train ≈ 3.5, Incinerator ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two). Continent (in its
+ * unit, 1 = 10 km; placeholders with the Region's numbers): the same ladder, Ice Sheet ≈ 4.
  *
  * `mass` is the growth multiplier when absorbed (Debris are ~1), so Hazards are a big gain.
  *
- * Lengths and speeds are in the Area's world unit: cm up to the City, 10 m in the Region
- * (`AREAS[area].unit`), so `knockbackCm`, `suctionReach`, `coneRange`… of a Region Hazard are in
- * Region units.
+ * Lengths and speeds are in the Area's world unit: cm up to the City, 10 m in the Region, 10 km
+ * in the Continent (`AREAS[area].unit`), so `knockbackCm`, `suctionReach`, `coneRange`… of a Region
+ * Hazard are in Region units and a Continent Hazard's in Continent units.
  *
  * Knockback is a displacement: max(knockbackCm, knockbackRadii × Bunny radius) in cm.
  * Suction strength is a fraction of the Bunny's max speed at the strongest point, so it
@@ -54,6 +55,20 @@ export function cityTiers(t7: number, t8: number, t9: number): PerTier {
  */
 export function regionTiers(t10: number, t11: number): PerTier {
   return [t10, t10, t10, t10, t10, t10, t10, t10, t10, t10, t11];
+}
+
+/**
+ * Per-Tier values for continent Hazards (Tiers 12, 13), in Continent units (1 = 10 km). Tiers 1–11
+ * repeat the Tier 12 value: the Bunny arrives in the continent at Tier 11 (0.85 units, the arrival
+ * leap) and continent Hazards live only there.
+ */
+export function continentTiers(t12: number, t13: number): PerTier {
+  return [t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t13];
+}
+
+/** A Region per-Tier table moved two Tiers up (Tier 10 → 12, 11 → 13): the Continent repeats the Region's shape. */
+function regionToContinent(values: PerTier): PerTier {
+  return continentTiers(values[9]!, values[10]!);
 }
 
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
@@ -924,7 +939,7 @@ export const WATER_BOMBER: AirConeTuning = {
  * at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 11 starts at 3). Its feed
  * conveyor sucks the Bunny in while it hunts, its chimney fires ash volleys that shed mass, towns
  * and the map edge stun its charges, and it summons mini compactors. Absorbing it clears the
- * Region (the last built Area, so the Run is won).
+ * Region: the motorway west to the Continent opens.
  */
 export const INCINERATOR: BossTuning = {
   size: 2.8,
@@ -976,6 +991,40 @@ export const INCINERATOR: BossTuning = {
     originOffset: -0.33,
   },
 };
+
+// ── Continent Hazards (Tiers 12–13, in Continent units: 1 = 10 km) ──
+// PLACEHOLDERS (Act 5 groundwork): each is the Region Hazard with the same behaviour, its numbers
+// moved two Tiers up (`regionToContinent`) and its Region model, so the Area has weather and a boss
+// that clears it. The Continent Hazards work (#25) replaces these tunings and model ids
+// (tornado, glacier_tongue, volcano, river_surge, hurricane, ice_sheet in public/models/).
+
+/** Tornado (wanderer that pulls): Roomba behaviour. Placeholder: the Landfill Compactor's numbers and model. */
+export const TORNADO: RoombaTuning = { ...LANDFILL_COMPACTOR, speed: regionToContinent(LANDFILL_COMPACTOR.speed) };
+
+/** Glacier tongue (lane patrol): Lint Roller behaviour. Placeholder: the Snowplow's numbers and model. */
+export const GLACIER_TONGUE: LaneTuning = { ...SNOWPLOW, speed: regionToContinent(SNOWPLOW.speed) };
+
+/** Volcano (turret): Spray Bottle behaviour. Placeholder: the Crop Duster's numbers and model. */
+export const VOLCANO: TurretTuning = {
+  ...CROP_DUSTER,
+  range: regionToContinent(CROP_DUSTER.range),
+  telegraph: regionToContinent(CROP_DUSTER.telegraph),
+  cooldown: regionToContinent(CROP_DUSTER.cooldown),
+  dropletSpeed: regionToContinent(CROP_DUSTER.dropletSpeed),
+};
+
+/** River surge (trail-layer): Mop behaviour. Placeholder: the River Barge's numbers and model. */
+export const RIVER_SURGE: MopTuning = { ...RIVER_BARGE, speed: regionToContinent(RIVER_BARGE.speed) };
+
+/** Hurricane (cone blaster): Leaf Blower behaviour. Placeholder: the Water Bomber's numbers and model. */
+export const HURRICANE: AirConeTuning = { ...WATER_BOMBER, speed: regionToContinent(WATER_BOMBER.speed) };
+
+/**
+ * The Ice Sheet (continent boss, Tier 13). Placeholder: the Incinerator's state machine, numbers
+ * and model without the ash volley (needs Bunny radius ≈ 4 units, ≈ 2.89 after two chips; Tier 13
+ * starts at 3). Absorbing it clears the Continent (the last built Area, so the Run is won).
+ */
+export const ICE_SHEET: BossTuning = { ...INCINERATOR, ash: undefined };
 
 export interface TierSpawnTable {
   /** Alive Hazard budget at the start / end of the Tier (ramps with Tier progress). */
@@ -1128,11 +1177,43 @@ export const REGION_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Continent director (after the region): spawn tables for Bunny Tiers 12–13, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 11 at 0.85 units, the arrival leap, and uses the
+ * Tier 12 table). PLACEHOLDER: the Region's tables with the Continent's placeholder Hazards.
+ */
+export const CONTINENT_DIRECTOR = {
+  firstTier: 12,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 12 (arrival, r ≈ 0.85–3): tornadoes, volcanoes, glacier tongues and river surges.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { tornado: { weight: 1, max: 2 }, volcano: { weight: 1, max: 2 }, glacier_tongue: { weight: 0.8, max: 1 }, river_surge: { weight: 0.7, max: 1 } },
+    },
+    // Tier 13 (r ≥ 3): hurricanes join, and the Ice Sheet arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        tornado: { weight: 1.2, max: 3 },
+        hurricane: { weight: 0.9, max: 2 },
+        glacier_tongue: { weight: 0.8, max: 2 },
+        river_surge: { weight: 0.5, max: 1 },
+        volcano: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
   city: CITY_DIRECTOR,
   region: REGION_DIRECTOR,
+  continent: CONTINENT_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -1141,10 +1222,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   neighborhood: { id: 'street_sweeper', tier: 7, arrivalDelay: 4 },
   city: { id: 'garbage_truck', tier: 9, arrivalDelay: 4 },
   region: { id: 'incinerator', tier: 11, arrivalDelay: 4 },
+  continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

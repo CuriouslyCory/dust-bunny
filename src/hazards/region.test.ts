@@ -348,7 +348,7 @@ describe('region Hazards', () => {
     expect(telegraphs).toBe(0);
   });
 
-  it('absorbing the Incinerator wins the Run (bossDefeated → victory → runEnded) and clears its minis', () => {
+  it('absorbing the Incinerator clears the Region (bossDefeated → exitOpened west) and clears its minis', () => {
     const { run, events } = makeRun('incinerator-win');
     moveToCentre(run);
     const b = run.bunny;
@@ -364,9 +364,11 @@ describe('region Hazards', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:incinerator', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:incinerator', 'exitOpened:region']);
+    expect(run.ended).toBe(false);
+    expect(run.regionCleared).toBe(true);
+    expect(run.house.exit).toMatchObject({ open: true, dir: { x: -1, z: 0 } });
+    expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_compactor')).toBe(0);
   });
 });

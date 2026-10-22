@@ -9,7 +9,7 @@
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MOP, RIVER_BARGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, MOP, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -197,5 +197,17 @@ export const riverBargeDef = hazardRegistry.register({
   modelId: RIVER_BARGE.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, RIVER_BARGE);
+  },
+});
+
+/** Continent trail-layer (placeholder tuning and model, see RIVER_SURGE). */
+export const riverSurgeDef = hazardRegistry.register({
+  id: 'river_surge',
+  name: 'River Surge',
+  footprint: tuningFootprint(RIVER_SURGE),
+  mass: RIVER_SURGE.mass,
+  modelId: RIVER_SURGE.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, RIVER_SURGE);
   },
 });

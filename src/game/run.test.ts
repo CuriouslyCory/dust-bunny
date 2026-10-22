@@ -88,10 +88,14 @@ describe('Run (headless)', () => {
     run.openExit(); // the Garbage Truck fell: the on-ramp opens
     expect(run.leaveArea()).toBe(true);
     expect(run.area).toBe('region');
-    run.openExit(); // no exit in the last area: the Incinerator wins the Run instead
+    expect(run.canLeaveArea).toBe(false); // the motorway west is still shut
+    run.openExit(); // the Incinerator fell: the motorway west opens
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('continent');
+    run.openExit(); // no exit in the last area: the Ice Sheet wins the Run instead
     expect(run.canLeaveArea).toBe(false);
     expect(run.leaveArea()).toBe(false);
-    expect(entered).toEqual(['neighborhood', 'city', 'region']);
+    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent']);
   });
 
   it('re-bases the Bunny into the Region unit on entry, keeping its real size', () => {
@@ -116,20 +120,58 @@ describe('Run (headless)', () => {
     expect(run.tier).toBe(10);
   });
 
+  it('leaps the Bunny up to the Continent arrival radius after the re-base: no growth, no Tier-up', () => {
+    const { run, events } = makeRun('leap');
+    run.enterArea('region');
+    run.bunny.setRadius(4.2); // 42 m: the Incinerator just fell
+    run.update(1 / 60);
+    expect(run.tier).toBe(11);
+    run.time = 1500;
+    const drafts = run.perkDraft.pending;
+    const log: string[] = [];
+    events.on('bunnyRebased', (e) => log.push(`rebased:${e.factor}`));
+    events.on('bunnyLeapt', (e) => log.push(`leapt:${e.radius}`));
+    events.on('bunnyGrew', () => log.push('grew'));
+    events.on('tierUp', () => log.push('tierUp'));
+    run.enterArea('continent');
+    run.update(1 / 60);
+    expect(log).toEqual(['rebased:0.001', 'leapt:0.85']);
+    expect(run.unit).toBe(1e6);
+    expect(run.bunny.radius).toBe(0.85);
+    expect(run.bunny.realRadius).toBeCloseTo(850_000);
+    expect(run.bunny.maxRadius).toBe(0.85);
+    expect(run.tier).toBe(11); // 8.5 km < 10 km: Tier 12 is still to grow into
+    expect(run.perkDraft.pending).toBe(drafts); // no Perk draft for the leap
+    const stats = run.getStats();
+    expect(stats.maxRadius).toBeCloseTo(850_000);
+    // The Region keeps its own growth; the Continent counts from the radius after the leap.
+    const [region, continent] = stats.areas!.slice(-2);
+    expect(region).toMatchObject({ area: 'region', cleared: true });
+    expect(region!.maxRadius).toBeCloseTo(4.2, 1);
+    expect(continent).toMatchObject({ area: 'continent', startSec: 1500, radiusIn: 0.85, maxRadius: 0.85, cleared: false });
+    // Tiers read the real radius: 1 unit (10 km) is Tier 12, 3 units Tier 13.
+    run.bunny.setRadius(1.01);
+    run.update(1 / 60);
+    expect(run.tier).toBe(12);
+    run.bunny.setRadius(3.01);
+    run.update(1 / 60);
+    expect(run.tier).toBe(13);
+  });
+
   it('wins the Run when the last Area is cleared (clearArea), and opens the exit before that', () => {
     const { run, events } = makeRun('clear');
     const order: string[] = [];
     events.on('exitOpened', (e) => order.push(`exit:${e.area}`));
     events.on('victory', () => order.push('victory'));
     events.on('runEnded', (e) => order.push(`end:${e.reason}`));
-    run.enterArea('city');
+    run.enterArea('region');
     run.clearArea();
-    expect(run.cityCleared).toBe(true);
+    expect(run.regionCleared).toBe(true);
     expect(run.house.exit?.open).toBe(true);
     run.leaveArea();
     run.clearArea();
-    expect(order).toEqual(['exit:city', 'victory', 'end:victory']);
-    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, area: 'region' });
+    expect(order).toEqual(['exit:region', 'victory', 'end:victory']);
+    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, area: 'continent' });
   });
 
   it('records each Area it plays and emits areaCompleted on leaving a cleared one', () => {
@@ -157,7 +199,7 @@ describe('Run (headless)', () => {
     expect(completed).toHaveLength(1); // dying mid-Area completes nothing
   });
 
-  it('counts the City as cleared once its exit opens, and the Region only on victory', () => {
+  it('counts the City and the Region as cleared once their exits open, and the Continent only on victory', () => {
     const events = new EventBus();
     const run = new Run(events, { seed: 'city', characterId: 'zap', area: 'city' });
     expect(run.getStats().areas!.map((a) => a.area)).toEqual(['city']); // a debug start skips the earlier Areas
@@ -168,7 +210,15 @@ describe('Run (headless)', () => {
     expect(region.bunny.realRadius).toBeCloseTo(900);
     expect(region.getStats().areas![0]!.cleared).toBe(false);
     region.clearArea();
-    expect(region.endReason).toBe('victory');
+    expect(region.endReason).toBeNull();
     expect(region.getStats().areas![0]!.cleared).toBe(true);
+    // A debug start in the Continent begins at the Incinerator-beaten size, then leaps.
+    const continent = new Run(new EventBus(), { seed: 'continent', characterId: 'zap', area: 'continent' });
+    expect(continent.bunny.realRadius).toBeCloseTo(850_000);
+    expect(continent.tier).toBe(11);
+    expect(continent.getStats().areas!.map((a) => a.area)).toEqual(['continent']);
+    continent.clearArea();
+    expect(continent.endReason).toBe('victory');
+    expect(continent.getStats().areas![0]!.cleared).toBe(true);
   });
 });

@@ -13,7 +13,7 @@
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { FREIGHT_TRAIN, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, type LaneTuning } from '../data/hazards';
+import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import type { HouseLayout } from '../world/types';
 import { BaseHazard } from './base';
@@ -247,5 +247,17 @@ export const freightTrainDef = hazardRegistry.register({
   modelId: FREIGHT_TRAIN.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, FREIGHT_TRAIN);
+  },
+});
+
+/** Continent lane patrol (placeholder tuning and model, see GLACIER_TONGUE). */
+export const glacierTongueDef = hazardRegistry.register({
+  id: 'glacier_tongue',
+  name: 'Glacier Tongue',
+  footprint: tuningFootprint(GLACIER_TONGUE),
+  mass: GLACIER_TONGUE.mass,
+  modelId: GLACIER_TONGUE.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, GLACIER_TONGUE);
   },
 });

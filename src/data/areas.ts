@@ -4,7 +4,7 @@
  * every size or distance in an Area's content are in its unit; the Run re-bases the Bunny on
  * entry so it arrives at ~1 unit and the House's Speck→Fluff curve repeats at each scale.
  */
-import type { AreaId } from '../world/types';
+import { nextArea, type AreaId } from '../world/types';
 import type { LengthUnitId } from './units';
 
 export interface AreaTuning {
@@ -27,6 +27,13 @@ export interface AreaTuning {
    * own share of the radius term instead of a cap on the Run's radius.
    */
   fluffPerUnit: number;
+  /**
+   * Smallest radius (in this Area's unit) the Bunny arrives at. Entering the Area re-bases the
+   * Bunny (same real size) and then, if it is smaller, scales it up to this radius: the off-screen
+   * growth the chapter card covers (docs/design.md, "The size leap"). It is not growth earned in
+   * either Area: Area stats, Fluff and scores count from the radius after the leap. Missing: no leap.
+   */
+  arrivalRadius?: number;
 }
 
 export const AREAS: Record<AreaId, AreaTuning> = {
@@ -35,6 +42,20 @@ export const AREAS: Record<AreaId, AreaTuning> = {
   city: { name: 'The City', tiers: [7, 9], initialScatter: 1800, startCluster: 110, startClusterRadius: 2600, growth: 0.11, unit: 1, readout: 'cm', fluffPerUnit: 1 / 120 },
   // 1 world unit = 10 m: the Bunny arrives at ~0.85 units, Tier 10 starts at 1 and Tier 11 at 3.
   region: { name: 'The Region', tiers: [10, 11], initialScatter: 2000, startCluster: 120, startClusterRadius: 11, growth: 0.12, unit: 1000, readout: 'm', fluffPerUnit: 1.5 },
+  // 1 world unit = 10 km. The Region ends at ≈40 m, a real-size re-base would arrive at ≈0.004
+  // units, so the Bunny leaps to 0.85 units (8.5 km): Tier 12 starts at 1 and Tier 13 at 3.
+  continent: {
+    name: 'The Continent',
+    tiers: [12, 13],
+    initialScatter: 2000,
+    startCluster: 120,
+    startClusterRadius: 11,
+    growth: 0.14,
+    unit: 1e6,
+    readout: 'km',
+    fluffPerUnit: 1.5,
+    arrivalRadius: 0.85,
+  },
 };
 
 /** Centimetres per world unit in `area`. */
@@ -46,4 +67,14 @@ export function areaUnit(area: AreaId): number {
 export function areaDebrisTier(area: AreaId, tier: number): number {
   const [lo, hi] = AREAS[area].tiers;
   return Math.min(hi, Math.max(lo, tier));
+}
+
+/**
+ * True if a real radius (cm) lies beyond the next Area's arrival leap: the Bunny only gets there
+ * after leaping on arrival, so it is no goal in `area` (the Region's HUD shows no Tier 12 goal).
+ */
+export function pastNextArrival(area: AreaId, cm: number): boolean {
+  const next = nextArea(area);
+  const arrival = next ? AREAS[next].arrivalRadius : undefined;
+  return arrival !== undefined && cm > arrival * AREAS[next!].unit;
 }

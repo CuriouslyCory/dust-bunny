@@ -16,7 +16,7 @@
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -214,5 +214,17 @@ export const waterBomberDef = hazardRegistry.register({
   modelId: WATER_BOMBER.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, WATER_BOMBER);
+  },
+});
+
+/** Continent cone blaster (placeholder tuning and model, see HURRICANE). */
+export const hurricaneDef = hazardRegistry.register({
+  id: 'hurricane',
+  name: 'Hurricane',
+  footprint: tuningFootprint(HURRICANE),
+  mass: HURRICANE.mass,
+  modelId: HURRICANE.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, HURRICANE);
   },
 });

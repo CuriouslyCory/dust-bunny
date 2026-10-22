@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AREA_BOSSES } from '../data/hazards';
 import { TIERS, tierForRadius } from '../data/tiers';
 import { AREA_ORDER } from '../world/types';
-import { AREA_BOSS_TIER, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREA_BOSS_TIER, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_ARRIVAL_RADIUS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
 import { AREAS } from '../data/areas';
 
 const base = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 3, durationMs: 300_000, victory: false };
@@ -56,7 +56,7 @@ describe('score tiers', () => {
   });
 
   it('match tierForRadius', () => {
-    for (const r of [0.5, 1, 2.9, 3, 7.99, 8, 20, 44, 45, 300]) expect(scoreTierForRadius(r)).toBe(tierForRadius(r).index);
+    for (const r of [0.5, 1, 2.9, 3, 7.99, 8, 20, 44, 45, 300, 4000, 850_000, 1e6, 4.2e6]) expect(scoreTierForRadius(r)).toBe(tierForRadius(r).index);
   });
 });
 
@@ -81,6 +81,12 @@ describe('score areas', () => {
     expect([...SCORE_AREAS]).toEqual([...AREA_ORDER]);
     for (const a of SCORE_AREAS) expect(AREA_BOSS_TIER[a]).toBe(AREA_BOSSES[a].tier);
     for (const a of SCORE_AREAS) expect(SCORE_AREA_UNIT[a]).toBe(AREAS[a].unit);
+    for (const a of SCORE_AREAS) expect((SCORE_ARRIVAL_RADIUS as Partial<Record<string, number>>)[a], a).toBe(AREAS[a].arrivalRadius);
+  });
+
+  it('scores Continent growth in Continent units (10 km) from the radius after the leap', () => {
+    const continent = { area: 'continent' as const, radiusIn: 0.85, maxRadius: 4.05, debrisAbsorbed: 0, durationMs: 360_000 };
+    expect(computeAreaScore(continent)).toBe(Math.round(3.2 * 10_000) + 3000);
   });
 
   it('scores Region growth in Region units (10 m)', () => {
@@ -98,5 +104,20 @@ describe('progressRadius (Run board scale)', () => {
     // Scores keep growing with the Bunny, without the Region's metres swamping the board.
     expect(computeScore({ ...base, maxRadius: 4000, tierReached: 11 })).toBeGreaterThan(computeScore({ ...base, maxRadius: 900, tierReached: 9 }));
     expect(computeScore({ ...base, maxRadius: 4000, tierReached: 11 })).toBeLessThan(200_000);
+  });
+
+  it('counts nothing for the leap into the Continent, then 100 per Continent unit', () => {
+    const region50m = progressRadius(5000);
+    expect(region50m).toBeCloseTo(1400);
+    // The band between 50 m and the arrival radius (8.5 km) is the leap: no growth.
+    expect(progressRadius(100_000)).toBeCloseTo(region50m);
+    expect(progressRadius(850_000)).toBeCloseTo(region50m);
+    // One Continent unit (10 km) of growth after the leap counts as much as one Region unit (10 m).
+    expect(progressRadius(1_850_000) - progressRadius(850_000)).toBeCloseTo(progressRadius(2000) - progressRadius(1000));
+    // A Continent win (42 km) out-scores a Region win (42 m), without the kilometres swamping the board.
+    const regionWin = computeScore({ ...base, maxRadius: 4200, tierReached: 11 });
+    const continentWin = computeScore({ ...base, maxRadius: 4_200_000, tierReached: 13 });
+    expect(continentWin).toBeGreaterThan(regionWin);
+    expect(continentWin - regionWin).toBeLessThan(80_000);
   });
 });

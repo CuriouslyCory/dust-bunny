@@ -15,6 +15,8 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   city: { sky: '#ffe2c4', ground: '#5d5a5f', sun: '#ffc98a', intensity: 3.0, dir: [-0.7, 1.05, 0.35] },
   // Overcast noon from altitude: a high, soft sun and a bright grey sky fill.
   region: { sky: '#f2f4f6', ground: '#6b7458', sun: '#eef0f2', intensity: 1.7, dir: [-0.25, 1.9, 0.3] },
+  // Dusk from the stratosphere: a warm sun low in the west (long shadows) and a cool blue-violet fill.
+  continent: { sky: '#b3b0e0', ground: '#5d5160', sun: '#ffb26b', intensity: 2.6, dir: [-0.9, 0.42, 0.18] },
 };
 
 export class Lighting {
@@ -37,6 +39,7 @@ export class Lighting {
    * Indoors: the warm window light. Neighborhood: brighter, whiter sky fill and a higher sun.
    * City: golden-hour light, a lower amber sun and a cooler fill bouncing off concrete.
    * Region: overcast noon seen from a few kilometres up (soft, high light).
+   * Continent: dusk from the stratosphere (a warm, low sun and a blue-violet sky fill).
    */
   setArea(area: AreaId): void {
     const L = AREA_LIGHT[area];

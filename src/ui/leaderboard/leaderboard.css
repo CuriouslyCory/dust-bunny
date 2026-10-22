@@ -262,7 +262,13 @@
 }
 
 @media (max-width: 420px) {
+  /* Six boards (Full run and five Areas): two rows of three on phones, so no name is cut short. */
+  .lb-boards {
+    flex-wrap: wrap;
+  }
+
   .lb-board {
+    flex: 1 1 30%;
     font-size: 12px;
   }
 }

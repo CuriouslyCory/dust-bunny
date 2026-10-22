@@ -68,7 +68,7 @@ const COLUMNS: Record<'run' | 'area', string[]> = {
   area: ['#', 'Name', 'Bunny', 'Score', 'Size', 'Time'],
 };
 
-/** An Area entry's peak radius (Area boards store radii in the Area's unit: 10 m in the Region). */
+/** An Area entry's peak radius (Area boards store radii in the Area's unit: 10 m in the Region, 10 km in the Continent). */
 function areaSizeCell(e: AreaLeaderboardEntry): HTMLElement {
   const unit = SCORE_AREA_UNIT[e.area] ?? 1;
   const from = unit >= 100 ? 'm' : 'cm';

@@ -11,7 +11,7 @@ export interface AreaStats {
   startSec: number;
   /** Simulated seconds spent in the Area. */
   timeSec: number;
-  /** Radius on entering the Area, in the Area's unit (`AREAS[area].unit` cm; 1 up to the City). */
+  /** Radius on entering the Area, in the Area's unit (`AREAS[area].unit` cm; 1 up to the City), after any arrival leap. */
   radiusIn: number;
   /** Largest radius reached by the time the Run left the Area, in the Area's unit. */
   maxRadius: number;
@@ -46,8 +46,10 @@ export interface RunStats {
   neighborhoodCleared?: boolean;
   /** True once the Garbage Truck was absorbed (the highway on-ramp to the region opened). */
   cityCleared?: boolean;
-  /** True once the Incinerator was absorbed. */
+  /** True once the Incinerator was absorbed (the motorway west to the continent opened). */
   regionCleared?: boolean;
+  /** True once the Ice Sheet was absorbed. */
+  continentCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
   /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */

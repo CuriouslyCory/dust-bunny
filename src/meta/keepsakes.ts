@@ -178,6 +178,8 @@ export function dropCaption(bossId: string, bossName: string, material: string):
       return "The Street Sweeper's bristles hold grit from every gutter in the neighbourhood. It keeps some.";
     case 'garbage_truck':
       return 'The hopper contains things nobody should keep. It keeps some.';
+    case 'ice_sheet':
+      return 'The Ice Sheet carries the silt of a continent it scraped clean. It keeps some.';
     default:
       return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
   }

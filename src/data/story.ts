@@ -79,6 +79,12 @@ export const STORY: Story = {
       'Regional authorities declare a state of emergency. The state is absorbed.',
       'The evening forecast shows a grey front moving across three counties. The front is not weather.',
     ],
+    // Act 5 · The Continent
+    dustmass: [
+      'There is a word for a dust bunny the size of a country. The word has not been invented. Everyone who might invent it is busy.',
+      'A mountain range. It had a name. It has a new one now: inside.',
+    ],
+    dust_pangaea: ['Plate tectonics usually takes two hundred million years to move this much material. It did it before lunch.'],
   },
 
   areas: {
@@ -106,16 +112,19 @@ export const STORY: Story = {
         'From up here the cities look like crumbs. They are, from its point of view, crumbs.',
         'The highway goes on for hours. It does not take hours.',
       ],
-      cleared: [
-        'Satellite imagery shows a grey smear moving west. The satellites are next.',
-        'The region is quiet now. Quiet, and slightly fluffy.',
-      ],
+      cleared: ['Satellite imagery shows a grey smear moving west. The satellites are next.'],
       boss: [
         [
           'At the landfill stands the Incinerator, the last machine built for this exact problem.',
           'It burns things so they go away. It is about to learn where they go.',
         ],
       ],
+    },
+    continent: {
+      title: 'Plate Tectonics, Before Lunch',
+      entered: ['The planet has run out of machines. It falls back on weather.'],
+      cleared: ['There is no more land. There is, however, up.'],
+      boss: ['The planet tries the oldest cleaning method it knows: ice. It worked on the mammoths.'],
     },
   },
 

@@ -38,6 +38,12 @@ export interface GameEvents {
    * `factor` (old unit / new unit). Views holding sizes (stuck Debris) rescale; no growth happened.
    */
   bunnyRebased: { factor: number; unit: number };
+  /**
+   * Entering an Area with an arrival radius (`AREAS[area].arrivalRadius`, the Continent) scaled the
+   * Bunny up off screen, after the re-base: `radius` from `previousRadius` (world units). Not
+   * growth (no bunnyGrew, no Tier-up): views holding sizes refresh, nothing is awarded.
+   */
+  bunnyLeapt: { radius: number; previousRadius: number };
   /** Crossed a Tier threshold upward. Emitted once per Tier crossed. */
   tierUp: { tier: number; previousTier: number; tierName: string };
   bunnyDamaged: { amount: number; source: string; health: number; maxHealth: number };

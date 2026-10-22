@@ -6,7 +6,7 @@ import { BASE_BUNNY_STATS, computeStats } from '../entities/stats';
 import { Run } from '../game/run';
 import type { RunStats } from '../game/runStats';
 import { registerPerks } from '../perks/perks';
-import { fluffForRun } from './fluff';
+import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
 import { MetaProgress } from './meta';
 import { defaultSave, type KeyValueStorage, parseSave, SAVE_KEY, SAVE_VERSION, SaveStore } from './save';
 import { upgradeCost, upgradeModifiers } from './upgrades';
@@ -84,8 +84,8 @@ describe('fluffForRun', () => {
     expect(fluffForRun('quit', stats({ maxRadius: 1.26, debrisAbsorbed: 19, tierReached: 1 }))).toBe(Math.floor(4 + 1.26 / 30 + 19 / 1000));
   });
 
-  it('multiplies by 1.5 on victory before flooring', () => {
-    expect(fluffForRun('victory', stats({ maxRadius: 50.3, debrisAbsorbed: 3001, tierReached: 5 }))).toBe(Math.floor((20 + 50.3 / 30 + 3001 / 1000) * 1.5));
+  it('multiplies by the victory multiplier before flooring', () => {
+    expect(fluffForRun('victory', stats({ maxRadius: 50.3, debrisAbsorbed: 3001, tierReached: 5 }))).toBe(Math.floor((20 + 50.3 / 30 + 3001 / 1000) * VICTORY_FLUFF_MULTIPLIER));
     expect(fluffForRun('died', stats({ maxRadius: 80, debrisAbsorbed: 2000, tierReached: 6, houseCleared: true }))).toBe(Math.floor((24 + 80 / 30 + 2000 / 1000) * 1.25));
   });
 
@@ -106,7 +106,7 @@ describe('fluffForRun', () => {
     const areas = [area('house', 1, 52), area('neighborhood', 52, 214), area('city', 214, 820), area('region', 0.82, 4.2)];
     const term = 51 / 30 + 162 / 60 + 606 / 120 + 3.38 * 1.5;
     const win = stats({ maxRadius: 4200, debrisAbsorbed: 0, tierReached: 11, areas, houseCleared: true, neighborhoodCleared: true });
-    expect(fluffForRun('victory', win)).toBe(Math.floor((44 + term) * 1.5));
+    expect(fluffForRun('victory', win)).toBe(Math.floor((44 + term) * VICTORY_FLUFF_MULTIPLIER));
     // Reaching the Region but dying there pays the City-cleared multiplier.
     expect(fluffForRun('died', { ...win, cityCleared: true })).toBe(Math.floor((44 + term) * 1.45));
   });
@@ -208,7 +208,7 @@ describe('MetaProgress', () => {
     const meta = new MetaProgress(memStorage());
     const e = { reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
     const a = meta.awardRun(e);
-    expect(a.fluff).toBe(Math.floor((12 + 50 / 30 + 400 / 1000) * 1.5));
+    expect(a.fluff).toBe(Math.floor((12 + 50 / 30 + 400 / 1000) * VICTORY_FLUFF_MULTIPLIER));
     expect(meta.awardRun(e)).toBe(a);
     expect(meta.fluff).toBe(a.fluff);
     expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1, bestRadius: 50, bestTier: 3 });

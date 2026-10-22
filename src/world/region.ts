@@ -14,7 +14,8 @@
  * and `river3`). Permanent obstacles (city centres, hills, ridges) keep `obstacleGap` clear of each
  * other and of the edge, so a Bunny of any Region size can roll around them. Every motorway leaves
  * the map through a closed roadblock in the wooded ridge around the edge and carries on out of
- * bounds (render-only markings).
+ * bounds (render-only markings). M1's west end is the Region's exit (`layout.exit`): barred until
+ * the Incinerator is absorbed, then the way west out to the Continent.
  */
 import type { Rect } from '../core/math';
 import { expandRect, rect, rectContains } from '../core/math';
@@ -22,7 +23,8 @@ import { Rng } from '../core/rng';
 import { REGION_DEBRIS } from '../data/regionDebris';
 import { FURNITURE, furnitureObstacles } from './furniture';
 import { wallSegments } from './house';
-import type { DebrisPlacement, FloorMaterialId, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, RegionZoneType, Room } from './types';
+import { ZoneGrid } from './zoneGrid';
+import type { DebrisPlacement, ExitDoor, FloorMaterialId, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, RegionZoneType } from './types';
 
 export const REGION = {
   /** Map size in units (10 m): 2 km × 1.5 km. */
@@ -64,84 +66,6 @@ function pointRectDist(x: number, z: number, r: Rect): number {
   return Math.hypot(Math.max(0, r.minX - x, x - r.maxX), Math.max(0, r.minZ - z, z - r.maxZ));
 }
 
-/** Zones painted on a 1-unit grid by feature (a town, a river reach, a motorway), merged back into rects. */
-class ZoneGrid {
-  readonly cells: Uint16Array;
-  readonly features: Array<{ name: string; type: RegionZoneType }> = [{ name: 'farmland', type: 'farmland' }];
-
-  constructor(
-    readonly w: number,
-    readonly d: number,
-  ) {
-    this.cells = new Uint16Array(w * d);
-  }
-
-  feature(name: string, type: RegionZoneType): number {
-    this.features.push({ name, type });
-    return this.features.length - 1;
-  }
-
-  fill(f: number, r: Rect): void {
-    const x0 = Math.max(0, Math.round(r.minX));
-    const x1 = Math.min(this.w, Math.round(r.maxX));
-    const z0 = Math.max(0, Math.round(r.minZ));
-    const z1 = Math.min(this.d, Math.round(r.maxZ));
-    for (let z = z0; z < z1; z++) this.cells.fill(f, z * this.w + x0, z * this.w + Math.max(x0, x1));
-  }
-
-  featureAt(x: number, z: number): number {
-    const cx = Math.floor(x);
-    const cz = Math.floor(z);
-    if (cx < 0 || cz < 0 || cx >= this.w || cz >= this.d) return -1;
-    return this.cells[cz * this.w + cx]!;
-  }
-
-  typeAt(x: number, z: number): RegionZoneType | null {
-    const f = this.featureAt(x, z);
-    return f < 0 ? null : this.features[f]!.type;
-  }
-
-  /** True if `r` lies in the map and every cell it touches is one of `types`. */
-  allOf(r: Rect, types: readonly RegionZoneType[]): boolean {
-    if (r.minX < 0 || r.minZ < 0 || r.maxX > this.w || r.maxZ > this.d) return false;
-    const x1 = Math.ceil(r.maxX);
-    const z1 = Math.ceil(r.maxZ);
-    for (let z = Math.floor(r.minZ); z < z1; z++) {
-      for (let x = Math.floor(r.minX); x < x1; x++) if (!types.includes(this.features[this.cells[z * this.w + x]!]!.type)) return false;
-    }
-    return true;
-  }
-
-  /** Greedy merge into rects, one Room each; a feature's first rect is named after it, the rest `name.k`. */
-  rooms(): Room[] {
-    const { w, d, cells } = this;
-    const done = new Uint8Array(w * d);
-    const count = new Map<number, number>();
-    const rooms: Room[] = [];
-    for (let z = 0; z < d; z++) {
-      for (let x = 0; x < w; x++) {
-        const i = z * w + x;
-        if (done[i]) continue;
-        const f = cells[i]!;
-        let x1 = x + 1;
-        while (x1 < w && !done[z * w + x1] && cells[z * w + x1] === f) x1++;
-        let z1 = z + 1;
-        for (; z1 < d; z1++) {
-          let ok = true;
-          for (let xx = x; xx < x1 && ok; xx++) ok = !done[z1 * w + xx] && cells[z1 * w + xx] === f;
-          if (!ok) break;
-        }
-        for (let zz = z; zz < z1; zz++) done.fill(1, zz * w + x, zz * w + x1);
-        const { name, type } = this.features[f]!;
-        const k = count.get(f) ?? 0;
-        count.set(f, k + 1);
-        rooms.push({ id: k === 0 ? name : `${name}.${k}`, type, rect: rect(x, z, x1, z1), floor: FLOORS[type] });
-      }
-    }
-    return rooms;
-  }
-}
-
 interface Town {
   name: string;
   rect: Rect;
@@ -169,7 +93,7 @@ export function generateRegion(seed: string | number): HouseLayout {
   const hw = R.highwayWidth / 2;
   const rw = R.riverWidth;
   const G = R.obstacleGap;
-  const grid = new ZoneGrid(W, D);
+  const grid = new ZoneGrid<RegionZoneType>(W, D, 'farmland', FLOORS);
 
   // ── Motorways (painted last) ──
   const mainZ = Math.round(rng.range(68, 82));
@@ -267,7 +191,7 @@ export function generateRegion(seed: string | number): HouseLayout {
   const rooms = grid.rooms();
   const spawn = { x: 8, z: mainZ, roomId: 'm1' };
 
-  // ── Edge: wooded ridge with a closed roadblock where each motorway leaves the map ──
+  // ── Edge: wooded ridge with a closed roadblock where each motorway leaves the map; M1 west is the exit ──
   const T = R.wallThickness;
   const gapsW: Array<[number, number]> = [[north, south]];
   const gapsE: Array<[number, number]> = [[north, south], [h3Z - hw, h3Z + hw]];
@@ -275,8 +199,10 @@ export function generateRegion(seed: string | number): HouseLayout {
   const gapsS: Array<[number, number]> = [[h1X - hw, h1X + hw]];
   const ridgeRects = [...wallSegments('h', 0, 0, W, gapsN, T), ...wallSegments('h', D, 0, W, gapsS, T), ...wallSegments('v', 0, 0, D, gapsW, T), ...wallSegments('v', W, 0, D, gapsE, T)];
   const walls: Obstacle[] = ridgeRects.map((r, i) => ({ id: `ridge${i}`, kind: 'wall', rect: r, height: R.wallHeight, clearance: 0 }));
+  // The Bunny leaves west along M1 once the Incinerator falls (the gate is an obstacle, not a wall).
+  const exit: ExitDoor = { rect: rect(-T / 2, north, T / 2, south), dir: { x: -1, z: 0 }, obstacleId: 'westbound_gate', open: false };
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: R.wallHeight * 0.4, clearance: 0 };
   const blocks: Rect[] = [
-    ...gapsW.map(([a, b]) => rect(-T / 2, a, T / 2, b)),
     ...gapsE.map(([a, b]) => rect(W - T / 2, a, W + T / 2, b)),
     ...gapsN.map(([a, b]) => rect(a, -T / 2, b, T / 2)),
     ...gapsS.map(([a, b]) => rect(a, D - T / 2, b, D + T / 2)),
@@ -325,7 +251,7 @@ export function generateRegion(seed: string | number): HouseLayout {
   // ── Fixed Debris: traffic, farms, town buildings, the landfill, boats and cabins ──
   const prng = root.fork('region:debris');
   const debrisPlacements: DebrisPlacement[] = [];
-  const solid = [...walls.map((w) => w.rect), ...furniture.map((f) => f.rect)];
+  const solid = [...walls.map((w) => w.rect), gate.rect, ...furniture.map((f) => f.rect)];
   const placed: Array<{ x: number; z: number; s: number }> = [];
   const put = (typeId: string, x: number, z: number, rotY: number) => debrisPlacements.push({ typeId, x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, rotY: Math.round(rotY * 1000) / 1000 });
   /** Places `typeId` if its disc (with the size jitter) stays inside `zones`, clear of obstacles, the spawn and other placements. */
@@ -519,7 +445,7 @@ export function generateRegion(seed: string | number): HouseLayout {
     mark(x, h3Z + hw, x + 0.9, z - 0.45, '#857a63');
     mark(x, z - 0.45, Math.round(mrng.range(x + 8, landfill.maxX - 4)), z + 0.45, '#857a63');
   }
-  // The motorways carry on out of bounds: M1 west towards the City, the others away into the haze.
+  // The motorways carry on out of bounds: M1 west (the way out to the Continent), the others away into the haze.
   const OUT = 160;
   roadLines(true, mainZ, -OUT, -T / 2, true);
   roadLines(true, mainZ, W + T / 2, W + OUT, true);
@@ -528,7 +454,7 @@ export function generateRegion(seed: string | number): HouseLayout {
   roadLines(false, h1X, -OUT, -T / 2, true);
   roadLines(false, h1X, D + T / 2, D + OUT, true);
 
-  const obstacles: Obstacle[] = [...walls, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
+  const obstacles: Obstacle[] = [...walls, gate, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
   return {
     area: 'region',
     seed: root.seed,
@@ -542,5 +468,6 @@ export function generateRegion(seed: string | number): HouseLayout {
     debrisPlacements,
     spawn,
     markings,
+    exit,
   };
 }

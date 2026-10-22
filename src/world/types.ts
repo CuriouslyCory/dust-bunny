@@ -1,9 +1,9 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-/** Which world a layout describes: the house floor, the street outside, the city, then the region. */
-export type AreaId = 'house' | 'neighborhood' | 'city' | 'region';
-export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region'];
+/** Which world a layout describes: the house floor, the street outside, the city, the region, then the continent. */
+export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent';
+export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent'];
 
 /** The area after `area` (null for the last one). */
 export function nextArea(area: AreaId): AreaId | null {
@@ -17,11 +17,14 @@ export type OutdoorZoneType = 'yard' | 'street' | 'sidewalk' | 'driveway' | 'par
 export type CityZoneType = 'avenue' | 'pavement' | 'plaza' | 'parking' | 'square';
 /** Region zones, seen from a few kilometres up: fields, highways, a river, towns, woods and the landfill. */
 export type RegionZoneType = 'farmland' | 'highway' | 'river' | 'town' | 'woods' | 'landfill';
-export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType;
+/** Continent zones, seen from the stratosphere: plains, mountains, lakes, desert, tundra and the ruins of cities. */
+export type ContinentZoneType = 'plains' | 'mountains' | 'lakes' | 'desert' | 'tundra' | 'ruins';
+export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
 export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
 export const REGION_ZONE_TYPES: readonly RegionZoneType[] = ['farmland', 'highway', 'river', 'town', 'woods', 'landfill'];
+export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mountains', 'lakes', 'desert', 'tundra', 'ruins'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
@@ -35,9 +38,13 @@ export function isRegionZone(type: RoomType): type is RegionZoneType {
   return (REGION_ZONE_TYPES as readonly string[]).includes(type);
 }
 
+export function isContinentZone(type: RoomType): type is ContinentZoneType {
+  return (CONTINENT_ZONE_TYPES as readonly string[]).includes(type);
+}
+
 /** The area a room / zone type belongs to. */
 export function zoneArea(type: RoomType): AreaId {
-  return isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
+  return isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
 }
 
 export type FloorMaterialId =
@@ -56,7 +63,14 @@ export type FloorMaterialId =
   | 'water'
   | 'townRoofs'
   | 'forest'
-  | 'landfill';
+  | 'landfill'
+  // Continent (from the stratosphere, 1 unit = 10 km). Placeholder textures until the Continent look lands.
+  | 'steppe'
+  | 'highlands'
+  | 'lakeWater'
+  | 'desertSand'
+  | 'tundraSnow'
+  | 'ruinsAsh';
 
 export interface Room {
   id: string;
@@ -123,8 +137,9 @@ export interface DebrisPlacement {
 
 /**
  * The way to the next area: the house's front door (closed until the Robo-Vac 9000 is absorbed),
- * the neighborhood's road barrier to the city (closed until the Street Sweeper is absorbed) or
- * the city's highway on-ramp to the region (closed until the Garbage Truck is absorbed).
+ * the neighborhood's road barrier to the city (closed until the Street Sweeper is absorbed),
+ * the city's highway on-ramp to the region (closed until the Garbage Truck is absorbed) or the
+ * region's westbound motorway out to the continent (closed until the Incinerator is absorbed).
  * While closed it is an obstacle; `rect` is the opening in the outer wall / hedge.
  */
 export interface ExitDoor {

@@ -9,6 +9,9 @@ import {
   FLOOR_SCRUBBER,
   FREIGHT_TRAIN,
   GARBAGE_TRUCK,
+  GLACIER_TONGUE,
+  HURRICANE,
+  ICE_SHEET,
   INCINERATOR,
   LANDFILL_COMPACTOR,
   MINI_COMPACTOR,
@@ -22,6 +25,7 @@ import {
   MOP,
   PRESSURE_WASHER,
   RIVER_BARGE,
+  RIVER_SURGE,
   ROBO_MOWER,
   ROBOVAC_9000,
   ROOMBA,
@@ -30,7 +34,9 @@ import {
   SPRINKLER,
   STREET_FLUSHER,
   STREET_SWEEPER,
+  TORNADO,
   UPRIGHT_VACUUM,
+  VOLCANO,
   WATER_BOMBER,
   type BossTuning,
 } from '../data/hazards';
@@ -44,7 +50,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -74,6 +80,11 @@ const TUNING: Record<string, { size: number; height: number }> = {
   crop_duster: CROP_DUSTER,
   river_barge: RIVER_BARGE,
   water_bomber: WATER_BOMBER,
+  tornado: TORNADO,
+  glacier_tongue: GLACIER_TONGUE,
+  volcano: VOLCANO,
+  river_surge: RIVER_SURGE,
+  hurricane: HURRICANE,
   ...BOSSES,
 };
 
@@ -88,7 +99,7 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis. */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();

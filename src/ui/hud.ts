@@ -20,7 +20,7 @@
 import { getDebrisType } from '../data/debris';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
-import { AREAS } from '../data/areas';
+import { AREAS, pastNextArrival } from '../data/areas';
 import { formatAmount, lengthUnitFor } from '../data/units';
 import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
@@ -406,6 +406,8 @@ function tierWidget(hud: Hud, game: Game): void {
   // The readout unit (cm, m, km…: the Area's ladder, see data/units.ts) is picked from the next
   // threshold, so the radius and its goal share one unit: `1.47 / 3 cm`, `14.7 / 30 m`.
   let unit = lengthUnitFor(1);
+  /** No further Tier to grow into in this Area (the bar stays full). */
+  let top = false;
   hud.addWidget({
     id: 'tier',
     el,
@@ -420,15 +422,18 @@ function tierWidget(hud: Hud, game: Game): void {
         badge.textContent = `Tier ${t.index}`;
         name.textContent = t.name;
         el.dataset.tier = String(t.index);
-        const n = t.index < MAX_TIER ? getTier(t.index + 1) : null;
+        // No goal past the next Area's arrival leap (the Region's Tier 11 tops out at the boss, not Tier 12).
+        const after = t.index < MAX_TIER ? getTier(t.index + 1) : null;
+        const n = after && !pastNextArrival(run.area, after.minRadius) ? after : null;
+        top = !n;
         const from = AREAS[run.area].readout;
         unit = lengthUnitFor(n ? n.minRadius : Math.max(r, t.minRadius), from);
         const goalText = n ? `${Number((n.minRadius / unit.cm).toPrecision(3))} ${unit.id}` : '';
-        next.textContent = n ? `${n.name} at ${goalText}` : 'Max size!';
+        next.textContent = n ? `${n.name} at ${goalText}` : after ? 'Absorb the boss' : 'Max size!';
         goal.textContent = n ? ` / ${goalText}` : ` ${unit.id}`;
-        nextShort.textContent = n ? `→ ${n.name}` : 'Max size!';
+        nextShort.textContent = n ? `→ ${n.name}` : after ? 'Boss next' : 'Max size!';
       }
-      const pct = Math.round(tierProgress(r) * 1000) / 10;
+      const pct = top ? 100 : Math.round(tierProgress(r) * 1000) / 10;
       if (pct !== lastPct) {
         lastPct = pct;
         fill.style.width = `${pct}%`;

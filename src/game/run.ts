@@ -29,6 +29,7 @@ import { circleVsRect } from '../core/math';
 import { generateHouse, openExit } from '../world/house';
 import { CITY, generateCity } from '../world/city';
 import { generateNeighborhood, NEIGHBORHOOD } from '../world/neighborhood';
+import { CONTINENT, generateContinent } from '../world/continent';
 import { generateRegion, REGION } from '../world/region';
 import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/types';
 import type { AreaStats, RunEndReason, RunStats } from './runStats';
@@ -39,7 +40,7 @@ export interface RunConfig {
   characterId: string;
   /** Difficulty (missing: casual). */
   difficulty?: DifficultyId;
-  /** Start in this area (debug / testing; 'neighborhood' skips the house, 'city' and 'region' the Areas before). */
+  /** Start in this area (debug / testing; 'neighborhood' skips the house, later Areas the ones before them). */
   area?: AreaId;
   /** Extra stat modifiers applied at start (permanent Upgrades from the Shop). */
   modifiers?: StatModifier[];
@@ -58,6 +59,8 @@ const AREA_WORLDS: Record<AreaId, { generate: (seed: string) => HouseLayout; cel
   neighborhood: { generate: generateNeighborhood, cellSize: NEIGHBORHOOD.debrisCellSize, startRadius: NEIGHBORHOOD.debugStartRadius },
   city: { generate: generateCity, cellSize: CITY.debrisCellSize, startRadius: CITY.debugStartRadius },
   region: { generate: generateRegion, cellSize: REGION.debrisCellSize, startRadius: REGION.debugStartRadius * areaUnit('region') },
+  // Starts at the Incinerator-beaten size; entering the Continent then leaps to its arrival radius.
+  continent: { generate: generateContinent, cellSize: CONTINENT.debrisCellSize, startRadius: CONTINENT.debugStartRadiusCm },
 };
 
 /** Real Bunny radius (cm) a Run starting in `area` begins with (about the size after the previous boss). */
@@ -86,7 +89,7 @@ export class Run {
   readonly difficulty: DifficultyDef;
   /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped). */
   readonly loadout: Loadout;
-  /** Current area's layout: the house floor, the neighborhood, the city, the region (swapped by enterArea). */
+  /** Current area's layout: the house floor, the neighborhood, the city, the region, the continent (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
   /** The Robo-Vac 9000 has been absorbed and the front door is open. */
@@ -95,14 +98,18 @@ export class Run {
   neighborhoodCleared = false;
   /** The Garbage Truck has been absorbed and the highway on-ramp to the region is open. */
   cityCleared = false;
-  /** The Incinerator has been absorbed (the last built Area: the Run is won). */
+  /** The Incinerator has been absorbed and the motorway west to the continent is open. */
   regionCleared = false;
+  /** The Ice Sheet has been absorbed (the last built Area: the Run is won). */
+  continentCleared = false;
   /** Simulated second at which the Run entered the neighborhood (null while in the house). */
   neighborhoodAt: number | null = null;
   /** Simulated second at which the Run entered the city (null before). */
   cityAt: number | null = null;
   /** Simulated second at which the Run entered the region (null before). */
   regionAt: number | null = null;
+  /** Simulated second at which the Run entered the continent (null before). */
+  continentAt: number | null = null;
   readonly bunny: Bunny;
   readonly debris: DebrisField;
   readonly hazards: HazardManager;
@@ -200,6 +207,7 @@ export class Run {
     if (area === 'neighborhood') this.neighborhoodCleared = true;
     if (area === 'city') this.cityCleared = true;
     if (area === 'region') this.regionCleared = true;
+    if (area === 'continent') this.continentCleared = true;
   }
 
   /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */
@@ -247,11 +255,17 @@ export class Run {
     this.enterArea('region');
   }
 
+  /** Leaves the region for the continent (debug / tests). */
+  enterContinent(): void {
+    this.enterArea('continent');
+  }
+
   /**
    * Moves the Run to a later area: swaps in its layout, clears Debris, Hazards and floor
-   * Pickups, re-bases the Bunny into the new Area's unit (same real size, see `Bunny.rebase`), puts
-   * it at the area's spawn (healing `difficulty.areaHeal` hearts: 1, none on Hardcore) and
-   * repopulates. The Bunny keeps its size, health, Perks and active Pickups. Every earlier area
+   * Pickups, re-bases the Bunny into the new Area's unit (same real size, see `Bunny.rebase`) and,
+   * for an Area with an `arrivalRadius` (the Continent), leaps it up to that radius (`Bunny.leapTo`,
+   * not growth: the Area's stats start after it), puts it at the area's spawn (healing
+   * `difficulty.areaHeal` hearts: 1, none on Hardcore) and repopulates. The Bunny keeps its size, health, Perks and active Pickups. Every earlier area
    * counts as cleared. Emits areaEntered (RunView rebuilds the world view).
    */
   enterArea(area: AreaId): void {
@@ -266,12 +280,15 @@ export class Run {
     if (area === 'neighborhood') this.neighborhoodAt = this.time;
     if (area === 'city') this.cityAt = this.time;
     if (area === 'region') this.regionAt = this.time;
+    if (area === 'continent') this.continentAt = this.time;
     const world = AREA_WORLDS[area];
     this.house = world.generate(this.config.seed);
     this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
     this.hazards.clear();
     this.pickups.clearFloor();
     this.bunny.rebase(AREAS[area].unit);
+    const arrival = AREAS[area].arrivalRadius;
+    if (arrival !== undefined) this.bunny.leapTo(arrival);
     this.bunny.teleport(this.house.spawn.x, this.house.spawn.z);
     // Fresh air: arriving in a new area restores a heart (not on Hardcore).
     this.bunny.heal(this.difficulty.areaHeal);
@@ -305,7 +322,8 @@ export class Run {
     if (area === 'house') return this.houseCleared;
     if (area === 'neighborhood') return this.neighborhoodCleared;
     if (area === 'city') return this.cityCleared;
-    return this.regionCleared;
+    if (area === 'region') return this.regionCleared;
+    return this.continentCleared;
   }
 
   /** The current Area's boss has been absorbed. */
@@ -381,6 +399,7 @@ export class Run {
       neighborhoodCleared: this.neighborhoodCleared,
       cityCleared: this.cityCleared,
       regionCleared: this.regionCleared,
+      continentCleared: this.continentCleared,
       areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
       loadout: this.loadout.map((k) => ({ ...k })),
     };

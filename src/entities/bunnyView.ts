@@ -274,6 +274,14 @@ export class BunnyView {
         this.stuckDirty = true;
       }),
     );
+    this.disposables.add(
+      events.on('bunnyLeapt', () => {
+        // The off-screen leap into the Continent: stuck Debris keeps its size, so the Region's
+        // towns drop out of the fur (rebuildStuck culls what is now too small).
+        this.stuckDirty = true;
+        this.squash.kick(5);
+      }),
+    );
     this.disposables.add(events.on('dashStarted', () => this.stretch.kick(5.5)));
     this.disposables.add(events.on('bunnyDamaged', () => this.squash.kick(-4)));
     this.disposables.add(events.on('tierUp', () => this.squash.kick(5)));

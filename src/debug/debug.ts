@@ -26,6 +26,8 @@ export interface DebugTools {
   enterCity(): void;
   /** Moves the Run to the region, growing the Bunny to Garbage-Truck-beaten size. */
   enterRegion(): void;
+  /** Moves the Run to the continent, growing the Bunny to Incinerator-beaten size (then the arrival leap). */
+  enterContinent(): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -72,6 +74,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterRegion() {
       goTo('region');
+    },
+    enterContinent() {
+      goTo('continent');
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

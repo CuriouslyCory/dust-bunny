@@ -19,6 +19,10 @@
  * burst of ash pellets flies along it; a hit deals damage and sheds mass (`shedMass`). The volley
  * aims through `aimTarget` (the Decoy pops it, `lure.shot`; nothing while the Bunny is hidden),
  * only starts on screen, and a planted Tumble takes nothing (its damage filter and `shedMass`).
+ * Absorbing it opens the motorway west to the continent.
+ *
+ * The Ice Sheet (continent, Tier 13, ICE_SHEET): placeholder until the Continent Hazards land, the
+ * Incinerator without its ash volley.
  *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
@@ -30,7 +34,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, ICE_SHEET, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -462,5 +466,19 @@ export const incineratorDef = hazardRegistry.register({
   modelId: INCINERATOR.modelId,
   create(_run, x, z, id, rng: Rng) {
     return new RoboVac9000(id, this, x, z, rng, INCINERATOR);
+  },
+});
+
+/** The Continent boss (placeholder: the Incinerator's state machine, numbers and model, see ICE_SHEET). */
+export const iceSheetDef = hazardRegistry.register({
+  id: 'ice_sheet',
+  name: 'Ice Sheet',
+  boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: ICE_SHEET.contactRadius, height: ICE_SHEET.height },
+  mass: ICE_SHEET.mass,
+  modelId: ICE_SHEET.modelId,
+  create(_run, x, z, id, rng: Rng) {
+    return new RoboVac9000(id, this, x, z, rng, ICE_SHEET);
   },
 });

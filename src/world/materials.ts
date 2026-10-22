@@ -664,6 +664,25 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'landfill':
         info = { texture: toTexture(landfillTexture()), worldSize: 16, roughness: 0.95 };
         break;
+      // Continent floors (1 unit = 10 km). PLACEHOLDERS reusing earlier textures until the Continent look lands.
+      case 'steppe':
+        info = { texture: toTexture(grassTexture()), worldSize: 30, roughness: 1 };
+        break;
+      case 'highlands':
+        info = { texture: toTexture(forestTexture()), worldSize: 24, roughness: 1 };
+        break;
+      case 'lakeWater':
+        info = { texture: toTexture(waterTexture()), worldSize: 20, roughness: 0.32 };
+        break;
+      case 'desertSand':
+        info = { texture: toTexture(landfillTexture()), worldSize: 30, roughness: 0.95 };
+        break;
+      case 'tundraSnow':
+        info = { texture: toTexture(concreteTexture()), worldSize: 24, roughness: 0.9 };
+        break;
+      case 'ruinsAsh':
+        info = { texture: toTexture(asphaltTexture()), worldSize: 16, roughness: 0.95 };
+        break;
     }
     floorCache.set(id, info);
   }

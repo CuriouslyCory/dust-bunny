@@ -27,6 +27,7 @@ import { installLeaderboardPosting } from './ui/leaderboard/posting';
 import { registerLeaderboardScreen } from './ui/leaderboard/screen';
 import { registerBuiltinScreens } from './ui/screens/builtin';
 import { loadModelOverrides } from './world/models';
+import { AREA_ORDER, type AreaId } from './world/types';
 
 async function boot(): Promise<void> {
   const params = new URLSearchParams(location.search);
@@ -49,7 +50,7 @@ async function boot(): Promise<void> {
   const difficulty = params.get('difficulty');
   if (isDifficultyId(difficulty)) game.nextRunConfig.difficulty = difficulty;
   const area = params.get('area');
-  if (area === 'neighborhood' || area === 'city' || area === 'region') game.nextRunConfig.area = area;
+  if (area !== 'house' && AREA_ORDER.includes(area as AreaId)) game.nextRunConfig.area = area as AreaId;
   installRoguelike(game);
   installCloudSave(getMeta(), account);
   installLeaderboardPosting(game);

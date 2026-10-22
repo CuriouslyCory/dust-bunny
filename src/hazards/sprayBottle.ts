@@ -14,7 +14,7 @@
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, type TurretTuning } from '../data/hazards';
+import { CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -193,5 +193,17 @@ export const cropDusterDef = hazardRegistry.register({
   modelId: CROP_DUSTER.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, CROP_DUSTER);
+  },
+});
+
+/** Continent turret (placeholder tuning and model, see VOLCANO). */
+export const volcanoDef = hazardRegistry.register({
+  id: 'volcano',
+  name: 'Volcano',
+  footprint: tuningFootprint(VOLCANO),
+  mass: VOLCANO.mass,
+  modelId: VOLCANO.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, VOLCANO);
   },
 });

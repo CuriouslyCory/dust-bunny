@@ -2,8 +2,9 @@
  * Renders a HouseLayout: floors, rugs, walls with baseboards, furniture and soft contact
  * shadows. The house's front door swings open once `layout.exit.open` is set, with a light
  * shaft marking the way out. Neighborhood layouts render their walls as a hedge, a grass
- * ground plane and painted road markings. Anything between the camera and the Bunny (walls, the couch above a Speck) fades out
- * so the Bunny stays visible.
+ * ground plane and painted road markings; the Region and the Continent (seen from altitude: their
+ * unit is above 1 cm) a wooded ridge edge and a floor that carries on into the haze. Anything
+ * between the camera and the Bunny (walls, the couch above a Speck) fades out so the Bunny stays visible.
  *
  * Draw-call budget: walls + furniture are baked into one StaticBatch (1 call + shadow), floors
  * are one mesh per floor material with world-space UVs, contact shadows are one mesh. While an
@@ -41,7 +42,8 @@ import './outdoorModels';
 import './cityModels';
 import { forestedMound, regionRoadblock } from './regionModels';
 import { StaticBatch } from './staticBatch';
-import type { FloorMaterialId, HouseLayout } from './types';
+import { areaUnit } from '../data/areas';
+import type { AreaId, FloorMaterialId, HouseLayout } from './types';
 
 interface Fadeable {
   /** Original meshes, shown only while fading. */
@@ -65,7 +67,21 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993' };
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#7c7a63' };
+/** How each Area's edge (`layout.walls`) is drawn. */
+const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges'> = { house: 'walls', neighborhood: 'hedges', city: 'barriers', region: 'ridges', continent: 'ridges' };
+/** Areas seen from altitude: the floor that carries on past the map edge into the haze. */
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'steppe' };
+/**
+ * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
+ * city avenue (3.5×) and a Region motorway (6 units of 10 m across).
+ */
+const GATE_SCALE: Partial<Record<AreaId, number>> = { neighborhood: 1, city: 3.5, region: 0.008 };
+
+/** The Area is seen from altitude (its unit is above 1 cm): Region-style floors, markings and shadows. */
+function fromAltitude(area: AreaId): boolean {
+  return areaUnit(area) > 1;
+}
 
 export class HouseView {
   readonly root = new Group();
@@ -87,25 +103,27 @@ export class HouseView {
     this.batch = new StaticBatch(`${layout.area}:static`, 2048);
     this.buildFloors();
     this.buildMarkings();
-    if (layout.area === 'neighborhood') this.buildHedges();
-    else if (layout.area === 'city') this.buildBarriers();
-    else if (layout.area === 'region') this.buildRidges();
+    const edge = EDGE[layout.area];
+    if (edge === 'hedges') this.buildHedges();
+    else if (edge === 'barriers') this.buildBarriers();
+    else if (edge === 'ridges') this.buildRidges();
     else this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
-    else if (layout.area === 'neighborhood' || layout.area === 'city') this.buildRoadGate();
+    else this.buildRoadGate();
   }
 
   private buildFloors(): void {
     const b = this.layout.bounds;
-    const region = this.layout.area === 'region';
-    const groundSize = region ? (b.maxX - b.minX) * 4 : Math.max(8000, (b.maxX - b.minX) * 4);
+    const altitude = fromAltitude(this.layout.area);
+    const outer = OUTER_FLOOR[this.layout.area];
+    const groundSize = altitude ? (b.maxX - b.minX) * 4 : Math.max(8000, (b.maxX - b.minX) * 4);
     const groundMat = new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: 1 });
-    if (region) {
-      // Farmland carries on past the edge into the haze (slightly darker, so the map reads as the lit part).
-      const info = floorTexture('fields');
+    if (outer) {
+      // The land carries on past the edge into the haze (slightly darker, so the map reads as the lit part).
+      const info = floorTexture(outer);
       const map = info.texture.clone();
       map.repeat.set(groundSize / info.worldSize, groundSize / info.worldSize);
       map.needsUpdate = true;
@@ -113,8 +131,8 @@ export class HouseView {
     }
     const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set((b.minX + b.maxX) / 2, region ? -0.05 : -0.5, (b.minZ + b.maxZ) / 2);
-    ground.receiveShadow = region;
+    ground.position.set((b.minX + b.maxX) / 2, altitude ? -0.05 : -0.5, (b.minZ + b.maxZ) / 2);
+    ground.receiveShadow = altitude;
     ground.name = 'ground';
     this.root.add(ground);
 
@@ -137,8 +155,8 @@ export class HouseView {
     for (const [id, geos] of byFloor) {
       const info = floorTexture(id);
       const mat = new MeshStandardMaterial({ map: info.texture, roughness: info.roughness, metalness: 0 });
-      // Fine grain over the map: a ~7-unit tile up close in cm; in the Region a 2.5-unit (25 m) tile, fainter.
-      if (region) addFloorDetail(mat, info.worldSize / 2.5, 0.16);
+      // Fine grain over the map: a ~7-unit tile up close in cm; from altitude a 2.5-unit tile (25 m in the Region), fainter.
+      if (altitude) addFloorDetail(mat, info.worldSize / 2.5, 0.16);
       else addFloorDetail(mat, info.worldSize / (id === 'carpet' ? 3 : 7), id.startsWith('tile') ? 0.12 : 0.3);
       const mesh = new Mesh(mergeGeometries(geos, false)!, mat);
       for (const g of geos) g.dispose();
@@ -194,9 +212,9 @@ export class HouseView {
     const col: number[] = [];
     const idx: number[] = [];
     const c = new Color();
-    // Height above the floor (and per layer): cm indoors and outdoors, Region units (10 m) in the region,
-    // where 3 cm keeps the lane lines under the cars (≈0.15 units tall).
-    const [y0, step] = this.layout.area === 'city' ? [2, 1] : this.layout.area === 'region' ? [0.03, 0.03] : [0.25, 0.1];
+    // Height above the floor (and per layer): cm indoors and outdoors; from altitude 0.03 units (30 cm of the
+    // Region's 10 m units), which keeps the lane lines under the cars (≈0.15 units tall).
+    const [y0, step] = this.layout.area === 'city' ? [2, 1] : fromAltitude(this.layout.area) ? [0.03, 0.03] : [0.25, 0.1];
     for (const m of marks) {
       const r = m.rect;
       const y = y0 + (m.layer ?? 0) * step;
@@ -260,7 +278,7 @@ export class HouseView {
   }
 
   /**
-   * Region edge (1 unit = 10 m): a dark tree line along each ridge obstacle with rolling wooded
+   * Region (and placeholder Continent) edge, in the Area's unit: a dark tree line along each ridge obstacle with rolling wooded
    * hills rising just outside it, a second, higher row behind (none on the south side, where the
    * camera looks over it), in ~18-unit pieces so only the piece between the camera and the Bunny
    * fades. Where a motorway leaves the map: a closed roadblock across the carriageways.
@@ -314,14 +332,15 @@ export class HouseView {
   }
 
   /**
-   * Neighborhood exit to the city and the city's highway on-ramp: two striped boom barriers across
-   * the road opening with a "road closed" sign between them (3.5× bigger in the city). Once the
-   * exit opens the booms swing up, the sign sinks and a light shaft marks the way (updateRoadGate).
+   * Neighborhood exit to the city, the city's highway on-ramp and the Region's motorway west: two
+   * striped boom barriers across the road opening with a "road closed" sign between them (sized by
+   * GATE_SCALE). Once the exit opens the booms swing up, the sign sinks and a light shaft marks the
+   * way (updateRoadGate).
    */
   private buildRoadGate(): void {
     const exit = this.layout.exit;
     if (!exit) return;
-    const k = this.layout.area === 'city' ? 3.5 : 1;
+    const k = GATE_SCALE[this.layout.area] ?? 1;
     const r = exit.rect;
     const alongZ = exit.dir.x !== 0;
     const width = alongZ ? r.maxZ - r.minZ : r.maxX - r.minX;
@@ -402,7 +421,7 @@ export class HouseView {
       else arm.rotation.z = sign * ease * Math.PI * 0.45;
     }
     if (this.gateSign) {
-      this.gateSign.position.y = -ease * 220 * (this.layout.area === 'city' ? 3.5 : 1);
+      this.gateSign.position.y = -ease * 220 * (GATE_SCALE[this.layout.area] ?? 1);
       this.gateSign.visible = ease < 1;
     }
     const beam = this.beacon!;
@@ -473,8 +492,8 @@ export class HouseView {
 
   private buildContactShadows(): void {
     const cs = new ContactShadows();
-    if (this.layout.area === 'region') {
-      // Region units (10 m): a few metres of soft shade at the foot of the edge and of each landmark.
+    if (fromAltitude(this.layout.area)) {
+      // From altitude (Region units, 10 m): a few metres of soft shade at the foot of the edge and of each landmark.
       for (const wall of this.layout.walls) cs.addRect(wall.rect, 0.8, 0.3, 0, 0.3, 0.015);
       for (const f of this.layout.furniture) cs.addRect(f.rect, 1.2, 0.45, -0.2, 0.6, 0.015);
       const mesh = cs.build();
@@ -523,9 +542,9 @@ export class HouseView {
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
-    // the bottom half still fades); in the city and the region also to its left and right edges, since a tower
+    // the bottom half still fades); in the city and from altitude also to its left and right edges, since a tower
     // can hide half of a giant Bunny without covering its centre.
-    const sides = this.layout.area === 'city' || this.layout.area === 'region' ? [0, -0.75, 0.75] : [0];
+    const sides = this.layout.area === 'city' || fromAltitude(this.layout.area) ? [0, -0.75, 0.75] : [0];
     let n = 0;
     for (const sx of sides) {
       for (const yk of sx === 0 ? [1, 0.35] : [0.6]) {

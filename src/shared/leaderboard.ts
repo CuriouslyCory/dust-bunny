@@ -4,7 +4,7 @@
  * Pure and dependency-free (see the note in `./score.ts` about imports).
  *
  * Boards: the Run board ('run', whole Runs) and one Area board per Area ('house',
- * 'neighborhood', 'city', 'region'), which takes an entry each time a Run clears that Area.
+ * 'neighborhood', 'city', 'region', 'continent'), which takes an entry each time a Run clears that Area.
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
 import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
@@ -16,6 +16,7 @@ import {
   progressRadius,
   SCORE_AREA_UNIT,
   SCORE_AREAS,
+  SCORE_ARRIVAL_RADIUS,
   SCORE_MAX_TIER,
   SCORE_TIER_MIN_RADII,
   scoreTierForRadius,
@@ -42,14 +43,23 @@ export const FALLBACK_NAME = 'Anonymous Bunny';
 
 /** Plausibility bounds. Generous on purpose: they reject impossible runs, not good ones. */
 export const BOUNDS = {
-  /** Run board: real cm. Area boards: the Area's unit (a Region radius of 4 is 40 m). */
-  maxRadius: { min: 0.2, max: 30_000 },
+  /**
+   * Run board: real cm, up to 10× the last Tier's threshold (300 km). Area boards: the Area's unit
+   * (a Region radius of 4 is 40 m), each further capped by AREA_RADIUS.
+   */
+  maxRadius: { min: 0.2, max: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 10 },
   debrisAbsorbed: { min: 0, max: 200_000 },
   durationMs: { min: 1_000, max: 4 * 60 * 60 * 1000 },
   /** Largest plausible starting radius (Tumble 1.2 cm × Head Start upgrades, with headroom). */
   maxStartRadius: 2.5,
-  /** Fastest plausible sustained growth on the Run board's progress scale (progressRadius) per simulated second. */
-  maxGrowthPerSec: 2,
+  /**
+   * Fastest plausible sustained growth on the Run board's progress scale (progressRadius) per
+   * simulated second. 2 until the Continent: each Act after the City adds ≈ 350 on the scale in a
+   * few minutes, and a max-Loadout Zap won at 62 km in 15:30 (`pnpm sim --validate
+   * --loadout=max`: 104% of 2/s). The leap into the Continent adds at most the Region band up to
+   * 50 m, which the time it takes to get there covers many times over.
+   */
+  maxGrowthPerSec: 2.5,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
   /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
@@ -59,11 +69,14 @@ export const BOUNDS = {
    * about 10× the House's scale and a Bunny there grows 3–4 cm/s for minutes at a time, so
    * maxGrowthPerSec alone rejected real City clears (`pnpm sim --validate`: up to 116% of the old
    * allowance). Its rate is 5 cm/s; the House and Neighborhood keep maxGrowthPerSec. Rates and
-   * slack are in each Area's unit: the Region's are 10 m units (0.05 units/s = 50 cm/s).
+   * slack are in each Area's unit: the Region's are 10 m units (0.05 units/s = 50 cm/s), the
+   * Continent's 10 km units. The Continent repeats the Region's 0.85 → 3 → boss curve, but its
+   * placeholder content let a max-Loadout Zap clear it 0.85 → 6.2 units in 96 s (99% of 0.05/s),
+   * so it allows 0.08 until the Continent content is tuned.
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08 },
   /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
-  areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1 },
+  areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */
   victoryMinTier: 9,
 } as const;
@@ -175,14 +188,17 @@ const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
  * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's Tier (Tier 5 = 45,
- * Tier 7 = 160, Tier 9 = 600 cm = 0.6 Region units), and the cap is two Tiers above the Area's
- * last Debris Tier (the Region: 10× its last Tier), which no real Run approaches.
+ * Tier 7 = 160, Tier 9 = 600 cm = 0.6 Region units), or for an Area the Bunny leaps into, its
+ * arrival radius (the Continent: 0.85 units, the radius after the leap); the cap is two Tiers above
+ * the Area's last Debris Tier (the Region and the Continent: 10× their last Tier), which no real
+ * Run approaches.
  */
 const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>> = {
   house: { minIn: BOUNDS.maxRadius.min, max: SCORE_TIER_MIN_RADII[6]! },
   neighborhood: { minIn: SCORE_TIER_MIN_RADII[4]!, max: SCORE_TIER_MIN_RADII[8]! },
   city: { minIn: SCORE_TIER_MIN_RADII[6]!, max: 3000 },
   region: { minIn: SCORE_TIER_MIN_RADII[8]! / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
+  continent: { minIn: SCORE_ARRIVAL_RADIUS.continent, max: (SCORE_TIER_MIN_RADII[12]! * 10) / SCORE_AREA_UNIT.continent },
 };
 
 export function isLeaderboardCharacter(id: unknown): id is LeaderboardCharacter {

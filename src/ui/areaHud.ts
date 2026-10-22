@@ -1,7 +1,7 @@
 /**
  * Area HUD: the "area cleared" banner and an exit compass while the area's exit is open (the
  * house's front door, the neighborhood's road to the city, the city's highway on-ramp to the
- * region), with a skip button that moves on
+ * region, the region's motorway west to the continent), with a skip button that moves on
  * without rolling to the exit (Enter on a keyboard), then a fade-in and an arrival banner when
  * the Bunny arrives in the next area. With the narrator on (src/story/), the cleared banner carries
  * the Area's cleared line and arriving plays the chapter card before the arrival banner.
@@ -9,6 +9,7 @@
 import { AREAS } from '../data/areas';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier } from '../data/tiers';
+import { formatLength } from '../data/units';
 import type { Game } from '../game/game';
 import { hazardRegistry } from '../hazards';
 import { captionDuration, narrate, storyCaption } from '../story';
@@ -23,8 +24,15 @@ const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; s
   house: { icon: '🚪', label: 'Front door', go: 'roll out!', skip: 'Go outside', cleared: 'House cleared!', sub: 'The front door is open · roll outside' },
   neighborhood: { icon: '🏙️', label: 'Road to the city', go: 'roll on!', skip: 'Go to the city', cleared: 'Neighborhood cleared!', sub: 'The road barrier is up · head for the city' },
   city: { icon: '🛣️', label: 'Highway on-ramp', go: 'roll on!', skip: 'Take the highway', cleared: 'City cleared!', sub: 'The on-ramp is open · take the highway out' },
-  // The Region is the last built Area: the Incinerator wins the Run (an exit to the Continent comes with Act 5).
+  region: { icon: '🌍', label: 'West to the continent', go: 'roll on!', skip: 'Head west', cleared: 'Region cleared!', sub: 'The motorway west is open · roll out to the continent' },
+  // The Continent is the last built Area: the Ice Sheet wins the Run (an exit to the Globe comes with Act 6).
 };
+
+/** "37 m", "1.2 km", "240 km": a compass distance (real cm) without the readout's decimals. */
+function formatDistance(cm: number): string {
+  if (cm < 1e5) return `${(cm / 100).toFixed(0)} m`;
+  return formatLength(cm, 'km');
+}
 
 /** Moves the Run on to the next area from the skip button / Enter, only while actually playing. */
 export function skipToNextArea(game: Game): boolean {
@@ -66,8 +74,9 @@ export function installAreaHud(game: Game): void {
       // Fixed camera yaw: world +X is screen right, −Z is screen up. The glyph points right.
       const deg = (Math.atan2(dz, dx) * 180) / Math.PI;
       arrow.style.transform = `rotate(${deg.toFixed(1)}deg)`;
-      const m = (Math.max(0, Math.hypot(dx, dz) - run.bunny.radius) * run.unit) / 100;
-      const text = m < 1.5 * Math.max(1, run.unit / 100) ? `${info.label} · ${info.go}` : `${info.label} · ${m.toFixed(0)} m`;
+      // Real distance in m, then km; "roll on" within 1.5 m (1.5 world units per metre of unit: 15 m in the Region).
+      const cm = Math.max(0, Math.hypot(dx, dz) - run.bunny.radius) * run.unit;
+      const text = cm < 150 * Math.max(1, run.unit / 100) ? `${info.label} · ${info.go}` : `${info.label} · ${formatDistance(cm)}`;
       if (label.textContent !== text) label.textContent = text;
     },
   });

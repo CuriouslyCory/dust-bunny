@@ -5,8 +5,8 @@
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
  * while stunned. Prints when each Tier is reached, plus how the Run ended.
  *
- * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck) the bot does not walk to
- * the exit: the Run moves straight to the next area (logged), so outdoor, city and region pacing
+ * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator) the bot does not walk to
+ * the exit: the Run moves straight to the next area (logged), so outdoor, city, region and continent pacing
  * are measured too. The summary prints each Area's median time from entry to its clear (the Act).
  * With --no-hazards a Run stops at each Area's boss Tier (no boss to clear), but keeps rolling in
  * the last Area until --minutes so growth towards the boss size is measured.
@@ -23,7 +23,7 @@
  *
  * Keepsakes: --loadout=<type>:<grade>,<type>:<grade> tucks those Keepsakes in for the Character
  * they belong to (the other Characters play without); --loadout=max gives every Character its
- * MAX_LOADOUTS pair at grade 5 (the strongest legal pair today, see MAX_LOADOUTS).
+ * MAX_LOADOUTS pair at grade 6 (the strongest legal pair today, see MAX_LOADOUTS).
  *
  * Leaderboards: --validate builds the Run board and Area board submissions every Run would post
  * (submissionFromRun / areaSubmission) and checks them with validateSubmission /
@@ -33,7 +33,7 @@
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
  *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
- *                 [--area=neighborhood|city|region]   start in a later area (as after its previous boss)
+ *                 [--area=neighborhood|city|region|continent]   start in a later area (as after its previous boss)
  *                 [--difficulty=casual|arcade|hardcore]
  *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]
  *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
@@ -42,6 +42,7 @@ import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type Hunker
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
+import { AREAS } from '../src/data/areas';
 import { getTier, TIERS } from '../src/data/tiers';
 import { formatLength } from '../src/data/units';
 import { AREA_ORDER, nextArea, type AreaId } from '../src/world/types';
@@ -109,8 +110,8 @@ const MAX_LOADOUTS: Record<string, readonly [KeepsakeTypeId, KeepsakeTypeId]> = 
   tumble: ['snowball', 'snowball'],
   zap: ['static_cling', 'grounding'],
 };
-/** Highest grade a Hoard can hold today: the Incinerator drops grade 4, Felting one above (feltCeiling). */
-const MAX_GRADE_TODAY = 5;
+/** Highest grade a Hoard can hold today: the Ice Sheet drops grade 5, Felting one above (feltCeiling). */
+const MAX_GRADE_TODAY = 6;
 
 /** The Loadout --loadout gives a Character ([] without the flag or when no listed type is its own). */
 function loadoutFor(characterId: string): Loadout {
@@ -150,9 +151,11 @@ class Planner {
     this.builtAt = this.run.time;
     this.builtLayout = house;
     const bd = house.bounds;
-    // World units: cm up to the City, 10 m in the Region (where the Bunny is house-sized again).
-    const cap = { house: 8, neighborhood: 60, city: 200, region: 4 }[house.area];
-    this.cell = Math.min(cap, Math.max(house.area === 'region' ? 0.5 : 2, r * 0.6));
+    // World units: cm up to the City; Areas seen from altitude (the Region's 10 m, the Continent's
+    // 10 km) re-base the Bunny to house size again, so they share the Region's grid.
+    const altitude = AREAS[house.area].unit > 1;
+    const cap = altitude ? 4 : { house: 8, neighborhood: 60, city: 200 }[house.area as 'house' | 'neighborhood' | 'city'];
+    this.cell = Math.min(cap, Math.max(altitude ? 0.5 : 2, r * 0.6));
     this.cols = Math.ceil((bd.maxX - bd.minX) / this.cell);
     this.rows = Math.ceil((bd.maxZ - bd.minZ) / this.cell);
     const n = this.cols * this.rows;
