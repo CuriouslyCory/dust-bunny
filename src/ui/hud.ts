@@ -156,8 +156,11 @@ export class Hud {
   private slots = new Map<string, HTMLElement>();
   private widgets: HudWidget[] = [];
   private bannerEl = h('div', { className: 'hud-banner' });
-  /** Dismisses the banner early (the only part of the banner that takes input). */
-  private bannerSkip = h('button', { type: 'button', className: 'hud-icon-btn hud-banner-skip', title: 'Dismiss (Enter)' });
+  /**
+   * Dismisses the banner early (the only part of the banner that takes input). Pointer only: it never
+   * takes focus, since Space on a focused button would also Dash; keyboards use Enter in play.
+   */
+  private bannerSkip = h('button', { type: 'button', className: 'hud-icon-btn hud-banner-skip', title: 'Dismiss (Enter)', tabIndex: -1, disabled: true });
   private bannerTimer: number | undefined;
   /** performance.now() when the current banner is due to hide (0: none showing). */
   private bannerUntil = 0;
@@ -190,10 +193,8 @@ export class Hud {
     this.slots.get('center')!.append(this.bannerEl);
     this.bannerSkip.setAttribute('aria-label', 'Dismiss message');
     this.bannerSkip.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 4.3 12 9.9l5.6-5.6 2.1 2.1-5.6 5.6 5.6 5.6-2.1 2.1-5.6-5.6-5.6 5.6-2.1-2.1 5.6-5.6-5.6-5.6z"/></svg>';
-    this.bannerSkip.addEventListener('click', () => {
-      this.bannerSkip.blur(); // Space dashes; it must not press this again
-      this.skipBanner();
-    });
+    this.bannerSkip.addEventListener('mousedown', (e) => e.preventDefault()); // keeps focus off it
+    this.bannerSkip.addEventListener('click', () => this.skipBanner());
     this.el.append(this.toastLayer);
     this.toasts = new ToastBatcher({
       show: (t) => {
@@ -320,7 +321,7 @@ export class Hud {
     this.narrating = false;
     this.bannerQueue = [];
     clearTimeout(this.bannerTimer);
-    this.bannerEl.classList.remove('show');
+    this.hideBannerEl();
   }
 
   /** Shows a banner, replacing the current one, or queues it while a narrator caption plays. */
@@ -349,7 +350,13 @@ export class Hud {
       return;
     }
     this.bannerUntil = 0;
+    this.hideBannerEl();
+  }
+
+  /** Fades the banner out; its dismiss button is disabled until the next one shows. */
+  private hideBannerEl(): void {
     this.bannerEl.classList.remove('show');
+    this.bannerSkip.disabled = true;
   }
 
   private showBanner(title: string, opts: BannerOptions): void {
@@ -366,6 +373,7 @@ export class Hud {
     );
     void b.offsetWidth;
     b.classList.add('show');
+    this.bannerSkip.disabled = false;
     clearTimeout(this.bannerTimer);
     const total = bannerSeconds(opts);
     this.bannerUntil = performance.now() + total * 1000;
