@@ -7,7 +7,7 @@ import type { Game } from '../../game/game';
 import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings, type GraphicsQuality, type TouchControlsMode } from '../settings';
-import { requestIntro } from '../../story';
+import { requestIntro, storyAvailable } from '../../story';
 import { playFromMenu } from './builtin';
 
 export interface BackParams {
@@ -91,8 +91,9 @@ export function registerMenuScreens(): void {
         el,
         enter(params) {
           back = backTarget(game, params);
-          // Mid-Run it would end the Run: Replay intro is on the title's Settings only.
-          replayRow.hidden = !screenRegistry.has('intro') || (!!game.run && !game.run.ended);
+          // Mid-Run it would end the Run: Replay intro is on the title's Settings only. Under
+          // `?autostart` the story is off for the page, so there is no intro to replay.
+          replayRow.hidden = !screenRegistry.has('intro') || !storyAvailable() || (!!game.run && !game.run.ended);
           focusFirst(el, done);
         },
         onKey(e) {

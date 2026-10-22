@@ -26,6 +26,11 @@ export function setStoryAvailable(on: boolean): void {
   available = on;
 }
 
+/** False for the page load when the story is off whatever the settings say (`?autostart`). */
+export function storyAvailable(): boolean {
+  return available;
+}
+
 /** True when the narrator speaks: the page allows it and the Story captions setting is on. */
 export function storyOn(): boolean {
   return available && settings.value.storyCaptions;
