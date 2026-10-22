@@ -281,6 +281,11 @@
   color: var(--berry-700);
 }
 
+/* Difficulty row and actions; short landscape puts them on one row. */
+.char-foot {
+  display: contents;
+}
+
 /* Difficulty picker, between the cards and the action row. */
 .char-diff-row {
   display: flex;
@@ -582,6 +587,10 @@
   .char-detail .char-traits li {
     break-inside: avoid;
   }
+  /* The Ability card and Keepsake slots scroll with the details here (characterSelect.ts). */
+  .char-body > .ks-loadout {
+    margin-top: 0;
+  }
   .char-diff-row {
     margin-top: 8px;
   }
@@ -695,6 +704,31 @@
   }
   .char-detail .char-traits {
     columns: 1;
+  }
+  .char-body > .ks-loadout {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    align-items: start;
+  }
+  /* Difficulty beside the actions when the row is wide enough; it wraps above them otherwise. */
+  .char-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 16px;
+  }
+  .char-diff-row {
+    margin-top: 0;
+  }
+  /* Casual / Arcade / Hardcore reads on its own; the label still names the radiogroup. */
+  .char-diff .field-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .char-actions {
     display: flex;
