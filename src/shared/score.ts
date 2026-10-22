@@ -53,6 +53,8 @@ const UNIVERSE_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.universe * UNIVERSE_UNIT_CM;
  * most a Globe Bunny reaches) to 0.0085 AU, and the leap into the Galaxy (≈0.045 AU → 85 ly):
  * nothing from 0.06 AU (about the most a Solar System Bunny reaches) to 85 ly, and the leap into
  * the Universe (≈400 ly → 8.5 Mly): nothing from 600 ly (about the most a Galaxy Bunny reaches) to 8.5 Mly.
+ * Past Tier 21 (30 Mly) a Universe unit counts a tenth: the Expansion fight feeds the Bunny whole
+ * filaments (wins end at 80–150 Mly), and that growth shouldn't outweigh the rest of the Run.
  */
 export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }> = [
   { fromCm: 0, perCm: 1 },
@@ -67,6 +69,7 @@ export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }
   { fromCm: GALAXY_ARRIVAL_CM, perCm: 100 / GALAXY_UNIT_CM },
   { fromCm: 6 * GALAXY_UNIT_CM, perCm: 0 },
   { fromCm: UNIVERSE_ARRIVAL_CM, perCm: 100 / UNIVERSE_UNIT_CM },
+  { fromCm: 3 * UNIVERSE_UNIT_CM, perCm: 10 / UNIVERSE_UNIT_CM },
 ];
 
 /** A real radius (cm) on the Run board's progress scale (see SCORE_RADIUS_BANDS). */

@@ -30,7 +30,7 @@
  *   `collapse.duration` s (the ending's first shot: the last galaxy filament is absorbed), then
  *   `bossDefeated` and `run.clearArea()`: the last Area, so `victory` and the Run ends.
  */
-import type { Object3D } from 'three';
+import { AdditiveBlending, Mesh, type Material, type Object3D } from 'three';
 import type { GameEvents } from '../core/events';
 import type { Rng } from '../core/rng';
 import { THE_EXPANSION, type ExpansionTuning } from '../data/hazards';
@@ -121,6 +121,7 @@ export class TheExpansion extends BaseHazard {
     this.timer = cfg.introTime;
     this.grid = this.model.getObjectByName('grid') ?? null;
     this.ring = this.model.getObjectByName('ring') ?? null;
+    fadeLattice(this.model);
     this.ripRing = this.addDecal(ringDecal(0.9, 1, '#ff5a3a', 0.6, 96));
     this.ripRing.visible = false;
     this.offAbsorbed = run.events.on('debrisAbsorbed', (e) => this.absorbed(e));
@@ -369,7 +370,8 @@ export class TheExpansion extends BaseHazard {
     this.body.position.set(this.x, 0, this.z);
     this.body.rotation.set(0, 0, 0);
     const scale = ((c.hollow * b.radius) / c.modelHollow) * this.appear();
-    this.model.scale.setScalar(scale);
+    // Flattened onto the floor so the lattice reads as stretched space round the play, not a dish over it.
+    this.model.scale.set(scale, scale * LATTICE_FLATTEN, scale);
     if (this.grid) {
       // Space stretching: wider the more the expansion is winning, snapping out on a Big Rip.
       const stretch = 1 + 0.22 * (1 - this.gravity) + 0.04 * Math.sin(this.time * 2.2) + 0.45 * this.ripFlash;
@@ -390,6 +392,25 @@ export class TheExpansion extends BaseHazard {
     this.crunch = [];
     super.dispose();
   }
+}
+
+/** Height kept from the model: a low lattice on the floor rather than a bowl over the Bunny. */
+const LATTICE_FLATTEN = 0.25;
+
+/** The lattice drawn faint and additive (own material copies), so Debris and Hazards inside it stay readable. */
+function fadeLattice(model: Object3D): void {
+  model.traverse((o) => {
+    if (!(o instanceof Mesh)) return;
+    const fade = (m: Material): Material => {
+      const c = m.clone();
+      c.transparent = true;
+      c.opacity = 0.4;
+      c.depthWrite = false;
+      c.blending = AdditiveBlending;
+      return c;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(fade) : fade(o.material);
+  });
 }
 
 export const theExpansionDef = hazardRegistry.register({

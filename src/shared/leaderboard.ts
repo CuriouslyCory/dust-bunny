@@ -79,10 +79,11 @@ export const BOUNDS = {
    * Galaxy (100 ly units) allows 0.1: a perk-loaded Zap clears it 0.85 → 5.8–7.1 units in 52–62 s
    * (`pnpm sim --seeds=3 --minutes=80 --validate`: 103–111% of 0.08/s, Sagittarius A*'s mass
    * landing at the end of a short Act). The Universe (10 Mly units) repeats the Galaxy's curve with
-   * more growth (0.32): a perk-loaded Zap clears it in about 43 s, 99% of 0.1/s (same sim), so it
-   * allows 0.13.
+   * more growth (0.32), and the Expansion fight feeds it whole filaments: perk-loaded Zap Runs
+   * reached 13.9–14.6 units 93–94 s after arriving (`pnpm sim --seeds=4 --minutes=90 --validate`),
+   * so it allows 0.2.
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1, universe: 0.13 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1, universe: 0.2 },
   /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
   areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1, universe: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */

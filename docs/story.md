@@ -38,7 +38,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun, Jupiter in the way until Dust Star, Voyager 1, solar Hazards and the Sun), with their story in the game, and Act 8 (the Galaxy) is playable: its chapter, Tier lines, the galactic disc with its spiral arms, dust lanes and starfield, the Bunny's black-hole look after Sagittarius A*, placeholder Hazards and a placeholder Sagittarius A* (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Act 8's Hazards and boss fight and Act 9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+All nine Acts exist, with their story in the game: Act 8 (the Galaxy) with its spiral disc, black-hole Bunny and Sagittarius A*, and Act 9 (the Universe) with the cosmic web, the Bunny as a cluster of black holes, the Expansion's tug-of-war fight and the ending sequence (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). They were tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 
@@ -102,7 +102,7 @@ Lines below are the primary variant; alternates live in `src/data/story.ts`.
 | Garbage Truck arrives | *The Garbage Truck is the largest thing people built to make dropped things go away. It is about to learn where they go.* |
 | City cleared | *The city is gone. The thing that used to be a dust bunny rolls on. There is more ground.* |
 
-> Absorbing the Garbage Truck opens the highway on-ramp (the City cleared line plays on its banner). `victory` comes after the last built Area's boss (Sagittarius A*, until Act 9 gives the Galaxy an exit) and moves to the end of Act 9 once it exists.
+> Absorbing the Garbage Truck opens the highway on-ramp (the City cleared line plays on its banner). `victory` comes when the Expansion collapses at the end of Act 9, and the ending plays before the results.
 
 ### Act 4 · The Region — *A State of Emergency*
 

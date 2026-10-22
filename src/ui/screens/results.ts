@@ -98,7 +98,7 @@ function diedLine(s: RunResult['stats']): string | null {
 }
 
 const VARIANTS = {
-  victory: { title: 'Victory!', sub: 'Sagittarius A* is part of you now. The whole Galaxy is yours.', badge: '👑' },
+  victory: { title: 'Victory!', sub: 'The Expansion collapsed. Everything that was ever dropped is yours.', badge: '👑' },
   died: { title: 'Swept up!', sub: 'The cleaning crew got you this time.', badge: '🧹' },
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
