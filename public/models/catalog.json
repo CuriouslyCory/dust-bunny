@@ -2624,16 +2624,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1280,
-      "footprintRadius": 59.5,
-      "height": 79.9,
+      "triangles": 280,
+      "footprintRadius": 58.6,
+      "height": 77.6,
       "minY": 0.0,
-      "maxY": 79.9,
-      "sizeX": 107.3,
-      "sizeZ": 98.3,
+      "maxY": 77.6,
+      "sizeX": 105.6,
+      "sizeZ": 99.0,
       "id": "asteroid",
       "file": "models/asteroid.glb",
-      "bytes": 33912,
+      "bytes": 11768,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A lumpy, cratered potato of grey-brown rock (about 120 x 100 x 80).",
       "nodes": {
         "body": {
@@ -2648,16 +2648,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1920,
-      "footprintRadius": 84.9,
-      "height": 51.7,
+      "triangles": 400,
+      "footprintRadius": 84.0,
+      "height": 52.2,
       "minY": 0.0,
-      "maxY": 51.7,
-      "sizeX": 143.5,
-      "sizeZ": 122.1,
+      "maxY": 52.2,
+      "sizeX": 142.4,
+      "sizeZ": 120.9,
       "id": "asteroid_cluster",
       "file": "models/asteroid_cluster.glb",
-      "bytes": 55720,
+      "bytes": 18400,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose clump of six rocks of different sizes, the biggest in the middle.",
       "nodes": {
         "body": {
@@ -2672,16 +2672,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 2600,
-      "footprintRadius": 73.9,
+      "triangles": 372,
+      "footprintRadius": 73.7,
       "height": 79.6,
       "minY": 0.0,
       "maxY": 79.6,
-      "sizeX": 144.1,
-      "sizeZ": 106.3,
+      "sizeX": 142.0,
+      "sizeZ": 106.2,
       "id": "comet_nucleus",
       "file": "models/comet_nucleus.glb",
-      "bytes": 59368,
+      "bytes": 13956,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A two-lobed dark comet nucleus (a rubber duck like 67P) with white frost patches and two pale sunward jets.",
       "nodes": {
         "body": {
@@ -2720,16 +2720,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1280,
-      "footprintRadius": 102.0,
-      "height": 201.6,
+      "triangles": 320,
+      "footprintRadius": 101.5,
+      "height": 202.1,
       "minY": 0.0,
-      "maxY": 201.6,
-      "sizeX": 200.3,
+      "maxY": 202.1,
+      "sizeX": 200.1,
       "sizeZ": 200.0,
       "id": "moonlet",
       "file": "models/moonlet.glb",
-      "bytes": 33200,
+      "bytes": 11684,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A small grey moon: a cratered sphere (radius 100) resting on the floor, darker crater floors and pale rims.",
       "nodes": {
         "body": {
@@ -2744,16 +2744,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1760,
-      "footprintRadius": 100.5,
-      "height": 200.5,
-      "minY": -0.5,
-      "maxY": 200.0,
-      "sizeX": 200.7,
-      "sizeZ": 200.3,
+      "triangles": 392,
+      "footprintRadius": 102.2,
+      "height": 201.7,
+      "minY": 0.0,
+      "maxY": 201.7,
+      "sizeX": 192.9,
+      "sizeZ": 197.0,
       "id": "icy_moon",
       "file": "models/icy_moon.glb",
-      "bytes": 43232,
+      "bytes": 13040,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An icy moon like Europa: a white and cream sphere (radius 100) criss-crossed by tan-brown crack lines.",
       "nodes": {
         "body": {
@@ -2768,16 +2768,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1280,
-      "footprintRadius": 100.0,
+      "triangles": 432,
+      "footprintRadius": 99.4,
       "height": 200.0,
       "minY": 0.0,
       "maxY": 200.0,
-      "sizeX": 200.0,
-      "sizeZ": 200.0,
+      "sizeX": 195.6,
+      "sizeZ": 198.5,
       "id": "rocky_planet",
       "file": "models/rocky_planet.glb",
-      "bytes": 30720,
+      "bytes": 13128,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A generic terrestrial planet: a light grey sphere (radius 100) with paler highlands, darker plains and a few craters; light so per-instance tints recolour it (if listed in GLB_TINTED).",
       "nodes": {
         "body": {
@@ -2792,16 +2792,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 2376,
-      "footprintRadius": 100.0,
+      "triangles": 784,
+      "footprintRadius": 99.8,
       "height": 200.0,
       "minY": 0.0,
       "maxY": 200.0,
-      "sizeX": 200.0,
-      "sizeZ": 200.0,
+      "sizeX": 199.5,
+      "sizeZ": 199.5,
       "id": "mars",
       "file": "models/mars.glb",
-      "bytes": 53560,
+      "bytes": 21856,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Mars: a rust-red sphere (radius 100) with a white north polar cap on top, dark albedo markings, paler deserts and the dark gash of Valles Marineris on the camera side.",
       "nodes": {
         "body": {
@@ -2816,7 +2816,7 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1512,
+      "triangles": 840,
       "footprintRadius": 100.0,
       "height": 200.0,
       "minY": 0.0,
@@ -2825,7 +2825,7 @@
       "sizeZ": 200.0,
       "id": "venus",
       "file": "models/venus.glb",
-      "bytes": 43276,
+      "bytes": 27260,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Venus: a pale yellow sphere (radius 100) wrapped in swirling cloud bands (a sideways Y pattern).",
       "nodes": {
         "body": {
@@ -2840,16 +2840,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 2952,
+      "triangles": 1100,
       "footprintRadius": 100.0,
-      "height": 200.0,
-      "minY": 0.0,
-      "maxY": 200.0,
-      "sizeX": 200.0,
-      "sizeZ": 200.0,
+      "height": 199.7,
+      "minY": 0.1,
+      "maxY": 199.9,
+      "sizeX": 198.9,
+      "sizeZ": 199.8,
       "id": "jupiter",
       "file": "models/jupiter.glb",
-      "bytes": 75140,
+      "bytes": 34864,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Jupiter: a banded sphere (radius 100; cream zones, rust and brown belts, greyish poles) with the Great Red Spot; the axis is tipped 42 deg back (away from the camera) so the bands run across the face the camera sees and the Red Spot sits just below its middle.",
       "nodes": {
         "body": {
@@ -2864,7 +2864,7 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 3920,
+      "triangles": 1152,
       "footprintRadius": 228.0,
       "height": 200.0,
       "minY": 0.0,
@@ -2873,8 +2873,8 @@
       "sizeZ": 456.0,
       "id": "saturn",
       "file": "models/saturn.glb",
-      "bytes": 102584,
-      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Saturn: a pale gold banded sphere (radius 100) with a flat ring system in the XZ plane round its equator (C ring 124-152, B ring 153-195, Cassini gap, A ring 203-228).",
+      "bytes": 36368,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Saturn: a pale gold banded sphere (radius 100) with a flat ring system in the XZ plane round its equator (C ring 124-152, B ring 152-195, Cassini gap, A ring 203-228; a single upward-facing sheet).",
       "nodes": {
         "body": {
           "pivot": [
@@ -2888,7 +2888,7 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 1960,
+      "triangles": 808,
       "footprintRadius": 158.0,
       "height": 200.0,
       "minY": 0.0,
@@ -2897,7 +2897,7 @@
       "sizeZ": 316.0,
       "id": "ice_giant",
       "file": "models/ice_giant.glb",
-      "bytes": 50376,
+      "bytes": 23872,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An ice giant (Uranus / Neptune): a smooth cyan sphere (radius 100) with faint paler and darker bands and one thin, faint flat ring (r 150-158).",
       "nodes": {
         "body": {
@@ -2912,16 +2912,16 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 2656,
-      "footprintRadius": 100.0,
+      "triangles": 492,
+      "footprintRadius": 101.6,
       "height": 200.0,
       "minY": 0.0,
       "maxY": 200.0,
       "sizeX": 200.0,
-      "sizeZ": 200.0,
+      "sizeZ": 201.6,
       "id": "dwarf_planet",
       "file": "models/dwarf_planet.glb",
-      "bytes": 58624,
+      "bytes": 14664,
       "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Pluto: a tan sphere (radius 100) with a dark reddish-brown equatorial belt and the pale heart (Tombaugh Regio) on the camera side.",
       "nodes": {
         "body": {
@@ -2936,17 +2936,17 @@
       "units": "0.0001 AU"
     },
     {
-      "triangles": 868,
-      "footprintRadius": 60.0,
-      "height": 84.6,
-      "minY": -3.2,
-      "maxY": 81.4,
-      "sizeX": 120.0,
+      "triangles": 264,
+      "footprintRadius": 57.7,
+      "height": 83.4,
+      "minY": -3.0,
+      "maxY": 80.4,
+      "sizeX": 114.2,
       "sizeZ": 54.0,
       "id": "prominence",
       "file": "models/prominence.glb",
-      "bytes": 30596,
-      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A chip of the Sun: a twisted plasma arc (yellow, orange and red strands) rooted in a glowing orange patch, spanning X.",
+      "bytes": 11320,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A chip of the Sun: a twisted plasma arc (yellow and orange strands) rooted in a glowing orange patch, spanning X.",
       "nodes": {
         "body": {
           "pivot": [

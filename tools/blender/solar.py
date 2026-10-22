@@ -183,19 +183,53 @@ def _ico(p, subdiv, classify, center, scale, disp=None, rot=(0, 0, 0)):
     return verts
 
 
-def _globe(p, R, classify, u=40, v=24, tilt=0.0, center=None):
+def _globe(p, R, classify, u=40, v=24, tilt=0.0, center=None, lats=None,
+           wobble=None):
     """UV sphere of radius R (rows of latitude, so bands stay crisp) resting
     on the floor; the axis is tilted `tilt` degrees about X (negative tips
-    the north pole away from the camera). classify(lat, lon) -> material."""
+    the north pole away from the camera). classify(lat, lon) -> material.
+    lats: explicit row latitudes (put them on band edges so few rows still
+    give crisp bands); wobble(lat, lon) shifts each row vertex in latitude
+    (wavy band edges)."""
+    if lats is None:
+        lats = [-90 + 180 * i / v for i in range(1, v)]
     rows = [[(0.0, 0.0, -1.0)]]
-    for i in range(1, v):
-        lat = -90 + 180 * i / v
-        rows.append([tuple(_dir(360 * j / u, lat)) for j in range(u)])
+    for lat in lats:
+        rows.append([tuple(_dir(360 * j / u, lat + (
+            wobble(lat, 360 * j / u) if wobble else 0.0))) for j in range(u)])
     rows.append([(0.0, 0.0, 1.0)])
     c = center if center is not None else (0, 0, R)
     with p.xform(c, (tilt, 0, 0), (R, R, R)):
         _surface(p, rows, lambda i, j, cc: classify(
             *_latlon(Vector(cc).normalized())), wrap=True, orient="recalc")
+
+
+def _uvs(p, u, v, classify, center, scale, disp=None, rot=(0, 0, 0)):
+    """Low-res UV sphere (2 * u * (v - 1) triangles) on the unit sphere,
+    displaced radially by disp(n), faces coloured by classify(n), then
+    scaled/placed. Returns its verts."""
+    rows = [[(0.0, 0.0, -1.0)]]
+    for i in range(1, v):
+        lat = -90 + 180 * i / v
+        rows.append([tuple(_dir(360 * j / u, lat)) for j in range(u)])
+    rows.append([(0.0, 0.0, 1.0)])
+    if disp:
+        rows = [[tuple(Vector(q) * (1 + disp(Vector(q)))) for q in row]
+                for row in rows]
+    with p.xform(center, rot, scale):
+        faces = _surface(p, rows, lambda i, j, c: classify(
+            Vector(c).normalized()), wrap=True, orient="recalc")
+    return list({vv for f in faces for vv in f.verts})
+
+
+def _ring_sheet(p, z, bands, segs):
+    """Flat, upward-facing ring sheet at height z: bands [(r0, r1, mat)]
+    (gaps between bands stay open). 2 * segs triangles per band."""
+    for r0, r1, material in bands:
+        rows = [[polar(360 * k / segs, r)[:2] + (z,) for k in range(segs)]
+                for r in (r0, r1)]
+        _surface(p, rows, lambda i, j, c, mm=material: mm, wrap=True,
+                 orient="up")
 
 
 def _rest(verts, floor=0.0):
@@ -332,7 +366,7 @@ def _dome_strip(p, centre, widths, heights, mat_fn, segs=8, z0=0.0):
 
 def _lumpy_rock(p, center, radii, seed, subdiv=2, crater_n=5, lump=0.13,
                 mats=("sol_rock", "sol_rock_light", "sol_rock_dark",
-                      "sol_crater")):
+                      "sol_crater"), uv=None):
     """Potato-shaped cratered rock (an ellipsoid with radii (x, y, z))."""
     rnd = random.Random(seed)
     craters = _craters(seed, crater_n, 14, 30)
@@ -352,6 +386,8 @@ def _lumpy_rock(p, center, radii, seed, subdiv=2, crater_n=5, lump=0.13,
         return S(mats[2] if v < -0.35 else mats[1] if v > 0.4 else mats[0])
 
     rot = (rnd.uniform(-20, 20), rnd.uniform(-20, 20), rnd.uniform(0, 360))
+    if uv:  # (u, v) low-res UV sphere instead of an icosphere
+        return _uvs(p, uv[0], uv[1], classify, center, radii, disp, rot)
     return _ico(p, subdiv, classify, center, radii, disp, rot)
 
 
@@ -721,8 +757,8 @@ def asteroid():
     m = Model("asteroid", f"{PROP_NOTE} A lumpy, cratered potato of grey-"
               "brown rock (about 120 x 100 x 80).")
     b = m.part("body")
-    verts = _lumpy_rock(b, (0, 0, 40), (60, 44, 35), seed=101, subdiv=4,
-                        crater_n=6)
+    verts = _lumpy_rock(b, (0, 0, 40), (60, 44, 35), seed=101, crater_n=4,
+                        uv=(14, 11))
     _rest(verts)
     return m
 
@@ -735,8 +771,8 @@ def asteroid_cluster():
                                    (14, 50, 16), (-30, -44, 15),
                                    (66, 34, 11))):
         verts = _lumpy_rock(b, (x, y, r), (r, r * 0.85, r * 0.7),
-                            seed=200 + k, subdiv=3, crater_n=2 if r > 20
-                            else 0)
+                            seed=200 + k, crater_n=1 if r > 20 else 0,
+                            uv=(10, 7) if k == 0 else (7, 5))
         _rest(verts)
     return m
 
@@ -755,16 +791,17 @@ def comet_nucleus():
             return S("sol_nucleus_dark" if v < -0.35 else "sol_nucleus")
         return f
 
-    _ico(b, 4, nuc(1.0), (-22, 8, 36), (52, 42, 36),
-              lambda n: 0.07 * _noise(n, 2.5, 1.0))
-    _ico(b, 4, nuc(4.0), (38, -10, 36), (34, 31, 29),
-              lambda n: 0.08 * _noise(n, 2.8, 3.0), rot=(0, 0, 25))
+    _uvs(b, 14, 8, nuc(1.0), (-22, 8, 36), (52, 42, 36),
+         lambda n: 0.07 * _noise(n, 2.5, 1.0))
+    _uvs(b, 12, 7, nuc(4.0), (38, -10, 36), (34, 31, 29),
+         lambda n: 0.08 * _noise(n, 2.8, 3.0), rot=(0, 0, 25))
     sh = _rest(list(b.bm.verts))
     for base, d in (((-30, -20, 60), (-0.3, -0.7, 0.6)),
                     ((40, -30, 52), (0.2, -0.8, 0.5))):
         bb = Vector(base) + Vector((0, 0, sh))
         dd = Vector(d).normalized()
-        b.rod(tuple(bb), tuple(bb + dd * 30), 6, S("sol_coma"), segs=6, r2=1)
+        b.rod(tuple(bb), tuple(bb + dd * 30), 6, S("sol_coma"), segs=5,
+              r2=1)
     return m
 
 
@@ -817,7 +854,7 @@ def moonlet():
               "sphere (radius 100) resting on the floor, darker crater "
               "floors and pale rims.")
     b = m.part("body")
-    craters = _craters(12, 18, 7, 18)
+    craters = _craters(12, 12, 10, 20)
 
     def classify(n):
         c = _crater_at(craters, n)
@@ -826,7 +863,7 @@ def moonlet():
         return S("sol_moon_light" if _noise(n, 3.0, 2.0) > 0.4
                  else "sol_moon")
 
-    v = _ico(b, 4, classify, (0, 0, R), (R, R, R), _crater_disp(craters))
+    v = _ico(b, 3, classify, (0, 0, R), (R, R, R), _crater_disp(craters))
     _rest(v)
     return m
 
@@ -843,23 +880,26 @@ def icy_moon():
         v = _noise(n, 3.5, 5.0)
         return S("sol_ice_cream" if v > 0.3 else "sol_ice_white")
 
-    _ico(b, 4, classify, (0, 0, R), (R, R, R))
-    for k in range(10):
+    _uvs(b, 14, 9, classify, (0, 0, R), (R, R, R))
+    for k in range(7):
         ax = Vector((rnd.uniform(-1, 1), rnd.uniform(-1, 1),
                      rnd.uniform(-0.5, 0.5))).normalized()
         u = ax.cross(Vector((0, 0, 1)) if abs(ax.z) < 0.9
                      else Vector((1, 0, 0))).normalized()
         v = ax.cross(u)
         off = rnd.uniform(-0.35, 0.35)
-        t0 = rnd.uniform(0, TAU)
-        span = rnd.uniform(1.6, 2.8)
+        span = rnd.uniform(1.6, 2.6)
+        # centre each arc near the top, camera-facing side
+        top = Vector((rnd.uniform(-0.5, 0.5), -0.5, 0.85)).normalized()
+        t0 = (math.atan2(top.dot(v), top.dot(u)) - span / 2
+              + rnd.uniform(-0.4, 0.4))
         dirs = []
-        for i in range(25):
-            t = t0 + span * i / 24
+        for i in range(13):
+            t = t0 + span * i / 12
             wob = 0.03 * math.sin(t * 7 + k)
             dirs.append((u * math.cos(t) + v * math.sin(t)
                          + ax * (off + wob)).normalized())
-        _drape_line(b, R, (0, 0, R), dirs, 3.2 if k % 3 else 5.0, 0.5,
+        _drape_line(b, R, (0, 0, R), dirs, 3.6 if k % 3 else 5.5, 2.2,
                     S("sol_ice_crack"))
     return m
 
@@ -871,7 +911,7 @@ def rocky_planet():
               "plains and a few craters; light so per-instance tints "
               "recolour it (if listed in GLB_TINTED).")
     b = m.part("body")
-    craters = _craters(44, 8, 5, 10)
+    craters = _craters(44, 6, 8, 13)
 
     def classify(n):
         c = _crater_at(craters, n)
@@ -881,7 +921,7 @@ def rocky_planet():
         return S("sol_grey_dark" if v < -0.35 else
                  "sol_grey_light" if v > 0.4 else "sol_grey")
 
-    _ico(b, 4, classify, (0, 0, R), (R, R, R),
+    _uvs(b, 18, 13, classify, (0, 0, R), (R, R, R),
          lambda n: 0.6 * _crater_disp(craters)(n))
     return m
 
@@ -896,17 +936,19 @@ def mars():
 
     def classify(n):
         lat, lon = _latlon(n)
-        if lat > 62 + 5 * math.sin(math.radians(lon * 3)):
+        if lat > 61:
             return S("sol_polar_cap")
-        if (abs(lat - 8 - 4 * math.sin(math.radians(lon * 4))) < 3.5
-                and -40 < lon < 30):
+        if 4 < lat < 12 and -40 < lon < 30:
             return S("sol_mars_dark")
         v = _noise(n, 2.4, 3.0)
         if v < -0.32 and lat < 50:
             return S("sol_mars_dark")
         return S("sol_mars_light" if v > 0.35 else "sol_mars")
 
-    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=44, v=28)
+    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=28,
+           lats=[-74, -60, -46, -32, -19, -6, 4, 12, 24, 37, 50, 61, 72, 82],
+           wobble=lambda lat, lon: (5 * math.sin(math.radians(lon * 3))
+                                    if lat == 61 else 0.0))
     return m
 
 
@@ -924,7 +966,7 @@ def venus():
         return S("sol_venus_light" if band > 0.45 else
                  "sol_venus_dark" if band < -0.55 else "sol_venus")
 
-    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=36, v=22)
+    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=28, v=16)
     return m
 
 
@@ -946,7 +988,7 @@ def _jupiter_mat(lat, lon, spot=True):
             return S("sol_jup_spot")
         if e < 1.6:
             return S("sol_jup_spot_rim")
-    w = lat + 1.8 * math.sin(math.radians(lon * 3 + lat * 5))
+    w = lat
     name = JUP_BANDS[0][1]
     for start, key in JUP_BANDS:
         if w >= start:
@@ -999,17 +1041,20 @@ def jupiter():
               "camera) so the bands run across the face the camera sees and "
               "the Red Spot sits just below its middle.")
     b = m.part("body")
+    edges = [start for start, _ in JUP_BANDS[1:]]
+    lats = sorted(edges + [-74, -51, 0, 51, 74])
     _globe(b, R, lambda lat, lon: _jupiter_mat(lat, lon, spot=False),
-           u=48, v=30, tilt=-42)
+           u=30, tilt=-42, lats=lats,
+           wobble=lambda lat, lon: (1.8 * math.sin(math.radians(
+               lon * 3 + lat * 5)) if lat in edges else 0.0))
     rot = Matrix.Rotation(math.radians(-42), 3, "X")
     n = (rot @ _dir(0, -22)).normalized()
     e1 = Vector((1, 0, 0))
     e2 = n.cross(e1).normalized()
     _decal(b, R, (0, 0, R), n, e1, e2,
-           [(12, 6, 1.2, S("sol_jup_spot")), (20, 10.5, 1.0,
-                                                S("sol_jup_spot")),
-            (25, 14, 0.6, S("sol_jup_spot_rim")),
-            (28, 16.5, -0.6, S("sol_jup_spot_rim"))])
+           [(13, 7, 2.0, S("sol_jup_spot")), (21, 11, 1.6,
+                                               S("sol_jup_spot")),
+            (27, 15, 0.6, S("sol_jup_spot_rim"))], segs=16)
     return m
 
 
@@ -1017,8 +1062,8 @@ def saturn():
     R = 100.0
     m = Model("saturn", f"{PROP_NOTE} Saturn: a pale gold banded sphere "
               "(radius 100) with a flat ring system in the XZ plane round "
-              "its equator (C ring 124-152, B ring 153-195, Cassini gap, A "
-              "ring 203-228).")
+              "its equator (C ring 124-152, B ring 152-195, Cassini gap, A "
+              "ring 203-228; a single upward-facing sheet).")
     b = m.part("body")
     bands = [(-90, "sol_sat_pole"), (-50, "sol_sat_dark"), (-36, "sol_sat"),
              (-22, "sol_sat_dark"), (-10, "sol_sat_light"),
@@ -1026,17 +1071,21 @@ def saturn():
              (50, "sol_sat_light"), (64, "sol_sat_pole")]
 
     def classify(lat, lon):
-        w = lat + 1.2 * math.sin(math.radians(lon * 4))
+        w = lat
         name = bands[0][1]
         for start, key in bands:
             if w >= start:
                 name = key
         return S(name)
 
-    _globe(b, R, classify, u=40, v=26)
-    for r0, r1, key in ((124, 152, "sol_ring_c"), (153, 172, "sol_ring_b"),
-                        (172, 195, "sol_ring_b2"), (203, 228, "sol_ring_a")):
-        b.band(r0, r1, R - 0.8, R + 0.8, 0, 360, S(key), segs=64)
+    edges = [start for start, _ in bands[1:]]
+    _globe(b, R, classify, u=32, lats=sorted(edges + [-76, 0, 76]),
+           wobble=lambda lat, lon: (1.2 * math.sin(math.radians(lon * 4))
+                                    if lat in edges else 0.0))
+    _ring_sheet(b, R, [(124, 152, S("sol_ring_c")),
+                       (152, 172, S("sol_ring_b")),
+                       (172, 195, S("sol_ring_b2")),
+                       (203, 228, S("sol_ring_a"))], segs=48)
     return m
 
 
@@ -1048,7 +1097,7 @@ def ice_giant():
     b = m.part("body")
 
     def classify(lat, lon):
-        w = lat + 2 * math.sin(math.radians(lon * 2))
+        w = lat
         if 18 < w < 26 or -34 < w < -28:
             return S("sol_ice_giant_light")
         if abs(w) > 66:
@@ -1057,8 +1106,9 @@ def ice_giant():
             return S("sol_ice_giant_dark")
         return S("sol_ice_giant")
 
-    _globe(b, R, classify, u=36, v=22)
-    b.band(150, 158, R - 0.6, R + 0.6, 0, 360, S("sol_ice_ring"), segs=56)
+    _globe(b, R, classify, u=26, lats=[-74, -60, -45, -34, -28, -12, -4,
+                                       8, 18, 26, 40, 55, 66, 78])
+    _ring_sheet(b, R, [(150, 158, S("sol_ice_ring"))], segs=40)
     return m
 
 
@@ -1082,7 +1132,7 @@ def dwarf_planet():
             return S("sol_pluto_dark")
         return S("sol_pluto_light" if v > 0.35 else "sol_pluto")
 
-    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=44, v=28)
+    _globe(b, R, lambda lat, lon: classify(_dir(lon, lat)), u=16, v=12)
 
     def heart(a):
         return (math.sin(a) ** 3,
@@ -1090,26 +1140,24 @@ def dwarf_planet():
                  - math.cos(4 * a)) / 16 + 0.15)
 
     _decal(b, R, (0, 0, R), hc, e1, e2,
-           [(14, 14, 1.2, S("sol_pluto_heart")),
-            (28, 28, 1.2, S("sol_pluto_heart")),
-            (42, 42, 1.2, S("sol_pluto_heart")),
-            (45, 45, -0.8, S("sol_pluto_heart"))], segs=40, shape=heart)
+           [(15, 15, 3.0, S("sol_pluto_heart")),
+            (30, 30, 3.0, S("sol_pluto_heart")),
+            (44, 44, 2.6, S("sol_pluto_heart"))], segs=28, shape=heart)
     return m
 
 
 def prominence():
     m = Model("prominence", f"{PROP_NOTE} A chip of the Sun: a twisted "
-              "plasma arc (yellow, orange and red strands) rooted in a "
+              "plasma arc (yellow and orange strands) rooted in a "
               "glowing orange patch, spanning X.")
     b = m.part("body")
-    b.cyl(60, 3, (0, 0, 1.5), S("sol_plasma_orange"), segs=16,
+    b.cyl(60, 3, (0, 0, 1.5), S("sol_plasma_orange"), segs=10,
           scale=(1, 0.45, 1))
-    b.cyl(40, 1.6, (0, 0, 3.2), S("sol_plasma_yellow"), segs=14,
+    b.cyl(40, 1.6, (0, 0, 3.2), S("sol_plasma_yellow"), segs=8,
           scale=(1, 0.4, 1))
-    _flux(b, _arch((-46, 0, 2), (46, 0, 2), 70, 20, bulge=(0, -8, 0)), 3,
-          lambda s: 6.0, lambda s: 6.5 - 1.5 * math.sin(math.pi * s), 1.4,
-          [S("sol_plasma_yellow"), S("sol_plasma_orange"),
-           S("sol_plasma_red")], segs=6)
+    _flux(b, _arch((-46, 0, 2), (46, 0, 2), 70, 9, bulge=(0, -8, 0)), 2,
+          lambda s: 5.0, lambda s: 7.5 - 2 * math.sin(math.pi * s), 1.0,
+          [S("sol_plasma_yellow"), S("sol_plasma_orange")], segs=5)
     return m
 
 
