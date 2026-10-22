@@ -8,6 +8,7 @@
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
 import { HAZARD_RECOIL, MOP, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
 import { BaseHazard } from './base';
@@ -126,7 +127,7 @@ export class Mop extends BaseHazard {
     }
     if (wet) {
       b.stats.removeSource(WET_SOURCE);
-      b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, duration: 0.25 });
+      b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: 0.25 });
     }
     this.syncTrail();
   }

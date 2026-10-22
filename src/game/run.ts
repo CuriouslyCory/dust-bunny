@@ -7,7 +7,7 @@ import { Disposables, type EventBus, type Vec3Like } from '../core/events';
 import { NO_INPUT, type InputSource } from '../core/input';
 import { Rng } from '../core/rng';
 import { AREAS } from '../data/areas';
-import { getCharacter } from '../data/characters';
+import { CAP_PRIORITY, getCharacter } from '../data/characters';
 import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
 import { isLoadoutFor, type Loadout } from '../data/keepsakes';
@@ -132,7 +132,7 @@ export class Run {
     this.house = generateHouse(config.seed);
 
     const character = getCharacter(config.characterId);
-    const stats = new StatBlock({ ...BASE_BUNNY_STATS, ...character.stats });
+    const stats = new StatBlock({ ...BASE_BUNNY_STATS, ...character.stats }, { caps: character.caps, capPriority: CAP_PRIORITY });
     for (const m of [...difficultyModifiers(this.difficulty), ...(config.modifiers ?? [])]) stats.add(m);
     this.bunny = new Bunny(events, stats, this.house.spawn.x, this.house.spawn.z);
     this.tier = tierForRadius(this.bunny.radius).index;

@@ -7,6 +7,11 @@
  *
  * Characters set base values; Upgrades, Perks and Pickups add modifiers tagged with a
  * `source` so they can be removed as a group. Timed modifiers expire via tick(dt).
+ *
+ * Optional per-stat caps (a Character's `caps`) form a stage at `capPriority` (CAP_PRIORITY,
+ * 250): modifiers below it (base + Shop + Keepsakes + Perks) are clamped to the cap, modifiers at
+ * or above it (TIMED_PRIORITY: Pickups, Hazard slows, Ability-state effects) apply on top. The
+ * global STAT_LIMITS clamp comes last.
  */
 
 export interface BunnyStatValues {
@@ -85,6 +90,19 @@ export const STAT_LIMITS: Partial<Record<StatKey, [number, number]>> = {
   perkRerolls: [0, 9],
 };
 
+/** A per-stat cap: `max` for stats where more is better, `min` (a floor) for the others. */
+export interface StatCapRange {
+  max?: number;
+  min?: number;
+}
+
+export type StatCaps = Partial<Record<StatKey, StatCapRange>>;
+
+/** Default priority of the cap stage (matches CAP_PRIORITY in src/data/characters.ts). */
+export const DEFAULT_CAP_PRIORITY = 250;
+/** Priority for timed and Ability-state effects (Pickups, Hazard slows, Hunker): after the cap stage. */
+export const TIMED_PRIORITY = 300;
+
 export interface StatModifier {
   stat: StatKey;
   op: 'add' | 'mul';
@@ -103,14 +121,54 @@ interface ActiveModifier extends StatModifier {
   remaining: number;
 }
 
-export function computeStats(base: Readonly<BunnyStatValues>, modifiers: readonly StatModifier[]): BunnyStatValues {
-  const out: BunnyStatValues = { ...base };
-  const sorted = modifiers
+export interface StatOptions {
+  /** Per-stat caps applied at `capPriority` (see file header). */
+  caps?: StatCaps;
+  /** Modifiers below this priority are capped, the rest apply after the cap. Default 250. */
+  capPriority?: number;
+}
+
+function clampCap(value: number, cap: StatCapRange | undefined): number {
+  if (!cap) return value;
+  if (cap.max !== undefined && value > cap.max) value = cap.max;
+  if (cap.min !== undefined && value < cap.min) value = cap.min;
+  return value;
+}
+
+function applyCaps(out: BunnyStatValues, caps: StatCaps): void {
+  for (const key of Object.keys(caps) as StatKey[]) out[key] = clampCap(out[key], caps[key]);
+}
+
+function sortModifiers(modifiers: readonly StatModifier[]): StatModifier[] {
+  return modifiers
     .map((m, seq) => ({ m, seq }))
-    .sort((a, b) => priorityOf(a.m) - priorityOf(b.m) || a.seq - b.seq);
-  for (const { m } of sorted) {
+    .sort((a, b) => priorityOf(a.m) - priorityOf(b.m) || a.seq - b.seq)
+    .map((e) => e.m);
+}
+
+/** Values after base + every modifier below the cap stage, before the cap clamp. */
+function preCapValues(base: Readonly<BunnyStatValues>, sorted: readonly StatModifier[], capPriority: number): BunnyStatValues {
+  const out: BunnyStatValues = { ...base };
+  for (const m of sorted) {
+    if (priorityOf(m) >= capPriority) break;
     out[m.stat] = m.op === 'add' ? out[m.stat] + m.value : out[m.stat] * m.value;
   }
+  return out;
+}
+
+export function computeStats(base: Readonly<BunnyStatValues>, modifiers: readonly StatModifier[], options: StatOptions = {}): BunnyStatValues {
+  const out: BunnyStatValues = { ...base };
+  const caps = options.caps;
+  const capPriority = options.capPriority ?? DEFAULT_CAP_PRIORITY;
+  let capped = !caps;
+  for (const m of sortModifiers(modifiers)) {
+    if (!capped && priorityOf(m) >= capPriority) {
+      applyCaps(out, caps!);
+      capped = true;
+    }
+    out[m.stat] = m.op === 'add' ? out[m.stat] + m.value : out[m.stat] * m.value;
+  }
+  if (!capped) applyCaps(out, caps!);
   for (const key of Object.keys(STAT_LIMITS) as StatKey[]) {
     const lim = STAT_LIMITS[key]!;
     out[key] = Math.min(lim[1], Math.max(lim[0], out[key]));
@@ -127,12 +185,32 @@ export class StatBlock {
   /** Called whenever the computed values change. */
   onChange: ((values: Readonly<BunnyStatValues>) => void) | null = null;
 
-  constructor(private base: BunnyStatValues) {}
+  constructor(
+    private base: BunnyStatValues,
+    private readonly options: StatOptions = {},
+  ) {}
 
   /** Computed values (cached until modifiers change). */
   get values(): Readonly<BunnyStatValues> {
-    if (!this.cache) this.cache = computeStats(this.base, this.mods);
+    if (!this.cache) this.cache = computeStats(this.base, this.mods, this.options);
     return this.cache;
+  }
+
+  /** The cap on a stat, if any. */
+  cap(key: StatKey): Readonly<StatCapRange> | undefined {
+    return this.options.caps?.[key];
+  }
+
+  /**
+   * True if the stat has a cap and base + modifiers below the cap stage already reach it (a
+   * `max` cap: at or above; a `min` floor: at or below). Timed effects don't count.
+   */
+  atCap(key: StatKey): boolean {
+    const cap = this.options.caps?.[key];
+    if (!cap) return false;
+    const v = preCapValues(this.base, sortModifiers(this.mods), this.options.capPriority ?? DEFAULT_CAP_PRIORITY)[key];
+    const eps = 1e-9;
+    return (cap.max !== undefined && v >= cap.max - eps) || (cap.min !== undefined && v <= cap.min + eps);
   }
 
   get<K extends StatKey>(key: K): number {

@@ -6,7 +6,7 @@ import { createRun, registerGameplayContent } from '../game/assembly';
 import { upgradeModifiers } from '../meta/upgrades';
 import { pickupRegistry } from '../pickups';
 import { availablePerks, perkRegistry } from './index';
-import { draftPerks } from './draft';
+import { draftablePerks, draftPerks, perkCapped } from './draft';
 
 registerGameplayContent();
 
@@ -173,7 +173,7 @@ describe('Perk draft workflow', () => {
       expect(draft.choose(draft.offer.perks[0]!.id)).toBe(true);
       picks++;
     }
-    expect(availablePerks(run)).toEqual([]);
+    expect(draftablePerks(run)).toEqual([]);
     expect(draft.pending).toBe(0);
     expect(picks).toBe(perkCount(run));
     expect(picks).toBeLessThan(100);
@@ -231,6 +231,45 @@ describe('Perk draft workflow', () => {
     run.update(1 / 60);
     expect(run.perkDraft.pending).toBe(3);
     expect(old.perkDraft.pending).toBe(3);
+  });
+});
+
+describe('cap-aware draft', () => {
+  it('hides a stat Perk once its stat is at the Character cap', () => {
+    const { run } = makeRun({}, 'tumble');
+    const aero = perkRegistry.require('aerodynamic');
+    expect(perkCapped(run, aero)).toBe(false);
+    // Tumble 0.8 × 1.1³ = 1.065 ≥ its 1.05 speed cap.
+    for (let i = 0; i < 3; i++) run.applyPerk('aerodynamic');
+    expect(run.bunny.stats.get('speed')).toBeCloseTo(1.05);
+    expect(perkCapped(run, aero)).toBe(true);
+    expect(availablePerks(run).map((p) => p.id)).toContain('aerodynamic');
+    expect(draftablePerks(run).map((p) => p.id)).not.toContain('aerodynamic');
+    for (let i = 0; i < 10; i++) {
+      run.perkDraft.queue();
+      expect(run.perkDraft.offer.perks.map((p) => p.id)).not.toContain('aerodynamic');
+      run.perkDraft.choose(run.perkDraft.offer.perks.find((p) => p.capStats)?.id ?? run.perkDraft.offer.perks[0]!.id);
+    }
+  });
+
+  it('hides a floor Perk at the floor (Quick Dash on Tumble)', () => {
+    const { run } = makeRun({}, 'tumble');
+    const quick = perkRegistry.require('quick_dash');
+    run.applyPerk('quick_dash'); // 4 × 0.7 = 2.8 > 2.5
+    expect(perkCapped(run, quick)).toBe(false);
+    run.applyPerk('quick_dash'); // 1.96 → floored at 2.5
+    expect(run.bunny.stats.get('dashCooldown')).toBe(2.5);
+    expect(perkCapped(run, quick)).toBe(true);
+  });
+
+  it('keeps Thick Fur on offer at the heart cap because it heals', () => {
+    const { run } = makeRun({ extra_heart: 2 }, 'zap');
+    expect(run.bunny.stats.atCap('maxHealth')).toBe(true);
+    const fur = perkRegistry.require('thick_fur');
+    expect(perkCapped(run, fur)).toBe(false);
+    expect(draftablePerks(run).map((p) => p.id)).toContain('thick_fur');
+    run.applyPerk('thick_fur');
+    expect(run.bunny.maxHealth).toBe(4);
   });
 });
 

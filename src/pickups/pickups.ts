@@ -1,10 +1,11 @@
 /**
  * The six design Pickups. Numbers live in src/data/pickups.ts.
- * Timed stat effects use StatBlock timed modifiers (source `pickup:<id>`); re-collecting
+ * Timed stat effects use StatBlock timed modifiers (source `pickup:<id>`, priority TIMED_PRIORITY so
+ * they apply after the Character's caps); re-collecting
  * refreshes them because PickupManager calls undo() (removeSource) before re-applying.
  */
 import { PICKUP_EFFECTS as FX, PICKUPS, type PickupData } from '../data/pickups';
-import type { StatKey } from '../entities/stats';
+import { TIMED_PRIORITY, type StatKey } from '../entities/stats';
 import { pickupRegistry, type PickupDef } from './index';
 import { createPickupObject } from './view';
 
@@ -22,7 +23,8 @@ function timedStat(id: string, stat: StatKey, op: 'add' | 'mul', value: number):
   return (run, duration) => {
     const stats = run.bunny.stats;
     stats.removeSource(src(id));
-    stats.add({ stat, op, value, source: src(id), duration });
+    // After the Character's cap stage, so a Sugar Rush always feels full strength.
+    stats.add({ stat, op, value, source: src(id), duration, priority: TIMED_PRIORITY });
     return () => stats.removeSource(src(id));
   };
 }

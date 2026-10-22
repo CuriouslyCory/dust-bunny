@@ -11,6 +11,7 @@
 import { Mesh, MeshStandardMaterial, SphereGeometry, type Object3D } from 'three';
 import type { Rng } from '../core/rng';
 import { PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, type TurretTuning } from '../data/hazards';
+import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -138,7 +139,7 @@ export class SprayBottle extends BaseHazard {
         const hit = hitBunny(run, d.x, d.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii, dirX: d.vx, dirZ: d.vz });
         if (hit && c.wetSeconds > 0 && b.alive) {
           b.stats.removeSource(WET_SOURCE);
-          b.stats.add({ stat: 'speed', op: 'mul', value: c.wetMultiplier, source: WET_SOURCE, duration: c.wetSeconds });
+          b.stats.add({ stat: 'speed', op: 'mul', value: c.wetMultiplier, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: c.wetSeconds });
         }
         gone = true;
       }
