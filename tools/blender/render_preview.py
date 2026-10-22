@@ -2,8 +2,10 @@
 (the cm-scale models), docs/models-preview-continent.png (the Continent
 models, authored at 1 unit = 100 m), docs/models-preview-globe.png (the
 Globe models, 1 unit = 10 km), docs/models-preview-solar.png (the Solar
-System models, 1 unit = 0.0001 AU) and docs/models-preview-galaxy.png (the
-Galaxy models, 1 unit = 1 ly, on a dark floor).
+System models, 1 unit = 0.0001 AU), docs/models-preview-galaxy.png (the
+Galaxy models, 1 unit = 1 ly, on a dark floor) and
+docs/models-preview-universe.png (the Universe models, 1 unit = 100 kly, on a
+near-black floor).
 
 Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py
@@ -15,6 +17,8 @@ Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py -- --solar
     # only the Galaxy sheet:
     blender -b --factory-startup --python tools/blender/render_preview.py -- --galaxy
+    # only the Universe sheet:
+    blender -b --factory-startup --python tools/blender/render_preview.py -- --universe
     # debug: bigger tiles of some models to /tmp (add --top for a steep,
     # game-camera-like view)
     blender -b --factory-startup --python tools/blender/render_preview.py -- roomba --top
@@ -213,7 +217,9 @@ def main():
               ("0.0001 AU", "models-preview-solar.png", "--solar", None,
                None),
               ("1 ly", "models-preview-galaxy.png", "--galaxy", "#1b1d33",
-               "#d8dcf0")]
+               "#d8dcf0"),
+              ("100 kly", "models-preview-universe.png", "--universe",
+               "#0e0d18", "#d8dcf0")]
     picked = {s[2] for s in sheets} & flags
     for units, name, flag, floor_hex, label_hex in sheets:
         if picked and flag not in picked:

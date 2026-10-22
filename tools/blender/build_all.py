@@ -24,6 +24,7 @@ import hazards  # noqa: E402
 import outdoor  # noqa: E402
 import region  # noqa: E402
 import solar  # noqa: E402
+import universe  # noqa: E402
 
 CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               ("prop", furniture.PROPS),
@@ -42,9 +43,12 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               # solar system (Act 7; 1 unit = 0.0001 AU, loaded at scale 0.01)
               ("hazard", solar.HAZARDS), ("prop", solar.PROPS),
               # galaxy (Act 8; 1 unit = 1 ly, loaded at scale 0.01)
-              ("hazard", galaxy.HAZARDS), ("prop", galaxy.PROPS)]
+              ("hazard", galaxy.HAZARDS), ("prop", galaxy.PROPS),
+              # universe (Act 9; 1 unit = 100 kly, loaded at scale 0.01)
+              ("hazard", universe.HAZARDS), ("prop", universe.PROPS)]
 # ids authored in other units than cm (catalog "units" field)
-UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe, solar, galaxy)
+UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe, solar, galaxy,
+                                         universe)
          for fn in mod.HAZARDS + mod.PROPS}
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
@@ -105,7 +109,9 @@ def write_doc(models):
         "(`tools/blender/solar.py`, notes starting \"Solar scale\") use "
         "1 unit = 0.0001 AU: see Solar scale below. The Galaxy models "
         "(`tools/blender/galaxy.py`, notes starting \"Galaxy scale\") use "
-        "1 unit = 1 light year: see Galaxy scale below.",
+        "1 unit = 1 light year: see Galaxy scale below. The Universe models "
+        "(`tools/blender/universe.py`, notes starting \"Universe scale\") "
+        "use 1 unit = 100 kly: see Universe scale below.",
         "- Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).",
         "- Origin: bottom centre at the floor contact point (y = 0). "
         "The broom is the exception: see its row.",
@@ -179,6 +185,32 @@ def write_doc(models):
         "so spinning them about Y shows. The contact sheet uses a dark "
         "floor.",
         "",
+        "## Universe scale",
+        "",
+        "One Universe world unit is 10 Mly, so the Universe models "
+        "(`tools/blender/universe.py`) are authored at 1 unit = 100 kly "
+        "(100,000 light years; 100 units per world unit) and loaded at "
+        "`\"scale\": 0.01` like the Galaxy models one rung down. Their "
+        "catalog entries carry `\"units\": \"100 kly\"` and their table "
+        "sizes are in those units: multiply by 0.01 for Universe world "
+        "units (the Expansion's footprint radius in the table divided by "
+        "100 is its radius in world units). Hazards load with fit none + "
+        "collapse and are scaled by `size / modelSize`; Debris props are "
+        "normalised to their Debris size (drawn with a footprint radius of "
+        "about 100, galaxies lying flat on the floor), so only their "
+        "proportions matter. Space is near black: every part of every "
+        "Universe model is emissive (cosmic-web blue, CMB-orange accents), "
+        "and Debris props keep per-part emission through the baked "
+        "`emission` attribute, so their Debris types should set "
+        "`material.glow`. The plain galaxies (`spiral_galaxy`, "
+        "`barred_spiral`, `elliptical_galaxy`, `lenticular_galaxy`, "
+        "`irregular_galaxy`, `dwarf_galaxy`) are pale cream and blue-white "
+        "so a `tintAll` instance colour reads on them; the rest carry their "
+        "own colours. The Expansion is a hollow frame (a metric lattice and "
+        "a ring) that sits round the Bunny, not a solid body. The sock and "
+        "the lint reuse the Galaxy's `space_sock` and `cosmic_lint`. The "
+        "contact sheet uses a near-black floor.",
+        "",
         "## Rebuild",
         "",
         "```sh",
@@ -188,7 +220,8 @@ def write_doc(models):
         "roomba broom",
         "# contact sheets -> docs/models-preview.png (cm models), "
         "docs/models-preview-continent.png, docs/models-preview-globe.png, "
-        "docs/models-preview-solar.png and docs/models-preview-galaxy.png",
+        "docs/models-preview-solar.png, docs/models-preview-galaxy.png and "
+        "docs/models-preview-universe.png",
         "blender -b --factory-startup --python tools/blender/render_preview.py",
         "# only the Continent sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
@@ -202,6 +235,9 @@ def write_doc(models):
         "# only the Galaxy sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
         " -- --galaxy",
+        "# only the Universe sheet:",
+        "blender -b --factory-startup --python tools/blender/render_preview.py"
+        " -- --universe",
         "```",
         "",
         "## Catalogue",
@@ -226,7 +262,8 @@ def write_doc(models):
         "\\* Continent models: units of 100 m (see Conventions). Globe "
         "models: units of 10 km (see Globe scale). Solar System models: "
         "units of 0.0001 AU (see Solar scale). Galaxy models: light years "
-        "(see Galaxy scale).",
+        "(see Galaxy scale). Universe models: units of 100 kly (see "
+        "Universe scale).",
         "",
         f"Total: {len(models)} models, "
         f"{sum(m['triangles'] for m in models)} triangles, "
@@ -249,6 +286,10 @@ def write_doc(models):
         "Galaxy models (Act 8):",
         "",
         "![Galaxy contact sheet](models-preview-galaxy.png)",
+        "",
+        "Universe models (Act 9):",
+        "",
+        "![Universe contact sheet](models-preview-universe.png)",
         "",
     ]
     with open(DOC, "w") as f:
