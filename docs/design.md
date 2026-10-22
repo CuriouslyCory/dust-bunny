@@ -319,7 +319,7 @@ Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't
 | 18–19 (Dust Nebula, r 1–3) | orange dwarf 0.45, sun-like star 0.5, planetary nebula 0.7, blue giant 0.9, dark nebula 1.0, red giant 1.1, open cluster 1.3 | giants in the core and bar, dark nebulae in the dust lanes |
 | 19 (Dust Cluster, r ≥ 3) | supergiant 1.8, star cluster 2.1, emission nebula 2.4, molecular cloud 2.8, stellar nursery 3.1; relativistic jet 1.4 (Sagittarius A*'s chip, placed only) | clusters in the arms and core, clouds in the dust lanes |
 
-**Galaxy pacing check** (placeholder content, `pnpm sim --area=galaxy --seeds=3`, Hazards on, growth 0.2): Tier 18 at Lint 0:57, Tumble 1:21, Zap 0:58; Tier 19 at 8:39, 11:42, 6:38; Act (arrival to absorbing Sagittarius A*) Lint 9:27, Tumble 12:33, Zap 7:30 (8 / 9 wins). Too slow for the 4–6 minute target: the world pass tunes the ladder and the growth multiplier.
+**Galaxy pacing check** (placeholder content, `pnpm sim --area=galaxy --seeds=3`, Hazards on, growth 0.2): Tier 18 at Lint 0:57, Tumble 1:21, Zap 0:58; Tier 19 at 8:39, 11:42, 6:38; Act (arrival to absorbing Sagittarius A*) Lint 9:27, Tumble 12:33, Zap 7:30 (8 / 9 wins). An `--area` start has no Perks: a full Run (`pnpm sim s1 --chars=zap --minutes=90 --validate`) won at 33:50 with the Galaxy Act at 4:25 (Solar System 2:52), and all 9 leaderboard submissions valid (Galaxy board at 23% of its growth limit). The world pass tunes the ladder and the growth multiplier on full Runs.
 
 ## Characters
 
