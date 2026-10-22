@@ -18,6 +18,8 @@ Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, a 7–
 
 **Globe phase (Act 6, *The Marble*).** The Earth seen from orbit: black space with a starfield above the planet's limb, a thin glowing band of atmosphere where the planet curves away, a hard white sun from the east (its glare in the top right corner, glinting off the oceans) and blue Earth-shine from below. The map (480,000 × 240,000 km, a stylised Earth at ten times real size) wraps east–west: roll off one edge and arrive on the other. Hand-drawn continents nudged per seed, shelf seas, inland seas, island chains (the Caribbean, the Malay Archipelago, Hawaii, Polynesia, Melanesia), Greenland, the Arctic sea ice and Antarctica along the poles, biomes by latitude (rainforest, savanna, desert belts, temperate green, boreal forest, tundra) and snow-capped ranges (the Rockies, the Andes, the Alps, the Himalaya, the Urals, the Atlas), with clouds drifting above. The date line is open ocean, so the seam never cuts through land. 1 world unit = 1,000 km. The Bunny arrives over the Gulf of Guinea after a second size leap, at 0.85 units (0.13 Earths), wearing a faint atmosphere; from Dust Moon (Tier 14, 1 unit) the Moon sits half-buried in its fur, and Tier 15 (Dust Planet) starts at 3. Globe Debris runs from satellites, spent rocket stages, space junk and weather systems through reefs, atolls, islands and great deserts to archipelagos, cordilleras, inland seas, the Moon, landmasses, ocean basins, a continent and an ocean. The Moon is an Obstacle until r ≈ 2.5 and the only thing that stuns the Orbital Sweeper.
 
+**Solar System phase (Act 7, *A Very Large Leaf Blower*).** The ecliptic from above: black space with a starfield and the Milky Way crossing the backdrop as a dust-lane band, faint orbit rings as lanes (Earth's empty and dashed), the Sun at the centre with its corona and glare, and the light coming from the Sun, so planets are lit on their sunward side and shadows fall away from it. The map (360 × 360 units, 3.6 × 3.6 AU, not to scale) is rings round the Sun: the corona, the inner orbits (Mercury, Venus, Earth's empty orbit, Mars), a cluttered asteroid belt (rocks, gravel, two Kirkwood gaps, Trojans at Jupiter's L4 / L5), the outer orbits (Jupiter, Saturn, Uranus, Neptune) and the Kuiper belt thinning into interstellar dark at the edge. 1 world unit = 0.01 AU. The Bunny arrives on Earth's orbit after the third size leap, at 0.85 units, glowing from within (plasma), and meets Voyager 1 on its first screen; Tier 16 (Dust Giant) starts at 1 unit (Mars is food just before it) and Tier 17 (Dust Star) at 3, when Jupiter stops being an Obstacle. When the Sun is absorbed the light goes out: everything fades to black but the Bunny's own glow.
+
 ## Tech
 
 - Vite + TypeScript (strict) + three.js. No game engine, no physics library: movement and collision are 2D circles/AABBs on the XZ floor plane.
@@ -161,7 +163,35 @@ Mountain ranges for the map: a furniture Obstacle whose def id starts with `moun
 
 The Moon is the only stun source because the Globe has no obstacles. A real-size Moon (1.74 units) is food from r ≈ 2.5, before the boss arrives at Tier 15, so the Sweeper brings its own: big enough to block the Bunny (which can still shove it), so standing behind it baits a charge into it. Sim check with the Bunny started at Tier 15 (`pnpm sim --area=globe --radius=3.05`): 12 / 12 wins (4 Moon stuns, the rest Ability stuns and growth); without Abilities 11 / 12 wins, 7 Moon stuns.
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, and absorbing the Orbital Sweeper wins the Run.
+**The Solar System (after the Orbital Sweeper; 1 world unit = 0.01 AU, Bunny r = 0.85 units on arrival).** Hazards are rocks, ice and the Sun's own weather. The Solar System repeats the Globe's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps the size and speed of the Globe Hazard whose behaviour it reskins. The map has no obstacles.
+
+| Hazard         | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|----------------|-----------|----------------------|-----------------|-----------|--------|
+| Rogue Asteroid | 16        | 1.1                  | ≈ 1.57          | Roomba behaviour: tumbling wander (2.4 / 4.2 units/s, turns every 1–2.6 s), gravity pull (reach 1.5, 0.3 × max speed), spinning rock | 1 + knockback |
+| Sunspot        | 16        | 1.3                  | ≈ 1.86          | static turret sunward of the Kuiper belt: the flux-tube head sweeps like a pulsar beam out of range (0.9 rad/s), aims (range 10 / 14), lane (1.2 / 1 s), then 3 flare bolts 0.16 s apart (13 / 18 units/s), reload 3.8 / 3 s | 1 per bolt |
+| Sungrazer      | 16        | 1.5                  | ≈ 2.14          | comet streaking between waypoints within 24 units of its spawn, across zones (2.8 / 4 units/s); its icy tail trail (7 s, wide) slows to 0.55 × | 1 + knockback |
+| Comet          | 16        | 1.6                  | ≈ 2.29          | rides the orbit ring nearest its spawn (within 20 units) one way round, no ends (3.2 / 4.6 units/s), a short lane sliding ahead of it, its tail streaming 7.5 units behind | 1 + big shove, sheds 8 % |
+| Solar Flare    | 17        | 2.4                  | ≈ 3.43          | plasma arch: its loop swells through the amber warm-up (1.1 s), then a dry blast cone (range 15, 1.25 × max speed) | 1 on contact |
+| The Sun        | 17 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | solar wind push, CMEs (telegraphed charges), flare volleys, stunned only by a giant planet (an eclipse), chips are prominences | 1, sheds 5 % (flares 3 %) |
+
+(Per-Tier pairs are Tier 16 / Tier 17.)
+
+| The Sun (`THE_SUN`) | Value | Orbital Sweeper, for scale |
+|---|---|---|
+| Size / contact radius | 2.8 / 2.6 units (the 270 photosphere × 2.8 / 2.944; model 5.8 across, 3.6 tall) | 2.8 / 2.1 |
+| Hunt speed / turn rate | 5 units/s / 1.2 rad/s | 5 / 1.3 |
+| CME (charge): trigger / telegraph / speed / distance | 32 / 1.6 s / 22 units/s / 42 | 32 / 1.5 / 22 / 40 |
+| Stun / recover | 3.8 s / 1.2 s, only from a charge into a giant planet the Bunny can't absorb yet (Jupiter, also while locked until Tier 17; Saturn, Uranus, Neptune; the Hot Jupiter); the map edge just ends it; Abilities and Spiky Dash still stun it | 3.5 / 1.2, the Moon |
+| Solar wind | while it hunts, telegraphs or recovers: a Bunny within 9 units of its surface is pushed away at up to 0.4 × its max speed (fading out; not when hunkered, hidden or able to absorb it); loose Debris ≤ 0.6 there is blown outward at up to 8 units/s | net pull 0.35, front only |
+| Flare volleys | every 7 s hunting or recovering on screen: orange lane for 1.1 s, then 3 flares (20 units/s, range 28) from its limb | lasers: 6 s, 1 s, 4 bolts at 26 |
+| Eclipse | glow ×0.15 while stunned, no wind | — |
+| Hot Jupiter | on arrival and every 8 s of hunting, if no blocking giant is within 26 units of the Bunny, one lands 3 units beyond its edge (between it and the Sun the first time), sized max(2.4, 1.25 × the largest the Bunny can absorb) | the Moon, same rule |
+| Minis | none | 3 mini sweepers / 13 s, up to 6 |
+| Chips | × 0.85, 8 prominences (0.45 × the Bunny's radius); each chip hides a prominence arc for 8 s | × 0.85, 8 parts |
+
+Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptune (2.9) stay too big until r ≈ 4.2, so they and Jupiter (until it is eaten) are what its charges hit, with the Hot Jupiter as the fallback when none is near. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, and absorbing the Sun wins the Run.
 
 ## Pacing and scale (Acts 4–9)
 
@@ -232,6 +262,27 @@ Every Run that reached the Incinerator beat it, and all 74 leaderboard submissio
 | 15 (Dust Planet, r ≥ 3) | polar ice cap 2.0, landmass† 2.2, subcontinent† 2.5, ocean basin† 2.8, a continent† 3.1, an ocean† 3.4 | caps on the ice, land on the landmasses, basins and oceans over the oceans |
 
 **Globe pacing check** (pure growth, `pnpm sim --area=globe --seeds=3 --no-hazards`, starting on the Globe at the arrival size): Tier 15 at Lint 3:15, Tumble 4:17, Zap 2:32 (medians). Growth 0.19 (the Continent's) left the 1 → 3 unit stretch at 6–10 minutes; the Tier 14 masses went up (×1.2–1.3) and the multiplier to 0.34. Starting on the Globe has no Perks, so the multiplier is tuned on full Runs, like the Continent's: at 0.20, full Runs from the house (`pnpm sim --seeds=6 --minutes=80 --validate`) took Lint 5:55 / 3:42, Tumble 5:34, Zap 3:27 / 3:29 from arrival to absorbing the Orbital Sweeper (per seed group), and every Run and Area board submission validated (the Globe board peaked at 31% of its growth limit, the Run board at 80%). Starting on the Globe (`pnpm sim --area=globe --seeds=6`) the same Act took Lint 4:48, Tumble 5:45, Zap 3:32 at 0.30 (17 boss wins in 18 fights), so at 0.20 an `--area=globe` start runs about 1.5× longer than a real Run. The bot needed its path planner to wrap round the seam: without it Runs stalled in Tier 14 at the date line.
+
+| Solar System tuning (`AREAS.solar_system`) | Value |
+|---|---|
+| Unit | 0.01 AU (1.496e11 cm) |
+| Arrival radius | 0.85 units (0.0085 AU), the third size leap |
+| Debris Tier band | 16–17 |
+| Map | 360 × 360 units, the Sun at the centre; zone rings: corona < 14, inner orbits < 78, asteroid belt < 102, outer orbits < 160, Kuiper belt beyond; no walls or obstacles |
+| Orbit rings (`layout.routes`, kind `orbit`) | 22, 36, 50 (Earth's, empty; the spawn), 66, 118 (Jupiter), 136, 150, 166 units; width 3 |
+| Placements | Voyager 1 7 units north-east of the spawn; Mercury, Venus, Mars (16–35 units from the spawn), Jupiter (far side of the Sun), Saturn, Uranus, Neptune on their rings; Pluto at 174; 600 belt rocks; 2 × 26 Trojans |
+
+**Solar System Debris ladder** (`src/data/solarDebris.ts`, sizes are radii in Solar System units; absorbable at size ÷ 0.7). Types marked † render a Blender prop (by id or `model`), the rest recipes. Named planets (‡) are placed by the map only, one each.
+
+| Tier band | Debris (size) | Zones |
+|---|---|---|
+| 15–16 (arrival, r 0.85–1) | Voyager 1† 0.12 (placed), meteoroid† 0.11, asteroid† 0.14, comet† 0.18, moonlet† 0.2, asteroid cluster† 0.24, Kuiper belt object† 0.27, rubble pile† 0.3, Phobos† 0.33 | rocks lead in the belt, comets and ice in the Kuiper belt |
+| 16 (Dust Giant, r 1–3) | Vesta† 0.45, Mercury†‡ 0.5, Io† 0.56, Europa† 0.62, Mars†‡ 0.68 (food from r ≈ 0.97), great comet† 0.75, Ceres† 0.78, icy moon† 0.85, Ganymede† 0.95, Titan† 1.05, Pluto†‡ 1.15, Venus†‡ 1.25, dwarf planet† 1.35 | Vesta and Ceres in the belt, the moons in the outer orbits, dwarf planets in the Kuiper belt |
+| 17 (Dust Star, r ≥ 3) | comet swarm 1.8, asteroid swarm† 2.0, Jupiter†‡ 2.4 (an Obstacle until Tier 17, then food from r ≈ 3.4), Uranus†‡ 2.6, rogue planet† 2.6, a slice of Saturn's rings 2.8, Neptune†‡ 2.9, Saturn†‡ 3.0, leftover dust 3.1 | swarms where their parts live, the rest everywhere lightly |
+
+Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't absorb them; Neptune and Saturn stay too big until r ≈ 4.2 (about when the Sun is edible), so they block for most of the fight. Before Tier 17 a dashed amber ring turns round Jupiter; at Tier 17 a toast says it is no longer an Obstacle, and the ring turns green (with a "Jupiter can be absorbed now" toast) once the Bunny is big enough.
+
+**Solar System pacing check** (`pnpm sim --area=solar_system`, 5 seeds, Hazards on, growth 0.2): Tier 16 at Lint 0:58, Tumble 1:30, Zap 0:33; Act (arrival to absorbing the Sun) Lint 7:05, Tumble 7:54, Zap 4:59. An `--area` start has no Perks and ran ≈1.5× a real Run on the Globe, so this is about 3:20–5:20 in a full Run. Tier 16 and 17 masses went up ×1.25 (Tier 15 ×1.15) from the first ladder, which took 5:41–9:54.
 
 ## Characters
 

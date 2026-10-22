@@ -54,8 +54,12 @@ describe('globe layout', () => {
       const g = generateGlobe(seed);
       expect(g.area).toBe('globe');
       expect(g.wrapX).toBe(true);
-      expect(g.exit).toBeUndefined();
-      expect(g.obstacles).toEqual([]);
+      // The only obstacle is the exit's gate on the north bound, well clear of the seam.
+      expect(g.exit?.dir).toEqual({ x: 0, z: -1 });
+      expect(g.exit!.rect.minZ).toBe(0);
+      expect(g.exit!.rect.minX).toBeGreaterThan(GLOBE.seamMargin);
+      expect(g.exit!.rect.maxX).toBeLessThan(GLOBE.width - GLOBE.seamMargin);
+      expect(g.obstacles.map((o) => o.id)).toEqual(['escape_gate']);
       for (let x = 0.5; x < GLOBE.width; x += 4) for (let z = 0.5; z < GLOBE.depth; z += 4) expect(roomAt(g, x, z), `${x},${z}`).toBeDefined();
       for (let z = GLOBE.northCap[1] + 1; z < GLOBE.depth - GLOBE.southCap[1] - 1; z += 2) {
         expect(roomAt(g, 0.5, z)?.type).toBe('oceans');

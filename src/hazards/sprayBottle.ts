@@ -11,17 +11,20 @@
  * (continent, VOLCANO) never moves: only its `crater` node turns to aim, the lane is the floor
  * telegraph, and it lobs a burst of lava bombs (`dropletArc`) whose ash slows like the soak. The
  * Anti-Satellite Laser (globe, ASAT_LASER) turns only its `head`, scans while the Bunny is out of
- * range, and fires fast, narrow red bolts that do not soak; it is placed on landmasses.
+ * range, and fires fast, narrow red bolts that do not soak; it is placed on landmasses. The Sunspot
+ * (solar system, SUNSPOT) sweeps its flux-tube `head` like a pulsar beam, then fires a pulsed burst
+ * of orange flare bolts; it is placed sunward of the Kuiper belt (SUNSPOT_ZONES).
  *
  * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
  * clogged by it), and a droplet that reaches the Decoy pops it.
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { ASAT_LASER, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
+import { ASAT_LASER, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
+import type { RoomType } from '../world/types';
 import { BaseHazard } from './base';
 import { aimTarget, bunnySheltered, hitBunny, pushBunnyOut, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
@@ -222,5 +225,21 @@ export const asatLaserDef = hazardRegistry.register({
   modelId: ASAT_LASER.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, ASAT_LASER);
+  },
+});
+
+/** Zones a Sunspot is placed in when the layout has any: sunward of the Kuiper belt. */
+export const SUNSPOT_ZONES: readonly RoomType[] = ['corona', 'inner_orbits', 'asteroid_belt', 'outer_orbits'];
+
+/** Solar System turret: a sunspot firing pulsar-like flares (SUNSPOT). */
+export const sunspotDef = hazardRegistry.register({
+  id: 'sunspot',
+  name: 'Sunspot',
+  footprint: tuningFootprint(SUNSPOT),
+  spawnZones: SUNSPOT_ZONES,
+  mass: SUNSPOT.mass,
+  modelId: SUNSPOT.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, SUNSPOT);
   },
 });

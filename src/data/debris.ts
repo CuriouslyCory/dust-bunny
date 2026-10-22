@@ -10,6 +10,8 @@ import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { CITY_DEBRIS } from './cityDebris';
 import { CONTINENT_DEBRIS } from './continentDebris';
 import { GLOBE_DEBRIS } from './globeDebris';
+import { SOLAR_DEBRIS } from './solarDebris';
+import { SUN_DEBRIS } from './sunDebris';
 import { ICE_SHEET_DEBRIS } from './iceSheetDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 import { REGION_DEBRIS } from './regionDebris';
@@ -59,6 +61,12 @@ export interface DebrisType {
   area?: AreaId;
   /** Model id whose GLB backs the visual (default: `id`; e.g. `calved_iceberg` renders the `iceberg` prop). */
   model?: string;
+  /**
+   * An Obstacle until the Bunny reaches this Tier (Jupiter: 17): it can't be absorbed, pulled by
+   * the magnet or pushed, whatever its size, and blocks like any Debris too big to absorb. From
+   * that Tier on it is ordinary Debris (`debrisLocked`, src/systems/absorb.ts).
+   */
+  lockedUntilTier?: number;
 }
 
 const PI = Math.PI;
@@ -411,6 +419,8 @@ export const DEBRIS_TYPES: DebrisType[] = [
   ...CONTINENT_DEBRIS,
   ...ICE_SHEET_DEBRIS,
   ...GLOBE_DEBRIS,
+  ...SOLAR_DEBRIS,
+  ...SUN_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

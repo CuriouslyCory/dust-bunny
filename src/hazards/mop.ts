@@ -8,14 +8,15 @@
  * patrols the river and leaves a slowing wake. The River Surge (continent, RIVER_SURGE) is a fast
  * flood surge across the plains with a wide muddy trail. The Re-entry Burn (globe, REENTRY_BURN)
  * roams across zones (`roam`) and its fire trail burns instead of slowing (`burn`: the Bunny sheds
- * mass every `interval` s on it).
+ * mass every `interval` s on it). The Sungrazer (solar system, SUNGRAZER) roams the same way and its
+ * icy tail trail slows.
  *
  * On a map that wraps east–west the spawn zone's rect is moved to the Mop's lap (rooms are stored
  * once, in the canonical strip), so the waypoints stay around it.
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, SUNGRAZER, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -249,5 +250,17 @@ export const reentryBurnDef = hazardRegistry.register({
   modelId: REENTRY_BURN.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, REENTRY_BURN);
+  },
+});
+
+/** Solar System trail-layer: a sungrazing comet leaving an ice tail that slows (SUNGRAZER). */
+export const sungrazerDef = hazardRegistry.register({
+  id: 'sungrazer',
+  name: 'Sungrazer',
+  footprint: tuningFootprint(SUNGRAZER),
+  mass: SUNGRAZER.mass,
+  modelId: SUNGRAZER.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, SUNGRAZER);
   },
 });

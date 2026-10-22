@@ -9,13 +9,14 @@
  * compactors (MINI_COMPACTOR); in the continent the Tornado (TORNADO: erratic turns, a wide vortex
  * pull, spins its `funnel`); on the Globe the Debris-Field Satellite (DEBRIS_SATELLITE: tumbling
  * turns, a debris-field pull, spins its `panels`) and the Orbital Sweeper's Kessler swarm of mini
- * sweepers (MINI_SWEEPER).
+ * sweepers (MINI_SWEEPER); in the Solar System the Rogue Asteroid (ROGUE_ASTEROID: tumbling turns,
+ * a gravity pull, spins its `rock`).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { DEBRIS_SATELLITE, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
+import { DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -227,5 +228,17 @@ export const miniSweeperDef = hazardRegistry.register({
   modelId: MINI_SWEEPER.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_SWEEPER);
+  },
+});
+
+/** Solar System wanderer: a rogue asteroid whose gravity pulls (ROGUE_ASTEROID). */
+export const rogueAsteroidDef = hazardRegistry.register({
+  id: 'rogue_asteroid',
+  name: 'Rogue Asteroid',
+  footprint: tuningFootprint(ROGUE_ASTEROID),
+  mass: ROGUE_ASTEROID.mass,
+  modelId: ROGUE_ASTEROID.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, ROGUE_ASTEROID);
   },
 });

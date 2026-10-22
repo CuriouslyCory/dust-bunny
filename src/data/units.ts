@@ -22,9 +22,13 @@ export function lengthUnitFor(cm: number, from: LengthUnitId = 'cm'): { id: Leng
   return LENGTH_UNITS[i]!;
 }
 
-/** A number for a readout: 2 decimals below 10, 1 below 1,000, none above. */
+/**
+ * A number for a readout: 2 significant digits below 0.1 (the Solar System's `0.0085 AU`), 2
+ * decimals below 10, 1 below 1,000, none above.
+ */
 export function formatAmount(v: number): string {
   const a = Math.abs(v);
+  if (a > 0 && a < 0.1) return v.toPrecision(2);
   return v.toFixed(a < 10 ? 2 : a < 1000 ? 1 : 0);
 }
 

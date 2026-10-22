@@ -1,5 +1,5 @@
 {
-  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts). Continent models are authored at 1 unit = 100 m and Globe models at 1 unit = 10 km: both scale 0.01.",
+  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts). Continent models are authored at 1 unit = 100 m and Globe models at 1 unit = 10 km and Solar System models at 1 unit = 0.0001 AU: all scale 0.01.",
   "couch": { "file": "couch.glb", "fit": "xz" },
   "armchair": { "file": "armchair.glb", "fit": "xz" },
   "coffee_table": { "file": "coffee_table.glb", "fit": "xz" },
@@ -94,5 +94,25 @@
   "satellite": { "file": "satellite.glb", "fit": "none", "scale": 0.01 },
   "rocket_stage": { "file": "rocket_stage.glb", "fit": "none", "scale": 0.01 },
   "space_junk": { "file": "space_junk.glb", "fit": "none", "scale": 0.01 },
-  "cloud_swirl": { "file": "cloud_swirl.glb", "fit": "none", "scale": 0.01 }
+  "cloud_swirl": { "file": "cloud_swirl.glb", "fit": "none", "scale": 0.01 },
+  "rogue_asteroid": { "file": "rogue_asteroid.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "comet": { "file": "comet.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "sunspot": { "file": "sunspot.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "sungrazer": { "file": "sungrazer.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "solar_flare": { "file": "solar_flare.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "the_sun": { "file": "the_sun.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "asteroid": { "file": "asteroid.glb", "fit": "none", "scale": 0.01 },
+  "asteroid_cluster": { "file": "asteroid_cluster.glb", "fit": "none", "scale": 0.01 },
+  "comet_nucleus": { "file": "comet_nucleus.glb", "fit": "none", "scale": 0.01 },
+  "voyager_1": { "file": "voyager_1.glb", "fit": "none", "scale": 0.01 },
+  "moonlet": { "file": "moonlet.glb", "fit": "none", "scale": 0.01 },
+  "icy_moon": { "file": "icy_moon.glb", "fit": "none", "scale": 0.01 },
+  "rocky_planet": { "file": "rocky_planet.glb", "fit": "none", "scale": 0.01 },
+  "mars": { "file": "mars.glb", "fit": "none", "scale": 0.01 },
+  "venus": { "file": "venus.glb", "fit": "none", "scale": 0.01 },
+  "jupiter": { "file": "jupiter.glb", "fit": "none", "scale": 0.01 },
+  "saturn": { "file": "saturn.glb", "fit": "none", "scale": 0.01 },
+  "ice_giant": { "file": "ice_giant.glb", "fit": "none", "scale": 0.01 },
+  "dwarf_planet": { "file": "dwarf_planet.glb", "fit": "none", "scale": 0.01 },
+  "prominence": { "file": "prominence.glb", "fit": "none", "scale": 0.01 }
 }

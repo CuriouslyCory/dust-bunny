@@ -2429,6 +2429,535 @@
       },
       "category": "prop",
       "units": "10 km"
+    },
+    {
+      "triangles": 1780,
+      "footprintRadius": 109.6,
+      "height": 80.4,
+      "minY": -0.1,
+      "maxY": 80.3,
+      "sizeX": 179.7,
+      "sizeZ": 200.5,
+      "id": "rogue_asteroid",
+      "file": "models/rogue_asteroid.glb",
+      "bytes": 58888,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Wanderer that pulls. A lumpy, cratered rock (about 140 x 115 x 80) with four pebbles caught in its gravity at r 80 to 105; scattered gravel on the floor in body. rock node (the rock and its pebbles) spins about its local Y axis; pivot at the rock centre (0, 40, 0).",
+      "nodes": {
+        "rock": {
+          "pivot": [
+            0.0,
+            40.0,
+            0.0
+          ]
+        },
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 2188,
+      "footprintRadius": 383.8,
+      "height": 119.8,
+      "minY": -0.7,
+      "maxY": 119.1,
+      "sizeX": 251.2,
+      "sizeZ": 485.7,
+      "id": "comet",
+      "file": "models/comet.glb",
+      "bytes": 59584,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Lane patrol riding an orbit. Comet moving +Z: an icy dark nucleus (radius 60, centre (0, 60, 0)) with frost patches and sunward jets, inside a glowing coma skirt (r 100); a curved cream dust tail and a straight blue ion tail stream back to -Z (to z = -375). tail node (both tails) has its pivot at the nucleus centre (0, 60, 0); scale it along Z / flutter it about Y. Nucleus radius 60 = 0.6 world units at scale 0.01.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "tail": {
+          "pivot": [
+            0.0,
+            60.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 1646,
+      "footprintRadius": 135.9,
+      "height": 77.4,
+      "minY": -6.0,
+      "maxY": 71.4,
+      "sizeX": 248.5,
+      "sizeZ": 245.1,
+      "id": "sunspot",
+      "file": "models/sunspot.glb",
+      "bytes": 60956,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Turret that fires flare bolts. A dark umbra (r 50) in a filamentary orange penumbra (r 106) with a bright faculae rim, flat on the floor. head node: a twisted magnetic flux tube (three emissive strands) rising from the back of the umbra and arching forward to a white-hot muzzle facing +Z; it turns about Y through its pivot at the origin (0, 0, 0). Muzzle at (0, 39, 77.3) in model space.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 524,
+      "footprintRadius": 152.1,
+      "height": 51.0,
+      "minY": -3.5,
+      "maxY": 47.5,
+      "sizeX": 136.0,
+      "sizeZ": 204.2,
+      "id": "sungrazer",
+      "file": "models/sungrazer.glb",
+      "bytes": 16572,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Trail-layer that lays an icy trail. A sungrazing comet moving +Z: a small white-hot head (r 20) at (0, 22, 46) in a yellow coma collar, and a short, wide tail fanning back to -Z (white, then orange, then icy blue at the end, where the trail continues).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 2746,
+      "footprintRadius": 230.3,
+      "height": 120.7,
+      "minY": -2.7,
+      "maxY": 118.0,
+      "sizeX": 190.9,
+      "sizeZ": 315.2,
+      "id": "solar_flare",
+      "file": "models/solar_flare.glb",
+      "bytes": 91060,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Cone blaster (blow). A bright flare ribbon patch (r 90) with two dark footpoints at x = +-58, and five flame tongues licking out to +Z (to r 240): the blast faces +Z. loop node: an arcade of three twisted emissive plasma loops (the tallest 120 high) rooted at the footpoints; it pulses / spins about its local Y axis; pivot at the origin (0, 0, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "loop": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 7768,
+      "footprintRadius": 294.4,
+      "height": 379.1,
+      "minY": -0.3,
+      "maxY": 378.8,
+      "sizeX": 583.3,
+      "sizeZ": 585.3,
+      "id": "the_sun",
+      "file": "models/the_sun.glb",
+      "bytes": 223384,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Boss. The Sun: a granulated emissive ball (radius 270, squashed to 0.7 in Y: height 378, centre (0, 189, 0)) with a face on the +Z side: two dark sunspot eyes with white glints under heavy penumbra brows (eye centres at (-97.8, 286.3, 209.8) and (97.8, 286.3, 209.8)). corona node: a fringe of 32 flame tongues round the equator (to r 294), spins about Y; pivot at the centre (0, 189, 0). prominence_l / prominence_r: twisted plasma loops over the left (-X) / right (+X) shoulders, pivot on the surface midway between their roots; hide them when chipped.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "corona": {
+          "pivot": [
+            0.0,
+            189.0,
+            0.0
+          ]
+        },
+        "prominence_l": {
+          "pivot": [
+            -226.44,
+            291.94,
+            0.0
+          ]
+        },
+        "prominence_r": {
+          "pivot": [
+            226.44,
+            291.94,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 280,
+      "footprintRadius": 58.6,
+      "height": 77.6,
+      "minY": 0.0,
+      "maxY": 77.6,
+      "sizeX": 105.6,
+      "sizeZ": 99.0,
+      "id": "asteroid",
+      "file": "models/asteroid.glb",
+      "bytes": 11768,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A lumpy, cratered potato of grey-brown rock (about 120 x 100 x 80).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 400,
+      "footprintRadius": 84.0,
+      "height": 52.2,
+      "minY": 0.0,
+      "maxY": 52.2,
+      "sizeX": 142.4,
+      "sizeZ": 120.9,
+      "id": "asteroid_cluster",
+      "file": "models/asteroid_cluster.glb",
+      "bytes": 18400,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose clump of six rocks of different sizes, the biggest in the middle.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 372,
+      "footprintRadius": 73.7,
+      "height": 79.6,
+      "minY": 0.0,
+      "maxY": 79.6,
+      "sizeX": 142.0,
+      "sizeZ": 106.2,
+      "id": "comet_nucleus",
+      "file": "models/comet_nucleus.glb",
+      "bytes": 13956,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A two-lobed dark comet nucleus (a rubber duck like 67P) with white frost patches and two pale sunward jets.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 864,
+      "footprintRadius": 101.3,
+      "height": 37.5,
+      "minY": 2.5,
+      "maxY": 40.0,
+      "sizeX": 146.2,
+      "sizeZ": 148.4,
+      "id": "voyager_1",
+      "file": "models/voyager_1.glb",
+      "bytes": 37780,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Voyager 1: a big white dish facing up on a ten-sided silver bus with a gold record, the RTG boom (three dark power cylinders) to -X, the science boom and scan platform to +X, and the long magnetometer boom trailing back to -Z.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 320,
+      "footprintRadius": 101.5,
+      "height": 202.1,
+      "minY": 0.0,
+      "maxY": 202.1,
+      "sizeX": 200.1,
+      "sizeZ": 200.0,
+      "id": "moonlet",
+      "file": "models/moonlet.glb",
+      "bytes": 11684,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A small grey moon: a cratered sphere (radius 100) resting on the floor, darker crater floors and pale rims.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 392,
+      "footprintRadius": 102.2,
+      "height": 201.7,
+      "minY": 0.0,
+      "maxY": 201.7,
+      "sizeX": 192.9,
+      "sizeZ": 197.0,
+      "id": "icy_moon",
+      "file": "models/icy_moon.glb",
+      "bytes": 13040,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An icy moon like Europa: a white and cream sphere (radius 100) criss-crossed by tan-brown crack lines.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 432,
+      "footprintRadius": 99.4,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 195.6,
+      "sizeZ": 198.5,
+      "id": "rocky_planet",
+      "file": "models/rocky_planet.glb",
+      "bytes": 13128,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A generic terrestrial planet: a light grey sphere (radius 100) with paler highlands, darker plains and a few craters; light so per-instance tints recolour it (if listed in GLB_TINTED).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 784,
+      "footprintRadius": 99.8,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 199.5,
+      "sizeZ": 199.5,
+      "id": "mars",
+      "file": "models/mars.glb",
+      "bytes": 21856,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Mars: a rust-red sphere (radius 100) with a white north polar cap on top, dark albedo markings, paler deserts and the dark gash of Valles Marineris on the camera side.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 840,
+      "footprintRadius": 100.0,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 200.0,
+      "sizeZ": 200.0,
+      "id": "venus",
+      "file": "models/venus.glb",
+      "bytes": 27260,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Venus: a pale yellow sphere (radius 100) wrapped in swirling cloud bands (a sideways Y pattern).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 1100,
+      "footprintRadius": 100.0,
+      "height": 199.7,
+      "minY": 0.1,
+      "maxY": 199.9,
+      "sizeX": 198.9,
+      "sizeZ": 199.8,
+      "id": "jupiter",
+      "file": "models/jupiter.glb",
+      "bytes": 34864,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Jupiter: a banded sphere (radius 100; cream zones, rust and brown belts, greyish poles) with the Great Red Spot; the axis is tipped 42 deg back (away from the camera) so the bands run across the face the camera sees and the Red Spot sits just below its middle.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 1152,
+      "footprintRadius": 228.0,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 456.0,
+      "sizeZ": 456.0,
+      "id": "saturn",
+      "file": "models/saturn.glb",
+      "bytes": 36368,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Saturn: a pale gold banded sphere (radius 100) with a flat ring system in the XZ plane round its equator (C ring 124-152, B ring 152-195, Cassini gap, A ring 203-228; a single upward-facing sheet).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 808,
+      "footprintRadius": 158.0,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 316.0,
+      "sizeZ": 316.0,
+      "id": "ice_giant",
+      "file": "models/ice_giant.glb",
+      "bytes": 23872,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An ice giant (Uranus / Neptune): a smooth cyan sphere (radius 100) with faint paler and darker bands and one thin, faint flat ring (r 150-158).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 492,
+      "footprintRadius": 101.6,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 200.0,
+      "sizeZ": 201.6,
+      "id": "dwarf_planet",
+      "file": "models/dwarf_planet.glb",
+      "bytes": 14664,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Pluto: a tan sphere (radius 100) with a dark reddish-brown equatorial belt and the pale heart (Tombaugh Regio) on the camera side.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
+    },
+    {
+      "triangles": 264,
+      "footprintRadius": 57.7,
+      "height": 83.4,
+      "minY": -3.0,
+      "maxY": 80.4,
+      "sizeX": 114.2,
+      "sizeZ": 54.0,
+      "id": "prominence",
+      "file": "models/prominence.glb",
+      "bytes": 11320,
+      "notes": "Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A chip of the Sun: a twisted plasma arc (yellow and orange strands) rooted in a glowing orange patch, spanning X.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "0.0001 AU"
     }
   ]
 }

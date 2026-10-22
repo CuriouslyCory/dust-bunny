@@ -11,13 +11,16 @@
  * prefers `tundra` and `mountains` zones (GLACIER_ZONES) when the map has them. On the Globe the
  * Space Station (SPACE_STATION) joins the nearest orbit lane (`layout.routes` of kind 'orbit',
  * `orbitLane`; the route's copy nearest it on the wrap-around map) and patrols east–west along it.
+ * In the Solar System the Comet (COMET, `ringReach`) rides the closed orbit ring nearest its spawn
+ * one way round (`ringPath`, `ringPoint`): no ends, a short telegraph lane sliding ahead of it, its
+ * `tail` fluttering (`flutterNode`).
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COMET, FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -120,8 +123,91 @@ function joinOrbit(run: Run, x: number, z: number, reach: number, c: LaneShape):
   return moved ? { lane: moved, t: (px - moved.ax) / moved.length } : { lane, t: Math.min(1, Math.max(0, onLane(px))) };
 }
 
+/** A closed orbit ring (a `routes` polyline of kind 'orbit' whose last point is its first) as an arc-length path. */
+export interface RingPath {
+  points: ReadonlyArray<{ x: number; z: number }>;
+  /** Arc length from the first point to each point (cum[0] = 0, last = length). */
+  cum: number[];
+  length: number;
+}
+
+/** Position and unit tangent (towards increasing s) at arc length `s` along a ring (wraps). */
+export function ringPoint(path: RingPath, s: number): { x: number; z: number; tx: number; tz: number } {
+  const L = path.length;
+  const t = ((s % L) + L) % L;
+  let i = 0;
+  while (i < path.cum.length - 2 && path.cum[i + 1]! <= t) i++;
+  const a = path.points[i]!;
+  const b = path.points[i + 1]!;
+  const seg = path.cum[i + 1]! - path.cum[i]! || 1;
+  const f = (t - path.cum[i]!) / seg;
+  return { x: a.x + (b.x - a.x) * f, z: a.z + (b.z - a.z) * f, tx: (b.x - a.x) / seg, tz: (b.z - a.z) / seg };
+}
+
+/**
+ * The closed orbit ring (`routes` of kind 'orbit' whose first and last points coincide: the Solar
+ * System's rings round the Sun) nearest (x, z), if one passes within `reach`, and the arc length
+ * of the point on it nearest (x, z). Open routes (the Globe's east–west lanes) never count.
+ */
+export function ringPath(house: HouseLayout, x: number, z: number, reach: number): { path: RingPath; s: number } | null {
+  let best: { points: ReadonlyArray<{ x: number; z: number }>; seg: number; f: number; d: number } | null = null;
+  for (const route of house.routes ?? []) {
+    const pts = route.points;
+    if (route.kind !== 'orbit' || pts.length < 4) continue;
+    const first = pts[0]!;
+    const last = pts[pts.length - 1]!;
+    if (Math.hypot(first.x - last.x, first.z - last.z) > 1e-6) continue;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i]!;
+      const b = pts[i + 1]!;
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
+      const len2 = ex * ex + ez * ez || 1;
+      const f = Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / len2));
+      const d = Math.hypot(a.x + ex * f - x, a.z + ez * f - z);
+      if (d <= reach && (!best || d < best.d)) best = { points: pts, seg: i, f, d };
+    }
+  }
+  if (!best) return null;
+  const cum = [0];
+  for (let i = 1; i < best.points.length; i++) {
+    const a = best.points[i - 1]!;
+    const b = best.points[i]!;
+    cum.push(cum[i - 1]! + Math.hypot(b.x - a.x, b.z - a.z));
+  }
+  const path = { points: best.points, cum, length: cum[cum.length - 1]! };
+  return { path, s: cum[best.seg]! + (cum[best.seg + 1]! - cum[best.seg]!) * best.f };
+}
+
+/**
+ * The ring a ring-riding Hazard spawned at (x, z) joins, and where on it (arc length) it starts. A
+ * spawn point off screen (the director's) stays off screen: if the snap would bring it into view,
+ * it starts further round the ring, whichever way is shorter.
+ */
+function joinRing(run: Run, x: number, z: number, reach: number, size: number): { path: RingPath; s: number } | null {
+  const ring = ringPath(run.house, x, z, reach);
+  if (!ring) return null;
+  const at = (s: number) => ringPoint(ring.path, s);
+  const p = at(ring.s);
+  if (onScreen(run, x, z, size) || !onScreen(run, p.x, p.z, size)) return ring;
+  for (let k = 1; k * size < ring.path.length / 2; k++) {
+    for (const dir of [1, -1]) {
+      const q = at(ring.s + dir * k * size);
+      if (!onScreen(run, q.x, q.z, size)) return { path: ring.path, s: ring.s + dir * k * size };
+    }
+  }
+  return ring;
+}
+
+/** Length of the lane telegraph that slides ahead of a ring rider (world units, plus its size). */
+const RING_LOOKAHEAD = 8;
+
 export class LintRoller extends BaseHazard {
   private readonly lane: Lane | null;
+  /** Ring riders (`ringReach`, the Comet): the ring, arc position and the telegraph sliding ahead. */
+  readonly ring: RingPath | null = null;
+  s = 0;
+  private readonly ringDecal;
   /** 0..1 position along the lane, and direction (+1 towards b). */
   private t = 0.5;
   private dir: 1 | -1;
@@ -141,6 +227,18 @@ export class LintRoller extends BaseHazard {
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
     this.model.scale.setScalar(cfg.size / (cfg.modelSize ?? cfg.size));
+    const ring = cfg.ringReach ? joinRing(run, x, z, cfg.ringReach, cfg.size) : null;
+    if (ring) {
+      this.dir = rng.chance(0.5) ? 1 : -1;
+      // Rides the ring one way round: no ends, a short telegraph lane slides ahead of it.
+      this.lane = null;
+      this.ring = ring.path;
+      this.s = ring.s;
+      this.ringDecal = this.addDecal(laneDecal(RING_LOOKAHEAD + cfg.size, cfg.size * 2, DECAL_COLORS.warn, 0.16));
+      this.placeOnRing();
+      return;
+    }
+    this.ringDecal = null;
     const orbit = cfg.orbitReach ? joinOrbit(run, x, z, cfg.orbitReach, cfg) : null;
     this.lane = orbit?.lane ?? planLane(run.house, x, z, rng, cfg);
     this.dir = rng.chance(0.5) ? 1 : -1;
@@ -169,20 +267,50 @@ export class LintRoller extends BaseHazard {
 
   /** Bounces off a planted Tumble: turns back along the lane (only if heading into it) and pauses. */
   onPlanted(run: Run): void {
-    const l = this.lane;
-    if (!l) return;
+    const a = this.axis();
+    if (!a) return;
     const b = run.bunny;
-    const towards = ((l.bx - l.ax) * (b.x - this.x) + (l.bz - l.az) * (b.z - this.z)) * this.dir > 0;
+    const towards = (a.x * (b.x - this.x) + a.z * (b.z - this.z)) * this.dir > 0;
     if (towards) {
       this.dir = this.dir === 1 ? -1 : 1;
       this.pause = Math.max(this.pause, this.cfg.endPause);
     }
   }
 
+  /** The course's direction here (towards b on a lane, increasing arc length on a ring); null without one. */
+  private axis(): { x: number; z: number } | null {
+    if (this.ring) {
+      const p = ringPoint(this.ring, this.s);
+      return { x: p.tx, z: p.tz };
+    }
+    const l = this.lane;
+    return l ? { x: l.bx - l.ax, z: l.bz - l.az } : null;
+  }
+
+  /** Puts it at its arc position on the ring, facing its way round, and slides the telegraph ahead. */
+  private placeOnRing(): void {
+    const p = ringPoint(this.ring!, this.s);
+    this.x = p.x;
+    this.z = p.z;
+    this.yaw = yawOf(p.tx * this.dir, p.tz * this.dir);
+    this.ringDecal?.place(this.x, this.z, this.yaw);
+  }
+
   protected tick(dt: number, run: Run): void {
+    const c = this.cfg;
+    if (c.flutterNode) {
+      const tail = this.model.getObjectByName(c.flutterNode);
+      if (tail) tail.scale.set(1 + 0.06 * Math.sin(this.time * 7.3), 1, 1 + 0.08 * Math.sin(this.time * 4.1));
+    }
+    if (this.ring) {
+      if (this.pause > 0) this.pause -= dt;
+      else this.s += this.tierSpeed(run, c.speed) * dt * this.dir;
+      this.placeOnRing();
+      this.carry(dt, run);
+      return;
+    }
     const l = this.lane;
     if (!l) return;
-    const c = this.cfg;
     if (this.pause > 0) {
       this.pause -= dt;
     } else {
@@ -198,7 +326,11 @@ export class LintRoller extends BaseHazard {
     this.x = l.ax + (l.bx - l.ax) * this.t;
     this.z = l.az + (l.bz - l.az) * this.t;
     this.yaw = yawOf((l.bx - l.ax) * this.dir, (l.bz - l.az) * this.dir);
+    this.carry(dt, run);
+  }
 
+  /** Carries a stuck Bunny along on the drum and releases it when its time is up. */
+  private carry(dt: number, run: Run): void {
     if (this.stuck > 0) {
       const b = run.bunny;
       this.stuck -= dt;
@@ -212,9 +344,9 @@ export class LintRoller extends BaseHazard {
 
   /** Unit vector perpendicular to the lane, on the side of (dx, dz) (random side if on the lane). */
   private sideOf(dx: number, dz: number): { x: number; z: number } {
-    const l = this.lane!;
-    let px = -(l.bz - l.az);
-    let pz = l.bx - l.ax;
+    const a = this.axis()!;
+    let px = -a.z;
+    let pz = a.x;
     if (px * dx + pz * dz < 0) {
       px = -px;
       pz = -pz;
@@ -349,5 +481,17 @@ export const spaceStationDef = hazardRegistry.register({
   modelId: SPACE_STATION.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, SPACE_STATION);
+  },
+});
+
+/** Solar System lane patrol: a comet on its orbit (COMET). */
+export const cometDef = hazardRegistry.register({
+  id: 'comet',
+  name: 'Comet',
+  footprint: tuningFootprint(COMET),
+  mass: COMET.mass,
+  modelId: COMET.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, COMET);
   },
 });

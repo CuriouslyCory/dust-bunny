@@ -53,7 +53,7 @@ describe('globe generation', () => {
       for (const s of SHAPES.filter((s) => s.kind === 'land' || s.kind === 'islands')) expect(g.rooms.some((r) => r.id === s.id || r.id.startsWith(`${s.id}.`)), s.id).toBe(true);
     });
 
-    it(`keeps the date line open and the map free of obstacles (seed ${seed})`, () => {
+    it(`keeps the date line open and the map free of obstacles but the exit gate (seed ${seed})`, () => {
       const surf = globeSurface(g.seed, 2);
       for (let j = 0; j < surf.rows; j++) {
         for (const i of [0, 1, surf.cols - 2, surf.cols - 1]) {
@@ -66,7 +66,7 @@ describe('globe generation', () => {
         expect(a === 'oceans' || a === 'icecaps').toBe(true);
         expect(roomAt(g, W - 0.2, z)!.type).toBe(a === 'icecaps' ? 'icecaps' : roomAt(g, W - 0.2, z)!.type);
       }
-      expect(g.obstacles).toEqual([]);
+      expect(g.obstacles.map((o) => o.id)).toEqual(['escape_gate']);
       expect(g.walls).toEqual([]);
       expect(g.wrapX).toBe(true);
     });

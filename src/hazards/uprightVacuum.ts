@@ -12,14 +12,16 @@
  * (`wetSeconds`: the `hazard:wet` slow, like the Mop's trail). The Hurricane (continent, HURRICANE)
  * is a Water Bomber that spins its cloud `bands` (`spinNode`): its wind cone blasts the Bunny away
  * from the eyewall and the rain soaks it. The Globe's Hurricane (GLOBE_HURRICANE, a hurricane seen
- * from orbit) does the same, spinning its `spiral`, and is placed over oceans and shelf seas.
+ * from orbit) does the same, spinning its `spiral`, and is placed over oceans and shelf seas. The
+ * Solar Flare (solar system, SOLAR_FLARE) is a dry blast from a plasma arch whose `loop` spins and
+ * swells through the warm-up (`pulseNode`).
  *
  * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
  * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { GLOBE_HURRICANE, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { GLOBE_HURRICANE, SOLAR_FLARE, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -126,6 +128,7 @@ export class UprightVacuum extends BaseHazard {
     this.cone.root.scale.setScalar(range / c.coneRange);
     if (this.state === 'warmup') this.cone.pulse(this.time, 1 - this.timer / this.attackTime(run, c.warmup));
     else if (this.state === 'on') this.cone.setOpacity(0.28 + 0.1 * Math.sin(this.time * 14));
+    if (c.pulseNode) this.pulse(run, c.pulseNode, c.pulseAmount ?? 0.2);
 
     if (this.state !== 'on') return;
     if (this.blows) this.blowDebris(dt, run, it.x, it.z, range);
@@ -143,6 +146,16 @@ export class UprightVacuum extends BaseHazard {
         b.stats.add({ stat: 'speed', op: 'mul', value: c.wetMultiplier ?? 1, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: c.wetSeconds });
       }
     } else applySuction(run, it.x, it.z, c.suctionStrength, falloff, dt);
+  }
+
+  /** Swells `name` by up to `amount` through the warm-up, pulses it while the air is on, rests it while off (the Solar Flare's `loop`). */
+  private pulse(run: Run, name: string, amount: number): void {
+    const node = this.model.getObjectByName(name);
+    if (!node) return;
+    let k = 0;
+    if (this.state === 'warmup') k = amount * (1 - this.timer / this.attackTime(run, this.cfg.warmup));
+    else if (this.state === 'on') k = amount * (0.85 + 0.15 * Math.sin(this.time * 12));
+    node.scale.setScalar(1 + Math.max(0, k));
   }
 
   /** Blows loose small Debris in the cone away from the nozzle (stronger up close). */
@@ -243,5 +256,17 @@ export const globeHurricaneDef = hazardRegistry.register({
   modelId: GLOBE_HURRICANE.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, GLOBE_HURRICANE);
+  },
+});
+
+/** Solar System cone blaster: a solar flare that blasts the Bunny away (SOLAR_FLARE). */
+export const solarFlareDef = hazardRegistry.register({
+  id: 'solar_flare',
+  name: 'Solar Flare',
+  footprint: tuningFootprint(SOLAR_FLARE),
+  mass: SOLAR_FLARE.mass,
+  modelId: SOLAR_FLARE.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, SOLAR_FLARE);
   },
 });

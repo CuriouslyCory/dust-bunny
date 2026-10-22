@@ -92,9 +92,10 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
  * Blender mesh instead of the recipe. The model is scaled so its footprint radius is 1 (= `size`)
  * and rests on y = 0; very tall, thin props (street lamps) use a fifth of their height instead, so
  * they don't tower over everything. For ids listed here the largest material is replaced by the per-instance
- * colour (other parts keep their authored colours); other GLB types ignore instance colours.
+ * colour (other parts keep their authored colours); other GLB types ignore instance colours. The
+ * Solar System's generic planets (`rocky_planet`, `icy_moon`, `ice_giant`) back several Debris types this way.
  */
-const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck']);
+const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck', 'rocky_planet', 'icy_moon', 'ice_giant']);
 
 /** Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute. */
 export function modelDebrisGeometry(id: string, template: Object3D): BufferGeometry | null {

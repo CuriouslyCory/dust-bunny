@@ -30,6 +30,10 @@
  * instead of radial suction, its twin lasers are the `ash` volley in red, and it summons a Kessler
  * swarm of mini sweepers.
  *
+ * The Sun (solar system, Tier 17, THE_SUN) is a subclass in theSun.ts: only a charge into a giant
+ * planet the Bunny can't absorb yet stuns it (an eclipse), its solar wind pushes instead of
+ * sucking, its flare volleys are the `ash` volley in orange, and its chips are prominences.
+ *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
@@ -505,3 +509,4 @@ export const incineratorDef = hazardRegistry.register({
     return new RoboVac9000(id, this, x, z, rng, INCINERATOR);
   },
 });
+

@@ -22,6 +22,7 @@ import globe  # noqa: E402
 import hazards  # noqa: E402
 import outdoor  # noqa: E402
 import region  # noqa: E402
+import solar  # noqa: E402
 
 CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               ("prop", furniture.PROPS),
@@ -36,9 +37,11 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               # continent (Act 5; 1 unit = 100 m, loaded at scale 0.01)
               ("hazard", continent.HAZARDS), ("prop", continent.PROPS),
               # globe (Act 6; 1 unit = 10 km, loaded at scale 0.01)
-              ("hazard", globe.HAZARDS), ("prop", globe.PROPS)]
+              ("hazard", globe.HAZARDS), ("prop", globe.PROPS),
+              # solar system (Act 7; 1 unit = 0.0001 AU, loaded at scale 0.01)
+              ("hazard", solar.HAZARDS), ("prop", solar.PROPS)]
 # ids authored in other units than cm (catalog "units" field)
-UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe)
+UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe, solar)
          for fn in mod.HAZARDS + mod.PROPS}
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
@@ -95,7 +98,9 @@ def write_doc(models):
         "are in those 100 m units, and their catalog entries carry "
         "`\"units\": \"100 m\"`. The Globe models "
         "(`tools/blender/globe.py`, notes starting \"Globe scale\") use "
-        "1 unit = 10 km: see Globe scale below.",
+        "1 unit = 10 km: see Globe scale below. The Solar System models "
+        "(`tools/blender/solar.py`, notes starting \"Solar scale\") use "
+        "1 unit = 0.0001 AU: see Solar scale below.",
         "- Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).",
         "- Origin: bottom centre at the floor contact point (y = 0). "
         "The broom is the exception: see its row.",
@@ -129,6 +134,24 @@ def write_doc(models):
         "proportions matter (the Moon is drawn at its true 1,737 km "
         "radius).",
         "",
+        "## Solar scale",
+        "",
+        "One Solar System world unit is 0.01 AU, so the Solar System models "
+        "(`tools/blender/solar.py`) are authored at 1 unit = 0.0001 AU "
+        "(about 15,000 km; 100 units per world unit) and loaded at "
+        "`\"scale\": 0.01` like the Globe models. Their catalog entries "
+        "carry `\"units\": \"0.0001 AU\"` and their table sizes are in "
+        "those units: multiply by 0.01 for Solar System world units (the "
+        "Sun's 292 footprint radius is 2.92 world units). Hazards load with "
+        "fit none + collapse and are scaled by `size / modelSize`; Debris "
+        "props are normalised to their Debris size, so they are drawn at a "
+        "convenient size (planets: radius 100, resting on the floor, rings "
+        "flat in XZ) and only their proportions matter. The camera looks "
+        "down from the +Z side, so the Sun's eyes, Jupiter's Great Red Spot "
+        "and Pluto's heart face +Z and upwards. Saturn's and the ice "
+        "giant's rings count in the footprint radius, so their spheres "
+        "draw at 1 / 2.28 and 1 / 1.58 of the Debris size.",
+        "",
         "## Rebuild",
         "",
         "```sh",
@@ -137,7 +160,8 @@ def write_doc(models):
         "blender -b --factory-startup --python tools/blender/build_all.py -- "
         "roomba broom",
         "# contact sheets -> docs/models-preview.png (cm models), "
-        "docs/models-preview-continent.png and docs/models-preview-globe.png",
+        "docs/models-preview-continent.png, docs/models-preview-globe.png "
+        "and docs/models-preview-solar.png",
         "blender -b --factory-startup --python tools/blender/render_preview.py",
         "# only the Continent sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
@@ -145,6 +169,9 @@ def write_doc(models):
         "# only the Globe sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
         " -- --globe",
+        "# only the Solar System sheet:",
+        "blender -b --factory-startup --python tools/blender/render_preview.py"
+        " -- --solar",
         "```",
         "",
         "## Catalogue",
@@ -167,7 +194,8 @@ def write_doc(models):
     lines += [
         "",
         "\\* Continent models: units of 100 m (see Conventions). Globe "
-        "models: units of 10 km (see Globe scale).",
+        "models: units of 10 km (see Globe scale). Solar System models: "
+        "units of 0.0001 AU (see Solar scale).",
         "",
         f"Total: {len(models)} models, "
         f"{sum(m['triangles'] for m in models)} triangles, "
@@ -182,6 +210,10 @@ def write_doc(models):
         "Globe models (Act 6):",
         "",
         "![Globe contact sheet](models-preview-globe.png)",
+        "",
+        "Solar System models (Act 7):",
+        "",
+        "![Solar System contact sheet](models-preview-solar.png)",
         "",
     ]
     with open(DOC, "w") as f:
