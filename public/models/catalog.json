@@ -1467,6 +1467,195 @@
         }
       },
       "category": "prop"
+    },
+    {
+      "triangles": 2856,
+      "footprintRadius": 355.3,
+      "height": 375.0,
+      "minY": 0.0,
+      "maxY": 375.0,
+      "sizeX": 340.0,
+      "sizeZ": 635.0,
+      "id": "landfill_compactor",
+      "file": "models/landfill_compactor.glb",
+      "bytes": 136052,
+      "notes": "Landfill compactor (CAT 836 style), front +Z: yellow articulated body, cab over the hinge, four spiked steel drums, dozer blade with a trash rack at the front. beacon node (amber, half lit) spins about its local Y axis on the cab roof. mini_compactor reuses this file.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "beacon": {
+          "pivot": [
+            0.0,
+            348.0,
+            10.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 2620,
+      "footprintRadius": 1099.6,
+      "height": 457.0,
+      "minY": 0.0,
+      "maxY": 457.0,
+      "sizeX": 308.0,
+      "sizeZ": 2180.0,
+      "id": "freight_train",
+      "file": "models/freight_train.glb",
+      "bytes": 123108,
+      "notes": "Diesel freight locomotive (one unit), long axis along Z, cab at +Z: navy body with a yellow nose and sill stripe, two three-axle bogies on a short section of track (rails 144 cm apart, top of rail at y = 33). Headlights are emissive.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 2448,
+      "footprintRadius": 529.5,
+      "height": 350.0,
+      "minY": 0.0,
+      "maxY": 350.0,
+      "sizeX": 340.8,
+      "sizeZ": 1007.2,
+      "id": "snowplow",
+      "file": "models/snowplow.glb",
+      "bytes": 100516,
+      "notes": "Municipal snowplow truck, front +Z: orange cab and dump body heaped with salt, yellow plough blade angled across the front (right end forward), salt spreader disc at the back. Amber light bar and headlights are emissive.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1658,
+      "footprintRadius": 562.3,
+      "height": 299.4,
+      "minY": 0.6,
+      "maxY": 300.0,
+      "sizeX": 1103.3,
+      "sizeZ": 747.0,
+      "id": "crop_duster",
+      "file": "models/crop_duster.glb",
+      "bytes": 77356,
+      "notes": "Single-engine crop-dusting plane (Air Tractor style), nose +Z, on its taildragger gear with the thrust line level at y = 150: yellow low wing with spray booms along the trailing edge. propeller node (three blades with yellow tips) spins about its local Z axis; pivot at the spinner.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "propeller": {
+          "pivot": [
+            0.0,
+            150.0,
+            345.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 1016,
+      "footprintRadius": 706.1,
+      "height": 302.0,
+      "minY": -0.0,
+      "maxY": 302.0,
+      "sizeX": 302.0,
+      "sizeZ": 1382.0,
+      "id": "river_barge",
+      "file": "models/river_barge.glb",
+      "bytes": 54948,
+      "notes": "River barge, bow +Z: long dark hull with four red covered-hopper loads, push-tug at the stern (-Z) with push knees against the barge, a white three-deck house and a tall wheelhouse. Hull bottom on the floor (no water).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 2070,
+      "footprintRadius": 1380.5,
+      "height": 700.0,
+      "minY": 0.0,
+      "maxY": 700.0,
+      "sizeX": 2740.0,
+      "sizeZ": 1917.0,
+      "id": "water_bomber",
+      "file": "models/water_bomber.glb",
+      "bytes": 74780,
+      "notes": "Amphibious water-bomber (Canadair CL-415 style), nose +Z, standing on its wheels: yellow upper body, red boat hull, high straight wing with two turboprops, red wingtip floats, high tailplane on the fin.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard"
+    },
+    {
+      "triangles": 3798,
+      "footprintRadius": 1780.8,
+      "height": 2600.0,
+      "minY": 0.0,
+      "maxY": 2600.0,
+      "sizeX": 1443.9,
+      "sizeZ": 3450.0,
+      "id": "incinerator",
+      "file": "models/incinerator.glb",
+      "bytes": 173292,
+      "notes": "Boss. The Incinerator: rail-mounted waste-to-energy plant, front +Z. Grey plant hall on four rail bogies (rails at x = +/-460 along Z), boiler house and a brick and steel chimney with a soot-black rim (top centre at (0, 2600, -600)), feed conveyor rising into an intake mouth that glows orange (emissive furnace). brush_l / brush_r are the two upright intake roller drums at the front corners; they spin about local Y, pivots at their centres.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "brush_l": {
+          "pivot": [
+            -560.0,
+            240.0,
+            1500.0
+          ]
+        },
+        "brush_r": {
+          "pivot": [
+            560.0,
+            240.0,
+            1500.0
+          ]
+        }
+      },
+      "category": "hazard"
     }
   ]
 }

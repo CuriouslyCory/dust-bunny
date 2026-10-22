@@ -58,5 +58,12 @@
   "hot_dog_cart": { "file": "hot_dog_cart.glb", "fit": "none" },
   "street_lamp": { "file": "street_lamp.glb", "fit": "none" },
   "phone_booth": { "file": "phone_booth.glb", "fit": "none" },
-  "fire_truck": { "file": "fire_truck.glb", "fit": "none" }
+  "fire_truck": { "file": "fire_truck.glb", "fit": "none" },
+  "landfill_compactor": { "file": "landfill_compactor.glb", "fit": "none", "collapse": true },
+  "freight_train": { "file": "freight_train.glb", "fit": "none", "collapse": true },
+  "snowplow": { "file": "snowplow.glb", "fit": "none", "collapse": true },
+  "crop_duster": { "file": "crop_duster.glb", "fit": "none", "collapse": true },
+  "river_barge": { "file": "river_barge.glb", "fit": "none", "collapse": true },
+  "water_bomber": { "file": "water_bomber.glb", "fit": "none", "collapse": true },
+  "incinerator": { "file": "incinerator.glb", "fit": "none", "collapse": true }
 }
