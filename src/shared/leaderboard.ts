@@ -57,9 +57,11 @@ export const BOUNDS = {
    * simulated second. 2 until the Continent: each Act after the City adds ≈ 350 on the scale in a
    * few minutes, and a max-Loadout Zap won at 62 km in 15:30 (`pnpm sim --validate
    * --loadout=max`: 104% of 2/s). The leap into the Continent adds at most the Region band up to
-   * 50 m, which the time it takes to get there covers many times over.
+   * 50 m, which the time it takes to get there covers many times over. The Galaxy adds up to ≈ 600
+   * more in 2–4 minutes, and a perk-loaded Zap won in 23:21 at 104% of 2.5/s (`pnpm sim --seeds=6
+   * --minutes=80 --validate`), so it is 2.8.
    */
-  maxGrowthPerSec: 2.5,
+  maxGrowthPerSec: 2.8,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
   /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
