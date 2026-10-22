@@ -18,7 +18,9 @@ Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, a 7–
 
 **Globe phase (Act 6, *The Marble*).** The Earth seen from orbit: black space with a starfield above the planet's limb, a thin glowing band of atmosphere where the planet curves away, a hard white sun from the east (its glare in the top right corner, glinting off the oceans) and blue Earth-shine from below. The map (480,000 × 240,000 km, a stylised Earth at ten times real size) wraps east–west: roll off one edge and arrive on the other. Hand-drawn continents nudged per seed, shelf seas, inland seas, island chains (the Caribbean, the Malay Archipelago, Hawaii, Polynesia, Melanesia), Greenland, the Arctic sea ice and Antarctica along the poles, biomes by latitude (rainforest, savanna, desert belts, temperate green, boreal forest, tundra) and snow-capped ranges (the Rockies, the Andes, the Alps, the Himalaya, the Urals, the Atlas), with clouds drifting above. The date line is open ocean, so the seam never cuts through land. 1 world unit = 1,000 km. The Bunny arrives over the Gulf of Guinea after a second size leap, at 0.85 units (0.13 Earths), wearing a faint atmosphere; from Dust Moon (Tier 14, 1 unit) the Moon sits half-buried in its fur, and Tier 15 (Dust Planet) starts at 3. Globe Debris runs from satellites, spent rocket stages, space junk and weather systems through reefs, atolls, islands and great deserts to archipelagos, cordilleras, inland seas, the Moon, landmasses, ocean basins, a continent and an ocean. The Moon is an Obstacle until r ≈ 2.5 and the only thing that stuns the Orbital Sweeper.
 
-**Solar System phase (Act 7, *A Very Large Leaf Blower*).** The ecliptic from above: black space with a starfield and the Milky Way crossing the backdrop as a dust-lane band, faint orbit rings as lanes (Earth's empty and dashed), the Sun at the centre with its corona and glare, and the light coming from the Sun, so planets are lit on their sunward side and shadows fall away from it. The map (360 × 360 units, 3.6 × 3.6 AU, not to scale) is rings round the Sun: the corona, the inner orbits (Mercury, Venus, Earth's empty orbit, Mars), a cluttered asteroid belt (rocks, gravel, two Kirkwood gaps, Trojans at Jupiter's L4 / L5), the outer orbits (Jupiter, Saturn, Uranus, Neptune) and the Kuiper belt thinning into interstellar dark at the edge. 1 world unit = 0.01 AU. The Bunny arrives on Earth's orbit after the third size leap, at 0.85 units, glowing from within (plasma), and meets Voyager 1 on its first screen; Tier 16 (Dust Giant) starts at 1 unit (Mars is food just before it) and Tier 17 (Dust Star) at 3, when Jupiter stops being an Obstacle. When the Sun is absorbed the light goes out: everything fades to black but the Bunny's own glow.
+**Solar System phase (Act 7, *A Very Large Leaf Blower*).** The ecliptic from above: black space with a starfield and the Milky Way crossing the backdrop as a dust-lane band, faint orbit rings as lanes (Earth's empty and dashed), the Sun at the centre with its corona and glare, and the light coming from the Sun, so planets are lit on their sunward side and shadows fall away from it. The map (360 × 360 units, 3.6 × 3.6 AU, not to scale) is rings round the Sun: the corona, the inner orbits (Mercury, Venus, Earth's empty orbit, Mars), a cluttered asteroid belt (rocks, gravel, two Kirkwood gaps, Trojans at Jupiter's L4 / L5), the outer orbits (Jupiter, Saturn, Uranus, Neptune) and the Kuiper belt thinning into interstellar dark at the edge. 1 world unit = 0.01 AU. The Bunny arrives on Earth's orbit after the third size leap, at 0.85 units, glowing from within (plasma), and meets Voyager 1 on its first screen; Tier 16 (Dust Giant) starts at 1 unit (Mars is food just before it) and Tier 17 (Dust Star) at 3, when Jupiter stops being an Obstacle. When the Sun is absorbed the light goes out: everything fades to black but the Bunny's own glow, and the heliopause opens on the north edge (the way Voyager 1 went) onto the Galaxy.
+
+**Galaxy phase (Act 8, *The Biggest Vacuum There Is*; groundwork, placeholders).** The galactic disc from above, Sagittarius A* at the centre: a bulge and a bar, two spiral arms with dark dust lanes between them, and a thin halo past the disc. 1 world unit = 100 ly. The Bunny arrives out on an arm after the fourth size leap, at 0.85 units (85 ly); Tier 18 (Dust Nebula) starts at 1 unit and Tier 19 (Dust Cluster) at 3. Absorbing Sagittarius A* wins the Run until Act 9 exists. The nebula skybox, instanced stars, painted disc and the Bunny's dark core and accretion disc after Sagittarius A* come with the world pass.
 
 ## Tech
 
@@ -57,6 +59,10 @@ Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, a 7–
 | 13 | Dust Pangaea | 30 km +        | volcanoes, metropolis ruins, great lakes, sand seas, a breadbasket, a small country, ice caps, mountain chains, the Ice Sheet | the continent |
 | 14 | Dust Moon   | 1,000 – 3,000 km | satellites, rocket stages, space junk, weather systems, ice floes, reefs, atolls, islands, great deserts, patches of ocean, ice shelves, the Great Barrier Reef, archipelagos, cordilleras, inland seas | a few thousand kilometres of planet |
 | 15 | Dust Planet | 3,000 km +      | the Moon, polar ice caps, landmasses, subcontinents, ocean basins, a continent, an ocean, the Orbital Sweeper | a hemisphere |
+| 16 | Dust Giant  | 0.01 – 0.03 AU  | Vesta, Mercury, moons, Mars, Ceres, Pluto, Venus, dwarf planets | a few orbits |
+| 17 | Dust Star   | 0.03 AU +       | swarms, Jupiter, Uranus, Neptune, Saturn, the Sun | the solar system |
+| 18 | Dust Nebula | 100 – 300 ly    | sun-like stars, planetary nebulae, giants, dark nebulae, open clusters (placeholder ladder) | a stretch of arm |
+| 19 | Dust Cluster | 300 ly +       | supergiants, star clusters, emission nebulae, molecular clouds, stellar nurseries, Sagittarius A* | the galaxy |
 
 Tier thresholds are the Bunny's real radius (cm); in the Region the world unit is 10 m, so Tiers 10 and 11 start at 1 and 3 units, in the Continent it is 10 km, so Tiers 12 and 13 start at 1 and 3 units, and on the Globe it is 1,000 km, so Tiers 14 and 15 start at 1 and 3 units. Camera distance and fog distance scale with radius so the visible floor area grows each Tier. Areas are gated physically: e.g. the gap under the couch skirt and closed doors are passable/absorbable only at certain sizes.
 
@@ -191,7 +197,18 @@ The Moon is the only stun source because the Globe has no obstacles. A real-size
 
 Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptune (2.9) stay too big until r ≈ 4.2, so they and Jupiter (until it is eaten) are what its charges hit, with the Hot Jupiter as the fallback when none is near. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, and absorbing the Sun wins the Run.
+**The Galaxy (after the Sun; 1 world unit = 100 ly, Bunny r = 0.85 units on arrival; placeholders from the Act 8 groundwork).** Each Hazard spreads the Solar System Hazard with the same behaviour, at the same size and speed, with a procedural fallback model; the hazards pass replaces the numbers and the fight.
+
+| Hazard            | From Tier | Size (units, radius) | Absorbable at r | Behaviour (placeholder) | Damage |
+|-------------------|-----------|----------------------|-----------------|-------------------------|--------|
+| Black Hole        | 18        | 1.1                  | ≈ 1.57          | Roomba behaviour: slow drifting wander (2.2 / 3.8 units/s), strong pull (reach 3, 0.55 × max speed), spinning accretion disc | 1 + knockback |
+| Pulsar            | 18        | 1.3                  | ≈ 1.86          | turret: the beam head sweeps at 2.4 rad/s out of range, then the Sunspot's burst in blue | 1 per bolt |
+| Supernova Remnant | 18        | 1.5                  | ≈ 2.14          | the Sungrazer's roaming trail-layer; violet trail slows to 0.55 × | 1 + knockback |
+| Globular Cluster  | 18        | 1.6                  | ≈ 2.29          | rides the orbit round the core nearest its spawn (3 / 4.4 units/s) | 1 + big shove, sheds 8 % |
+| Supernova         | 19        | 2.4                  | ≈ 3.43          | the Solar Flare's blast cone; its shell pulses through the warm-up | 1 on contact |
+| Sagittarius A*    | 19 (boss) | 2.8                  | ≈ 4             | the Sun's state machine with suction (reach 10, 0.45) instead of the solar wind; charges stunned by star clusters the Bunny can't absorb (a star cluster swings round when none is near); violet volleys; chips are relativistic jets | 1, sheds 5 % |
+
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, the Sun the heliopause to the Galaxy, and absorbing Sagittarius A* wins the Run.
 
 ## Pacing and scale (Acts 4–9)
 
@@ -284,6 +301,26 @@ Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't
 
 **Solar System pacing check** (`pnpm sim --area=solar_system`, 5 seeds, Hazards on, growth 0.2): Tier 16 at Lint 0:58, Tumble 1:30, Zap 0:33; Act (arrival to absorbing the Sun) Lint 7:05, Tumble 7:54, Zap 4:59. An `--area` start has no Perks and ran ≈1.5× a real Run on the Globe, so this is about 3:20–5:20 in a full Run. Tier 16 and 17 masses went up ×1.25 (Tier 15 ×1.15) from the first ladder, which took 5:41–9:54.
 
+| Galaxy tuning (`AREAS.galaxy`, placeholder) | Value |
+|---|---|
+| Unit | 100 ly (9.461e19 cm) |
+| Arrival radius | 0.85 units (85 ly), the fourth size leap (the Solar System ends at ≈ 0.045 AU, ≈ 7e-9 Galaxy units) |
+| Debris Tier band | 18–19 |
+| Growth multiplier | 0.2 (placeholder) |
+| Map | 360 × 360 units, Sagittarius A* at the centre; galactic core < 14, a bar (half-length 38, half-width 7) at a seeded angle, a two-armed spiral (pitch 0.26) of inner arms (< 95) / outer arms with dust lanes between, out to the disc's edge at 168, halo beyond; no walls, obstacles or exit |
+| Orbits (`layout.routes`, kind `orbit`) | 30, 60, 90, 120, 150 units round the core; width 3 |
+| Spawn | on the arm crossing nearest due south, 120 units from the core |
+
+**Galaxy Debris ladder** (`src/data/galaxyDebris.ts`, placeholder recipes, sizes are radii in Galaxy units; absorbable at size ÷ 0.7).
+
+| Tier band | Debris (size) | Zones |
+|---|---|---|
+| 17–18 (arrival, r 0.85–1) | red dwarf 0.12, brown dwarf 0.14, rogue planet 0.18, protostar 0.22, binary star 0.26, dust cloud 0.32 | stars in the arms, clouds and protostars in the dust lanes, stragglers in the halo |
+| 18–19 (Dust Nebula, r 1–3) | orange dwarf 0.45, sun-like star 0.5, planetary nebula 0.7, blue giant 0.9, dark nebula 1.0, red giant 1.1, open cluster 1.3 | giants in the core and bar, dark nebulae in the dust lanes |
+| 19 (Dust Cluster, r ≥ 3) | supergiant 1.8, star cluster 2.1, emission nebula 2.4, molecular cloud 2.8, stellar nursery 3.1; relativistic jet 1.4 (Sagittarius A*'s chip, placed only) | clusters in the arms and core, clouds in the dust lanes |
+
+**Galaxy pacing check** (placeholder content, `pnpm sim --area=galaxy --seeds=3`, Hazards on, growth 0.2): Tier 18 at Lint 0:57, Tumble 1:21, Zap 0:58; Tier 19 at 8:39, 11:42, 6:38; Act (arrival to absorbing Sagittarius A*) Lint 9:27, Tumble 12:33, Zap 7:30 (8 / 9 wins). Too slow for the 4–6 minute target: the world pass tunes the ladder and the growth multiplier.
+
 ## Characters
 
 | Character | Fantasy           | Speed | Health | Start radius | Dash CD | Strength | Weakness |
@@ -314,7 +351,7 @@ Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweep
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(tierReached × 4 + radius term + debrisAbsorbed / 1000)`, ×1.55 on victory (×1.5 if the region was cleared, ×1.45 if the city was, ×1.35 if the neighborhood was, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). The radius term has no cap: each Area adds its growth measured in its own unit × `AREAS[area].fluffPerUnit` (House 1/30 per cm, Neighborhood 1/60, City 1/120, Region 1.5 per 10 m unit, Continent 1.5 per 10 km unit counted from the radius after the leap; about 2 + 3 + 5 + 5 + 5 for a full Run). Targets: a Casual Run that clears the house pays about 40 Fluff, a Casual win about 115 since the Continent (the sim's full Runs: 114–119), Arcade about twice that and Hardcore about 575. Buying every Upgrade (about 1,545 Fluff) takes about 14 Casual wins or 3 Hardcore wins.
+Fluff earned per Run ≈ `floor(tierReached × 4 + radius term + debrisAbsorbed / 1000)`, ×1.7 on victory (×1.65 if the solar system was cleared, ×1.6 if the globe was, ×1.55 if the continent was, ×1.5 if the region was, ×1.45 if the city was, ×1.35 if the neighborhood was, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). The radius term has no cap: each Area adds its growth measured in its own unit × `AREAS[area].fluffPerUnit` (House 1/30 per cm, Neighborhood 1/60, City 1/120, Region 1.5 per 10 m unit, Continent 1.5 per 10 km unit, Globe 1.5 per 1,000 km, Solar System 1.5 per 0.01 AU and Galaxy 1.5 per 100 ly, each counted from the radius after its leap; about 2 + 3 + 5 + 5 + 5 for a full Run). Targets: a Casual Run that clears the house pays about 40 Fluff, a Casual win about 115 since the Continent (the sim's full Runs: 114–119), Arcade about twice that and Hardcore about 575. Buying every Upgrade (about 1,545 Fluff) takes about 14 Casual wins or 3 Hardcore wins.
 
 ## Keepsakes and Felting
 
