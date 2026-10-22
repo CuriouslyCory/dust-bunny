@@ -10,6 +10,7 @@
 import type { Game } from '../game/game';
 import { isBossHazard, onLoose } from '../ui/looseEvents';
 import { settings } from '../ui/settings';
+import { EndingAudio } from './ending';
 import { AudioEngine } from './engine';
 import { Music } from './music';
 import { Sfx } from './sfx';
@@ -150,7 +151,11 @@ export function installAudio(game: Game): GameAudio {
 
   ev.on('paused', (e) => engine.setDuck(e.reason === 'paused' ? 0.35 : 0.6));
   ev.on('resumed', () => engine.setDuck(1));
+  // The ending (src/story/endingScreen.ts): a cue as each shot starts; leaving it fades what still sounds.
+  const ending = new EndingAudio(engine, music, sfx);
+  ev.on('storyCue', (e) => ending.cue(e.cue, settings.value.reducedMotion));
   ev.on('screenChanged', (e) => {
+    if (e.from === 'ending') ending.stop();
     if (e.to === 'title' || e.to === 'results') {
       engine.setDuck(1);
       music.setBoss(false);

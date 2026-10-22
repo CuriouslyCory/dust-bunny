@@ -11,13 +11,32 @@ export const STORY_CAPTION_MAX = 140;
 
 export type StoryLine = string | readonly string[];
 
-/** One card of a scripted sequence (the intro now, the ending later). */
+/** One card of a scripted sequence (the intro). */
 export interface StoryPanel {
   caption: string;
   /** Second caption, shown under the first after a beat. */
   caption2?: string;
   /** Seconds on screen when not skipped. */
   hold: number;
+}
+
+/** The ending's shots in order (docs/story.md "Ending sequence"); src/fx/ending.ts draws each. */
+export type EndingShot = 'bunny' | 'core' | 'bang' | 'planet' | 'fire' | 'stick' | 'speck' | 'the_end' | 'question' | 'fade';
+
+/**
+ * Sound cues of the ending (src/audio/ending.ts plays them when a shot starts): a single held
+ * note, the note stopping into true silence, the Bang (thump and shimmer), the Tier 1 theme
+ * returning quietly, rocks and fire, footsteps receding, room tone with a hum, a staple landing.
+ */
+export type EndingCue = 'held_note' | 'silence' | 'bang' | 'theme' | 'fire' | 'footsteps' | 'room_tone' | 'staple';
+
+/** One shot of the ending: its caption (some have none), minimum seconds and sound cue. */
+export interface EndingPanel {
+  shot: EndingShot;
+  caption?: string;
+  /** Seconds on screen (a caption's reading time can stretch it, see narrator.ts `panelTiming`). */
+  hold: number;
+  cue?: EndingCue;
 }
 
 /** The chapter that an Area is. Its chapter number is its position in AREA_ORDER. */
@@ -34,6 +53,8 @@ export interface AreaStory {
 
 export interface Story {
   intro: readonly StoryPanel[];
+  /** Played between the Universe's victory and the results (the `ending` screen). */
+  ending: readonly EndingPanel[];
   /** Tier-up lines keyed by Tier id (src/data/tiers.ts); every Tier after the first has some. */
   tiers: Readonly<Record<string, readonly StoryLine[]>>;
   /** Every Area must have a chapter: adding an AreaId without one does not compile. */
@@ -50,6 +71,19 @@ export const STORY: Story = {
     { caption: 'Under the couch, the dropped things reach a density the universe has no procedure for.', hold: 4.5 },
     { caption: 'Physics does not have an explanation for what happens next.', caption2: 'Physics has decided not to look.', hold: 4.5 },
     { caption: 'It has one instinct.', caption2: 'Grow.', hold: 3.5 },
+  ],
+
+  ending: [
+    { shot: 'bunny', caption: 'Everything is in one place.', hold: 4, cue: 'held_note' },
+    { shot: 'core', caption: 'This has happened before.', hold: 3, cue: 'silence' },
+    { shot: 'bang', hold: 3, cue: 'bang' },
+    { shot: 'planet', caption: 'Eventually, somewhere, a planet cools.', hold: 6, cue: 'theme' },
+    { shot: 'fire', caption: 'Eventually, something clever figures out fire.', hold: 5, cue: 'fire' },
+    { shot: 'stick', caption: 'It does not pick up after itself.', hold: 4, cue: 'footsteps' },
+    { shot: 'speck', hold: 2.5, cue: 'room_tone' },
+    { shot: 'the_end', hold: 2 },
+    { shot: 'question', hold: 3, cue: 'staple' },
+    { shot: 'fade', hold: 1.2 },
   ],
 
   tiers: {

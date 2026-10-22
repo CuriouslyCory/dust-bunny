@@ -1,6 +1,6 @@
 /**
- * Browser wiring for the story (called once from main.ts): registers the intro and chapter
- * screens and tells one-off Debris lines. The other beats are hosted by the UI that already
+ * Browser wiring for the story (called once from main.ts): registers the intro, chapter and
+ * ending screens and tells one-off Debris lines. The other beats are hosted by the UI that already
  * shows that moment (see ./index.ts).
  */
 import { STORY, type StoryLine } from '../data/story';
@@ -8,6 +8,7 @@ import type { Game } from '../game/game';
 import { absorbedName } from '../ui/looseEvents';
 import type { AreaId } from '../world/types';
 import { captionDuration, narrate, setStoryAvailable, storyCaption } from './index';
+import { registerEndingScreen } from './endingScreen';
 import { canShowChapter, registerStoryScreens, type ChapterParams } from './screens';
 
 export interface StoryOptions {
@@ -18,6 +19,7 @@ export interface StoryOptions {
 export function installStory(game: Game, opts: StoryOptions = {}): void {
   setStoryAvailable(opts.available ?? true);
   registerStoryScreens();
+  registerEndingScreen();
 
   // One-off Debris (docs/story.md: Voyager 1, the Moon…): a line the first time per Run.
   const told = new Set<string>();

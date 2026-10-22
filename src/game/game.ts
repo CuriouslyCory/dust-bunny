@@ -36,9 +36,15 @@ import { settings } from '../ui/settings';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
 import { AREA_ORDER, type AreaId } from '../world/types';
+import { afterRunEnded } from '../story/ending';
+import type { EndingParams } from '../story/endingScreen';
+import { storyAvailable } from '../story/index';
 import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import { RunView } from './runView';
+
+/** Seconds between the last Area's victory and the ending (the last absorb lands first). */
+const ENDING_LEAD_SECONDS = 0.8;
 
 export interface GameOptions {
   debug?: boolean;
@@ -82,6 +88,8 @@ export class Game {
 
   run: Run | null = null;
   view: RunView | null = null;
+  /** The ending's scene while the `ending` screen is up (src/story/endingScreen.ts): rendered instead of the Run. */
+  ending: { render(renderer: WebGLRenderer): void } | null = null;
   /** Default config for the next Run (character select / shop write here). */
   nextRunConfig: Partial<RunConfig> = {};
 
@@ -146,6 +154,15 @@ export class Game {
     this.events.on('runEnded', (e) => {
       // A victory (the last built Area's boss absorbed) holds the results back so it is seen and the
       // narrator's line is read.
+      // A victory in the last Area plays the ending first (then the results); not with ?autostart.
+      if (this.run && afterRunEnded(e.reason, this.run.area, storyAvailable()) === 'ending') {
+        const run = this.run;
+        this.resultsTimer = window.setTimeout(() => {
+          this.resultsTimer = null;
+          if (this.run === run) this.go('ending', { result: e } satisfies EndingParams);
+        }, ENDING_LEAD_SECONDS * 1000);
+        return;
+      }
       if (e.reason === 'victory') {
         const run = this.run;
         const show = (): void => {
@@ -272,6 +289,10 @@ export class Game {
 
   private render(alpha: number, frameDt: number): void {
     this.screens.update(frameDt);
+    if (this.ending) {
+      this.ending.render(this.renderer);
+      return;
+    }
     // Sagittarius A*'s pull bends the camera (src/fx/lensing.ts).
     const lens = findLens(this.run);
     if (this.view) {
