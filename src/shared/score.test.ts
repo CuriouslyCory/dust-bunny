@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { AREA_BOSSES } from '../data/hazards';
 import { TIERS, tierForRadius } from '../data/tiers';
 import { AREA_ORDER } from '../world/types';
-import { AREA_BOSS_TIER, computeAreaScore, computeScore, SCORE_AREAS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREA_BOSS_TIER, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREAS } from '../data/areas';
 
 const base = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 3, durationMs: 300_000, victory: false };
 
@@ -76,8 +77,26 @@ describe('computeAreaScore', () => {
 });
 
 describe('score areas', () => {
-  it('mirror AREA_ORDER and the boss Tiers', () => {
+  it('mirror AREA_ORDER, the boss Tiers and the Area units', () => {
     expect([...SCORE_AREAS]).toEqual([...AREA_ORDER]);
     for (const a of SCORE_AREAS) expect(AREA_BOSS_TIER[a]).toBe(AREA_BOSSES[a].tier);
+    for (const a of SCORE_AREAS) expect(SCORE_AREA_UNIT[a]).toBe(AREAS[a].unit);
+  });
+
+  it('scores Region growth in Region units (10 m)', () => {
+    const region = { area: 'region' as const, radiusIn: 0.9, maxRadius: 4.1, debrisAbsorbed: 0, durationMs: 360_000 };
+    expect(computeAreaScore(region)).toBe(Math.round(3.2 * 10_000) + 3000);
+  });
+});
+
+describe('progressRadius (Run board scale)', () => {
+  it('is centimetres up to the City and 100 per Region unit beyond 10 m', () => {
+    expect(progressRadius(0)).toBe(0);
+    expect(progressRadius(45)).toBe(45);
+    expect(progressRadius(1000)).toBe(1000);
+    expect(progressRadius(3000)).toBeCloseTo(1200);
+    // Scores keep growing with the Bunny, without the Region's metres swamping the board.
+    expect(computeScore({ ...base, maxRadius: 4000, tierReached: 11 })).toBeGreaterThan(computeScore({ ...base, maxRadius: 900, tierReached: 9 }));
+    expect(computeScore({ ...base, maxRadius: 4000, tierReached: 11 })).toBeLessThan(200_000);
   });
 });

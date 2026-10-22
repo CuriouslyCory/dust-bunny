@@ -100,6 +100,16 @@ describe('fluffForRun', () => {
     expect(hardcore).toBeGreaterThanOrEqual(300);
     expect(hardcore).toBeLessThanOrEqual(400);
   });
+
+  it('scales the radius term per Area, in each Area\'s own unit (no cap)', () => {
+    const area = (a: 'house' | 'neighborhood' | 'city' | 'region', radiusIn: number, maxRadius: number) => ({ area: a, startSec: 0, timeSec: 60, radiusIn, maxRadius, debrisAbsorbed: 0, cleared: true });
+    const areas = [area('house', 1, 52), area('neighborhood', 52, 214), area('city', 214, 820), area('region', 0.82, 4.2)];
+    const term = 51 / 30 + 162 / 60 + 606 / 120 + 3.38 * 1.5;
+    const win = stats({ maxRadius: 4200, debrisAbsorbed: 0, tierReached: 11, areas, houseCleared: true, neighborhoodCleared: true });
+    expect(fluffForRun('victory', win)).toBe(Math.floor((44 + term) * 1.5));
+    // Reaching the Region but dying there pays the City-cleared multiplier.
+    expect(fluffForRun('died', { ...win, cityCleared: true })).toBe(Math.floor((44 + term) * 1.45));
+  });
 });
 
 describe('upgrade cost curve', () => {
