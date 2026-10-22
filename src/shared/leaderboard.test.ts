@@ -121,7 +121,7 @@ describe('validateSubmission', () => {
     // Growth without Debris.
     expect(err(submission({ maxRadius: 10, debrisAbsorbed: 0 }))).toBe('maxRadius');
     // Growth too fast for the duration.
-    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 15_000 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 12_000 }))).toBe('maxRadius');
     // Absorbing too fast.
     expect(err(submission({ debrisAbsorbed: 100_000, durationMs: 60_000 }))).toBe('debrisAbsorbed');
   });

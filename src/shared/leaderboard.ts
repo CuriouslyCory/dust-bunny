@@ -59,9 +59,11 @@ export const BOUNDS = {
    * --loadout=max`: 104% of 2/s). The leap into the Continent adds at most the Region band up to
    * 50 m, which the time it takes to get there covers many times over. The Galaxy adds up to ≈ 600
    * more in 2–4 minutes, and a perk-loaded Zap won in 23:21 at 104% of 2.5/s (`pnpm sim --seeds=6
-   * --minutes=80 --validate`), so it is 2.8.
+   * --minutes=80 --validate`), so it was 2.8. The Universe adds up to ≈ 420 more (100 per unit to
+   * Tier 21, 10 per unit past it), and with the faster magnet a max-Loadout Zap won in 22:36 at 100%
+   * of 2.8/s (`pnpm sim --seeds=4 --minutes=90 --chars=zap --loadout=max --validate`), so it is 3.2.
    */
-  maxGrowthPerSec: 2.8,
+  maxGrowthPerSec: 3.2,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
   /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
@@ -81,9 +83,9 @@ export const BOUNDS = {
    * landing at the end of a short Act). The Universe (10 Mly units) repeats the Galaxy's curve with
    * more growth (0.32), and the Expansion fight feeds it whole filaments: perk-loaded Zap Runs
    * reached 13.9–14.6 units 93–94 s after arriving (`pnpm sim --seeds=4 --minutes=90 --validate`),
-   * so it allows 0.2.
+   * and a max-Loadout Zap peaked at 98% of 0.2, so it allows 0.25.
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1, universe: 0.2 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05, continent: 0.08, globe: 0.08, solar_system: 0.08, galaxy: 0.1, universe: 0.25 },
   /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
   areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1, continent: 0.1, globe: 0.1, solar_system: 0.1, galaxy: 0.1, universe: 0.1 },
   /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */
