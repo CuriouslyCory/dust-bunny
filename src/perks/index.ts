@@ -6,6 +6,7 @@
  * src/ui/screens/perkDraft.ts.
  */
 import { Registry } from '../core/registry';
+import type { StatKey } from '../entities/stats';
 import type { Run } from '../game/run';
 
 export interface PerkDef {
@@ -19,6 +20,11 @@ export interface PerkDef {
   maxStacks?: number;
   /** Relative draft weight. */
   weight?: number;
+  /**
+   * Stats this Perk only raises (or lowers, for floors). The draft hides it once every one is at
+   * the Character's cap. Omit for Perks with any other effect (Thick Fur also heals).
+   */
+  capStats?: readonly StatKey[];
   /** Called each time the Perk is taken; `stacks` is the new stack count (1-based). */
   apply(run: Run, stacks: number): void;
 }

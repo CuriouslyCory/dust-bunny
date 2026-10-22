@@ -4,10 +4,10 @@
  */
 import { Group } from 'three';
 import { Disposables, type EventBus, type Vec3Like } from '../core/events';
-import { NO_INPUT, type InputSource } from '../core/input';
+import { NO_INPUT, type InputSource, type InputState } from '../core/input';
 import { Rng } from '../core/rng';
 import { AREAS } from '../data/areas';
-import { getCharacter } from '../data/characters';
+import { CAP_PRIORITY, getCharacter } from '../data/characters';
 import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
 import { isLoadoutFor, type Loadout } from '../data/keepsakes';
@@ -104,6 +104,8 @@ export class Run {
   readonly disposables = new Disposables();
 
   input: InputSource = { sample: () => NO_INPUT };
+  /** This tick's input, sampled once at the start of update() (movement, the Ability System). */
+  inputState: InputState = NO_INPUT;
   /** Live camera framing, refreshed by RunView each frame; null headless (spawners assume a default). */
   viewInfo: ViewInfo | null = null;
   /** Current Tier (1-based); only increases. */
@@ -132,7 +134,7 @@ export class Run {
     this.house = generateHouse(config.seed);
 
     const character = getCharacter(config.characterId);
-    const stats = new StatBlock({ ...BASE_BUNNY_STATS, ...character.stats });
+    const stats = new StatBlock({ ...BASE_BUNNY_STATS, ...character.stats }, { caps: character.caps, capPriority: CAP_PRIORITY });
     for (const m of [...difficultyModifiers(this.difficulty), ...(config.modifiers ?? [])]) stats.add(m);
     this.bunny = new Bunny(events, stats, this.house.spawn.x, this.house.spawn.z);
     this.tier = tierForRadius(this.bunny.radius).index;
@@ -278,6 +280,7 @@ export class Run {
     if (this.ended) return;
     this.bunny.snapshot();
     this.time += dt;
+    this.inputState = this.input.sample();
     for (const s of this.systems) {
       s.update(dt, this);
       if (this.ended) break;

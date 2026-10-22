@@ -4,12 +4,24 @@
  *
  * One pending draft per Tier crossed (growthSystem calls queue() before emitting tierUp). An offer
  * is `perkChoices` (3, 4 with Wide Choice) distinct Perks, weighted, never a unique or maxed Perk
- * the Run already has. Choosing applies the Perk, consumes one pending draft and prepares the next
+ * the Run already has, and never a Perk whose stats are all at the Character's cap (`perkCapped`;
+ * Thick Fur stays because it also heals). Choosing applies the Perk, consumes one pending draft and prepares the next
  * offer; an exhausted pool drops the remaining drafts. Rerolls per Run come from the perkRerolls stat.
  */
 import type { Rng } from '../core/rng';
 import type { Run } from '../game/run';
 import { availablePerks, type PerkDef } from './index';
+
+/** True if every stat the Perk raises is already at the Character's cap (taking it would do nothing). */
+export function perkCapped(run: Run, perk: PerkDef): boolean {
+  const keys = perk.capStats;
+  return !!keys && keys.length > 0 && keys.every((k) => run.bunny.stats.atCap(k));
+}
+
+/** Perks the draft may offer: available (not unique-owned or maxed) and not capped out. */
+export function draftablePerks(run: Run): PerkDef[] {
+  return availablePerks(run).filter((p) => !perkCapped(run, p));
+}
 
 /** Weighted sample of up to `count` distinct Perks from `pool`. */
 export function draftPerks(pool: readonly PerkDef[], count: number, rng: Rng, exclude: readonly string[] = []): PerkDef[] {
@@ -97,7 +109,7 @@ export class PerkDraft {
 
   private prepare(exclude: readonly string[] = []): void {
     const count = Math.round(this.run.bunny.stats.get('perkChoices'));
-    const perks = draftPerks(availablePerks(this.run), count, this.rng, exclude);
+    const perks = draftPerks(draftablePerks(this.run), count, this.rng, exclude);
     if (perks.length === 0) {
       // Everything is owned or maxed: no later draft could offer anything either.
       this.pending = 0;

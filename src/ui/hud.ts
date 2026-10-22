@@ -25,6 +25,7 @@ import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
 import { pickupRegistry } from '../pickups';
 import { captionDuration, narrate, storyCaption } from '../story';
+import { abilityWidget } from './abilityHud';
 import { COMPACT_QUERY } from './components';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
 import { h } from './screens';
@@ -683,6 +684,8 @@ export function addDefaultHudWidgets(hud: Hud, game: Game): void {
   pickupTimersWidget(hud);
   counterWidgets(hud, game);
   perksWidget(hud, game);
+  // The Ability widget sits up and to the left of Dash (src/ui/abilityHud.ts).
+  abilityWidget(hud, game);
   dashWidget(hud);
   absorbToasts(hud, game);
   bossBanner(hud, game);

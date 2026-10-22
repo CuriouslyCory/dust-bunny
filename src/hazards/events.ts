@@ -11,8 +11,11 @@ declare module '../core/events' {
     bunnyShed: { volume: number; pieces: number; source: string; radius: number };
     /** An area boss arrived. `absorbRadius` = Bunny radius needed to absorb it. */
     bossSpawned: { hazardId: number; absorbRadius: number; name: string };
-    /** The boss crashed into a wall and can be rammed. */
-    bossStunned: { hazardId: number };
+    /**
+     * The boss is stunned and can be rammed: it crashed into a wall (`cause` 'wall'), or an Ability
+     * stunned it ('decoy' clog, 'hunker' crash into a planted Tumble, 'discharge').
+     */
+    bossStunned: { hazardId: number; cause?: 'wall' | 'decoy' | 'hunker' | 'discharge' };
     /** The Bunny rammed the stunned boss and chipped it smaller. */
     bossHit: { hazardId: number; size: number; absorbRadius: number };
     /** An area boss was absorbed (`defId` says which; the house boss opens the front door). */

@@ -11,7 +11,9 @@
  *   1. Combat hooks: damage filter first in bunny.damageFilters, `combat` System (order 290).
  *   2. Hazard spawning: the seeded director (run.hazards.director) plus the absorb effect System.
  *   3. Pickup spawning: the floor Pickup director (run.pickups.director).
+ *   4. The Character's Ability: the `ability` System (order 90, src/abilities).
  */
+import { installAbilities } from '../abilities';
 import type { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
 import { HazardDirector } from '../hazards/director';
@@ -29,6 +31,8 @@ export interface GameplayRules {
   hazards?: boolean;
   /** Floor Pickup spawning (false: no Pickups spawn on their own). */
   pickups?: boolean;
+  /** The Character's Ability (false: no Ability, e.g. `pnpm sim --no-ability`). */
+  abilities?: boolean;
 }
 
 let contentRegistered = false;
@@ -62,6 +66,7 @@ export function installGameplay(run: Run, rules: GameplayRules = {}): void {
     hazardDirectors.set(run, director);
   }
   if (rules.pickups !== false) run.pickups.director ??= createPickupDirector();
+  if (rules.abilities !== false) installAbilities(run);
 }
 
 /** The Run's Hazard director, if Hazard spawning is installed. */

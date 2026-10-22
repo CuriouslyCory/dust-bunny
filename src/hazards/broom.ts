@@ -2,13 +2,15 @@
  * Broom: stands at a fixed spot. It telegraphs a sweep with a red arc on the floor (aimed at
  * the Bunny when it is near), then sweeps the bristle head through the arc. Getting hit
  * during the sweep: 1 damage + a big knockback along the sweep. The head is solid otherwise.
+ * It aims at Lint's Decoy instead while the Decoy is within its aggro range, and a sweep that
+ * runs into a planted (hunkered) Tumble stops there (onPlanted).
  */
 import { Box3, Vector3 } from 'three';
 import type { Rng } from '../core/rng';
 import { BROOM, tierValue } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { bunnySheltered, canTarget, hitBunny, pushBunnyOut, randomIn, wrapAngle, yawOf } from './common';
+import { aimTarget, bunnySheltered, hitBunny, randomIn, separateFromBunny, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, type HazardDef } from './index';
 
@@ -71,10 +73,11 @@ export class Broom extends BaseHazard {
     this.timer -= dt;
     const b = run.bunny;
     if (this.state === 'idle' && this.timer <= 0) {
-      // Aim the arc centre at the Bunny when it is in range, otherwise sweep somewhere nearby.
-      const dx = b.x - this.pivotX;
-      const dz = b.z - this.pivotZ;
-      const near = canTarget(run) && Math.hypot(dx, dz) < BROOM.aggroRange + b.radius;
+      // Aim the arc centre at the Bunny (or the Decoy) when it is in range, otherwise sweep somewhere nearby.
+      const t = aimTarget(run, this.pivotX, this.pivotZ, BROOM.aggroRange + b.radius);
+      const dx = (t?.x ?? b.x) - this.pivotX;
+      const dz = (t?.z ?? b.z) - this.pivotZ;
+      const near = !!t && Math.hypot(dx, dz) < BROOM.aggroRange + t.radius;
       const centre = near ? yawOf(dx, dz) : this.angle + this.side * (BROOM.arc / 2);
       this.side = this.rng.chance(0.5) ? 1 : -1;
       this.from = centre - (this.side * BROOM.arc) / 2;
@@ -137,7 +140,20 @@ export class Broom extends BaseHazard {
         dirZ: tz + (rz / rn) * 0.5,
       });
     }
-    pushBunnyOut(run, this.x, this.z, BROOM.headRadius);
+    separateFromBunny(run, this, BROOM.headRadius, HEAD_HEIGHT);
+  }
+
+  /** A sweep that hits a planted Tumble stops against it, as against a wall. */
+  onPlanted(run: Run): void {
+    if (this.state === 'sweep') {
+      // Step the head back out of contact and end the sweep here.
+      const b = run.bunny;
+      const back = (BROOM.headRadius + b.radius) / BROOM.sweepRadius;
+      this.angle -= Math.sign(this.to - this.from) * Math.min(back, Math.abs(this.to - this.from));
+      this.to = this.angle;
+      this.timer = 0;
+      this.placeHead();
+    }
   }
 }
 

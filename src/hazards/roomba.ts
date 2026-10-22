@@ -5,12 +5,16 @@
  * (ROBO_MOWER, weak blade pull) and the Street Sweeper's mini mowers (MINI_MOWER) do too, and in
  * the city the Floor Scrubber (FLOOR_SCRUBBER, weak scrub-brush pull, spins `brush`) and the
  * Garbage Truck's mini scrubbers (MINI_SCRUBBER).
+ *
+ * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
+ * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
 import { FLOOR_SCRUBBER, HAZARD_RECOIL, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
-import { applySuction, bunnySheltered, hitBunny, moveCircle, pushBunnyOut, randomIn, suctionFalloff, suctionReachFor, wrapAngle, yawOf } from './common';
+import { maxSpeedFor } from '../systems/movement';
+import { activeLure, applySuction, bunnySheltered, hitBunny, moveCircle, pullLure, randomIn, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, ringDecal } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 
@@ -45,6 +49,10 @@ export class Roomba extends BaseHazard {
 
   protected tick(dt: number, run: Run): void {
     this.steer(dt);
+    const lure = activeLure(run);
+    if (lure && lure.wanderRange > 0 && Math.hypot(lure.x - this.x, lure.z - this.z) < lure.wanderRange) {
+      this.yaw = turnTowards(this.yaw, yawOf(lure.x - this.x, lure.z - this.z), 3 * dt);
+    }
     const speed = this.tierSpeed(run, this.cfg.speed);
     const m = moveCircle(run.house, this.x, this.z, this.size, this.cfg.height, Math.sin(this.yaw) * speed * dt, Math.cos(this.yaw) * speed * dt);
     this.x = m.x;
@@ -73,6 +81,10 @@ export class Roomba extends BaseHazard {
     if (dist < reach + b.radius && !bunnySheltered(run, this.cfg.height)) {
       applySuction(run, this.x, this.z, this.cfg.suctionStrength, suctionFalloff(dist - b.radius, this.size, reach), dt);
     }
+    if (lure) {
+      const falloff = suctionFalloff(Math.hypot(lure.x - this.x, lure.z - this.z) - lure.radius, this.size, this.size + this.cfg.suctionReach);
+      if (falloff > 0) pullLure(run, this.x, this.z, maxSpeedFor(b) * this.cfg.suctionStrength * falloff, dt);
+    }
     this.suctionRing.place(this.x, this.z);
     this.suctionRing.root.scale.set(reach, 1, reach);
     this.suctionRing.setOpacity(0.18 + 0.12 * Math.sin(this.time * 6));
@@ -85,7 +97,7 @@ export class Roomba extends BaseHazard {
       this.recoilFor = HAZARD_RECOIL;
       this.yaw = yawOf(this.x - run.bunny.x, this.z - run.bunny.z);
     }
-    pushBunnyOut(run, this.x, this.z, this.size);
+    separateFromBunny(run, this, this.size, this.cfg.height);
   }
 }
 

@@ -8,10 +8,11 @@
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
 import { HAZARD_RECOIL, MOP, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
 import { BaseHazard } from './base';
-import { bunnySheltered, hazardFloorFree, hitBunny, moveCircle, pushBunnyOut, turnTowards, yawOf } from './common';
+import { bunnySheltered, hazardFloorFree, hitBunny, moveCircle, separateFromBunny, turnTowards, yawOf } from './common';
 import { DECAL_COLORS } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
 
@@ -126,7 +127,7 @@ export class Mop extends BaseHazard {
     }
     if (wet) {
       b.stats.removeSource(WET_SOURCE);
-      b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, duration: 0.25 });
+      b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: 0.25 });
     }
     this.syncTrail();
   }
@@ -150,7 +151,7 @@ export class Mop extends BaseHazard {
     const c = this.cfg;
     if (bunnySheltered(run, c.height)) return;
     if (!this.stunned && this.recoilFor <= 0 && hitBunny(run, this.x, this.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii })) this.recoilFor = HAZARD_RECOIL;
-    pushBunnyOut(run, this.x, this.z, this.size);
+    separateFromBunny(run, this, this.size, c.height);
   }
 
   override dispose(): void {
