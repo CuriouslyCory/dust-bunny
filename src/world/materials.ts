@@ -262,6 +262,356 @@ function pavingTexture(): HTMLCanvasElement {
   return c;
 }
 
+// ── Region floors (seen from altitude) ─────────────────────────────
+
+/** Draws `fn` at (x, y) and at its wrapped copies, so shapes crossing an edge tile seamlessly. */
+function wrapped(S: number, x: number, y: number, r: number, fn: (x: number, y: number) => void): void {
+  for (const ox of [0, -S, S]) for (const oy of [0, -S, S]) if (x + ox > -r && x + ox < S + r && y + oy > -r && y + oy < S + r) fn(x + ox, y + oy);
+}
+
+/** Splits [0, S] at points between `min` and `max` apart (the last piece takes the rest). */
+function splits(rng: Rng, S: number, min: number, max: number): number[] {
+  const out = [0];
+  let at = 0;
+  while (S - at > max) {
+    at += Math.min(rng.range(min, max), S - at - min);
+    out.push(Math.round(at));
+  }
+  out.push(S);
+  return out;
+}
+
+/**
+ * Crop patchwork: columns of parcels, each a crop colour (greens, wheat gold, ploughed brown,
+ * the odd rapeseed yellow) with rows at its own angle and dark field margins between them.
+ */
+function fieldsTexture(): HTMLCanvasElement {
+  const S = 2048;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('fields');
+  ctx.fillStyle = hsl(80, 22, 30);
+  ctx.fillRect(0, 0, S, S);
+  const crops = [
+    () => hsl(rng.range(88, 108), rng.range(30, 42), rng.range(34, 44)),
+    () => hsl(rng.range(75, 92), rng.range(32, 44), rng.range(40, 50)),
+    () => hsl(rng.range(42, 50), rng.range(45, 58), rng.range(56, 64)),
+    () => hsl(rng.range(24, 32), rng.range(24, 34), rng.range(32, 40)),
+    () => hsl(rng.range(36, 44), rng.range(30, 40), rng.range(46, 54)),
+    () => hsl(rng.range(54, 58), rng.range(62, 72), rng.range(52, 58)),
+  ];
+  const cropWeights = [3, 2.5, 2.5, 2, 1.5, 0.5];
+  const xs = splits(rng, S, 180, 420);
+  for (let i = 0; i < xs.length - 1; i++) {
+    const x0 = xs[i]!;
+    const x1 = xs[i + 1]!;
+    const ys = splits(rng, S, 150, 380);
+    for (let j = 0; j < ys.length - 1; j++) {
+      const y0 = ys[j]!;
+      const y1 = ys[j + 1]!;
+      const crop = rng.weighted([0, 1, 2, 3, 4, 5], (k) => cropWeights[k]!)!;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x0, y0, x1 - x0, y1 - y0);
+      ctx.clip();
+      ctx.fillStyle = crops[crop]!();
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      // Soft tone drift across the parcel.
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      g.addColorStop(0, `rgba(255,255,255,${rng.range(0, 0.08)})`);
+      g.addColorStop(1, `rgba(0,0,0,${rng.range(0, 0.1)})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      // Rows: parallel strokes at the parcel's angle (mostly along an edge).
+      const alongEdge = rng.chance(0.8);
+      const ang = alongEdge ? (rng.chance(0.5) ? 0 : Math.PI / 2) + rng.range(-0.04, 0.04) : rng.range(0, Math.PI);
+      const gap = crop === 3 ? rng.range(5, 8) : rng.range(6, 11);
+      const reach = Math.hypot(x1 - x0, y1 - y0);
+      ctx.translate((x0 + x1) / 2, (y0 + y1) / 2);
+      ctx.rotate(ang);
+      ctx.lineWidth = gap * 0.42;
+      for (let k = -reach / 2; k < reach / 2; k += gap) {
+        ctx.strokeStyle = crop === 3 ? `rgba(40,25,15,${rng.range(0.18, 0.3)})` : `rgba(${rng.chance(0.5) ? '255,255,230' : '20,30,10'},${rng.range(0.06, 0.14)})`;
+        ctx.beginPath();
+        ctx.moveTo(-reach / 2, k);
+        ctx.lineTo(reach / 2, k);
+        ctx.stroke();
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // Tractor turning strip along one edge, and a few damp patches.
+      if (rng.chance(0.5)) {
+        ctx.fillStyle = 'rgba(80,60,40,0.18)';
+        if (ang < 0.5) ctx.fillRect(x0, y0, 10, y1 - y0);
+        else ctx.fillRect(x0, y0, x1 - x0, 10);
+      }
+      for (let k = rng.int(0, 3); k > 0; k--) {
+        const r = rng.range(20, 70);
+        const px = rng.range(x0, x1);
+        const py = rng.range(y0, y1);
+        const rg = ctx.createRadialGradient(px, py, 0, px, py, r);
+        rg.addColorStop(0, `rgba(0,0,0,${rng.range(0.05, 0.12)})`);
+        rg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(px - r, py - r, r * 2, r * 2);
+      }
+      ctx.restore();
+      // Field margin.
+      ctx.strokeStyle = 'rgba(52,62,34,0.7)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x0 + 1.5, y0 + 1.5, x1 - x0 - 3, y1 - y0 - 3);
+    }
+  }
+  speckle(ctx, S, S, rng, 30000, 0.06);
+  return c;
+}
+
+/** Motorway asphalt from altitude: grey with repair patches, oil stains and sealed cracks (no direction). */
+function motorwayTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('motorway');
+  ctx.fillStyle = hsl(220, 5, 34);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 30000; i++) {
+    ctx.fillStyle = hsl(220, 4, 34 + rng.range(-10, 10), 0.5);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), 1.5, 1.5);
+  }
+  for (let i = 0; i < 10; i++) {
+    const w = rng.range(30, 120);
+    const h = rng.range(30, 120);
+    const l = 34 + rng.range(-6, 5);
+    wrapped(S, rng.range(0, S), rng.range(0, S), Math.max(w, h), (px, py) => {
+      ctx.fillStyle = hsl(220, 4, l, 0.45);
+      ctx.fillRect(px, py, w, h);
+    });
+  }
+  for (let i = 0; i < 18; i++) {
+    const r = rng.range(8, 30);
+    wrapped(S, rng.range(0, S), rng.range(0, S), r, (px, py) => {
+      const rg = ctx.createRadialGradient(px, py, 0, px, py, r);
+      rg.addColorStop(0, 'rgba(10,10,14,0.22)');
+      rg.addColorStop(1, 'rgba(10,10,14,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(px - r, py - r, r * 2, r * 2);
+    });
+  }
+  ctx.strokeStyle = 'rgba(15,15,18,0.35)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 14; i++) {
+    let x = rng.range(40, S - 40);
+    let y = rng.range(40, S - 40);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    for (let k = 0; k < 4; k++) {
+      x += rng.range(-9, 9);
+      y += rng.range(-9, 9);
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  return c;
+}
+
+/** River water from altitude: slate blue-green with drifting lighter streaks and silt clouds. */
+function waterTexture(): HTMLCanvasElement {
+  const S = 512;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('water');
+  ctx.fillStyle = hsl(196, 24, 34);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 26; i++) {
+    const r = rng.range(40, 130);
+    const tone = rng.chance(0.5) ? hsl(rng.range(170, 190), 22, 40, 0.25) : hsl(205, 30, 26, 0.25);
+    wrapped(S, rng.range(0, S), rng.range(0, S), r, (px, py) => {
+      const rg = ctx.createRadialGradient(px, py, 0, px, py, r);
+      rg.addColorStop(0, tone);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(px - r, py - r, r * 2, r * 2);
+    });
+  }
+  for (let i = 0; i < 900; i++) {
+    const l = rng.range(6, 22);
+    const a = rng.range(-0.3, 0.3);
+    const alpha = rng.range(0.05, 0.16);
+    const w = rng.range(0.6, 1.4);
+    wrapped(S, rng.range(0, S), rng.range(0, S), l, (px, py) => {
+      ctx.strokeStyle = `rgba(225,238,240,${alpha})`;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l);
+      ctx.stroke();
+    });
+  }
+  speckle(ctx, S, S, rng, 3000, 0.04);
+  return c;
+}
+
+/** A town from above: a street grid around blocks of pitched roofs, back gardens and trees. */
+function townRoofsTexture(): HTMLCanvasElement {
+  const S = 1024;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('townRoofs');
+  // Streets underneath; each block is inset from a grid cell, so a street runs along every edge (and across the seams).
+  ctx.fillStyle = hsl(30, 4, 42);
+  ctx.fillRect(0, 0, S, S);
+  const roofs = [
+    [12, 48, 40],
+    [16, 42, 34],
+    [8, 40, 46],
+    [210, 8, 34],
+    [215, 10, 46],
+    [30, 18, 38],
+    [0, 0, 55],
+  ] as const;
+  const xs = splits(rng, S, 170, 280);
+  for (let i = 0; i < xs.length - 1; i++) {
+    const ys = splits(rng, S, 150, 260);
+    for (let j = 0; j < ys.length - 1; j++) {
+      const street = 14;
+      const x0 = xs[i]! + street / 2;
+      const x1 = xs[i + 1]! - street / 2;
+      const y0 = ys[j]! + street / 2;
+      const y1 = ys[j + 1]! - street / 2;
+      // Pavement, then back gardens.
+      ctx.fillStyle = hsl(36, 8, 62);
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.fillStyle = hsl(95, 26, 38);
+      ctx.fillRect(x0 + 4, y0 + 4, x1 - x0 - 8, y1 - y0 - 8);
+      if (rng.chance(0.12)) {
+        // A park or square: trees on grass.
+        for (let k = 0; k < 14; k++) {
+          const r = rng.range(6, 14);
+          ctx.fillStyle = hsl(105 + rng.range(-12, 10), 32, 26 + rng.range(-4, 6));
+          ctx.beginPath();
+          ctx.arc(rng.range(x0 + r, x1 - r), rng.range(y0 + r, y1 - r), r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        continue;
+      }
+      // Houses fronting the street on all four sides of the block.
+      const depth = rng.range(26, 38);
+      const sides: Array<[number, number, number, number, boolean]> = [
+        [x0 + 4, y0 + 4, x1 - x0 - 8, depth, true],
+        [x0 + 4, y1 - 4 - depth, x1 - x0 - 8, depth, true],
+        [x0 + 4, y0 + 4 + depth, depth, y1 - y0 - 8 - 2 * depth, false],
+        [x1 - 4 - depth, y0 + 4 + depth, depth, y1 - y0 - 8 - 2 * depth, false],
+      ];
+      for (const [sx, sy, sw, sh, horizontal] of sides) {
+        const len = horizontal ? sw : sh;
+        for (let t = 0; t < len - 8; ) {
+          const w = Math.min(len - t, rng.range(14, 30));
+          if (rng.chance(0.08)) {
+            t += w;
+            continue;
+          }
+          const [hh, ss, ll] = rng.pick(roofs);
+          const l = ll + rng.range(-5, 5);
+          const bx = horizontal ? sx + t : sx;
+          const by = horizontal ? sy : sy + t;
+          const bw = horizontal ? w - 2 : sw;
+          const bh = horizontal ? sh : w - 2;
+          // Two roof slopes, one lit and one in shade, the ridge parallel to the street.
+          ctx.fillStyle = hsl(hh, ss, l + 6);
+          ctx.fillRect(bx, by, horizontal ? bw : bw / 2, horizontal ? bh / 2 : bh);
+          ctx.fillStyle = hsl(hh, ss, l - 6);
+          ctx.fillRect(horizontal ? bx : bx + bw / 2, horizontal ? by + bh / 2 : by, horizontal ? bw : bw / 2, horizontal ? bh / 2 : bh);
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          if (horizontal) ctx.fillRect(bx + bw - 1.5, by, 1.5, bh);
+          else ctx.fillRect(bx, by + bh - 1.5, bw, 1.5);
+          t += w;
+        }
+      }
+      // A few garden trees.
+      for (let k = rng.int(1, 4); k > 0; k--) {
+        const r = rng.range(5, 9);
+        ctx.fillStyle = hsl(105 + rng.range(-12, 10), 30, 26);
+        ctx.beginPath();
+        ctx.arc(rng.range(x0 + depth + 8, Math.max(x0 + depth + 9, x1 - depth - 8)), rng.range(y0 + depth + 8, Math.max(y0 + depth + 9, y1 - depth - 8)), r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  speckle(ctx, S, S, rng, 12000, 0.06);
+  return c;
+}
+
+/** Forest canopy: overlapping tree crowns lit from one side, with dark gaps between. */
+function forestTexture(): HTMLCanvasElement {
+  const S = 1024;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('forest');
+  ctx.fillStyle = hsl(110, 30, 14);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 2600; i++) {
+    const r = rng.range(9, 24);
+    const conifer = rng.chance(0.35);
+    const h = conifer ? rng.range(130, 150) : rng.range(85, 115);
+    const sat = conifer ? rng.range(22, 32) : rng.range(30, 44);
+    const l = conifer ? rng.range(18, 26) : rng.range(24, 36);
+    wrapped(S, rng.range(0, S), rng.range(0, S), r, (px, py) => {
+      const rg = ctx.createRadialGradient(px - r * 0.35, py - r * 0.35, r * 0.1, px, py, r);
+      rg.addColorStop(0, hsl(h - 4, sat, l + 12));
+      rg.addColorStop(0.7, hsl(h, sat, l));
+      rg.addColorStop(1, hsl(h, sat, l - 8, 0.9));
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  speckle(ctx, S, S, rng, 8000, 0.06);
+  return c;
+}
+
+/** Landfill: grey-brown rubble with flecks of colour, bare soil caps, puddles and dozer tracks. */
+function landfillTexture(): HTMLCanvasElement {
+  const S = 1024;
+  const [c, ctx] = canvas(S, S);
+  const rng = new Rng('landfill');
+  ctx.fillStyle = hsl(36, 10, 40);
+  ctx.fillRect(0, 0, S, S);
+  for (let i = 0; i < 40; i++) {
+    const r = rng.range(50, 160);
+    const tone = rng.chance(0.4) ? hsl(30, 22, 34, 0.4) : hsl(40, 6, rng.range(36, 50), 0.4);
+    wrapped(S, rng.range(0, S), rng.range(0, S), r, (px, py) => {
+      const rg = ctx.createRadialGradient(px, py, 0, px, py, r);
+      rg.addColorStop(0, tone);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(px - r, py - r, r * 2, r * 2);
+    });
+  }
+  const flecks = ['#c1121f', '#1d4e89', '#f4f4f4', '#e9c46a', '#2a9d8f', '#3a3a3a', '#d8c4a8'];
+  for (let i = 0; i < 26000; i++) {
+    ctx.fillStyle = rng.chance(0.12) ? rng.pick(flecks) : hsl(36, rng.range(4, 14), rng.range(24, 58), 0.7);
+    const s = rng.range(1, 4);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), s, s * rng.range(0.6, 1.6));
+  }
+  for (let i = 0; i < 7; i++) {
+    const r = rng.range(14, 40);
+    const a = rng.range(0, Math.PI);
+    wrapped(S, rng.range(0, S), rng.range(0, S), r, (px, py) => {
+      ctx.fillStyle = hsl(200, 12, 24, 0.7);
+      ctx.beginPath();
+      ctx.ellipse(px, py, r, r * 0.6, a, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  ctx.strokeStyle = 'rgba(60,48,36,0.35)';
+  ctx.lineWidth = 5;
+  for (let i = 0; i < 6; i++) {
+    const r = rng.range(120, 300);
+    const x = rng.range(r, S - r);
+    const y = rng.range(r, S - r);
+    const a = rng.range(0, Math.PI * 2);
+    ctx.beginPath();
+    ctx.arc(x, y, r, a, a + rng.range(0.6, 1.4));
+    ctx.stroke();
+  }
+  return c;
+}
+
 const floorCache = new Map<FloorMaterialId, FloorTextureInfo>();
 
 export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
@@ -295,18 +645,24 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'paving':
         info = { texture: toTexture(pavingTexture()), worldSize: 480, roughness: 0.85 };
         break;
-      // Region floors (1 world unit = 10 m). Placeholders until the Region look lands.
+      // Region floors: world sizes in Region units (1 = 10 m), seen from a few kilometres up.
       case 'fields':
-      case 'forest':
-        info = { texture: toTexture(grassTexture()), worldSize: 12, roughness: 1 };
+        info = { texture: toTexture(fieldsTexture()), worldSize: 72, roughness: 1 };
         break;
       case 'motorway':
+        info = { texture: toTexture(motorwayTexture()), worldSize: 9, roughness: 0.92 };
+        break;
       case 'water':
-        info = { texture: toTexture(asphaltTexture()), worldSize: 8, roughness: 0.95 };
+        info = { texture: toTexture(waterTexture()), worldSize: 16, roughness: 0.32 };
         break;
       case 'townRoofs':
+        info = { texture: toTexture(townRoofsTexture()), worldSize: 18, roughness: 0.85 };
+        break;
+      case 'forest':
+        info = { texture: toTexture(forestTexture()), worldSize: 20, roughness: 1 };
+        break;
       case 'landfill':
-        info = { texture: toTexture(concreteTexture()), worldSize: 10, roughness: 0.9 };
+        info = { texture: toTexture(landfillTexture()), worldSize: 16, roughness: 0.95 };
         break;
     }
     floorCache.set(id, info);

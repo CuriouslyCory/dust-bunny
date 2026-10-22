@@ -119,5 +119,7 @@ export const STORY: Story = {
     },
   },
 
-  debris: {},
+  debris: {
+    stadium: ['It has eaten a stadium. The match has been postponed. Both teams are claiming the win.'],
+  },
 };

@@ -60,6 +60,11 @@ export const FURNITURE: Record<string, FurnitureDef> = {
   building_apartment: { id: 'building_apartment', name: 'Apartments', w: 2000, d: 1600, h: 3200, clearance: 0 },
   building_shops: { id: 'building_shops', name: 'Shops', w: 2400, d: 1400, h: 1200, clearance: 0 },
   building_brick: { id: 'building_brick', name: 'Brick Loft', w: 2200, d: 2000, h: 2000, clearance: 0 },
+  // Region (sizes in Region units, 1 = 10 m): permanent landmarks seen from altitude. The generator
+  // jitters w / d / h per instance; these are the nominal sizes.
+  region_city_core: { id: 'region_city_core', name: 'City Centre', w: 8, d: 7, h: 9, clearance: 0 },
+  region_hill: { id: 'region_hill', name: 'Hill', w: 12, d: 9, h: 4, clearance: 0 },
+  region_ridge: { id: 'region_ridge', name: 'Ridge', w: 20, d: 7, h: 3.5, clearance: 0 },
 };
 
 /** Footprint after rotation by quarter turns. */
