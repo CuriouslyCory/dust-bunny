@@ -108,7 +108,7 @@ function proceduralSun(): Group {
 function dashedRing(): BufferGeometry {
   const parts: BufferGeometry[] = [];
   const n = 18;
-  for (let i = 0; i < n; i++) parts.push(new RingGeometry(1.12, 1.24, 6, 1, (i / n) * Math.PI * 2, (Math.PI * 2 * 0.6) / n));
+  for (let i = 0; i < n; i++) parts.push(new RingGeometry(1.1, 1.32, 6, 1, (i / n) * Math.PI * 2, (Math.PI * 2 * 0.6) / n));
   const g = mergeGeometries(parts, false)!;
   for (const p of parts) p.dispose();
   g.rotateX(-Math.PI / 2);
@@ -246,6 +246,6 @@ export class SolarSky {
     this.ring.position.set(j.x, 0.05, j.z);
     this.ring.scale.setScalar(j.size * pulse);
     this.ring.rotation.y = this.time * (state === 'open' ? 0.6 : 0.15);
-    this.ringMat.opacity = state === 'locked' ? 0.45 : state === 'unlocked' ? 0.6 : 0.85;
+    this.ringMat.opacity = state === 'locked' ? 0.65 : state === 'unlocked' ? 0.8 : 1;
   }
 }
