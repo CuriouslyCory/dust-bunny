@@ -3,7 +3,8 @@
  * Loadout applied, and the narrator caption line. Used by Character select, Under the Couch,
  * the results "Kept" section, the HUD reward moment and the leaderboard panel.
  */
-import { DECOY, DISCHARGE, getAbility, HUNKER, type AbilityId } from '../data/abilities';
+import { abilityParamsFor } from '../abilities/keepsakeParams';
+import { getAbility, type AbilityId } from '../data/abilities';
 import {
   describeKeepsake,
   getGrade,
@@ -21,23 +22,25 @@ import './keepsakes.css';
 
 const n1 = (x: number): string => (Math.round(x * 10) / 10).toString();
 
-/** The Ability's numbers with a Loadout's Keepsakes applied, as short "label value" parts. */
+/**
+ * The Ability's numbers with a Loadout's Keepsakes applied, as short "label value" parts. Read from
+ * the same resolver the Run uses (abilityParamsFor), so the card shows what the Run plays with.
+ */
 export function abilityNumbers(ability: AbilityId, loadout: Loadout = []): string[] {
+  const p = abilityParamsFor(loadout);
   switch (ability) {
     case 'decoy': {
-      const lasts = DECOY.duration + loadoutValue(loadout, 'long_strand', 'duration');
-      const cooldown = DECOY.cooldown * (1 - Math.min(0.9, loadoutValue(loadout, 'quick_shed', 'cooldown')));
-      const clog = DECOY.clogStun + loadoutValue(loadout, 'thick_clog', 'clogStun');
-      return [`lasts ${n1(lasts)} s`, `${n1(cooldown)} s cooldown`, `${n1(clog)} s clog`];
+      const d = p.decoy;
+      const clog = d.bossClogStun === d.clogStun ? `${n1(d.clogStun)} s clog` : `${n1(d.clogStun)} s clog (bosses ${n1(d.bossClogStun)} s)`;
+      return [`lasts ${n1(d.duration)} s`, `${n1(d.cooldown)} s cooldown`, clog];
     }
     case 'hunker': {
-      const perSecond = Math.max(0, HUNKER.cooldownPerSecondHeld - loadoutValue(loadout, 'loose_roots', 'perSecondSaved'));
-      return [`hold up to ${HUNKER.maxHold} s`, `cooldown ${HUNKER.cooldownBase} s + ${n1(perSecond)} s per second held`];
+      const h = p.hunker;
+      return [`hold up to ${n1(h.maxHold)} s`, `cooldown ${n1(h.cooldownBase)} s + ${n1(h.cooldownPerSecondHeld)} s per second held`];
     }
     case 'discharge': {
-      const fill = DISCHARGE.fillDistance / (1 + loadoutValue(loadout, 'live_wire', 'fillRate'));
-      const range = DISCHARGE.range + loadoutValue(loadout, 'long_reach', 'range');
-      return [`full after ${n1(fill)} r rolled`, `${n1(range)} r range`];
+      const z = p.discharge;
+      return [`full after ${n1(z.fillDistance / z.fillRate)} r rolled`, `${n1(z.range)} r range`];
     }
   }
 }

@@ -294,6 +294,27 @@ export function isLoadoutFor(characterId: string, loadout: Loadout): boolean {
   );
 }
 
+// --- Floors (two stacked copies at any grade must leave the Ability playable) ---
+
+/**
+ * Limits applied after a Loadout's Keepsakes are added up (src/abilities/keepsakeParams.ts), so
+ * two copies at any grade keep the Ability's numbers sane. Only these two bind; every other
+ * effect stays reasonable at two grade-10 copies, and the stat effects are bounded by the caps.
+ */
+export const KEEPSAKE_FLOORS = {
+  /**
+   * Decoy cooldown is never shorter than the Decoy's duration, so it is on the floor at most half
+   * the time. Binds for two Quick Sheds from grade 8 (−79%: 16 s → 3.4 s, raised to 4 s), and
+   * for a Quick Shed beside a Long Strand only when both are grade 10 (8.8 s → 9 s).
+   */
+  decoyCooldownPerDuration: 1,
+  /**
+   * Hunker cooldown per second held never drops below 0.2 s. Binds for two Loose Roots from
+   * grade 6 (two grade-10 copies save 1.2 s of the base 1.0 s), so a long hold always costs something.
+   */
+  hunkerPerSecondHeld: 0.2,
+} as const;
+
 // --- Felting ---
 
 /** Keepsakes of one type and grade felted into one of the next grade. */

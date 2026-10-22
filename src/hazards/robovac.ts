@@ -54,6 +54,12 @@ export class RoboVac9000 extends BaseHazard {
   stunCause: BossStunCause | null = null;
   /** Grounded: seconds after a Discharge during which it can't be Discharged again (counted down by the Ability System). */
   groundedFor = 0;
+  /**
+   * Extra effect of the chip taken during the current stun (Dead Weight sets it for Hunker
+   * stuns): the stun lasts `hold` more seconds after the chip and `pieces` more parts fall off.
+   * Cleared whenever a new stun starts.
+   */
+  chipBonus: { hold: number; pieces: number } | null = null;
   readonly minis = new Set<number>();
   private readonly lane;
   private readonly stunRing;
@@ -158,6 +164,7 @@ export class RoboVac9000 extends BaseHazard {
         if (m.hit) {
           this.lane.visible = false;
           this.hitThisStun = false;
+          this.chipBonus = null;
           this.stunCause = 'wall';
           this.enter('stunned', c.stunTime);
           run.events.emit('bossStunned', { hazardId: this.id, cause: 'wall' });
@@ -187,6 +194,7 @@ export class RoboVac9000 extends BaseHazard {
   /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
   override stun(_seconds: number): void {
     this.hitThisStun = false;
+    this.chipBonus = null;
     this.stunCause = 'spiky';
   }
 
@@ -198,6 +206,7 @@ export class RoboVac9000 extends BaseHazard {
   abilityStun(run: Run, seconds: number, cause: Exclude<BossStunCause, 'wall' | 'spiky'>): void {
     this.lane.visible = false;
     this.hitThisStun = false;
+    this.chipBonus = null;
     this.stunCause = cause;
     // Never cut short a stun that is already running.
     this.enter('stunned', this.state === 'stunned' ? Math.max(this.timer, seconds) : seconds);
@@ -264,9 +273,10 @@ export class RoboVac9000 extends BaseHazard {
         this.hits++;
         this.size = bossSizeAfterHits(this.hits, c.size, c.chipFactor);
         // Parts knocked loose: absorbable Debris around the boss.
-        scatterDebris(run, this.rng, this.x, this.z, c.chipPieces, b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
+        const bonus = this.chipBonus;
+        scatterDebris(run, this.rng, this.x, this.z, c.chipPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
         run.events.emit('bossHit', { hazardId: this.id, size: this.size, absorbRadius: this.absorbRadius(run) });
-        if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6);
+        if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6 + (bonus?.hold ?? 0));
       }
       knockbackCm(b, b.x - this.x, b.z - this.z, b.radius * 2);
       separateFromBunny(run, this, radius, c.height);
