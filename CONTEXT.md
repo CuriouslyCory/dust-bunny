@@ -1,6 +1,7 @@
 # Dust Bunny — Domain Glossary
 
 - **Bunny** — the player character: a fuzzy sphere of dust. Its size is its **radius**, in the current Area's **unit**; its **real radius** is in centimetres.
+- **Form** — what the Bunny is made of, for its look: **dust** until it absorbs Sagittarius A*, then a **black hole** (a dark core, an accretion disc of lint, a lensing shimmer; the same eyes) for the rest of the Run.
 - **Character** — one of three starting Bunny archetypes chosen before a Run (Lint, Tumble, Zap). Each has different base stats.
 - **Difficulty** — how hard a Run is, chosen with the Character: **Casual** (default, the original balance), **Arcade** (faster, more frequent Hazards with quicker attacks) or **Hardcore** (much more of that, one heart fewer, fewer Pickups, no heal between Areas). Harder Difficulties pay more Fluff and leaderboard score.
 - **Run** — one play session from spawn to death or victory (absorbing Sagittarius A*, the Galaxy's boss, while the Galaxy is the last Area built). Runs are procedurally generated from a seed.

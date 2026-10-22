@@ -37,7 +37,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun, Jupiter in the way until Dust Star, Voyager 1, solar Hazards and the Sun), with their story in the game, and Act 8 (the Galaxy) is playable as groundwork: its chapter, Tier lines, a placeholder galactic disc, placeholder Hazards and a placeholder Sagittarius A* (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Act 8's look, Hazards and boss fight and Act 9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun, Jupiter in the way until Dust Star, Voyager 1, solar Hazards and the Sun), with their story in the game, and Act 8 (the Galaxy) is playable: its chapter, Tier lines, the galactic disc with its spiral arms, dust lanes and starfield, the Bunny's black-hole look after Sagittarius A*, placeholder Hazards and a placeholder Sagittarius A* (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Act 8's Hazards and boss fight and Act 9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 
@@ -158,12 +158,13 @@ The ecliptic plane: conveniently flat. Debris: asteroids, comets, moons, planets
 
 ### Act 8 · The Galaxy — *The Biggest Vacuum There Is*
 
-The galactic disc: also flat. Debris: stars, star clusters, nebulae, rogue planets. Black holes appear as Hazards (suction, the purest vacuum) and foreshadow what the Bunny is becoming. After Sagittarius A* the Bunny's look changes: a dark core, an accretion disc of lint.
+The galactic disc: also flat. Debris: stars, star clusters, nebulae, rogue planets. Black holes appear as Hazards (suction, the purest vacuum) and foreshadow what the Bunny is becoming. A rogue planet drifts beside the arrival point, a one-off with its own line (any rogue planet, the first absorbed), and a sock floats nearby for the Tier 18 line. After Sagittarius A* the Bunny's look changes for the rest of the Run: a dark core, an accretion disc of lint, a lensing shimmer; the eyes stay.
 
 | Beat | Line |
 |---|---|
 | Area entered | *Astronomers on a distant world classify it as a nebula. They are not wrong.* |
 | Tier 17 → 18 (Dust Nebula) | *It is now mostly hydrogen, lint, and a sock.* |
+| Rogue planet absorbed (one-off) | *A rogue planet, drifting between stars for a billion years. Finally, something happens to it.* |
 | Tier 18 → 19 (Dust Cluster) | *The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.* |
 | Sagittarius A* arrives | *At the centre of the galaxy is a hole four million times heavier than the Sun. It has been quietly cleaning the galactic core for thirteen billion years. It is the biggest vacuum there is. It is not big enough.* |
 | Galaxy cleared | *It has absorbed the thing that absorbs things. It is now that thing, with fur.* |
@@ -316,5 +317,4 @@ Spares for rotation, same voice. Add to `STORY.tiers[...]` as they are approved.
 - *A mountain range. It had a name. It has a new one now: inside.* (Dustmass)
 - *The Great Barrier Reef is absorbed. It was going anyway.* (Dust Planet)
 - *Saturn's rings are, strictly speaking, also dust that never got picked up. It feels seen.* (Dust Giant)
-- *A rogue planet, drifting between stars for a billion years. Finally, something happens to it.* (Dust Nebula)
 - *A galaxy with 300 billion stars and, probably, someone's couch.* (Dust Singularity)
