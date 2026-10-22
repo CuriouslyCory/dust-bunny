@@ -34,6 +34,7 @@ import { GLOBE, generateGlobe } from '../world/globe';
 import { generateSolarSystem, SOLAR } from '../world/solarSystem';
 import { GALAXY, generateGalaxy } from '../world/galaxy';
 import { generateUniverse, UNIVERSE } from '../world/universe';
+import { VoidSlowSystem } from '../systems/voidSlow';
 import { WrapSystem } from '../systems/wrap';
 import { generateRegion, REGION } from '../world/region';
 import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/types';
@@ -195,7 +196,7 @@ export class Run {
     this.spawner = new DebrisSpawner(this.rng.fork('debris'));
     this.perkDraft = new PerkDraft(this);
 
-    for (const s of [movementSystem, magnetSystem, this.hazards, absorbSystem, collisionSystem, this.pickups, growthSystem, exitSystem, new WrapSystem(), this.spawner]) {
+    for (const s of [new VoidSlowSystem(), movementSystem, magnetSystem, this.hazards, absorbSystem, collisionSystem, this.pickups, growthSystem, exitSystem, new WrapSystem(), this.spawner]) {
       this.addSystem(s);
     }
 
@@ -208,6 +209,8 @@ export class Run {
       this.bunny.setRadius(Math.max(this.bunny.radius, areaStartRadius(config.area)));
       this.tier = tierForRadius(this.bunny.realRadius).index;
       for (let t = 2; t <= this.tier; t++) this.tierTimes[t] = 0;
+      // Past the Galaxy the Bunny has absorbed Sagittarius A*: a black hole with fur.
+      if (AREA_ORDER.indexOf(config.area) > AREA_ORDER.indexOf('galaxy')) this.bunny.form = 'black_hole';
       this.enterArea(config.area);
     }
   }

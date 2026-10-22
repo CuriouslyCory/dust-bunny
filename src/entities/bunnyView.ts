@@ -10,6 +10,8 @@
  * (`plasmaBoost` brightens it all when the Sun's light goes out, src/fx/solar.ts). Once it has
  * absorbed Sagittarius A* (`Bunny.form` 'black_hole', for the rest of the Run) the fur and core go
  * dark and an accretion disc of lint and a lensing shimmer surround it (blackHoleLook.ts); the eyes stay.
+ * In the Universe it is a cluster of black holes with fur between them: small cores with discs of
+ * their own orbit inside the fur and the big disc's lint puffs up round them (BlackHoleCluster).
  * Appearance comes from a BunnyLook (the Character `look`), see bunnyLook.ts.
  *
  * Hierarchy: root (x, r·squashY, z) → body (yaw = heading, squash scale) → roll (fur, Debris)
@@ -45,7 +47,7 @@ import { ContactShadows } from '../fx/contactShadows';
 import { getQuality } from '../fx/quality';
 import { furTextures } from '../world/materials';
 import type { Bunny } from './bunny';
-import { BlackHoleLook, HOLE } from './blackHoleLook';
+import { BlackHoleCluster, BlackHoleLook, CLUSTER, HOLE } from './blackHoleLook';
 import { resolveLook, type BunnyLook } from './bunnyLook';
 import { debrisColors, debrisGeometry, debrisMaterial } from './debrisGeometry';
 
@@ -213,6 +215,9 @@ export class BunnyView {
   /** The black-hole form (after Sagittarius A*): its disc and shimmer, 0..1 grown in, and the dust look's colours to darken from. */
   private hole: BlackHoleLook | null = null;
   private holeGrow = 0;
+  /** The Universe: a cluster of black holes inside the fur (blackHoleLook.ts), 0..1 grown in. */
+  private cluster: BlackHoleCluster | null = null;
+  private clusterGrow = 0;
   private readonly dustColors: { root: Color; tip: Color; core: Color; rim: Color };
   private stuck: StuckItem[] = [];
   private stuckMeshes = new Map<string, InstancedMesh>();
@@ -320,6 +325,7 @@ export class BunnyView {
     this.dustColors = { root: (this.furUniforms.uRoot!.value as Color).clone(), tip: tip.clone(), core: coreMat.color.clone(), rim: this.rim.value.clone() };
     // A view built after the change (a later Area) shows it at once.
     if (bunny.form === 'black_hole') this.holeGrow = 1;
+    if (bunny.form === 'black_hole' && bunny.unit === AREAS.universe.unit) this.clusterGrow = 1;
 
     this.body.add(this.rollGroup);
     this.buildEyes();
@@ -427,6 +433,13 @@ export class BunnyView {
     const hole = new BlackHoleLook();
     this.root.add(hole.root);
     return hole;
+  }
+
+  /** The Universe's cluster of black holes, round the ball (not rolling, not squashed). */
+  private buildCluster(): BlackHoleCluster {
+    const cluster = new BlackHoleCluster();
+    this.root.add(cluster.root);
+    return cluster;
   }
 
   /** The Moon (the `moon` Debris: its Blender prop when loaded) half-buried in the fur, rolling with the ball. */
@@ -654,6 +667,15 @@ export class BunnyView {
       this.rim.value.copy(D.rim).lerp(DARK.rim, g);
       this.hole.update(dt, r, g, this.time);
     }
+    // The Universe: several small black holes with their own discs orbit inside the fur.
+    const clusterOn = holeOn && b.unit === AREAS.universe.unit;
+    if (clusterOn) this.cluster ??= this.buildCluster();
+    if (this.cluster) {
+      this.clusterGrow = clusterOn ? Math.min(1, this.clusterGrow + dt / CLUSTER.growSeconds) : 0;
+      const g = 1 - (1 - this.clusterGrow) ** 3;
+      this.hole?.setCluster(g);
+      this.cluster.update(r, g, this.time);
+    }
     const moonOn = orbit && b.realRadius >= getTier(14).minRadius;
     if (moonOn) this.moon ??= this.buildMoon();
     if (this.moon) {
@@ -715,6 +737,7 @@ export class BunnyView {
       (this.atmosphere.material as ShaderMaterial).dispose();
     }
     this.hole?.dispose();
+    this.cluster?.dispose();
     this.shells.dispose();
     this.root.removeFromParent();
   }
