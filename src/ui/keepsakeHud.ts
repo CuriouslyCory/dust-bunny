@@ -1,20 +1,22 @@
 /**
  * The Keepsake reward moment (browser only): on `keepsakesDropped`, fibre particles in the grade's
- * colour stream into the Bunny, a narrator caption plays, and a `good` banner names the Keepsake
- * ("Thick Clog · Brush Tangle", "Tangled into Lint's fur"). The banner and caption wait for the
- * area-cleared banner that `exitOpened` shows at the same moment (longer when it carries the
- * narrator's cleared line). A first kill's banner says a choice waits
- * on the results screen; the Run is never paused.
+ * colour stream into the Bunny, then the Run pauses on the Keepsake reveal
+ * (src/ui/screens/keepsakeReveal.ts: what was won, the narrator caption, a first kill's choice).
+ * The reveal waits for the area-cleared banner that `exitOpened` shows at the same moment (longer
+ * when it carries the narrator's cleared line) and for play to be on screen (a Perk draft, chapter
+ * card or pause menu goes first).
  */
 import { Color } from 'three';
-import { getCharacter } from '../data/characters';
-import { getGrade, keepsakeLabel } from '../data/keepsakes';
+import { getGrade } from '../data/keepsakes';
 import type { Game } from '../game/game';
-import { dropCaption } from '../meta/keepsakes';
+import { dropCaption, getKeepsakeTracker } from '../meta/keepsakes';
 import { narrate } from './keepsakeUi';
+import { openKeepsakeReveal } from './screens/keepsakeReveal';
 
-/** Seconds before ours, at least: the area-cleared banner (src/ui/areaHud.ts) shows meanwhile. */
-const BANNER_DELAY = 3.7;
+/** Seconds before the reveal, at least: the area-cleared banner (src/ui/areaHud.ts) shows meanwhile. */
+const REVEAL_DELAY = 3.7;
+/** Seconds between checks while another screen (Perk draft, chapter card, pause) is up. */
+const RETRY = 0.25;
 const WHITE = new Color(1, 1, 1);
 
 export function installKeepsakeHud(game: Game): void {
@@ -34,26 +36,25 @@ export function installKeepsakeHud(game: Game): void {
       }, i * 140);
     }
 
-    const name = getCharacter(e.characterId).name;
-    const title = e.firstKill ? `New Keepsake · ${grade.material}` : e.drops.map((d) => keepsakeLabel(d.ref)).join(' + ');
-    const subtitle = e.firstKill ? `Tangled into ${name}'s fur · choose its type on the results screen` : `Tangled into ${name}'s fur`;
+    const record = getKeepsakeTracker()?.current;
     const caption = dropCaption(e.bossId, grade.bossName, grade.material);
-    // A Run-winning boss ends the Run in the same event chain: no banner then, caption at once.
+    // A Run-winning boss ends the Run in the same event chain: no reveal then, caption at once.
     queueMicrotask(() => {
       if (run.ended) narrate(game, caption);
     });
     const show = (): void => {
-      // The Run may have ended (the City boss wins it): the results screen lists the drop instead.
-      if (game.run !== run || run.ended) return;
+      // The Run may have ended (the last boss wins it): the results screen lists the drop instead.
+      if (game.run !== run || run.ended || !record) return;
       // Still reading the cleared line: wait for it rather than cut it off.
       const left = game.hud.bannerLeft;
       if (left > 0.1) {
         window.setTimeout(show, left * 1000 + 150);
         return;
       }
-      narrate(game, caption);
-      game.hud.banner(title, { subtitle, variant: 'good', duration: 3.4 });
+      if (!openKeepsakeReveal(game, { run: record, drops: e.drops, firstKill: e.firstKill, caption })) {
+        window.setTimeout(show, RETRY * 1000);
+      }
     };
-    window.setTimeout(show, BANNER_DELAY * 1000);
+    window.setTimeout(show, REVEAL_DELAY * 1000);
   });
 }

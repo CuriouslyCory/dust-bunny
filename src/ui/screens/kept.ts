@@ -1,8 +1,8 @@
 /**
- * Results "Kept" section: the Keepsakes this Run left in the played Character's fur, the
- * first-kill choose-1-of-3 card, and a button to Under the Couch. The first offered type is already
- * in the Hoard; picking another swaps it. Leaving the results screen without choosing keeps the
- * highlighted (first) one.
+ * Results "Kept" section: the Keepsakes this Run left in the played Character's fur and a button to
+ * Under the Couch. A first kill is chosen in the in-Run Keepsake reveal; only a drop whose reveal
+ * never showed (the Run ended first) gets the choose-1-of-3 card here. The first offered type is
+ * already in the Hoard; picking another swaps it. Leaving without choosing keeps the highlighted one.
  */
 import { getCharacter } from '../../data/characters';
 import { describeKeepsake, getGrade, getKeepsakeType } from '../../data/keepsakes';
@@ -20,7 +20,16 @@ export function openUnderTheCouch(game: Game, characterId?: string): void {
   game.go('underTheCouch', { back: 'characterSelect', characterId });
 }
 
-function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerender: () => void): HTMLElement {
+/** The line under the options: whether a pick was made and until when it can change. */
+export type ChoiceNote = (chosen: boolean) => string;
+
+const resultsNote: ChoiceNote = (chosen) => (chosen ? 'Kept. You can still change it until you leave.' : 'Leaving keeps the highlighted one.');
+
+/**
+ * A first-kill choose-1-of-3 card for `run.drops[index]`: clicking an option swaps the credited
+ * Keepsake (tracker.choose) and calls `rerender`. Also shown by the in-Run reveal.
+ */
+export function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerender: () => void, note: ChoiceNote = resultsNote): HTMLElement {
   const tracker = getKeepsakeTracker();
   const grade = getGrade(drop.ref.grade);
   const options = drop.offer!.map((type) => {
@@ -46,7 +55,7 @@ function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerend
     { className: 'kept-choice' },
     h('p', { className: 'kept-choice-head', textContent: `First ${grade.bossName} for ${getCharacter(run.characterId).name}: choose what it left (${grade.material}).` }),
     h('div', { className: 'kept-options' }, ...options),
-    h('p', { className: 'kept-choice-note', textContent: drop.chosen ? 'Kept. You can still change it until you leave.' : 'Leaving keeps the highlighted one.' }),
+    h('p', { className: 'kept-choice-note', textContent: note(!!drop.chosen) }),
   );
   card.style.setProperty('--grade', grade.color);
   return card;
@@ -73,7 +82,7 @@ export function registerKeptSection(): void {
           return;
         }
         const items = run.drops.map((d, i) =>
-          d.offer && !run.settled ? choiceCard(run, i, d, render) : h('div', { className: 'kept-item' }, keepsakeChip(d.ref, { describe: true }), ...(d.bonus ? [h('span', { className: 'kept-bonus', textContent: 'Hardcore' })] : [])),
+          d.offer && !d.locked && !run.settled ? choiceCard(run, i, d, render) : h('div', { className: 'kept-item' }, keepsakeChip(d.ref, { describe: true }), ...(d.bonus ? [h('span', { className: 'kept-bonus', textContent: 'Hardcore' })] : [])),
         );
         el.replaceChildren(
           h('h3', { className: 'kept-head', textContent: `Kept · tangled into ${name}'s fur` }),
