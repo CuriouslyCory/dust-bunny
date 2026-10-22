@@ -64,7 +64,7 @@ import { areaRadiusAllowed, runRadiusAllowed, validateAreaSubmission, validateSu
 import { progressRadius } from '../src/shared/score';
 import { fluffForRun } from '../src/meta/fluff';
 import { upgradeModifiers } from '../src/meta/upgrades';
-import { canAbsorb } from '../src/systems/absorb';
+import { canAbsorb, debrisLocked } from '../src/systems/absorb';
 import { viewRadiusFor } from '../src/systems/camera';
 import { passesUnder } from '../src/systems/collision';
 import { reachableBy } from '../src/systems/spawner';
@@ -198,7 +198,8 @@ class Planner {
     pad = r * 0.95;
     const ratio = this.run.bunny.stats.get('absorbRatio');
     this.run.debris.forEach((d) => {
-      if (canAbsorb(r, ratio, d.size) || d.size <= r * TUNING.push.ratio) return;
+      // Locked Debris (Jupiter before Dust Star) is an Obstacle whatever its size.
+      if (!debrisLocked(this.run.bunny, d) && (canAbsorb(r, ratio, d.size) || d.size <= r * TUNING.push.ratio)) return;
       const s = d.size * 0.6;
       mark(d.x - s, d.z - s, d.x + s, d.z + s);
     });
@@ -449,7 +450,7 @@ class Bot implements InputSource {
     let best: Debris | null = null;
     let bestScore = 0;
     for (const d of near) {
-      if (!canAbsorb(r, ratio, d.size) || (this.blacklist.get(d.id) ?? 0) > this.run.time || !reachableBy(house, d.x, d.z, d.size, r)) continue;
+      if (!canAbsorb(r, ratio, d.size) || debrisLocked(bunny, d) || (this.blacklist.get(d.id) ?? 0) > this.run.time || !reachableBy(house, d.x, d.z, d.size, r)) continue;
       const crow = Math.hypot(d.x - bunny.x, d.z - bunny.z);
       const quick = ((d.size / r) ** 3 * d.type.mass) / (crow + r);
       if (quick <= bestScore) continue; // path length >= straight line, so it can't win
@@ -471,7 +472,7 @@ class Bot implements InputSource {
       }
     }
     if (traceAt !== undefined && this.run.time > traceAt && this.run.time < traceAt + 1) {
-      const ab = near.filter((d) => canAbsorb(r, ratio, d.size));
+      const ab = near.filter((d) => canAbsorb(r, ratio, d.size) && !debrisLocked(bunny, d));
       const reach = ab.filter((d) => reachableBy(house, d.x, d.z, d.size, r));
       const path = reach.filter((d) => this.planner.pathTo(d.x, d.z, r + d.size) >= 0);
       console.log(`  pick t=${this.run.time.toFixed(1)} r=${r.toFixed(1)} pos=(${bunny.x.toFixed(0)},${bunny.z.toFixed(0)}) near=${near.length} absorbable=${ab.length} reachable=${reach.length} pathable=${path.length} best=${best?.type.id} cell=${this.planner.cell.toFixed(1)} startFree=${this.planner.debugStart()}`);
@@ -783,7 +784,7 @@ for (const characterId of chars) {
         const b = run.bunny;
         const r = b.radius;
         const ratio = b.stats.get('absorbRatio');
-        const near = run.debris.query(b.x, b.z, viewRadiusFor(r, run.tier)).filter((d) => canAbsorb(r, ratio, d.size) && d.size >= r * 0.12 && reachableBy(run.house, d.x, d.z, d.size, r));
+        const near = run.debris.query(b.x, b.z, viewRadiusFor(r, run.tier)).filter((d) => canAbsorb(r, ratio, d.size) && !debrisLocked(b, d) && d.size >= r * 0.12 && reachableBy(run.house, d.x, d.z, d.size, r));
         supply.push(`${Math.round(run.time / 60)}m:r${r.toFixed(0)}/${near.length}`);
         if (stalls && r < lastR * 1.02) log.push(`${fmt(run.time)} STALL r=${r.toFixed(1)} at (${b.x.toFixed(0)},${b.z.toFixed(0)}) absorbable in view=${near.length}`);
         lastR = r;
