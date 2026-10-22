@@ -118,9 +118,18 @@ Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweep
 
 Fluff earned per Run ≈ `floor(tierReached × 4 + min(maxRadius, 300) / 30 + debrisAbsorbed / 1000)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). Targets: a Casual Run that clears the house or wins pays about 40–80 Fluff (one base-level Upgrade), Arcade 80–160, Hardcore 300–400 for Runs that reach the city. Buying every Upgrade (about 1,545 Fluff) takes about 20 Casual wins or 4 Hardcore wins.
 
+## Keepsakes and Felting
+
+Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Keepsakes modify that Character's Ability (5 types per Character) and have a **grade** set by the boss: 1 Brush Tangle (Robo-Vac 9000), 2 Gutter Grit (Street Sweeper), 3 Hopper Gunk (Garbage Truck), up to 10 First Dust (Felting only). Data and effect values: `src/data/keepsakes.ts`.
+
+- **Drops:** every boss kill credits 1 Keepsake of the boss's grade with a random type (seeded from the Run seed); Hardcore adds 1. On a Character's first kill of a boss the player chooses 1 of 3 offered types on the results screen instead (the first offer is credited at once; leaving results without choosing keeps it). Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. Chipping doesn't change the reward.
+- **Loadout:** on Character select two slots take Keepsakes from that Character's **Hoard** (both may hold the same type; copies add up). It is fixed for the Run, remembered per Character on the device, and sent with leaderboard entries.
+- **Felting** (Under the Couch): 3 of the same type and grade make 1 of the next grade for 40 × g² Fluff (g = the new grade), and only up to one grade above the best boss that Character has beaten. **Shedding** discards one for 10 × g² Fluff. Neither counts as Fluff earned.
+- A narrator caption plays when a Keepsake drops and on the first Felting (Settings → Story captions).
+
 ## Screens
 
-Title → Character select (and Difficulty) → Run (HUD) → Perk draft (modal on Tier-up) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, leaderboard name entry) → Shop → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion) and a How-to-Play panel.
+Title → Character select (Difficulty, Ability card and Loadout) → Run (HUD) → Perk draft (modal on Tier-up) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, Keepsakes kept, leaderboard name entry) → Shop / Under the Couch → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion, story captions) and a How-to-Play panel.
 
 HUD: hearts, radius readout, progress bar to next Tier with Tier name, Dash cooldown, active Pickup icons with timers, Perk icons, small Tier-up/absorb toasts ("+ Sock!").
 

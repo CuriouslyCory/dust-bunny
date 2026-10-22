@@ -20,3 +20,10 @@
 - **Verified score** — a leaderboard entry posted while signed in, shown with a ✓. Entries posted without an account are **anonymous**.
 - **Run board** / **Area board** — the leaderboards. The Run board ranks whole Runs; each Area has an Area board that takes an entry whenever a Run clears that Area. Signed-in players' entries post automatically; anonymous players choose to submit them on the results screen.
 - **Dash** — a short speed burst on a cooldown.
+- **Keepsake** — an Ability modifier a boss leaves tangled in the fur of the Character that absorbed it. Five types per Character, usable only by that Character. Shown as type plus material, e.g. "Thick Clog · Gutter Grit". Not "loot" or "item".
+- **Grade** — a Keepsake's strength, 1–10, named after the filth inside the boss that drops it (1 Brush Tangle from the Robo-Vac 9000, 2 Gutter Grit from the Street Sweeper, 3 Hopper Gunk from the Garbage Truck … 10 First Dust, from Felting only).
+- **Hoard** — one Character's Keepsakes, counted by type and grade (at most 99 of each). Kept in the save and the cloud save.
+- **Loadout** — the 0–2 Keepsakes tucked into a Character's fur for a Run; fixed for the Run and remembered per Character on the device.
+- **Tuck in** — the UI verb for putting a Keepsake into a Loadout slot.
+- **Felting** — turning 3 Keepsakes of the same type and grade into 1 of the next grade, for Fluff, up to one grade above the best boss that Character has beaten. **Shedding** discards one for a little Fluff.
+- **Under the Couch** — the Bunny's den and hub screen where each Character's Hoard is shown and felted.
