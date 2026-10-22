@@ -5,7 +5,7 @@
  */
 import type { GameEvents } from '../core/events';
 import type { DifficultyId } from '../data/difficulty';
-import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, MAX_GRADE, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
+import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_GRADE, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
 import { fluffForRun } from './fluff';
@@ -156,10 +156,12 @@ export class MetaProgress {
     return added;
   }
 
-  /** Replaces one `from` with one `to` (the first-kill choice). False if `from` isn't in the Hoard. */
+  /** Replaces one `from` with one `to` (the first-kill choice). False if `from` isn't in the Hoard or `to`'s cell is full. */
   swapKeepsake(characterId: string, from: KeepsakeRef, to: KeepsakeRef): boolean {
     if (getKeepsakeType(to.type)?.characterId !== characterId || this.keepsakeCount(characterId, from) < 1) return false;
     if (from.type === to.type && from.grade === to.grade) return true;
+    // A full destination cell would swallow the source Keepsake.
+    if (this.keepsakeCount(characterId, to) >= HOARD_STACK_MAX) return false;
     this.store.update((d) => {
       const h = d.characters[characterId]!;
       addToHoard(h, from, -1);

@@ -170,6 +170,20 @@ describe('Felting and shedding', () => {
     expect(meta.data.stats.keepsakesEarned).toBe(99);
     expect(meta.creditKeepsakes('lint', [ref('arc', 1)])).toBe(0);
   });
+
+  it('refuses a first-kill swap into a full Hoard cell without losing the credited Keepsake', () => {
+    const meta = new MetaProgress(memStorage());
+    const t = new KeepsakeTracker(meta);
+    const run = t.start({ seed: 'seed-e', characterId: 'lint', ranked: true });
+    const [drop] = t.bossDefeated('robovac_9000');
+    const first = drop!.ref;
+    const full = drop!.offer![1]!;
+    meta.creditKeepsakes('lint', Array.from({ length: 99 }, () => ref(full, 1)));
+    expect(t.choose(run, 0, full)).toBe(false);
+    expect(drop!.ref).toEqual(first);
+    expect(meta.keepsakeCount('lint', first)).toBe(1);
+    expect(meta.keepsakeCount('lint', ref(full, 1))).toBe(99);
+  });
 });
 
 describe('Loadout memory', () => {
