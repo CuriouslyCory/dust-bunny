@@ -23,7 +23,7 @@
  *
  * Keepsakes: --loadout=<type>:<grade>,<type>:<grade> tucks those Keepsakes in for the Character
  * they belong to (the other Characters play without); --loadout=max gives every Character its
- * MAX_LOADOUTS pair at grade 4 (the strongest legal pair today, see MAX_LOADOUTS).
+ * MAX_LOADOUTS pair at grade 5 (the strongest legal pair today, see MAX_LOADOUTS).
  *
  * Leaderboards: --validate builds the Run board and Area board submissions every Run would post
  * (submissionFromRun / areaSubmission) and checks them with validateSubmission /
@@ -97,7 +97,7 @@ if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo')
 const validate = args.includes('--validate') && !bossOnly && !startArea;
 
 /**
- * --loadout=max: the strongest legal pair at grade 4 per Character. Chosen by playing every pair
+ * --loadout=max: the strongest legal pair per Character, at MAX_GRADE_TODAY. Chosen by playing every pair
  * of that Character's types (duplicates included, 15 per Character) at grade 4 over seeds s1–s30
  * (--minutes=25, default bot policies) and taking the most wins, then the fastest median win:
  * Lint Quick Shed + Reclaim (18/30 wins, base 12/30), Tumble Snowball ×2 (7/30, base 2/30), Zap
@@ -109,7 +109,8 @@ const MAX_LOADOUTS: Record<string, readonly [KeepsakeTypeId, KeepsakeTypeId]> = 
   tumble: ['snowball', 'snowball'],
   zap: ['static_cling', 'grounding'],
 };
-const MAX_GRADE_TODAY = 4;
+/** Highest grade a Hoard can hold today: the Incinerator drops grade 4, Felting one above (feltCeiling). */
+const MAX_GRADE_TODAY = 5;
 
 /** The Loadout --loadout gives a Character ([] without the flag or when no listed type is its own). */
 function loadoutFor(characterId: string): Loadout {
