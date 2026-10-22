@@ -21,8 +21,10 @@ export interface Settings {
   showFps: boolean;
   /** 'auto' shows the joystick on touch devices. */
   touchControls: TouchControlsMode;
-  /** Narrator captions (e.g. when a boss leaves a Keepsake). */
+  /** Narrator lines: Tier-ups, bosses, Area changes, results (src/story/) and Keepsake drops. */
   storyCaptions: boolean;
+  /** The intro has played once on this device (it plays on the first Play). */
+  introSeen: boolean;
 }
 
 const prefersReducedMotion = (): boolean => {
@@ -50,6 +52,7 @@ export function defaultSettings(): Settings {
     showFps: false,
     touchControls: 'auto',
     storyCaptions: true,
+    introSeen: false,
   };
 }
 
@@ -70,6 +73,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings = defaultSetti
     showFps: bool(r.showFps, defaults.showFps),
     touchControls: oneOf(r.touchControls, ['auto', 'on', 'off'] as const, defaults.touchControls),
     storyCaptions: bool(r.storyCaptions, defaults.storyCaptions),
+    introSeen: bool(r.introSeen, defaults.introSeen),
   };
 }
 
@@ -97,8 +101,9 @@ export class SettingsStore {
     for (const fn of [...this.listeners]) fn(this.current, prev);
   }
 
+  /** Back to defaults, except that a seen intro stays seen. */
   reset(): void {
-    this.update(defaultSettings());
+    this.update({ ...defaultSettings(), introSeen: this.current.introSeen });
   }
 
   /** Calls `fn` now (prev = null) and on every change. Returns an unsubscribe. */

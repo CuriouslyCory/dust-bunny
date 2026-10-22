@@ -8,7 +8,8 @@
  *            | perks  (icon row under the top-right counters: taken Perks live here)
  *   toast(text, { key, tone, swatch, short })   small batched toast near the Bunny ("+ Sock!");
  *                                       on phones a one-line ticker under the Tier pill ("Sock ×3")
- *   banner(title, { subtitle, variant, duration })   big centred banner (tier | boss | good | info)
+ *   banner(title, { subtitle, variant, duration, caption })   big centred banner (tier | boss | good | info),
+ *                                       optionally with a narrator caption under it
  *   flash(widgetId)                     plays the highlight animation on a widget
  *   onCompactChange(fn)                 runs fn(compact) now and whenever the phone layout toggles
  *
@@ -23,6 +24,7 @@ import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
 import { pickupRegistry } from '../pickups';
+import { captionDuration, narrate, storyCaption } from '../story';
 import { abilityWidget } from './abilityHud';
 import { COMPACT_QUERY } from './components';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
@@ -59,6 +61,11 @@ export interface BannerOptions {
   variant?: BannerVariant;
   /** Seconds on screen (default 2.4). */
   duration?: number;
+  /**
+   * Narrator caption under the subtitle (src/story/): its parts show in turn, `hold` seconds
+   * each, and the banner stays up until the last one has had its time (or `duration`, if longer).
+   */
+  caption?: { parts: readonly string[]; hold: number };
 }
 
 export interface ToastOptions {
@@ -140,6 +147,8 @@ export class Hud {
   private widgets: HudWidget[] = [];
   private bannerEl = h('div', { className: 'hud-banner' });
   private bannerTimer: number | undefined;
+  /** performance.now() when the current banner is due to hide (0: none showing). */
+  private bannerUntil = 0;
   private toastLayer = h('div', { className: 'hud-toasts' });
   private toastEls = new Map<number, HTMLElement>();
   private clock = 0;
@@ -259,22 +268,51 @@ export class Hud {
     this.toasts.clear();
   }
 
+  /** Seconds until the current banner hides (0 when none is up), so a later banner can wait its turn. */
+  get bannerLeft(): number {
+    return Math.max(0, (this.bannerUntil - performance.now()) / 1000);
+  }
+
   clearBanner(): void {
+    this.bannerUntil = 0;
     clearTimeout(this.bannerTimer);
     this.bannerEl.classList.remove('show');
   }
 
   banner(title: string, opts: BannerOptions = {}): void {
     const b = this.bannerEl;
+    const parts = opts.caption?.parts ?? [];
+    const caption = h('div', { className: 'hud-banner-caption', textContent: parts[0] ?? '' });
     b.className = `hud-banner variant-${opts.variant ?? 'info'}`;
     b.replaceChildren(
       h('div', { className: 'hud-banner-title', textContent: title }),
       ...(opts.subtitle ? [h('div', { className: 'hud-banner-sub', textContent: opts.subtitle })] : []),
+      ...(parts.length ? [caption] : []),
     );
     void b.offsetWidth;
     b.classList.add('show');
     clearTimeout(this.bannerTimer);
-    this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), (opts.duration ?? 2.4) * 1000);
+    const duration = opts.duration ?? 2.4;
+    const hold = opts.caption?.hold ?? 0;
+    this.bannerUntil = performance.now() + Math.max(duration, hold * parts.length) * 1000;
+    let shown = 0;
+    // One timer at a time, so a newer banner (or clearBanner) cancels the rest of the caption.
+    const next = (): void => {
+      shown++;
+      if (shown >= parts.length) {
+        const left = duration - hold * Math.max(1, parts.length);
+        if (left > 0.05) this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), left * 1000);
+        else b.classList.remove('show');
+        return;
+      }
+      caption.textContent = parts[shown]!;
+      caption.classList.remove('next');
+      void caption.offsetWidth;
+      caption.classList.add('next');
+      this.bannerTimer = window.setTimeout(next, hold * 1000);
+    };
+    if (parts.length) this.bannerTimer = window.setTimeout(next, hold * 1000);
+    else this.bannerTimer = window.setTimeout(() => b.classList.remove('show'), duration * 1000);
   }
 
   /** Replays the highlight animation on a widget (e.g. 'tier' on Tier-up). */
@@ -410,7 +448,10 @@ function tierWidget(hud: Hud, game: Game): void {
     const cleared = area === 'house' ? game.run?.houseCleared : area === 'neighborhood' ? game.run?.neighborhoodCleared : false;
     const bossDue = e.tier >= boss.tier && !cleared;
     const hunt = bossDue ? ` · hunt the ${hazardRegistry.get(boss.id)?.name ?? 'boss'}` : '';
-    hud.banner('Tier up!', { subtitle: `${t.name}${hunt}`, variant: 'tier', duration: 2.6 });
+    // The narrator's Tier beat goes in the Perk draft header; with no draft waiting, here.
+    const line = game.run && !game.run.perkDraft.active ? narrate(game.run, { kind: 'tier', tier: e.tier }) : null;
+    const caption = line ? storyCaption(line) : undefined;
+    hud.banner('Tier up!', { subtitle: `${t.name}${hunt}`, variant: 'tier', duration: caption ? captionDuration(caption) : 2.6, caption });
   });
 }
 
@@ -610,9 +651,17 @@ function absorbToasts(hud: Hud, game: Game): void {
 function bossBanner(hud: Hud, game: Game): void {
   let shownFor = -1;
   const warn = (name?: unknown): void => {
-    hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Area boss', variant: 'boss', duration: 3.2 });
+    // With the narrator on, the boss is introduced by name with its line (docs/story.md).
+    const run = game.run;
+    const line = typeof name === 'string' && run ? narrate(run, { kind: 'boss', area: run.area }) : null;
+    if (line) {
+      const caption = storyCaption(line);
+      hud.banner(name as string, { subtitle: '⚠ Boss incoming!', variant: 'boss', duration: Math.max(3.2, captionDuration(caption)), caption });
+    } else {
+      hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Area boss', variant: 'boss', duration: 3.2 });
+    }
     hud.el.classList.add('boss-alert');
-    setTimeout(() => hud.el.classList.remove('boss-alert'), 3200);
+    setTimeout(() => hud.el.classList.remove('boss-alert'), Math.max(3.2, hud.bannerLeft) * 1000);
   };
   onLoose(game.events, 'bossSpawned', (p) => {
     shownFor = typeof p.hazardId === 'number' ? p.hazardId : -2;

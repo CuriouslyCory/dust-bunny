@@ -1,0 +1,190 @@
+/* The narrator (src/story/): intro cards, chapter card, banner captions, story lines in panels.
+   Narrator lines: Nunito 800 italic, cream on the dark HUD-pill card. Chapter titles: Fredoka. */
+:root {
+  --story-cream: #fff7ec;
+  --story-card: rgba(42, 29, 23, 0.86);
+  --story-amber: #f6b860;
+}
+
+/* ── Intro and chapter screens ───────────────────────────── */
+.screen-intro,
+.screen-chapter {
+  pointer-events: auto;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%, #2e211b 0%, #1b130f 70%, #120c09 100%);
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.story-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(24px + var(--safe-top)) calc(24px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(24px + var(--safe-left));
+  cursor: pointer;
+}
+
+.story-cards {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  max-width: min(760px, 92vw);
+  text-align: center;
+}
+
+.story-card-caption {
+  margin: 0;
+  font: italic 800 clamp(20px, 3.4vw, 34px) / 1.35 var(--font-body);
+  color: var(--story-cream);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.3s ease-in;
+}
+
+.story-card-caption.show {
+  opacity: 1;
+  transition: opacity 0.2s ease-out;
+}
+
+.story-card-caption-2 {
+  font-size: clamp(18px, 3vw, 28px);
+}
+
+.story-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + var(--safe-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.story-hint {
+  margin: 0;
+  font-size: var(--fs-sm, 14px);
+  font-weight: 700;
+  color: rgba(255, 247, 236, 0.5);
+}
+
+.touch .story-hint {
+  display: none;
+}
+
+.story-skip {
+  --btn-fg: rgba(255, 247, 236, 0.75);
+}
+
+/* Chapter card: "Chapter 2", an amber rule, the title, then the line. */
+.chapter-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: min(720px, 92vw);
+  text-align: center;
+}
+
+.chapter-label {
+  margin: 0;
+  font: 600 clamp(14px, 2.2vw, 18px) / 1 var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.18em;
+  text-transform: lowercase;
+  color: var(--story-amber);
+}
+
+.chapter-rule {
+  width: 72px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--story-amber);
+}
+
+.chapter-title {
+  margin: 0 0 10px;
+  font: 700 clamp(28px, 5.4vw, 52px) / 1.1 var(--font-display);
+  color: var(--story-cream);
+}
+
+.story-chapter .story-card-caption {
+  font-size: clamp(18px, 2.8vw, 26px);
+}
+
+/* ── HUD banner caption ──────────────────────────────────── */
+.hud-banner-caption {
+  margin-top: 10px;
+  max-width: min(560px, 88vw);
+  padding: 8px 16px 9px;
+  border-radius: 14px;
+  background: var(--story-card);
+  font: italic 800 clamp(15px, 3.4vw, 19px) / 1.35 var(--font-body);
+  color: var(--story-cream);
+  text-shadow: none;
+}
+
+.hud-banner-caption.next {
+  animation: story-caption-in 0.2s ease-out both;
+}
+
+@keyframes story-caption-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── Story lines in panels (Perk draft header, results) ──── */
+.story-line {
+  display: inline-block;
+  margin: 2px auto 10px;
+  max-width: min(640px, 100%);
+  padding: 7px 14px 8px;
+  border-radius: 14px;
+  background: var(--story-card);
+  color: var(--story-cream);
+  font-size: clamp(14px, 2.4vw, 16px);
+  line-height: 1.35;
+}
+
+.story-line[hidden] {
+  display: none;
+}
+
+.story-line-tier {
+  font-weight: 700;
+  color: var(--story-amber);
+}
+
+.story-line-text {
+  font-style: italic;
+  font-weight: 800;
+}
+
+.results-story {
+  margin: 8px 0 0;
+}
+
+/* ── Reduced motion: captions appear and go without fading ── */
+.reduce-motion .story-card-caption,
+.reduce-motion .story-card-caption.show {
+  transition: none;
+}
+
+.reduce-motion .hud-banner-caption.next {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-card-caption,
+  .story-card-caption.show {
+    transition: none;
+  }
+  .hud-banner-caption.next {
+    animation: none;
+  }
+}

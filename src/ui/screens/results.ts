@@ -22,6 +22,8 @@ import { getMeta } from '../../meta/meta';
 import { HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
+import { captions, chapterOf, storyOn } from '../../story';
+import { pickLine } from '../../story/narrator';
 
 export type RunResult = GameEvents['runEnded'];
 export type ResultsSlot = 'fluff' | 'leaderboard' | 'extra';
@@ -36,6 +38,21 @@ export interface ResultsSection {
 }
 
 const sections = new Map<string, ResultsSection>();
+
+/**
+ * Where the story stopped (docs/story.md): "Swept up in Chapter 3 · Title" after a death, the
+ * last Area's cleared line after a win. Null when the narrator is off.
+ */
+export function storyResultLine(e: RunResult): { lead: string; text: string } | null {
+  if (!storyOn()) return null;
+  const s = e.stats;
+  if (e.reason === 'victory') {
+    const line = pickLine(s.seed, { kind: 'cleared', area: s.area });
+    return line ? { lead: '', text: captions(line).join(' ') } : null;
+  }
+  const chapter = chapterOf(s.area);
+  return { lead: `${e.reason === 'died' ? 'Swept up' : 'Stopped'} in Chapter ${chapter.number} · `, text: chapter.title };
+}
 
 /** "Victory ×1.5 · Hardcore ×1.6 · " etc.: the Fluff multipliers the Run earned (see meta/fluff.ts). */
 function fluffBonusLabel(e: RunResult): string {
@@ -92,6 +109,9 @@ export function registerResultsScreen(): void {
       badge.setAttribute('aria-hidden', 'true');
       const title = h('h2', { className: 'panel-title results-title', id: 'results-title' });
       const sub = h('p', { className: 'panel-sub' });
+      const storyLead = h('span', { className: 'story-line-tier' });
+      const storyText = h('span', { className: 'story-line-text' });
+      const story = h('p', { className: 'story-line results-story' }, storyLead, storyText);
       const stats = h('div', { className: 'results-stats' });
       const fluffSlot = h('div', { className: 'results-slot' });
       fluffSlot.dataset.slot = 'fluff';
@@ -119,7 +139,7 @@ export function registerResultsScreen(): void {
       const actions = h('div', { className: 'results-actions' }, again, charSelect, shop, toTitle);
 
       // Header (badge, title, line) · scrolling body (stats + Fluff | leaderboard) · pinned actions.
-      const head = h('div', { className: 'results-head' }, badge, h('div', { className: 'results-heading' }, title, sub));
+      const head = h('div', { className: 'results-head' }, badge, h('div', { className: 'results-heading' }, title, sub, story));
       const main = h('div', { className: 'results-main' }, stats, fluffSlot, extraSlot, seed);
       const body = scrollArea('results-body', main, lbSlot);
       const card = panel({ className: 'results-panel' }, head, body, actions);
@@ -152,6 +172,10 @@ export function registerResultsScreen(): void {
                     : s.houseCleared
                       ? 'So close to the front door!'
                       : v.sub;
+          const told = storyResultLine(e);
+          story.hidden = !told;
+          storyLead.textContent = told?.lead ?? '';
+          storyText.textContent = told?.text ?? '';
           const tier = getTier(s.tierReached);
           const rows: Array<[string, string, string]> = [
             ['⏱', 'Time', fmtTime(s.timeSec)],

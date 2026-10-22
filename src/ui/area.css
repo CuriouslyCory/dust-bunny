@@ -53,6 +53,12 @@
   animation: area-fade-in 1.4s ease-out forwards;
 }
 
+/* After a chapter card: lift its dark card off the new Area. */
+.area-fade.dark {
+  background: #1b130f;
+  animation-duration: 0.7s;
+}
+
 @keyframes area-fade-in {
   0% {
     opacity: 1;

@@ -5,7 +5,7 @@
  */
 import type { Game } from '../../game/game';
 import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
-import { h, registerScreen } from '../screens';
+import { h, registerScreen, screenRegistry } from '../screens';
 import { settings, type GraphicsQuality, type TouchControlsMode } from '../settings';
 
 export interface BackParams {
@@ -45,7 +45,9 @@ export function registerMenuScreens(): void {
       });
       const motion = toggle({ label: 'Reduced motion', hint: 'Calmer UI animation', value: s.reducedMotion, onChange: (v) => settings.update({ reducedMotion: v }) });
       const fps = toggle({ label: 'Show FPS', value: s.showFps, onChange: (v) => settings.update({ showFps: v }) });
-      const captions = toggle({ label: 'Story captions', hint: 'Narrator lines, e.g. when a boss leaves a Keepsake', value: s.storyCaptions, onChange: (v) => settings.update({ storyCaptions: v }) });
+      const captions = toggle({ label: 'Story captions', hint: 'The narrator: Tier-ups, bosses, Areas, Keepsakes', value: s.storyCaptions, onChange: (v) => settings.update({ storyCaptions: v }) });
+      const replay = button('Replay intro', () => game.go('intro', { done: () => game.go('settings', { back }) }), { size: 'sm', icon: '▶' });
+      const replayRow = h('div', { className: 'field' }, replay);
       const touch = segmented<TouchControlsMode>({
         label: 'Touch controls',
         value: s.touchControls,
@@ -72,13 +74,14 @@ export function registerMenuScreens(): void {
       const reset = button('Reset to defaults', () => settings.reset(), { variant: 'ghost', size: 'sm' });
       const el = panel(
         { title: 'Settings', className: 'settings-panel' },
-        scrollArea('settings-body', section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el), section('Story', captions.el)),
+        scrollArea('settings-body', section('Sound', master.el, music.el, sfx.el, mute.el), section('Display', quality.el, motion.el, fps.el, touch.el), section('Story', captions.el, replayRow)),
         h('div', { className: 'panel-actions' }, reset, done),
       );
       return {
         el,
         enter(params) {
           back = backTarget(game, params);
+          replayRow.hidden = !screenRegistry.has('intro');
           focusFirst(el, done);
         },
         onKey(e) {
