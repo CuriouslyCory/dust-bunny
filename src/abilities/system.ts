@@ -20,7 +20,7 @@ import { getCharacter } from '../data/characters';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import type { Hazard } from '../hazards';
-import { RoboVac9000, type BossStunCause } from '../hazards/robovac';
+import { RoboVac9000, type AbilityStunCause, type BossStunCause } from '../hazards/robovac';
 import { resolveAbilityParams, type AbilityParams } from './params';
 import type { AbilityEndReason } from './events';
 import './events';
@@ -131,7 +131,7 @@ export class AbilitySystem implements System {
   }
 
   /** Stuns a boss with an Ability if the limit allows (abilityStun, so a chip lands on contact). */
-  stunBoss(boss: RoboVac9000, seconds: number, cause: Exclude<BossStunCause, 'wall' | 'spiky'>): boolean {
+  stunBoss(boss: RoboVac9000, seconds: number, cause: AbilityStunCause): boolean {
     if (!this.canStunBoss(boss)) return false;
     this.lastBossStun.set(boss.id, this.run.time);
     boss.abilityStun(this.run, seconds, cause);

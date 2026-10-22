@@ -103,11 +103,13 @@ export function installAudio(game: Game): GameAudio {
     if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova') sfx.windRoar();
     else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun' || e.defId === 'sagittarius_a') && e.attack === 'charge')) sfx.rumble();
   });
-  // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse).
+  // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse), or Sagittarius A*'s indigestion.
   ev.on('bossStunned', (e) => {
     const area = game.run?.area;
-    if (e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy')) sfx.rumble(true);
+    if ((e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy')) || e.cause === 'indigestion') sfx.rumble(true);
   });
+  // Sagittarius A* gulps a star cluster.
+  ev.on('bossSwallowed', () => sfx.rumble());
   ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
   ev.on('staticFull', () => sfx.staticFull());
   ev.on('pickupCollected', () => sfx.pickup());

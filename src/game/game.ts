@@ -17,6 +17,7 @@ import {
   WebGLRenderer,
   type DirectionalLight,
 } from 'three';
+import { bendCamera, findLens, LensingPass } from '../fx/lensing';
 import { Lighting } from '../fx/lighting';
 import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
@@ -31,6 +32,7 @@ import { DEFAULT_CHARACTER_ID } from '../data/characters';
 import { TUNING } from '../data/tuning';
 import { CameraRig } from '../systems/camera';
 import { addDefaultHudWidgets, Hud } from '../ui/hud';
+import { settings } from '../ui/settings';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
 import { AREA_ORDER, type AreaId } from '../world/types';
@@ -84,6 +86,7 @@ export class Game {
   nextRunConfig: Partial<RunConfig> = {};
 
   private quality: Quality = 'high';
+  private readonly lensing = new LensingPass();
   /** Screen that paused the Run, if it is paused mid-Run. */
   private pausedBy: string | null = null;
   private readonly raycaster = new Raycaster();
@@ -263,7 +266,10 @@ export class Game {
 
   private render(alpha: number, frameDt: number): void {
     this.screens.update(frameDt);
+    // Sagittarius A*'s pull bends the camera (src/fx/lensing.ts).
+    const lens = findLens(this.run);
     if (this.view) {
+      bendCamera(this.rig, lens, settings.value.reducedMotion);
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
@@ -271,6 +277,7 @@ export class Game {
     }
     this.hud.update(frameDt);
     this.renderer.render(this.scene, this.camera);
+    if (this.view) this.lensing.render(this.renderer, this.scene, this.camera, lens, this.quality);
   }
 
   /** Render quality (see fx/quality.ts): shadows and pixel ratio. */

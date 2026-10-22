@@ -10,23 +10,33 @@
  * pull, spins its `funnel`); on the Globe the Debris-Field Satellite (DEBRIS_SATELLITE: tumbling
  * turns, a debris-field pull, spins its `panels`) and the Orbital Sweeper's Kessler swarm of mini
  * sweepers (MINI_SWEEPER); in the Solar System the Rogue Asteroid (ROGUE_ASTEROID: tumbling turns,
- * a gravity pull, spins its `rock`).
+ * a gravity pull, spins its `rock`); in the Galaxy the Black Hole (BLACK_HOLE: slow drifting turns,
+ * a strong long pull, spins its accretion `disk`), whose pull also drags loose Debris into a spiral
+ * and swallows it (`debrisPull`), rings flowing inward across the pull on the floor.
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { BLACK_HOLE, DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
+import { BLACK_HOLE, DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type DebrisPullTuning, type RoombaTuning } from '../data/hazards';
+import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
 import { activeLure, applySuction, bunnySheltered, hitBunny, moveCircle, pullLure, randomIn, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
-import { DECAL_COLORS, ringDecal } from './decals';
+import { isFloorFree } from '../systems/spawner';
+import { DECAL_COLORS, ringDecal, type Decal } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
+
+const _debris: Debris[] = [];
 
 export class Roomba extends BaseHazard {
   private turnTimer: number;
   private readonly suctionRing;
+  /** Inward-flowing rings over the Debris pull (the Black Hole). */
+  private readonly flowRings: Decal[] = [];
+  /** Debris swallowed (the Black Hole's `debrisPull.eat`). */
+  swallowed = 0;
 
   constructor(
     id: number,
@@ -42,6 +52,7 @@ export class Roomba extends BaseHazard {
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.turnTimer = randomIn(rng, cfg.turnInterval);
     this.suctionRing = this.addDecal(ringDecal(0.97, 1, DECAL_COLORS.suction, 0.35, 64));
+    if (cfg.debrisPull) for (let i = 0; i < 2; i++) this.flowRings.push(this.addDecal(ringDecal(0.94, 1, '#d9c8ff', 0.3, 64)));
   }
 
   /** Random turns every few seconds. */
@@ -94,6 +105,42 @@ export class Roomba extends BaseHazard {
     this.suctionRing.place(this.x, this.z);
     this.suctionRing.root.scale.set(reach, 1, reach);
     this.suctionRing.setOpacity(0.18 + 0.12 * Math.sin(this.time * 6));
+    if (this.cfg.debrisPull) this.pullDebris(dt, run, this.cfg.debrisPull, reach);
+  }
+
+  /**
+   * The Black Hole's pull on loose Debris (`debrisPull`): small Debris near it spirals in and,
+   * with `eat`, is swallowed at its middle. Rings flow inward across the pull on the floor.
+   */
+  private pullDebris(dt: number, run: Run, p: DebrisPullTuning, reach: number): void {
+    _debris.length = 0;
+    run.debris.query(this.x, this.z, this.size + p.reach + p.maxSize, _debris);
+    for (const d of _debris) {
+      if (!d.alive || d.size > p.maxSize) continue;
+      const dx = this.x - d.x;
+      const dz = this.z - d.z;
+      const dist = Math.hypot(dx, dz) || 1e-6;
+      if (p.eat && dist < this.size * 0.35 + d.size * 0.5) {
+        run.debris.remove(d);
+        this.swallowed++;
+        continue;
+      }
+      const falloff = suctionFalloff(dist - d.size - this.size, 0, p.reach);
+      if (falloff <= 0) continue;
+      const step = Math.min(dist, p.speed * falloff * dt);
+      const nx = d.x + ((dx - dz * p.swirl) / dist) * step;
+      const nz = d.z + ((dz + dx * p.swirl) / dist) * step;
+      if (isFloorFree(run.house, nx, nz, d.size)) run.debris.move(d, nx, nz);
+    }
+    // Two rings sliding from the edge of the pull to the hole, half a cycle apart.
+    for (let i = 0; i < this.flowRings.length; i++) {
+      const ring = this.flowRings[i]!;
+      const k = (this.time * 0.7 + i / this.flowRings.length) % 1;
+      const r = reach + (this.size - reach) * k;
+      ring.place(this.x, this.z);
+      ring.root.scale.set(r, 1, r);
+      ring.setOpacity(0.35 * Math.sin(k * Math.PI));
+    }
   }
 
   onContact(run: Run): void {

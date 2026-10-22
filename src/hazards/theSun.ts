@@ -24,9 +24,8 @@
  *   its `prominence_l` / `prominence_r` arcs for `prominenceRegrow` s. Its `corona` turns.
  *
  * Absorbing it clears the Solar System (`run.clearArea()`): the heliopause gate opens onto the Galaxy.
- * Sagittarius A* (src/hazards/sagittariusA.ts) is the Galaxy's placeholder on this class.
  */
-import type { Material, Mesh, MeshStandardMaterial } from 'three';
+import type { Material, Mesh, MeshStandardMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
 import { THE_SUN, type SunTuning } from '../data/hazards';
 import { PROMINENCE_ID } from '../data/sunDebris';
@@ -59,6 +58,33 @@ export function blockingGiantAt(run: Run, x: number, z: number, radius: number, 
   return null;
 }
 
+/** A model's own copy of a glowing material and its authored emissive intensity. */
+export interface GlowMaterial {
+  m: MeshStandardMaterial;
+  base: number;
+}
+
+/**
+ * Gives `model` its own copies of its glowing (emissive) materials, which GLB and procedural
+ * models share between instances, so a boss can dim or flash only itself. Returns them.
+ */
+export function ownGlowMaterials(model: Object3D): GlowMaterial[] {
+  const out: GlowMaterial[] = [];
+  model.traverse((o) => {
+    const mesh = o as Mesh;
+    if (!mesh.isMesh) return;
+    const own = (m: Material): Material => {
+      const s = m as MeshStandardMaterial;
+      if (!s.emissive || s.emissive.getHex() === 0 || !(s.emissiveIntensity > 0)) return m;
+      const c = s.clone();
+      out.push({ m: c, base: c.emissiveIntensity });
+      return c;
+    };
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
+  });
+  return out;
+}
+
 export class TheSun extends RoboVac9000 {
   private readonly sun: SunTuning;
   private giantTimer = 0;
@@ -71,24 +97,12 @@ export class TheSun extends RoboVac9000 {
   private nextProminence = 0;
   /** Glow level (1: full, `eclipseGlow` in an eclipse) and the model's own emissive materials. */
   glow = 1;
-  private readonly glowMats: Array<{ m: MeshStandardMaterial; base: number }> = [];
+  private readonly glowMats: GlowMaterial[];
 
   constructor(id: number, def: HazardDef, x: number, z: number, rng: Rng, cfg: SunTuning = THE_SUN) {
     super(id, def, x, z, rng, cfg);
     this.sun = cfg;
-    // Its own copies of the glowing materials (GLB and procedural materials are shared), so the eclipse dims only it.
-    this.model.traverse((o) => {
-      const mesh = o as Mesh;
-      if (!mesh.isMesh) return;
-      const own = (m: Material): Material => {
-        const s = m as MeshStandardMaterial;
-        if (!s.emissive || s.emissive.getHex() === 0 || !(s.emissiveIntensity > 0)) return m;
-        const c = s.clone();
-        this.glowMats.push({ m: c, base: c.emissiveIntensity });
-        return c;
-      };
-      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
-    });
+    this.glowMats = ownGlowMaterials(this.model);
   }
 
   /** True while the solar wind blows (hunting, a CME telegraph, recovering). */

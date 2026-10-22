@@ -12,10 +12,16 @@ declare module '../core/events' {
     /** An area boss arrived. `absorbRadius` = Bunny radius needed to absorb it. */
     bossSpawned: { hazardId: number; absorbRadius: number; name: string };
     /**
-     * The boss is stunned and can be rammed: it crashed into a wall (`cause` 'wall'), or an Ability
-     * stunned it ('decoy' clog, 'hunker' crash into a planted Tumble, 'discharge').
+     * The boss is stunned and can be rammed: it crashed into a wall (`cause` 'wall'), Sagittarius A*
+     * swallowed star clusters too fast ('indigestion'), or an Ability stunned it ('decoy' clog,
+     * 'hunker' crash into a planted Tumble, 'discharge').
      */
-    bossStunned: { hazardId: number; cause?: 'wall' | 'decoy' | 'hunker' | 'discharge' };
+    bossStunned: { hazardId: number; cause?: 'wall' | 'indigestion' | 'decoy' | 'hunker' | 'discharge' };
+    /**
+     * Sagittarius A* swallowed a star cluster (Debris `typeId`): its `fullness` (meals of the last
+     * few seconds) out of the `threshold` that stuns it.
+     */
+    bossSwallowed: { hazardId: number; typeId: string; fullness: number; threshold: number };
     /** The Bunny rammed the stunned boss and chipped it smaller. */
     bossHit: { hazardId: number; size: number; absorbRadius: number };
     /** An area boss was absorbed (`defId` says which; the house boss opens the front door). */

@@ -3,7 +3,9 @@
  * occupancy grid (walls, furniture it cannot roll under, Obstacle Debris), heads for the best
  * absorbable Debris it can see, sidesteps Hazard telegraphs, drafts a random Perk at each
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
- * while stunned. Prints when each Tier is reached, plus how the Run ended.
+ * while stunned (against Sagittarius A* it leaves star clusters for the boss to choke on, and
+ * against a Pulsar it backs out of reach of the lit beams). Prints when each Tier is reached, plus
+ * how the Run ended, and boss stuns by cause.
  *
  * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet, Orbital Sweeper, the Sun) the bot does not walk to
  * the exit: the Run moves straight to the next area (logged), so outdoor, city, region, continent, globe, solar system and galaxy pacing
@@ -56,6 +58,8 @@ import type { RoboVac9000 } from '../src/hazards/robovac';
 import { SprayBottle as SprayBottleClass, type SprayBottle } from '../src/hazards/sprayBottle';
 import { inCone, UprightVacuum as UprightVacuumClass, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
+import { inBeam, Pulsar } from '../src/hazards/pulsar';
+import { SagittariusA } from '../src/hazards/sagittariusA';
 import { getDifficulty } from '../src/data/difficulty';
 import { AREA_BOSSES, BROOM, tierValue } from '../src/data/hazards';
 import { getKeepsakeType, isLoadoutFor, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
@@ -384,6 +388,15 @@ class Bot implements InputSource {
         x += -fz * side * 2;
         z += fx * side * 2;
       }
+      if (h instanceof Pulsar && (h.state === 'telegraph' || h.state === 'firing')) {
+        // Leave the lit beams' reach (a player sees the red lanes and the amber wedges they will sweep).
+        const range = tierValue(h.cfg.range, this.run.tier);
+        if (d < range + r * 2) {
+          x += (dx / d) * 4;
+          z += (dz / d) * 4;
+          if (inBeam(dx, dz, r * 2, h.beamYaw, range, h.cfg.beamWidth) || h.state === 'firing') urgent = true;
+        }
+      }
       const vac = h.def.id === 'upright_vacuum' || h.def.id === 'litter_vacuum' ? (h as UprightVacuum) : null;
       if (vac && vac.state !== 'off') {
         // Step out of the (telegraphed) suction cone sideways and back.
@@ -418,6 +431,11 @@ class Bot implements InputSource {
         x += -fz * side * 2;
         z += fx * side * 2;
       }
+      if (h instanceof SagittariusA && d > 30 && h.state !== 'intro') {
+        // Stay in the fight (a player keeps it on screen): drift back towards it, outside its pull.
+        x -= (dx / d) * 1.2;
+        z -= (dz / d) * 1.2;
+      }
       if (boss && (boss.state === 'telegraph' || boss.state === 'charge')) {
         const fx = Math.sin(boss.yaw);
         const fz = Math.cos(boss.yaw);
@@ -447,10 +465,12 @@ class Bot implements InputSource {
     this.planner.ensure();
     this.planner.flood();
     const near = debris.query(bunny.x, bunny.z, viewRadiusFor(r, this.run.tier));
+    // Against Sagittarius A*, leave star clusters for it to choke on (two quickly stun it).
+    const sgr = this.run.hazards.hazards.find((h): h is SagittariusA => h instanceof SagittariusA && !h.dead && !canAbsorb(r, ratio, h.size));
     let best: Debris | null = null;
     let bestScore = 0;
     for (const d of near) {
-      if (!canAbsorb(r, ratio, d.size) || debrisLocked(bunny, d) || (this.blacklist.get(d.id) ?? 0) > this.run.time || !reachableBy(house, d.x, d.z, d.size, r)) continue;
+      if (!canAbsorb(r, ratio, d.size) || debrisLocked(bunny, d) || (sgr && sgr.sgr.clusters.meals[d.type.id] !== undefined) || (this.blacklist.get(d.id) ?? 0) > this.run.time || !reachableBy(house, d.x, d.z, d.size, r)) continue;
       const crow = Math.hypot(d.x - bunny.x, d.z - bunny.z);
       const quick = ((d.size / r) ** 3 * d.type.mass) / (crow + r);
       if (quick <= bestScore) continue; // path length >= straight line, so it can't win
@@ -672,7 +692,7 @@ interface Validation {
 }
 const summary: Record<
   string,
-  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; loadout: Loadout; v: Validation; acts: Record<string, number[]> }
+  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; stuns: Record<string, number>; loadout: Loadout; v: Validation; acts: Record<string, number[]> }
 > = {};
 const BOSS_IDS = AREA_ORDER.map((a) => AREA_BOSSES[a].id);
 const modifiers = upgradeModifiers(upgrades);
@@ -708,6 +728,8 @@ for (const characterId of chars) {
     fights: {} as Record<string, number>,
     kills: {} as Record<string, number>,
     abilityUses: 0,
+    /** Boss stuns by cause (wall crashes, Sagittarius A*'s indigestion, Abilities). */
+    stuns: {} as Record<string, number>,
     loadout,
     v: { checked: 0, rejected: [], runHeadroom: 0, areaHeadroom: {} },
     acts: {} as Record<string, number[]>,
@@ -722,6 +744,7 @@ for (const characterId of chars) {
     });
     events.on('bossDefeated', (e) => (sum.kills[e.defId] = (sum.kills[e.defId] ?? 0) + 1));
     events.on('abilityUsed', () => sum.abilityUses++);
+    events.on('bossStunned', (e) => (sum.stuns[e.cause ?? 'other'] = (sum.stuns[e.cause ?? 'other'] ?? 0) + 1));
     /** Area whose exit just opened (the bot skips the walk to it), or null. */
     let leaveArea: string | null = null;
     events.on('exitOpened', (e) => {
@@ -759,6 +782,8 @@ for (const characterId of chars) {
       });
       events.on('bossSpawned', (e) => log.push(`${fmt(run.time)} boss spawned, absorb at r=${e.absorbRadius.toFixed(1)} (r=${run.bunny.radius.toFixed(1)})`));
       events.on('bossHit', (e) => log.push(`${fmt(run.time)} boss chipped → absorb at r=${e.absorbRadius.toFixed(1)} (r=${run.bunny.radius.toFixed(1)})`));
+      events.on('bossStunned', (e) => log.push(`${fmt(run.time)} boss stunned (${e.cause ?? 'spiky'})`));
+      events.on('bossSwallowed', (e) => log.push(`${fmt(run.time)} boss swallowed ${e.typeId} (${e.fullness}/${e.threshold})`));
       events.on('pickupCollected', (e) => log.push(`${fmt(run.time)} pickup ${e.defId}`));
     }
     const supply: string[] = [];
@@ -820,7 +845,8 @@ for (const [id, s] of Object.entries(summary)) {
   const bosses = BOSS_IDS.filter((b) => s.fights[b]);
   const acts = AREA_ORDER.filter((a) => s.acts[a]?.length).map((a) => `${a} ${fmt(med(s.acts[a]!))}(${s.acts[a]!.length})`);
   if (acts.length) console.log(`          Act time, entry → boss absorbed (median, clears): ${acts.join('  ')}`);
-  console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}`);
+  const stuns = Object.entries(s.stuns).map(([c, n]) => `${c} ${n}`).join(', ');
+  console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}${stuns ? `  boss stuns: ${stuns}` : ''}`);
   if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.grade}`).join(', ')}`);
   if (validate) {
     const pct = (x: number) => `${Math.round(x * 100)}%`;
