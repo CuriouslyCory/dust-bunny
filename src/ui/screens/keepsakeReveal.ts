@@ -122,6 +122,8 @@ export function registerKeepsakeRevealScreen(): void {
           const n = /^Digit([1-9])$/.exec(e.code) ?? /^Numpad([1-9])$/.exec(e.code);
           if (n) return armed <= 0 && chooseAt(Number(n[1]) - 1);
           if (isKey(e, 'Space', 'Enter', 'NumpadEnter', 'Escape', 'KeyP')) {
+            // Still arming: swallow the key so it can't click a focused option either.
+            if (armed > 0) return true;
             // Enter on a focused option picks it (the browser's click); otherwise any of these resume.
             const focused = document.activeElement as HTMLElement | null;
             if (isKey(e, 'Enter', 'NumpadEnter', 'Space') && focused && focused !== resume && el.contains(focused)) return false;
