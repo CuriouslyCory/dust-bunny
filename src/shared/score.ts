@@ -8,12 +8,34 @@
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_SCORE_MULTIPLIER, type DifficultyId } from './difficulty.js';
 
-/** Tier start radii (cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
-export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600];
+/** Tier start radii (real cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
+export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000];
 export const SCORE_MAX_TIER = SCORE_TIER_MIN_RADII.length;
 
+/**
+ * The Run board's radius scale: each Act counts its growth in its own unit. Up to the City
+ * (1 cm units) a centimetre is a centimetre; from `fromCm` on, a cm counts `perCm`, so one Region
+ * unit (10 m) is worth 100 "cm". Later Acts add a band each, keeping scores in plain float range.
+ */
+export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }> = [
+  { fromCm: 0, perCm: 1 },
+  { fromCm: 1000, perCm: 0.1 },
+];
+
+/** A real radius (cm) on the Run board's progress scale (see SCORE_RADIUS_BANDS). */
+export function progressRadius(cm: number): number {
+  let out = 0;
+  for (let i = 0; i < SCORE_RADIUS_BANDS.length; i++) {
+    const band = SCORE_RADIUS_BANDS[i]!;
+    const end = SCORE_RADIUS_BANDS[i + 1]?.fromCm ?? Infinity;
+    if (cm <= band.fromCm) break;
+    out += (Math.min(cm, end) - band.fromCm) * band.perCm;
+  }
+  return out;
+}
+
 export const SCORE = {
-  /** Points per cm of max radius. */
+  /** Points per cm of max radius on the progress scale (progressRadius). */
   perRadiusCm: 100,
   perDebris: 2,
   /** Points per Tier above Tier 1. */
@@ -21,7 +43,7 @@ export const SCORE = {
   victoryBonus: 5000,
   /** Victory only: points per second under `victoryParSec`. */
   victoryPerSecUnderPar: 10,
-  victoryParSec: 2100,
+  victoryParSec: 2400,
 } as const;
 
 export interface ScoreInput {
@@ -35,15 +57,15 @@ export interface ScoreInput {
 }
 
 /**
- * base  = round(maxRadius × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
- *         + victory ? 5000 + round(max(0, 2100 − seconds) × 10) : 0
+ * base  = round(progressRadius(maxRadius) × 100) + debrisAbsorbed × 2 + (tierReached − 1) × 1000
+ *         + victory ? 5000 + round(max(0, 2400 − seconds) × 10) : 0
  * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])   (casual 1, arcade 1.25, hardcore 1.6)
  */
 export function computeScore(s: ScoreInput): number {
   const radius = Math.max(0, s.maxRadius);
   const debris = Math.max(0, Math.floor(s.debrisAbsorbed));
   const tier = Math.min(Math.max(Math.floor(s.tierReached), 1), SCORE_MAX_TIER);
-  let score = Math.round(radius * SCORE.perRadiusCm) + debris * SCORE.perDebris + (tier - 1) * SCORE.perTier;
+  let score = Math.round(progressRadius(radius) * SCORE.perRadiusCm) + debris * SCORE.perDebris + (tier - 1) * SCORE.perTier;
   if (s.victory) {
     const sec = Math.max(0, s.durationMs) / 1000;
     score += SCORE.victoryBonus + Math.round(Math.max(0, SCORE.victoryParSec - sec) * SCORE.victoryPerSecUnderPar);
@@ -65,7 +87,7 @@ export function scoreTierForRadius(radius: number): number {
 // Area boards: one entry per Area a Run clears (see docs/architecture.md, Leaderboard).
 
 /** Area ids, in Run order, mirrored from `AREA_ORDER` in `src/world/types.ts` (test-synced). */
-export const SCORE_AREAS = ['house', 'neighborhood', 'city'] as const;
+export const SCORE_AREAS = ['house', 'neighborhood', 'city', 'region'] as const;
 export type ScoreArea = (typeof SCORE_AREAS)[number];
 
 export function isScoreArea(v: unknown): v is ScoreArea {
@@ -73,23 +95,29 @@ export function isScoreArea(v: unknown): v is ScoreArea {
 }
 
 /** Tier at which each Area's boss arrives, mirrored from `AREA_BOSSES` (test-synced): a clear needs it. */
-export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9 };
+export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11 };
+
+/**
+ * Centimetres per world unit in each Area, mirrored from `AREAS[area].unit` (test-synced). Area
+ * board radii are in the Area's own unit.
+ */
+export const SCORE_AREA_UNIT: Readonly<Record<ScoreArea, number>> = { house: 1, neighborhood: 1, city: 1, region: 1000 };
 
 export const AREA_SCORE = {
-  /** Points per cm the Bunny grew in the Area. */
-  perRadiusCm: 100,
+  /** Points per unit (the Area's own unit) the Bunny grew in the Area: 100 per cm up to the City. */
+  perRadiusUnit: { house: 100, neighborhood: 100, city: 100, region: 10_000 } as Readonly<Record<ScoreArea, number>>,
   perDebris: 2,
   clearBonus: 3000,
   /** Points per second under the Area's par. */
   perSecUnderPar: 10,
-  parSec: { house: 720, neighborhood: 600, city: 900 } as Readonly<Record<ScoreArea, number>>,
+  parSec: { house: 720, neighborhood: 600, city: 900, region: 360 } as Readonly<Record<ScoreArea, number>>,
 } as const;
 
 export interface AreaScoreInput {
   area: ScoreArea;
-  /** Radius on entering the Area. */
+  /** Radius on entering the Area, in the Area's unit (SCORE_AREA_UNIT). */
   radiusIn: number;
-  /** Largest radius reached by the time the Run left the Area. */
+  /** Largest radius reached by the time the Run left the Area, in the Area's unit. */
   maxRadius: number;
   /** Debris absorbed in the Area. */
   debrisAbsorbed: number;
@@ -99,8 +127,9 @@ export interface AreaScoreInput {
 }
 
 /**
- * base  = round((maxRadius − radiusIn) × 100) + debrisAbsorbed × 2 + 3000
- *         + round(max(0, par − seconds) × 10)          (par: house 720 s, neighborhood 600 s, city 900 s)
+ * base  = round((maxRadius − radiusIn) × perRadiusUnit) + debrisAbsorbed × 2 + 3000
+ *         + round(max(0, par − seconds) × 10)   (par: house 720 s, neighborhood 600 s, city 900 s, region 360 s;
+ *                                                perRadiusUnit 100 per cm up to the City, 10,000 per Region unit)
  * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])
  */
 export function computeAreaScore(s: AreaScoreInput): number {
@@ -109,7 +138,7 @@ export function computeAreaScore(s: AreaScoreInput): number {
   const sec = Math.max(0, s.durationMs) / 1000;
   const par = AREA_SCORE.parSec[s.area] ?? 0;
   const score =
-    Math.round(growth * AREA_SCORE.perRadiusCm) + debris * AREA_SCORE.perDebris + AREA_SCORE.clearBonus + Math.round(Math.max(0, par - sec) * AREA_SCORE.perSecUnderPar);
+    Math.round(growth * (AREA_SCORE.perRadiusUnit[s.area] ?? 0)) + debris * AREA_SCORE.perDebris + AREA_SCORE.clearBonus + Math.round(Math.max(0, par - sec) * AREA_SCORE.perSecUnderPar);
   const mult = DIFFICULTY_SCORE_MULTIPLIER[s.difficulty ?? DEFAULT_DIFFICULTY] ?? 1;
   return Math.round(score * mult);
 }

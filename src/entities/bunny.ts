@@ -24,10 +24,14 @@ export class Bunny {
   /** External velocity (knockback, suction); decays every step. */
   impulseX = 0;
   impulseZ = 0;
+  /** Radius in world units (the current Area's unit, see `unit`). */
   radius: number;
   prevRadius: number;
+  /** Centimetres per world unit in the current Area (1 up to the City; re-based by `rebase`). */
+  unit = 1;
   /** Lateral squeeze while passing a doorway (wall collision radius / radius; 1 = none). */
   squeeze = 1;
+  /** Largest radius this Run, in world units of the current Area (re-based with the radius). */
   maxRadius: number;
   health: number;
   /** Seconds of remaining invulnerability. */
@@ -84,6 +88,33 @@ export class Bunny {
     this.dashTime = 0;
     this.rooted = 0;
     this.squeeze = 1;
+  }
+
+  /** Real radius in cm (Tiers, readouts and scores use this). */
+  get realRadius(): number {
+    return this.radius * this.unit;
+  }
+
+  /**
+   * Switches to a world unit of `unit` cm (an Area change): radius, the Run's max radius and
+   * speeds are converted so the real size is unchanged. Emits bunnyRebased, not bunnyGrew.
+   */
+  rebase(unit: number): void {
+    if (unit === this.unit) return;
+    const f = this.unit / unit;
+    this.unit = unit;
+    this.radius *= f;
+    this.prevRadius *= f;
+    this.maxRadius *= f;
+    this.x *= f;
+    this.z *= f;
+    this.prevX *= f;
+    this.prevZ *= f;
+    this.vx *= f;
+    this.vz *= f;
+    this.impulseX *= f;
+    this.impulseZ *= f;
+    this.events.emit('bunnyRebased', { factor: f, unit });
   }
 
   get maxHealth(): number {

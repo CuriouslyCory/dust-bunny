@@ -19,6 +19,7 @@
  * stays escapable at every Tier; it is multiplied by the Bunny's suctionMultiplier stat.
  */
 import type { HazardModelId } from '../hazards/models';
+import type { AreaId } from '../world/types';
 
 /** Seconds a Roomba / Mop / Upright Vacuum holds still after landing a hit (no pinning against walls). */
 export const HAZARD_RECOIL = 1.4;
@@ -39,6 +40,14 @@ export function outdoorTiers(t5: number, t6: number, t7: number): PerTier {
  */
 export function cityTiers(t7: number, t8: number, t9: number): PerTier {
   return [t7, t7, t7, t7, t7, t7, t7, t8, t9];
+}
+
+/**
+ * Per-Tier values for region Hazards (Tiers 10, 11), in Region units (1 = 10 m). Tiers 1–9 repeat
+ * the Tier 10 value: the Bunny arrives in the region at Tier 9 and region Hazards live only there.
+ */
+export function regionTiers(t10: number, t11: number): PerTier {
+  return [t10, t10, t10, t10, t10, t10, t10, t10, t10, t10, t11];
 }
 
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
@@ -359,7 +368,10 @@ export interface BossTuning {
   miniId: string;
   /** Spin (rad/s) of the `brush_l` / `brush_r` model nodes. */
   brushSpin: number;
-  /** Absorbing it opens the area's exit (front door, road to the city), or wins the Run. */
+  /**
+   * 'openExit': absorbing it clears the Area (`run.clearArea()`): the exit to the next Area opens,
+   * or in the last built Area the Run is won. 'victory' wins the Run outright.
+   */
   onDefeat: 'openExit' | 'victory';
   modelId: HazardModelId;
   /** Boss size the unscaled model represents at full size (the model is scaled by size / modelSize). */
@@ -663,7 +675,8 @@ export const STREET_FLUSHER: MopTuning = {
 /**
  * Garbage Truck (city boss, Tier 9). Needs Bunny radius ≈ 800 at absorbRatio 0.7, ≈ 680 after
  * one chip and ≈ 578 after two (Tier 9 starts at 600). Its compactor sucks the Bunny in while it
- * hunts; buildings and the concrete barrier stun its charges. Absorbing it wins the Run.
+ * hunts; buildings and the concrete barrier stun its charges. Absorbing it opens the highway
+ * on-ramp to the region.
  */
 export const GARBAGE_TRUCK: BossTuning = {
   size: 560,
@@ -694,9 +707,44 @@ export const GARBAGE_TRUCK: BossTuning = {
   maxMinis: 4,
   miniId: 'mini_scrubber',
   brushSpin: 12,
-  onDefeat: 'victory',
+  onDefeat: 'openExit',
   modelId: 'garbage_truck',
   modelSize: 430,
+};
+
+// ── Region Hazards (Tiers 10–11, 1 world unit = 10 m, Bunny radius ≈ 0.85–4.5 units) ──
+// PRELIMINARY: the Garbage Truck and mini scrubbers scaled to Region units (× 0.005, a 700 cm City
+// Bunny ≈ a 3.5 unit Region Bunny). The Region's own Hazards replace these numbers.
+
+/** Mini compactors summoned by the Incinerator. */
+export const MINI_COMPACTOR: RoombaTuning = {
+  ...MINI_SCRUBBER,
+  size: 0.7,
+  height: 1.1,
+  knockbackCm: 1.75,
+  speed: regionTiers(4.5, 6.5),
+  suctionReach: 0.4,
+  modelId: 'floor_scrubber',
+};
+
+/**
+ * The Incinerator (region boss, Tier 11): rail-mounted waste plant. Needs Bunny radius ≈ 4 units
+ * at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.9 after two (Tier 11 starts at 3).
+ */
+export const INCINERATOR: BossTuning = {
+  ...GARBAGE_TRUCK,
+  size: 2.8,
+  contactRadius: 2.95,
+  height: 2.5,
+  knockbackCm: 4,
+  huntSpeed: 6.5,
+  chargeTrigger: 35,
+  chargeSpeed: 25,
+  chargeDistance: 45,
+  suctionReach: 3.5,
+  miniId: 'mini_compactor',
+  onDefeat: 'openExit',
+  modelSize: GARBAGE_TRUCK.modelSize * (2.8 / GARBAGE_TRUCK.size),
 };
 
 export interface TierSpawnTable {
@@ -814,21 +862,37 @@ export interface AreaDirector {
   tiers: readonly TierSpawnTable[];
 }
 
-export const AREA_DIRECTORS: Record<'house' | 'neighborhood' | 'city', AreaDirector> = {
+/**
+ * Region director (after the city): spawn tables for Bunny Tiers 10–11, indexed from
+ * `firstTier`. PLACEHOLDER until the Region Hazards land (no spawns).
+ */
+export const REGION_DIRECTOR = {
+  firstTier: 10,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    { budget: [0, 0], interval: [8, 6], types: {} },
+    { budget: [0, 0], interval: [8, 6], types: {} },
+  ] as readonly TierSpawnTable[],
+};
+
+export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
   city: CITY_DIRECTOR,
+  region: REGION_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
-export const AREA_BOSSES = {
+export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonly tier: number; readonly arrivalDelay: number }>> = {
   house: { id: 'robovac_9000', tier: 5, arrivalDelay: 3 },
   neighborhood: { id: 'street_sweeper', tier: 7, arrivalDelay: 4 },
   city: { id: 'garbage_truck', tier: 9, arrivalDelay: 4 },
-} as const;
+  region: { id: 'incinerator', tier: 11, arrivalDelay: 4 },
+};
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

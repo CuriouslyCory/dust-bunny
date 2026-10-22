@@ -49,7 +49,7 @@ async function boot(): Promise<void> {
   const difficulty = params.get('difficulty');
   if (isDifficultyId(difficulty)) game.nextRunConfig.difficulty = difficulty;
   const area = params.get('area');
-  if (area === 'neighborhood' || area === 'city') game.nextRunConfig.area = area;
+  if (area === 'neighborhood' || area === 'city' || area === 'region') game.nextRunConfig.area = area;
   installRoguelike(game);
   installCloudSave(getMeta(), account);
   installLeaderboardPosting(game);

@@ -11,7 +11,10 @@
  *
  * Garbage Truck (city, Tier 9, GARBAGE_TRUCK): its compactor sucks the Bunny in while it hunts,
  * buildings and the concrete barrier stun its charges, and it summons mini scrubbers. Absorbing
- * it (onDefeat 'victory') wins the Run (bossDefeated → victory → runEnded 'victory').
+ * it opens the highway on-ramp to the region.
+ *
+ * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
+ * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
  * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
  * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun
@@ -20,7 +23,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -294,11 +297,11 @@ export class RoboVac9000 extends BaseHazard {
     for (const h of run.hazards.hazards) if (this.minis.has(h.id)) h.dead = true;
     run.events.emit('bossDefeated', { hazardId: this.id, defId: this.def.id, timeSec: run.time });
     if (this.cfg.onDefeat === 'victory') {
-      run.events.emit('victory', { timeSec: run.time, radius: run.bunny.radius });
+      run.events.emit('victory', { timeSec: run.time, radius: run.bunny.realRadius });
       run.end('victory');
     } else {
-      // The area is cleared: its exit opens onto the next area (the Run goes on).
-      run.openExit();
+      // The area is cleared: its exit opens onto the next area, or the last built Area wins the Run.
+      run.clearArea();
     }
   }
 }
@@ -339,5 +342,18 @@ export const garbageTruckDef = hazardRegistry.register({
   modelId: GARBAGE_TRUCK.modelId,
   create(_run, x, z, id, rng: Rng) {
     return new RoboVac9000(id, this, x, z, rng, GARBAGE_TRUCK);
+  },
+});
+
+export const incineratorDef = hazardRegistry.register({
+  id: 'incinerator',
+  name: 'The Incinerator',
+  boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: INCINERATOR.contactRadius, height: INCINERATOR.height },
+  mass: INCINERATOR.mass,
+  modelId: INCINERATOR.modelId,
+  create(_run, x, z, id, rng: Rng) {
+    return new RoboVac9000(id, this, x, z, rng, INCINERATOR);
   },
 });

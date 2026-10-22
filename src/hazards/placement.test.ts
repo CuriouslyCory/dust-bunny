@@ -7,6 +7,8 @@ import {
   DIRECTOR_EXCLUDE,
   FLOOR_SCRUBBER,
   GARBAGE_TRUCK,
+  INCINERATOR,
+  MINI_COMPACTOR,
   LAWN_MOWER,
   LEAF_BLOWER,
   LINT_ROLLER,
@@ -35,7 +37,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -55,6 +57,7 @@ const TUNING: Record<string, { size: number; height: number }> = {
   sprinkler: SPRINKLER,
   floor_scrubber: FLOOR_SCRUBBER,
   mini_scrubber: MINI_SCRUBBER,
+  mini_compactor: MINI_COMPACTOR,
   pressure_washer: PRESSURE_WASHER,
   litter_vacuum: LITTER_VACUUM,
   street_flusher: STREET_FLUSHER,

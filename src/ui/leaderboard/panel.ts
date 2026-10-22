@@ -18,6 +18,8 @@ import { CHARACTERS, getCharacter } from '../../data/characters';
 import { getDifficulty, isDifficultyId } from '../../data/difficulty';
 import { getGrade, getKeepsakeType, type KeepsakeTypeId } from '../../data/keepsakes';
 import { getTier } from '../../data/tiers';
+import { formatLength } from '../../data/units';
+import { SCORE_AREA_UNIT } from '../../shared/score';
 import { account as defaultAccount, type AccountClient } from '../../net/account';
 import { leaderboard as defaultClient, type LeaderboardClient } from '../../net/leaderboard';
 import { DIFFICULTY_SCORE_MULTIPLIER } from '../../shared/difficulty';
@@ -65,6 +67,14 @@ const COLUMNS: Record<'run' | 'area', string[]> = {
   run: ['#', 'Name', 'Bunny', 'Score', 'Tier', 'Time'],
   area: ['#', 'Name', 'Bunny', 'Score', 'Size', 'Time'],
 };
+
+/** An Area entry's peak radius (Area boards store radii in the Area's unit: 10 m in the Region). */
+function areaSizeCell(e: AreaLeaderboardEntry): HTMLElement {
+  const unit = SCORE_AREA_UNIT[e.area] ?? 1;
+  const from = unit >= 100 ? 'm' : 'cm';
+  const max = formatLength(e.maxRadius * unit, from);
+  return h('td', { textContent: unit === 1 ? `${Math.round(e.maxRadius)} cm` : max, title: `Grew from ${formatLength(e.radiusIn * unit, from)}` });
+}
 
 /** One line about this Run's entry on a board. */
 function postLine(p: BoardPost | undefined, board: BoardId): { text: string; error?: boolean } {
@@ -218,7 +228,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       h('td', { className: 'lb-bunny' }, getCharacter(e.character).name, ...(pips ? [pips] : []), ...(badge ? [badge] : [])),
       h('td', { className: 'lb-score', textContent: e.score.toLocaleString() }),
       area
-        ? h('td', { textContent: `${Math.round(e.maxRadius)} cm`, title: `Grew from ${(e as AreaLeaderboardEntry).radiusIn.toFixed(1)} cm` })
+        ? areaSizeCell(e as AreaLeaderboardEntry)
         : h('td', { textContent: run.victory ? '★' : String(run.tierReached), title: getTier(run.tierReached).name }),
       h('td', { textContent: fmtTime(e.durationMs), title: area ? 'Time in the area' : 'Run time' }),
     );

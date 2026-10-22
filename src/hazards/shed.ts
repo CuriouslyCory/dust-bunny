@@ -81,7 +81,7 @@ export function shedMass(run: Run, rng: Rng, fraction: number, source: string): 
   const approx = planShed(b.radius, fraction, ratio);
   if (approx.volume <= 0) return approx;
   const type = pickShedType(run.debris.types, approx.pieceSize, run.tier);
-  const plan = planShed(b.radius, fraction, ratio, growthFactorAt(b.radius), type?.mass ?? 1);
+  const plan = planShed(b.radius, fraction, ratio, growthFactorAt(b.realRadius), type?.mass ?? 1);
   const x = b.x;
   const z = b.z;
   b.addVolume(-plan.volume);

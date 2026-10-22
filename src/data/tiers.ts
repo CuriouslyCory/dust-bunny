@@ -1,10 +1,13 @@
-/** Tiers (growth stages). Thresholds are Bunny radius in cm; see docs/design.md. */
+/**
+ * Tiers (growth stages). Thresholds are the Bunny's **real** radius in cm (world radius × the
+ * Area's unit, `bunny.realRadius`), so Tiers stay comparable across Areas; see docs/design.md.
+ */
 export interface TierDef {
   /** 1-based Tier number. */
   index: number;
   id: string;
   name: string;
-  /** Radius (cm) at which this Tier starts. */
+  /** Real radius (cm) at which this Tier starts. */
   minRadius: number;
   /** Camera distance = radius × cameraScale (smoothed). Rising per Tier = extra pull-back on Tier-up. */
   cameraScale: number;
@@ -24,6 +27,9 @@ export const TIERS: readonly TierDef[] = [
   // City (after the Street Sweeper).
   { index: 8, id: 'dust_hurricane', name: 'Dust Hurricane', minRadius: 320, cameraScale: 22, growth: 1 },
   { index: 9, id: 'dust_colossus', name: 'Dust Colossus', minRadius: 600, cameraScale: 23, growth: 1 },
+  // Region (after the Garbage Truck; 1 world unit = 10 m, so these are 1 and 3 units).
+  { index: 10, id: 'dust_sprawl', name: 'Dust Sprawl', minRadius: 1000, cameraScale: 24, growth: 1 },
+  { index: 11, id: 'dust_front', name: 'Dust Front', minRadius: 3000, cameraScale: 25, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;
@@ -32,14 +38,14 @@ export function getTier(index: number): TierDef {
   return TIERS[Math.min(Math.max(index, 1), MAX_TIER) - 1]!;
 }
 
-/** Tier for a radius. Radii below the first threshold count as Tier 1. */
+/** Tier for a real radius (cm). Radii below the first threshold count as Tier 1. */
 export function tierForRadius(radius: number): TierDef {
   let t = TIERS[0]!;
   for (const tier of TIERS) if (radius >= tier.minRadius) t = tier;
   return t;
 }
 
-/** 0..1 progress from the current Tier's threshold to the next (1 at the last Tier). */
+/** 0..1 progress (real radius, cm) from the current Tier's threshold to the next (1 at the last Tier). */
 export function tierProgress(radius: number): number {
   const t = tierForRadius(radius);
   if (t.index >= MAX_TIER) return 1;

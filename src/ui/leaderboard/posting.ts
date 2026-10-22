@@ -30,6 +30,7 @@ import {
 } from '../../net/leaderboard';
 import type { DifficultyId } from '../../shared/difficulty';
 import { cleanName, type AnyLeaderboardEntry, type BoardId } from '../../shared/leaderboard';
+import { SCORE_AREAS } from '../../shared/score';
 
 export type PostState = 'unsent' | 'posting' | 'posted' | 'failed' | 'invalid';
 
@@ -41,7 +42,7 @@ export interface BoardPost {
   error?: string;
 }
 
-const BOARD_NAMES: Record<BoardId, string> = { run: 'Full run', house: 'House', neighborhood: 'Neighborhood', city: 'City' };
+const BOARD_NAMES: Record<BoardId, string> = { run: 'Full run', house: 'House', neighborhood: 'Neighborhood', city: 'City', region: 'Region' };
 
 /** Short display name of a board (tab labels, toasts). */
 export function boardName(board: BoardId): string {
@@ -82,7 +83,7 @@ export class RunPosts {
 
   /** In board order: Run board first, then Areas in Run order. */
   list(): BoardPost[] {
-    const order: BoardId[] = ['run', 'house', 'neighborhood', 'city'];
+    const order: BoardId[] = ['run', ...SCORE_AREAS];
     return order.flatMap((b) => {
       const p = this.posts.get(b);
       return p ? [{ board: p.board, state: p.state, result: p.result, error: p.error }] : [];

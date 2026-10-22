@@ -95,7 +95,7 @@ export class HazardDirector {
 
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
-    const progress = tierProgress(b.radius);
+    const progress = tierProgress(b.realRadius);
     const d = this.difficulty;
     this.spawnTimer = spawnInterval(run.tier, progress, run.area) * d.spawnInterval;
     const alive: Record<string, number> = {};

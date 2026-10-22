@@ -45,7 +45,15 @@ describe('city generation', () => {
         if (p.typeId !== 'car' && p.typeId !== 'park_bench') expect(t!.area, p.typeId).toBe('city');
         expect(roomAt(c, p.x, p.z)).toBeDefined();
       }
-      expect(c.exit).toBeUndefined();
+      // The highway on-ramp: a closed gate in the east barrier spanning the main avenue and its sidewalks.
+      const exit = c.exit!;
+      expect(exit.open).toBe(false);
+      expect(exit.dir).toEqual({ x: 1, z: 0 });
+      expect(c.obstacles.some((o) => o.id === exit.obstacleId)).toBe(true);
+      expect(exit.rect.maxX).toBeGreaterThanOrEqual(c.bounds.maxX);
+      const avenue = c.rooms.find((r) => r.id === 'main_avenue')!;
+      expect(exit.rect.minZ).toBeLessThanOrEqual(avenue.rect.minZ);
+      expect(exit.rect.maxZ).toBeGreaterThanOrEqual(avenue.rect.maxZ);
     });
   }
 });

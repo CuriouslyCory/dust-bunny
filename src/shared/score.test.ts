@@ -16,7 +16,7 @@ describe('computeScore', () => {
     const fast = computeScore({ ...win, durationMs: 400_000 });
     const slow = computeScore({ ...win, durationMs: 800_000 });
     expect(fast - slow).toBe(4000);
-    expect(computeScore({ ...win, durationMs: 2_200_000 })).toBe(computeScore({ ...win, victory: false }) + 5000);
+    expect(computeScore({ ...win, durationMs: 2_500_000 })).toBe(computeScore({ ...win, victory: false }) + 5000);
   });
 
   it('is monotonic in each stat', () => {

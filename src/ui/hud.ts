@@ -20,6 +20,8 @@
 import { getDebrisType } from '../data/debris';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
+import { AREAS } from '../data/areas';
+import { formatAmount, lengthUnitFor } from '../data/units';
 import { hazardRegistry } from '../hazards';
 import type { Game } from '../game/game';
 import { perkRegistry } from '../perks';
@@ -399,24 +401,31 @@ function tierWidget(hud: Hud, game: Game): void {
     bar,
     h('div', { className: 'tier-foot' }, h('span', { className: 'tier-size' }, radius, goal), next, nextShort),
   );
-  let lastTier = -1;
+  let lastKey = '';
   let lastPct = -1;
+  // The readout unit (cm, m, km…: the Area's ladder, see data/units.ts) is picked from the next
+  // threshold, so the radius and its goal share one unit: `1.47 / 3 cm`, `14.7 / 30 m`.
+  let unit = lengthUnitFor(1);
   hud.addWidget({
     id: 'tier',
     el,
     update(g) {
       const run = g.run;
       if (!run) return;
-      const r = run.bunny.radius;
+      const r = run.bunny.realRadius;
       const t = getTier(run.tier);
-      if (t.index !== lastTier) {
-        lastTier = t.index;
+      const key = `${t.index}:${run.area}`;
+      if (key !== lastKey) {
+        lastKey = key;
         badge.textContent = `Tier ${t.index}`;
         name.textContent = t.name;
         el.dataset.tier = String(t.index);
         const n = t.index < MAX_TIER ? getTier(t.index + 1) : null;
-        next.textContent = n ? `${n.name} at ${n.minRadius} cm` : 'Max size!';
-        goal.textContent = n ? ` / ${n.minRadius} cm` : ' cm';
+        const from = AREAS[run.area].readout;
+        unit = lengthUnitFor(n ? n.minRadius : Math.max(r, t.minRadius), from);
+        const goalText = n ? `${Number((n.minRadius / unit.cm).toPrecision(3))} ${unit.id}` : '';
+        next.textContent = n ? `${n.name} at ${goalText}` : 'Max size!';
+        goal.textContent = n ? ` / ${goalText}` : ` ${unit.id}`;
         nextShort.textContent = n ? `→ ${n.name}` : 'Max size!';
       }
       const pct = Math.round(tierProgress(r) * 1000) / 10;
@@ -425,8 +434,8 @@ function tierWidget(hud: Hud, game: Game): void {
         fill.style.width = `${pct}%`;
         bar.setAttribute('aria-valuenow', String(Math.round(pct)));
       }
-      const size = r.toFixed(r < 10 ? 2 : 1);
-      radius.textContent = hud.compact ? size : `${size} cm`;
+      const size = formatAmount(r / unit.cm);
+      radius.textContent = hud.compact ? size : `${size} ${unit.id}`;
     },
   });
   // Phones: a one-line pill at the top centre instead of the card under the hearts.
@@ -445,7 +454,7 @@ function tierWidget(hud: Hud, game: Game): void {
     const t = getTier(e.tier);
     const area = game.run?.area ?? 'house';
     const boss = AREA_BOSSES[area];
-    const cleared = area === 'house' ? game.run?.houseCleared : area === 'neighborhood' ? game.run?.neighborhoodCleared : false;
+    const cleared = game.run?.isAreaCleared(area) ?? false;
     const bossDue = e.tier >= boss.tier && !cleared;
     const hunt = bossDue ? ` · hunt the ${hazardRegistry.get(boss.id)?.name ?? 'boss'}` : '';
     // The narrator's Tier beat goes in the Perk draft header; with no draft waiting, here.

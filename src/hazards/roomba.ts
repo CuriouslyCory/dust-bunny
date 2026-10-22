@@ -10,7 +10,7 @@
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { FLOOR_SCRUBBER, HAZARD_RECOIL, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
+import { FLOOR_SCRUBBER, HAZARD_RECOIL, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -164,5 +164,16 @@ export const miniScrubberDef = hazardRegistry.register({
   modelId: MINI_SCRUBBER.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_SCRUBBER);
+  },
+});
+
+export const miniCompactorDef = hazardRegistry.register({
+  id: 'mini_compactor',
+  name: 'Mini Compactor',
+  footprint: tuningFootprint(MINI_COMPACTOR),
+  mass: MINI_COMPACTOR.mass,
+  modelId: MINI_COMPACTOR.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, MINI_COMPACTOR);
   },
 });

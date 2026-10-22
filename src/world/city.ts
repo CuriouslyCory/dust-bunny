@@ -6,14 +6,15 @@
  * Layout: a grid of avenues (along X) and streets (along Z) split the map into blocks ringed by
  * sidewalks. Blocks hold office towers and plazas downtown, apartments, shops and old brick
  * lofts further out, two parking lots and a park square. The Bunny rolls in at the west end of
- * the main avenue, where the road from the neighborhood arrives.
+ * the main avenue, where the road from the neighborhood arrives; the east end is the highway
+ * on-ramp to the region (layout.exit), barred until the Garbage Truck is absorbed.
  */
 import type { Rect } from '../core/math';
 import { rect, rectsOverlap } from '../core/math';
 import { Rng } from '../core/rng';
 import { FURNITURE, furnitureObstacles } from './furniture';
 import { wallSegments } from './house';
-import type { CityZoneType, DebrisPlacement, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, Room } from './types';
+import type { CityZoneType, DebrisPlacement, ExitDoor, FurnitureInstance, GroundMarking, HouseLayout, Obstacle, Room } from './types';
 
 export const CITY = {
   width: 32000,
@@ -318,11 +319,22 @@ export function generateCity(seed: string | number): HouseLayout {
   markings.push({ rect: rect(-8000, mainZ - rw / 2, -C.wallThickness / 2, mainZ + rw / 2), color: '#56585c' });
   markings.push({ rect: rect(-8000, mainZ + rw / 2, -C.wallThickness / 2, mainZ + rw / 2 + sw), color: '#c9c3b8' });
 
-  // ── Concrete barrier around the edge ──
+  // ── Concrete barrier around the edge, with the highway on-ramp at the east end of the main avenue ──
   const T = C.wallThickness;
-  const wallRects: Rect[] = [...wallSegments('h', 0, 0, W, [], T), ...wallSegments('h', D, 0, W, [], T), ...wallSegments('v', 0, 0, D, [], T), ...wallSegments('v', W, 0, D, [], T)];
+  const gap: [number, number] = [mainZ - rw / 2 - sw, mainZ + rw / 2 + sw];
+  const wallRects: Rect[] = [...wallSegments('h', 0, 0, W, [], T), ...wallSegments('h', D, 0, W, [], T), ...wallSegments('v', 0, 0, D, [], T), ...wallSegments('v', W, 0, D, [gap], T)];
   const walls: Obstacle[] = wallRects.map((r, i) => ({ id: `barrier${i}`, kind: 'wall', rect: r, height: C.wallHeight, clearance: 0 }));
-  const obstacles: Obstacle[] = [...walls, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
+  const exit: ExitDoor = { rect: rect(W - T / 2, gap[0], W + T / 2, gap[1]), dir: { x: 1, z: 0 }, obstacleId: 'onramp_gate', open: false };
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: C.wallHeight, clearance: 0 };
+  // The highway carries on past the gate and climbs away towards the region (render-only, outside the bounds).
+  markings.push({ rect: rect(W + T / 2, mainZ - rw / 2 - sw, W + 12000, mainZ - rw / 2), color: '#c9c3b8' });
+  markings.push({ rect: rect(W + T / 2, mainZ - rw / 2, W + 12000, mainZ + rw / 2), color: '#56585c' });
+  markings.push({ rect: rect(W + T / 2, mainZ + rw / 2, W + 12000, mainZ + rw / 2 + sw), color: '#c9c3b8' });
+  for (let x = W + T / 2 + 200; x < W + 12000; x += 900) {
+    for (const s of [-1, 1]) markings.push({ rect: rect(x, mainZ + s * rw * 0.25 - 8, x + 400, mainZ + s * rw * 0.25 + 8), color: '#f4f1ea' });
+  }
+  markings.push({ rect: rect(W + T / 2, mainZ - 22, W + 12000, mainZ - 8), color: '#f2c94c' }, { rect: rect(W + T / 2, mainZ + 8, W + 12000, mainZ + 22), color: '#f2c94c' });
+  const obstacles: Obstacle[] = [...walls, gate, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
 
   return {
     area: 'city',
@@ -337,5 +349,6 @@ export function generateCity(seed: string | number): HouseLayout {
     debrisPlacements,
     spawn,
     markings,
+    exit,
   };
 }

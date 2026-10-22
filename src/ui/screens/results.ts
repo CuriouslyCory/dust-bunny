@@ -19,7 +19,8 @@ import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { getMeta } from '../../meta/meta';
-import { HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { CITY_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { formatLength } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { captions, chapterOf, storyOn } from '../../story';
@@ -59,6 +60,7 @@ function fluffBonusLabel(e: RunResult): string {
   const difficulty = getDifficulty(e.stats.difficulty);
   const diff = difficulty.fluff !== 1 ? `${difficulty.name} ×${difficulty.fluff} · ` : '';
   if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · ${diff}`;
+  if (e.stats.cityCleared) return `City cleared ×${CITY_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.houseCleared) return `House cleared ×${HOUSE_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   return diff;
@@ -69,7 +71,7 @@ export function registerResultsSection(section: ResultsSection): void {
 }
 
 const VARIANTS = {
-  victory: { title: 'Victory!', sub: 'The Garbage Truck is part of you now. The whole city is yours.', badge: '👑' },
+  victory: { title: 'Victory!', sub: 'The Incinerator is part of you now. The whole region is yours.', badge: '👑' },
   died: { title: 'Swept up!', sub: 'The cleaning crew got you this time.', badge: '🧹' },
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
@@ -157,21 +159,26 @@ export function registerResultsScreen(): void {
           const s = e.stats;
           const outside = s.area !== 'house';
           const inCity = s.area === 'city';
+          const inRegion = s.area === 'region';
           card.dataset.variant = e.reason;
           badge.textContent = v.badge;
           title.textContent = v.title;
           sub.textContent =
             e.reason !== 'died'
               ? v.sub
-              : inCity
-                ? 'Hosed off the avenue. The whole neighborhood was yours, at least.'
-                : s.neighborhoodCleared
-                  ? 'So close to the city!'
-                  : outside
-                    ? 'Swept off the street. The house was yours, at least.'
-                    : s.houseCleared
-                      ? 'So close to the front door!'
-                      : v.sub;
+              : inRegion
+                ? 'Burnt down at the landfill. The whole city was yours, at least.'
+                : s.cityCleared
+                  ? 'So close to the highway!'
+                  : inCity
+                    ? 'Hosed off the avenue. The whole neighborhood was yours, at least.'
+                    : s.neighborhoodCleared
+                      ? 'So close to the city!'
+                      : outside
+                        ? 'Swept off the street. The house was yours, at least.'
+                        : s.houseCleared
+                          ? 'So close to the front door!'
+                          : v.sub;
           const told = storyResultLine(e);
           story.hidden = !told;
           storyLead.textContent = told?.lead ?? '';
@@ -179,12 +186,13 @@ export function registerResultsScreen(): void {
           const tier = getTier(s.tierReached);
           const rows: Array<[string, string, string]> = [
             ['⏱', 'Time', fmtTime(s.timeSec)],
-            ['📏', 'Max radius', `${s.maxRadius.toFixed(1)} cm`],
+            ['📏', 'Max radius', formatLength(s.maxRadius)],
             ['✦', 'Debris absorbed', s.debrisAbsorbed.toLocaleString()],
             ['⭐', 'Tier reached', `${s.tierReached} · ${tier.name}`],
           ];
           if (s.houseCleared) rows.push(['🏠', 'House', outside ? 'Cleared · made it outside' : 'Cleared']);
           if (s.neighborhoodCleared) rows.push(['🌳', 'Neighborhood', inCity ? 'Cleared · made it downtown' : 'Cleared']);
+          if (s.cityCleared) rows.push(['🏙️', 'City', inRegion ? 'Cleared · took the highway' : 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

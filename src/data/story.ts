@@ -73,6 +73,12 @@ export const STORY: Story = {
       'The fire department arrives. The fire department is red and about 12 metres long.',
     ],
     dust_colossus: ['Pedestrians are advised to remain indoors. Indoors is advised to remain pedestrians.'],
+    // Act 4 · The Region
+    dust_sprawl: ['It has eaten a town. The town was, by most accounts, fine.', 'A stadium. Mid-game. The home team was losing.'],
+    dust_front: [
+      'Regional authorities declare a state of emergency. The state is absorbed.',
+      'The evening forecast shows a grey front moving across three counties. The front is not weather.',
+    ],
   },
 
   areas: {
@@ -93,6 +99,23 @@ export const STORY: Story = {
       entered: ['The city is where people go to drop things professionally.'],
       cleared: ['The city is gone. The thing that used to be a dust bunny rolls on. There is more ground.'],
       boss: ['The Garbage Truck is the largest thing people built to make dropped things go away. It is about to learn where they go.'],
+    },
+    region: {
+      title: 'A State of Emergency',
+      entered: [
+        'From up here the cities look like crumbs. They are, from its point of view, crumbs.',
+        'The highway goes on for hours. It does not take hours.',
+      ],
+      cleared: [
+        'Satellite imagery shows a grey smear moving west. The satellites are next.',
+        'The region is quiet now. Quiet, and slightly fluffy.',
+      ],
+      boss: [
+        [
+          'At the landfill stands the Incinerator, the last machine built for this exact problem.',
+          'It burns things so they go away. It is about to learn where they go.',
+        ],
+      ],
     },
   },
 

@@ -24,6 +24,8 @@ export interface DebugTools {
   enterNeighborhood(): void;
   /** Moves the Run to the city (via the neighborhood), growing the Bunny to boss-beaten size. */
   enterCity(): void;
+  /** Moves the Run to the region, growing the Bunny to Garbage-Truck-beaten size. */
+  enterRegion(): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -38,7 +40,8 @@ export function installDebug(game: Game): DebugTools {
   const goTo = (area: AreaId) => {
     const run = game.run;
     if (!run) return;
-    if (run.bunny.radius < areaStartRadius(area)) run.bunny.setRadius(areaStartRadius(area));
+    // areaStartRadius is real cm; setRadius takes the current Area's world units.
+    if (run.bunny.realRadius < areaStartRadius(area)) run.bunny.setRadius(areaStartRadius(area) / run.bunny.unit);
     run.openExit();
     run.enterArea(area);
   };
@@ -53,7 +56,7 @@ export function installDebug(game: Game): DebugTools {
     nextTier() {
       const run = game.run;
       if (!run || run.tier >= MAX_TIER) return;
-      run.bunny.setRadius(getTier(run.tier + 1).minRadius * 1.02);
+      run.bunny.setRadius((getTier(run.tier + 1).minRadius * 1.02) / run.bunny.unit);
     },
     setTimeScale(s) {
       game.loop.timeScale = Math.max(0.05, Math.min(16, s));
@@ -66,6 +69,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterCity() {
       goTo('city');
+    },
+    enterRegion() {
+      goTo('region');
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

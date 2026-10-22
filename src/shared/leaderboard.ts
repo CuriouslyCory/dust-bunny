@@ -4,7 +4,7 @@
  * Pure and dependency-free (see the note in `./score.ts` about imports).
  *
  * Boards: the Run board ('run', whole Runs) and one Area board per Area ('house',
- * 'neighborhood', 'city'), which takes an entry each time a Run clears that Area.
+ * 'neighborhood', 'city', 'region'), which takes an entry each time a Run clears that Area.
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
 import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
@@ -13,6 +13,8 @@ import {
   computeAreaScore,
   computeScore,
   isScoreArea,
+  progressRadius,
+  SCORE_AREA_UNIT,
   SCORE_AREAS,
   SCORE_MAX_TIER,
   SCORE_TIER_MIN_RADII,
@@ -40,12 +42,13 @@ export const FALLBACK_NAME = 'Anonymous Bunny';
 
 /** Plausibility bounds. Generous on purpose: they reject impossible runs, not good ones. */
 export const BOUNDS = {
-  maxRadius: { min: 0.2, max: 3000 },
+  /** Run board: real cm. Area boards: the Area's unit (a Region radius of 4 is 40 m). */
+  maxRadius: { min: 0.2, max: 30_000 },
   debrisAbsorbed: { min: 0, max: 200_000 },
   durationMs: { min: 1_000, max: 4 * 60 * 60 * 1000 },
   /** Largest plausible starting radius (Tumble 1.2 cm × Head Start upgrades, with headroom). */
   maxStartRadius: 2.5,
-  /** Fastest plausible sustained growth, cm of radius per simulated second. */
+  /** Fastest plausible sustained growth on the Run board's progress scale (progressRadius) per simulated second. */
   maxGrowthPerSec: 2,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
@@ -55,14 +58,24 @@ export const BOUNDS = {
    * Area boards: fastest plausible growth per simulated second in each Area. The City is built at
    * about 10× the House's scale and a Bunny there grows 3–4 cm/s for minutes at a time, so
    * maxGrowthPerSec alone rejected real City clears (`pnpm sim --validate`: up to 116% of the old
-   * allowance). Its rate is 5 cm/s; the House and Neighborhood keep maxGrowthPerSec.
+   * allowance). Its rate is 5 cm/s; the House and Neighborhood keep maxGrowthPerSec. Rates and
+   * slack are in each Area's unit: the Region's are 10 m units (0.05 units/s = 50 cm/s).
    */
-  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5 },
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5, region: 0.05 },
+  /** Area boards: flat slack on top of the entry radius, in the Area's unit. */
+  areaSlack: { house: 10, neighborhood: 10, city: 10, region: 0.1 },
+  /** A victory needs at least this Tier (the City's boss Tier: clients from before the Region won there). */
+  victoryMinTier: 9,
 } as const;
 
-/** Largest maxRadius an Area board entry may claim after `sec` seconds in the Area from `radiusIn`. */
+/** Largest maxRadius an Area board entry may claim after `sec` seconds in the Area from `radiusIn` (the Area's unit). */
 export function areaRadiusAllowed(area: ScoreArea, radiusIn: number, sec: number): number {
-  return radiusIn * BOUNDS.areaEntryGrowth + 10 + BOUNDS.areaGrowthPerSec[area] * sec;
+  return radiusIn * BOUNDS.areaEntryGrowth + BOUNDS.areaSlack[area] + BOUNDS.areaGrowthPerSec[area] * sec;
+}
+
+/** Largest Run board maxRadius (real cm) whose progressRadius fits `sec` seconds. */
+export function runRadiusAllowed(sec: number): number {
+  return BOUNDS.maxStartRadius + BOUNDS.maxGrowthPerSec * sec;
 }
 
 /** The Keepsakes tucked in for a Run (0–2 of the Character's own types, grades 1–10). */
@@ -161,13 +174,15 @@ export type AreaValidationResult = Validation<ValidAreaSubmission>;
 const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
- * Radius bounds per Area (cm): arriving needs the previous boss's Tier (Tier 5 = 45, Tier 7 = 160),
- * and the cap is two Tiers above the Area's last Debris Tier, which no real Run approaches.
+ * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's Tier (Tier 5 = 45,
+ * Tier 7 = 160, Tier 9 = 600 cm = 0.6 Region units), and the cap is two Tiers above the Area's
+ * last Debris Tier (the Region: 10× its last Tier), which no real Run approaches.
  */
 const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>> = {
   house: { minIn: BOUNDS.maxRadius.min, max: SCORE_TIER_MIN_RADII[6]! },
   neighborhood: { minIn: SCORE_TIER_MIN_RADII[4]!, max: SCORE_TIER_MIN_RADII[8]! },
-  city: { minIn: SCORE_TIER_MIN_RADII[6]!, max: BOUNDS.maxRadius.max },
+  city: { minIn: SCORE_TIER_MIN_RADII[6]!, max: 3000 },
+  region: { minIn: SCORE_TIER_MIN_RADII[8]! / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
 };
 
 export function isLeaderboardCharacter(id: unknown): id is LeaderboardCharacter {
@@ -277,11 +292,11 @@ export function validateSubmission(body: unknown): ValidationResult {
   const radiusTier = scoreTierForRadius(maxRadius);
   if (tierReached > radiusTier || tierReached < radiusTier - 1)
     return fail('tierReached', 'tierReached does not match maxRadius.');
-  if (victory && tierReached < SCORE_MAX_TIER) return fail('victory', `A victory requires Tier ${SCORE_MAX_TIER}.`);
+  if (victory && tierReached < BOUNDS.victoryMinTier) return fail('victory', `A victory requires Tier ${BOUNDS.victoryMinTier}.`);
   const sec = durationMs / 1000;
   if (debrisAbsorbed === 0 && maxRadius > BOUNDS.maxStartRadius)
     return fail('maxRadius', 'Cannot grow without absorbing Debris.');
-  if (maxRadius > BOUNDS.maxStartRadius + BOUNDS.maxGrowthPerSec * sec)
+  if (progressRadius(maxRadius) > runRadiusAllowed(sec))
     return fail('maxRadius', 'maxRadius is too large for the run duration.');
   if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec)
     return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the run duration.');
@@ -316,9 +331,9 @@ export function validateAreaSubmission(body: unknown): AreaValidationResult {
   // A Run starts in the house, and an Area is cleared by absorbing its boss, which arrives at a set Tier.
   if (area === 'house' && radiusIn > BOUNDS.maxStartRadius) return fail('radiusIn', 'radiusIn is too large for the start of a Run.');
   // Later Areas open only after the previous boss, so the Bunny arrives at least at that boss's Tier.
-  if (radiusIn < AREA_RADIUS[area].minIn) return fail('radiusIn', `Reaching the ${area} needs a radius of ${AREA_RADIUS[area].minIn} cm.`);
+  if (radiusIn < AREA_RADIUS[area].minIn) return fail('radiusIn', `Reaching the ${area} needs a radius of ${AREA_RADIUS[area].minIn * SCORE_AREA_UNIT[area]} cm.`);
   if (maxRadius > AREA_RADIUS[area].max) return fail('maxRadius', `maxRadius is too large for the ${area}.`);
-  if (scoreTierForRadius(maxRadius) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
+  if (scoreTierForRadius(maxRadius * SCORE_AREA_UNIT[area]) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
   const sec = durationMs / 1000;
   if (maxRadius > areaRadiusAllowed(area, radiusIn, sec)) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');
   if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec) return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the time spent in the area.');

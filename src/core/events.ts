@@ -33,6 +33,11 @@ export interface GameEvents {
   };
   /** Bunny radius changed (growth or shrink). */
   bunnyGrew: { radius: number; previousRadius: number };
+  /**
+   * The Run moved to an Area with another world unit: every world length was multiplied by
+   * `factor` (old unit / new unit). Views holding sizes (stuck Debris) rescale; no growth happened.
+   */
+  bunnyRebased: { factor: number; unit: number };
   /** Crossed a Tier threshold upward. Emitted once per Tier crossed. */
   tierUp: { tier: number; previousTier: number; tierName: string };
   bunnyDamaged: { amount: number; source: string; health: number; maxHealth: number };
@@ -50,7 +55,7 @@ export interface GameEvents {
   pickupCollected: { pickupId: number; defId: string };
   pickupExpired: { defId: string };
   perkApplied: { perkId: string; stacks: number };
-  /** The house's front door opened (after the Robo-Vac 9000). Position = centre of the doorway. */
+  /** An Area's exit opened (after its boss). Position = centre of the opening. */
   exitOpened: { area: AreaId; x: number; z: number };
   /** The Bunny left a cleared Area for the next one (emitted just before areaEntered). */
   areaCompleted: { stats: AreaStats; characterId: string; difficulty: DifficultyId };

@@ -63,7 +63,7 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257' };
+const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#6b7652' };
 
 export class HouseView {
   readonly root = new Group();
@@ -87,12 +87,13 @@ export class HouseView {
     this.buildMarkings();
     if (layout.area === 'neighborhood') this.buildHedges();
     else if (layout.area === 'city') this.buildBarriers();
+    else if (layout.area === 'region') this.buildRidges();
     else this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
-    else this.buildRoadGate();
+    else if (layout.area === 'neighborhood' || layout.area === 'city') this.buildRoadGate();
   }
 
   private buildFloors(): void {
@@ -240,14 +241,28 @@ export class HouseView {
     }
   }
 
+  /** Region edge (1 unit = 10 m): a low wooded ridge along each wall obstacle. */
+  private buildRidges(): void {
+    const body = new MeshStandardMaterial({ color: '#56653f', roughness: 1 });
+    for (const wall of this.layout.walls) {
+      const w = wall.rect.maxX - wall.rect.minX;
+      const d = wall.rect.maxZ - wall.rect.minZ;
+      const m = new Mesh(new BoxGeometry(w, wall.height, d), body);
+      m.position.set(wall.rect.minX + w / 2, wall.height / 2, wall.rect.minZ + d / 2);
+      m.name = `ridge:${wall.id}`;
+      this.addStatic(m);
+    }
+  }
+
   /**
-   * Neighborhood exit to the city: two striped boom barriers across the road opening with a
-   * "road closed" sign between them. Once the exit opens the booms swing up, the sign sinks
-   * and a light shaft marks the way (updateRoadGate).
+   * Neighborhood exit to the city and the city's highway on-ramp: two striped boom barriers across
+   * the road opening with a "road closed" sign between them (3.5× bigger in the city). Once the
+   * exit opens the booms swing up, the sign sinks and a light shaft marks the way (updateRoadGate).
    */
   private buildRoadGate(): void {
     const exit = this.layout.exit;
     if (!exit) return;
+    const k = this.layout.area === 'city' ? 3.5 : 1;
     const r = exit.rect;
     const alongZ = exit.dir.x !== 0;
     const width = alongZ ? r.maxZ - r.minZ : r.maxX - r.minX;
@@ -256,26 +271,26 @@ export class HouseView {
     const red = new MeshStandardMaterial({ color: '#d0342c', roughness: 0.6 });
     const white = new MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.6 });
     const post = new MeshStandardMaterial({ color: '#5b5f66', roughness: 0.5, metalness: 0.4 });
-    const armLen = width / 2 - 20;
-    const armH = 110;
+    const armLen = width / 2 - 20 * k;
+    const armH = 110 * k;
     for (const end of [-1, 1]) {
       // Post at each end of the opening; the arm reaches towards the middle.
       const g = new Group();
-      const p = new Mesh(new BoxGeometry(30, armH + 30, 30), post);
-      p.position.y = (armH + 30) / 2;
+      const p = new Mesh(new BoxGeometry(30 * k, armH + 30 * k, 30 * k), post);
+      p.position.y = (armH + 30 * k) / 2;
       g.add(p);
       const arm = new Group();
       arm.position.y = armH;
       const n = 8;
       for (let i = 0; i < n; i++) {
-        const seg = new Mesh(new BoxGeometry(alongZ ? 14 : armLen / n, 14, alongZ ? armLen / n : 14), i % 2 ? white : red);
+        const seg = new Mesh(new BoxGeometry(alongZ ? 14 * k : armLen / n, 14 * k, alongZ ? armLen / n : 14 * k), i % 2 ? white : red);
         const t = (armLen / n) * (i + 0.5);
         if (alongZ) seg.position.z = -end * t;
         else seg.position.x = -end * t;
         arm.add(seg);
       }
       g.add(arm);
-      g.position.set(alongZ ? cx : cx + end * (width / 2 - 10), 0, alongZ ? cz + end * (width / 2 - 10) : cz);
+      g.position.set(alongZ ? cx : cx + end * (width / 2 - 10 * k), 0, alongZ ? cz + end * (width / 2 - 10 * k) : cz);
       g.traverse((o) => {
         o.castShadow = true;
         o.receiveShadow = true;
@@ -286,17 +301,17 @@ export class HouseView {
     }
     // "Road closed" sign on a frame in the middle.
     const sign = new Group();
-    const board = new Mesh(new BoxGeometry(alongZ ? 8 : 260, 90, alongZ ? 260 : 8), new MeshStandardMaterial({ color: '#f08a24', roughness: 0.6 }));
-    board.position.y = 120;
-    const band = new Mesh(new BoxGeometry(alongZ ? 10 : 230, 26, alongZ ? 230 : 10), white);
-    band.position.y = 120;
+    const board = new Mesh(new BoxGeometry(alongZ ? 8 * k : 260 * k, 90 * k, alongZ ? 260 * k : 8 * k), new MeshStandardMaterial({ color: '#f08a24', roughness: 0.6 }));
+    board.position.y = 120 * k;
+    const band = new Mesh(new BoxGeometry(alongZ ? 10 * k : 230 * k, 26 * k, alongZ ? 230 * k : 10 * k), white);
+    band.position.y = 120 * k;
     sign.add(board, band);
     for (const s of [-1, 1]) {
-      const leg = new Mesh(new BoxGeometry(10, 120, 10), post);
-      leg.position.set(alongZ ? 0 : s * 110, 60, alongZ ? s * 110 : 0);
+      const leg = new Mesh(new BoxGeometry(10 * k, 120 * k, 10 * k), post);
+      leg.position.set(alongZ ? 0 : s * 110 * k, 60 * k, alongZ ? s * 110 * k : 0);
       sign.add(leg);
     }
-    sign.position.set(cx - exit.dir.x * 160, 0, cz - exit.dir.z * 160);
+    sign.position.set(cx - exit.dir.x * 160 * k, 0, cz - exit.dir.z * 160 * k);
     sign.traverse((o) => {
       o.castShadow = true;
     });
@@ -305,10 +320,10 @@ export class HouseView {
     this.gateSign = sign;
 
     const beam = new Mesh(
-      new CylinderGeometry(width * 0.3, width * 0.5, 600, 24, 1, true),
+      new CylinderGeometry(width * 0.3, width * 0.5, 600 * k, 24, 1, true),
       new MeshBasicMaterial({ color: '#fff1c4', transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false }),
     );
-    beam.position.set(cx - exit.dir.x * width * 0.3, 300, cz - exit.dir.z * width * 0.3);
+    beam.position.set(cx - exit.dir.x * width * 0.3, 300 * k, cz - exit.dir.z * width * 0.3);
     beam.visible = false;
     beam.name = 'exitBeacon';
     this.root.add(beam);
@@ -328,7 +343,7 @@ export class HouseView {
       else arm.rotation.z = sign * ease * Math.PI * 0.45;
     }
     if (this.gateSign) {
-      this.gateSign.position.y = -ease * 220;
+      this.gateSign.position.y = -ease * 220 * (this.layout.area === 'city' ? 3.5 : 1);
       this.gateSign.visible = ease < 1;
     }
     const beam = this.beacon!;

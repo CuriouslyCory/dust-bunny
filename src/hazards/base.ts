@@ -122,7 +122,7 @@ export abstract class BaseHazard implements Hazard {
   /** Speed for the current Tier, ramped up within the Tier and scaled by the Difficulty. */
   protected tierSpeed(run: Run, speeds: PerTier): number {
     const [a, b] = DIRECTOR.speedRamp;
-    return this.speed(run, tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.radius)));
+    return this.speed(run, tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.realRadius)));
   }
 
   /** A movement speed (cm/s) scaled by the Run's Difficulty (faster on Arcade and Hardcore). */

@@ -40,8 +40,8 @@ export interface GameOptions {
 }
 
 const BACKGROUND = '#3b2f2a';
-/** Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze. */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6' };
+/** Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze, overcast altitude haze. */
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4' };
 
 export class Game {
   readonly events = new EventBus();
@@ -202,6 +202,7 @@ export class Game {
     this.lighting.setArea(area);
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
     this.canvas.parentElement?.classList.toggle('city', area === 'city');
+    this.canvas.parentElement?.classList.toggle('region', area === 'region');
   }
 
   pickFloor(clientX: number, clientY: number): { x: number; z: number } | null {

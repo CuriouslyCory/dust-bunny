@@ -117,12 +117,13 @@ describe('city Hazards', () => {
     for (const id of spawned) expect([...CITY_HAZARDS, ...BOSS_IDS]).toContain(id);
   });
 
-  it('absorbing the Garbage Truck wins the Run (bossDefeated → victory → runEnded) and clears its minis', () => {
+  it('absorbing the Garbage Truck opens the highway on-ramp (bossDefeated → exitOpened) and clears its minis', () => {
     const { run, events } = makeRun('truck-win');
     moveToAvenue(run);
     const b = run.bunny;
     const order: string[] = [];
     events.on('bossDefeated', (e) => order.push(`bossDefeated:${e.defId}`));
+    events.on('exitOpened', (e) => order.push(`exitOpened:${e.area}`));
     events.on('victory', () => order.push('victory'));
     events.on('runEnded', (e) => order.push(`runEnded:${e.reason}`));
     b.setRadius(absorbRadiusFor(GARBAGE_TRUCK.size, b.stats.get('absorbRatio')) + 1);
@@ -132,9 +133,10 @@ describe('city Hazards', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:garbage_truck', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:garbage_truck', 'exitOpened:city']);
+    expect(run.ended).toBe(false);
+    expect(run.cityCleared).toBe(true);
+    expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_scrubber')).toBe(0);
   });
 

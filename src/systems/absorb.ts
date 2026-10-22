@@ -9,7 +9,7 @@ export function canAbsorb(radius: number, absorbRatio: number, size: number): bo
   return size <= radius * absorbRatio;
 }
 
-/** Effective growth factor at a radius: TUNING.growthFactor × the Tier's `growth` pacing multiplier. */
+/** Effective growth factor at a real radius (cm): TUNING.growthFactor × the Tier's `growth` pacing multiplier. */
 export function growthFactorAt(radius: number): number {
   return TUNING.growthFactor * tierForRadius(radius).growth;
 }

@@ -267,6 +267,13 @@ export class BunnyView {
         if (type) this.stick(type, e.position.x, e.position.z, e.size);
       }),
     );
+    this.disposables.add(
+      events.on('bunnyRebased', (e) => {
+        // New Area unit: the Debris stuck in the fur keeps its real size (rooftops and cars in the Region).
+        for (const s of this.stuck) s.size *= e.factor;
+        this.stuckDirty = true;
+      }),
+    );
     this.disposables.add(events.on('dashStarted', () => this.stretch.kick(5.5)));
     this.disposables.add(events.on('bunnyDamaged', () => this.squash.kick(-4)));
     this.disposables.add(events.on('tierUp', () => this.squash.kick(5)));

@@ -1,6 +1,7 @@
 /**
  * Area HUD: the "area cleared" banner and an exit compass while the area's exit is open (the
- * house's front door, the neighborhood's road to the city), with a skip button that moves on
+ * house's front door, the neighborhood's road to the city, the city's highway on-ramp to the
+ * region), with a skip button that moves on
  * without rolling to the exit (Enter on a keyboard), then a fade-in and an arrival banner when
  * the Bunny arrives in the next area. With the narrator on (src/story/), the cleared banner carries
  * the Area's cleared line and arriving plays the chapter card before the arrival banner.
@@ -21,6 +22,8 @@ import './area.css';
 const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; skip: string; cleared: string; sub: string }>> = {
   house: { icon: '🚪', label: 'Front door', go: 'roll out!', skip: 'Go outside', cleared: 'House cleared!', sub: 'The front door is open · roll outside' },
   neighborhood: { icon: '🏙️', label: 'Road to the city', go: 'roll on!', skip: 'Go to the city', cleared: 'Neighborhood cleared!', sub: 'The road barrier is up · head for the city' },
+  city: { icon: '🛣️', label: 'Highway on-ramp', go: 'roll on!', skip: 'Take the highway', cleared: 'City cleared!', sub: 'The on-ramp is open · take the highway out' },
+  // The Region is the last built Area: the Incinerator wins the Run (an exit to the Continent comes with Act 5).
 };
 
 /** Moves the Run on to the next area from the skip button / Enter, only while actually playing. */
@@ -63,8 +66,8 @@ export function installAreaHud(game: Game): void {
       // Fixed camera yaw: world +X is screen right, −Z is screen up. The glyph points right.
       const deg = (Math.atan2(dz, dx) * 180) / Math.PI;
       arrow.style.transform = `rotate(${deg.toFixed(1)}deg)`;
-      const m = Math.max(0, Math.hypot(dx, dz) - run.bunny.radius) / 100;
-      const text = m < 1.5 ? `${info.label} · ${info.go}` : `${info.label} · ${m.toFixed(0)} m`;
+      const m = (Math.max(0, Math.hypot(dx, dz) - run.bunny.radius) * run.unit) / 100;
+      const text = m < 1.5 * Math.max(1, run.unit / 100) ? `${info.label} · ${info.go}` : `${info.label} · ${m.toFixed(0)} m`;
       if (label.textContent !== text) label.textContent = text;
     },
   });

@@ -11,13 +11,13 @@ export interface AreaStats {
   startSec: number;
   /** Simulated seconds spent in the Area. */
   timeSec: number;
-  /** Radius on entering the Area. */
+  /** Radius on entering the Area, in the Area's unit (`AREAS[area].unit` cm; 1 up to the City). */
   radiusIn: number;
-  /** Largest radius reached by the time the Run left the Area. */
+  /** Largest radius reached by the time the Run left the Area, in the Area's unit. */
   maxRadius: number;
   /** Debris absorbed in the Area. */
   debrisAbsorbed: number;
-  /** The Area's boss was absorbed (in the City: the Run was won). */
+  /** The Area's boss was absorbed (in the last Area: the Run was won). */
   cleared: boolean;
 }
 
@@ -28,7 +28,9 @@ export interface RunStats {
   difficulty?: DifficultyId;
   /** Simulated seconds (pauses excluded). */
   timeSec: number;
+  /** Largest real radius (cm) of the Run. */
   maxRadius: number;
+  /** Real radius (cm) at the end. */
   finalRadius: number;
   debrisAbsorbed: number;
   hazardsAbsorbed: number;
@@ -42,6 +44,10 @@ export interface RunStats {
   houseCleared: boolean;
   /** True once the Street Sweeper was absorbed (the road to the city opened). */
   neighborhoodCleared?: boolean;
+  /** True once the Garbage Truck was absorbed (the highway on-ramp to the region opened). */
+  cityCleared?: boolean;
+  /** True once the Incinerator was absorbed. */
+  regionCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
   /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */

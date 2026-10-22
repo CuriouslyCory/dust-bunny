@@ -5,10 +5,11 @@
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
  * while stunned. Prints when each Tier is reached, plus how the Run ended.
  *
- * When an area boss falls (Robo-Vac 9000, Street Sweeper) the bot does not walk to the exit:
- * the Run moves straight to the next area (logged), so outdoor and city pacing are measured too.
- * With --no-hazards a Run stops at the top Tier of the house / neighborhood (no boss to clear),
- * but keeps rolling in the city until --minutes so growth towards the boss size is measured.
+ * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck) the bot does not walk to
+ * the exit: the Run moves straight to the next area (logged), so outdoor, city and region pacing
+ * are measured too. The summary prints each Area's median time from entry to its clear (the Act).
+ * With --no-hazards a Run stops at each Area's boss Tier (no boss to clear), but keeps rolling in
+ * the last Area until --minutes so growth towards the boss size is measured.
  *
  * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, or a vacuum
  * cone or spray lane is about to hit it (--decoy=boss: only the first two, the issue's policy).
@@ -32,7 +33,7 @@
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
  *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
- *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
+ *                 [--area=neighborhood|city|region]   start in a later area (as after its previous boss)
  *                 [--difficulty=casual|arcade|hardcore]
  *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]
  *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
@@ -42,6 +43,8 @@ import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
 import { getTier, TIERS } from '../src/data/tiers';
+import { formatLength } from '../src/data/units';
+import { AREA_ORDER, nextArea, type AreaId } from '../src/world/types';
 import { TUNING } from '../src/data/tuning';
 import type { Debris } from '../src/entities/debris';
 import { createRun } from '../src/game/assembly';
@@ -52,10 +55,11 @@ import { SprayBottle as SprayBottleClass, type SprayBottle } from '../src/hazard
 import { inCone, UprightVacuum as UprightVacuumClass, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
-import { BROOM, tierValue } from '../src/data/hazards';
+import { AREA_BOSSES, BROOM, tierValue } from '../src/data/hazards';
 import { getKeepsakeType, isLoadoutFor, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
 import { areaSubmission, submissionFromRun } from '../src/net/leaderboard';
-import { areaRadiusAllowed, BOUNDS, validateAreaSubmission, validateSubmission } from '../src/shared/leaderboard';
+import { areaRadiusAllowed, runRadiusAllowed, validateAreaSubmission, validateSubmission } from '../src/shared/leaderboard';
+import { progressRadius } from '../src/shared/score';
 import { fluffForRun } from '../src/meta/fluff';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { canAbsorb } from '../src/systems/absorb';
@@ -84,7 +88,7 @@ const god = args.includes('--god');
 const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
 const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
-const startArea = opt('area') === 'neighborhood' || opt('area') === 'city' ? (opt('area') as 'neighborhood' | 'city') : undefined;
+const startArea = AREA_ORDER.includes(opt('area') as AreaId) && opt('area') !== 'house' ? (opt('area') as AreaId) : undefined;
 const difficulty = getDifficulty(opt('difficulty')).id;
 const seeds = args.filter((a) => !a.startsWith('--'));
 const seedCount = Number(opt('seeds') ?? 0);
@@ -145,7 +149,9 @@ class Planner {
     this.builtAt = this.run.time;
     this.builtLayout = house;
     const bd = house.bounds;
-    this.cell = Math.min(house.area === 'house' ? 8 : house.area === 'neighborhood' ? 60 : 200, Math.max(2, r * 0.6));
+    // World units: cm up to the City, 10 m in the Region (where the Bunny is house-sized again).
+    const cap = { house: 8, neighborhood: 60, city: 200, region: 4 }[house.area];
+    this.cell = Math.min(cap, Math.max(house.area === 'region' ? 0.5 : 2, r * 0.6));
     this.cols = Math.ceil((bd.maxX - bd.minX) / this.cell);
     this.rows = Math.ceil((bd.maxZ - bd.minZ) / this.cell);
     const n = this.cols * this.rows;
@@ -604,7 +610,11 @@ interface Validation {
   runHeadroom: number;
   areaHeadroom: Record<string, number>;
 }
-const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; loadout: Loadout; v: Validation }> = {};
+const summary: Record<
+  string,
+  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; loadout: Loadout; v: Validation; acts: Record<string, number[]> }
+> = {};
+const BOSS_IDS = AREA_ORDER.map((a) => AREA_BOSSES[a].id);
 const modifiers = upgradeModifiers(upgrades);
 
 /** Validates the submissions a finished Run would post (--validate). */
@@ -615,7 +625,7 @@ function validateRun(run: Run, v: Validation, label: string): void {
   const res = validateSubmission(sub);
   v.checked++;
   if (!res.ok) v.rejected.push(`${label} run board: ${res.field}: ${res.message} (r=${sub.maxRadius} t=${(sub.durationMs / 1000).toFixed(0)}s)`);
-  v.runHeadroom = Math.max(v.runHeadroom, sub.maxRadius / (BOUNDS.maxStartRadius + (BOUNDS.maxGrowthPerSec * sub.durationMs) / 1000));
+  v.runHeadroom = Math.max(v.runHeadroom, progressRadius(sub.maxRadius) / runRadiusAllowed(sub.durationMs / 1000));
   for (const a of stats.areas ?? []) {
     if (!a.cleared) continue;
     const as = areaSubmission(a, stats.characterId, stats.difficulty, 'Sim Bot', 'sim-bot-run', stats.loadout);
@@ -640,13 +650,14 @@ for (const characterId of chars) {
     abilityUses: 0,
     loadout,
     v: { checked: 0, rejected: [], runHeadroom: 0, areaHeadroom: {} },
+    acts: {} as Record<string, number[]>,
   });
   for (const seed of seeds) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
     const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea, loadout }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
     events.on('hazardSpawned', (e) => {
-      if (['robovac_9000', 'street_sweeper', 'garbage_truck'].includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
+      if (BOSS_IDS.includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
     });
     events.on('bossDefeated', (e) => (sum.kills[e.defId] = (sum.kills[e.defId] ?? 0) + 1));
     events.on('abilityUsed', () => sum.abilityUses++);
@@ -695,7 +706,7 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || run.area === 'city' || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
+    for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || nextArea(run.area) === null || run.tier < AREA_BOSSES[run.area].tier); i++) {
       run.update(dt);
       // Skip the walk, unless the Bunny already rolled through the exit this tick.
       if (leaveArea) {
@@ -728,11 +739,12 @@ for (const characterId of chars) {
       sum.ends.push(run.time);
     }
     if (run.endReason === 'died') sum.deaths++;
+    for (const a of run.getStats().areas ?? []) if (a.cleared) (sum.acts[a.area] ??= []).push(a.timeSec);
     if (validate) validateRun(run, sum.v, `${characterId} seed=${seed}`);
     if (quiet) continue;
     const tiers = TIERS.map((t) => `${t.name} ${fmt(run.tierTimes[t.index])}`).join(' | ');
     console.log(
-      `${characterId} seed=${seed} end=${run.endReason ?? 'timeout'}@${fmt(run.time)} r=${run.bunny.radius.toFixed(1)}cm hits=${hits} absorbed=${run.debrisAbsorbed}+${run.hazardsAbsorbed}h debris=${run.debris.count} starved=${bot.starved.toFixed(0)}s fluff=${fluff} sim=${(ms / 1000).toFixed(1)}s\n  ${tiers}\n  supply (r / reachable absorbables in view): ${supply.join(' ')}`,
+      `${characterId} seed=${seed} end=${run.endReason ?? 'timeout'}@${fmt(run.time)} r=${formatLength(run.bunny.realRadius)} hits=${hits} absorbed=${run.debrisAbsorbed}+${run.hazardsAbsorbed}h debris=${run.debris.count} starved=${bot.starved.toFixed(0)}s fluff=${fluff} sim=${(ms / 1000).toFixed(1)}s\n  ${tiers}\n  supply (r / reachable absorbables in view): ${supply.join(' ')}`,
     );
     if (log.length) console.log(`  ${log.join('\n  ')}`);
   }
@@ -744,7 +756,9 @@ for (const [id, s] of Object.entries(summary)) {
   console.log(
     `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  fluff ${Math.min(...s.fluff)}–${med(s.fluff)}–${Math.max(...s.fluff)}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
   );
-  const bosses = ['robovac_9000', 'street_sweeper', 'garbage_truck'].filter((b) => s.fights[b]);
+  const bosses = BOSS_IDS.filter((b) => s.fights[b]);
+  const acts = AREA_ORDER.filter((a) => s.acts[a]?.length).map((a) => `${a} ${fmt(med(s.acts[a]!))}(${s.acts[a]!.length})`);
+  if (acts.length) console.log(`          Act time, entry → boss absorbed (median, clears): ${acts.join('  ')}`);
   console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}`);
   if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.grade}`).join(', ')}`);
   if (validate) {

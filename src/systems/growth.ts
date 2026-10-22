@@ -6,7 +6,7 @@ export const growthSystem: System = {
   id: 'growth',
   order: SYSTEM_ORDER.growth,
   update(_dt, run) {
-    const target = tierForRadius(run.bunny.radius).index;
+    const target = tierForRadius(run.bunny.realRadius).index;
     while (run.tier < target) {
       const previousTier = run.tier;
       run.tier++;

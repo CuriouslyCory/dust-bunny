@@ -156,7 +156,7 @@ export class DebrisSpawner implements System {
     const s = TUNING.spawner;
     const r = bunny.radius;
     const ratio = bunny.stats.get('absorbRatio');
-    const tier = areaDebrisTier(run.area, tierForRadius(r).index);
+    const tier = areaDebrisTier(run.area, tierForRadius(bunny.realRadius).index);
     const viewR = viewRadiusFor(r, run.tier);
     const outer = viewR * s.spawnOuter;
     const inner = viewR * s.spawnInner;

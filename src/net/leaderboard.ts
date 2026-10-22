@@ -332,8 +332,9 @@ export function areaSubmission(
 ): AreaScoreSubmission {
   const fields = {
     area: a.area,
-    radiusIn: Math.round(a.radiusIn * 100) / 100,
-    maxRadius: Math.round(a.maxRadius * 100) / 100,
+    // The Area's unit (10 m in the Region): 4 decimals keep a centimetre-ish precision there too.
+    radiusIn: Math.round(a.radiusIn * 1e4) / 1e4,
+    maxRadius: Math.round(a.maxRadius * 1e4) / 1e4,
     debrisAbsorbed: a.debrisAbsorbed,
     durationMs: Math.round(a.timeSec * 1000),
     difficulty: difficulty ?? DEFAULT_DIFFICULTY,

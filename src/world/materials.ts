@@ -295,6 +295,19 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'paving':
         info = { texture: toTexture(pavingTexture()), worldSize: 480, roughness: 0.85 };
         break;
+      // Region floors (1 world unit = 10 m). Placeholders until the Region look lands.
+      case 'fields':
+      case 'forest':
+        info = { texture: toTexture(grassTexture()), worldSize: 12, roughness: 1 };
+        break;
+      case 'motorway':
+      case 'water':
+        info = { texture: toTexture(asphaltTexture()), worldSize: 8, roughness: 0.95 };
+        break;
+      case 'townRoofs':
+      case 'landfill':
+        info = { texture: toTexture(concreteTexture()), worldSize: 10, roughness: 0.9 };
+        break;
     }
     floorCache.set(id, info);
   }

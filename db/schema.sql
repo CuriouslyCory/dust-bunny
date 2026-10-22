@@ -86,7 +86,7 @@ ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS run_id text;
 CREATE UNIQUE INDEX IF NOT EXISTS leaderboard_scores_run_idx ON leaderboard_scores (run_id) WHERE run_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leaderboard_scores_user_idx ON leaderboard_scores (user_id, score DESC) WHERE user_id IS NOT NULL;
 
--- Area boards: one row per Area (house | neighborhood | city) a Run cleared.
+-- Area boards: one row per Area (house | neighborhood | city | region) a Run cleared. Radii are in the Area's unit (the Region's is 10 m).
 CREATE TABLE IF NOT EXISTS area_scores (
   id              bigserial PRIMARY KEY,
   area            text        NOT NULL,
