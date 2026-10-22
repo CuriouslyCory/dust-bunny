@@ -117,15 +117,23 @@ CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, s
 ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 
+-- Universes the player had ended when the Run was posted (a Universe victory counts itself);
+-- NULL for entries from clients before Act 9.
+ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS universes integer;
+
 -- Cloud save for signed-in players: Fluff wallet, Upgrade levels (id → level), lifetime stats,
--- and per Character its Keepsake Hoard ("type:grade" → count) and bosses beaten.
+-- per Character its Keepsake Hoard ("type:grade" → count) and bosses beaten, and Universe
+-- victories (only ever goes up).
 CREATE TABLE IF NOT EXISTS player_progress (
   user_id    text        PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
   fluff      integer     NOT NULL CHECK (fluff >= 0),
   upgrades   jsonb       NOT NULL,
   stats      jsonb       NOT NULL,
   characters jsonb       NOT NULL DEFAULT '{}',
+  universes  integer     NOT NULL DEFAULT 0 CHECK (universes >= 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 -- Tables created before Keepsakes.
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}';
+-- Tables created before Act 9.
+ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0);

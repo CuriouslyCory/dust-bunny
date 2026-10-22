@@ -18,7 +18,7 @@ import { getDifficulty } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
-import { getMeta } from '../../meta/meta';
+import { endsUniverse, getMeta } from '../../meta/meta';
 import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
 import { formatLength } from '../../data/units';
@@ -212,6 +212,9 @@ export function registerResultsScreen(): void {
           if (s.solarSystemCleared) rows.push(['☀️', 'Solar System', inGalaxy ? 'Cleared · crossed the heliopause' : 'Cleared']);
           if (s.galaxyCleared) rows.push(['🌌', 'Galaxy', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
+          // The player's count after this Run (awardRun is idempotent and counts a Universe victory).
+          const universes = getMeta().awardRun(e).universes;
+          if (universes > 0) rows.push(['🌀', 'Universes', endsUniverse(e) ? `${universes} · +1` : String(universes)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {
               const c = h('div', { className: 'stat' }, h('span', { className: 'stat-icon', textContent: icon }), h('span', { className: 'stat-value', textContent: val }), h('span', { className: 'stat-label', textContent: k }));

@@ -20,6 +20,7 @@
 - **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends.
 - **Upgrade** — a permanent meta-progression improvement bought in the Shop with Fluff. Persists across Runs.
 - **Fluff** — the meta currency earned at the end of each Run.
+- **Universes** — how many times the player has won the Universe (ended the story); every ending counts one more. The title then reads *Universe N · Roll. Absorb. Grow.* (N = Universes + 1, the Universe being played), and the results screen and Run board show the count. It never goes down, on the device or in the cloud save.
 - **Account** — optional sign-in with Google or Discord. A signed-in player's Fluff, Upgrades and stats follow them between devices (the **cloud save**).
 - **Verified score** — a leaderboard entry posted while signed in, shown with a ✓. Entries posted without an account are **anonymous**.
 - **Run board** / **Area board** — the leaderboards. The Run board ranks whole Runs; each Area has an Area board that takes an entry whenever a Run clears that Area. Signed-in players' entries post automatically; anonymous players choose to submit them on the results screen.

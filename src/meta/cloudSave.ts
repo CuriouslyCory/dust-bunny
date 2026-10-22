@@ -13,9 +13,11 @@
  *   offline). Spending, Felting and shedding change neither lifetime counter, so on such a tie the device's copy wins;
  *   without unsynced changes a tie goes to the server, so a stale device can't undo another
  *   device's purchases.
+ * - `universes` only goes up: adopting a server copy keeps the larger count, and so does the server
+ *   when it stores an upload (except when loading another account's save, which replaces it).
  */
 import type { AccountClient, AccountState } from '../net/account';
-import { compareProgress, isEmptyProgress, sameProgress, validateProgress, type Progress } from '../shared/progress';
+import { compareProgress, isEmptyProgress, mergeUniverses, sameProgress, validateProgress, type Progress } from '../shared/progress';
 import type { MetaProgress } from './meta';
 import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from './save';
 
@@ -40,7 +42,13 @@ export function progressOf(d: SaveData): Progress {
   const { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } = d.stats;
   const characters: Progress['characters'] = {};
   for (const [id, c] of Object.entries(d.characters)) characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
-  return { fluff: d.fluff, upgrades: { ...d.upgrades }, characters, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } };
+  return {
+    fluff: d.fluff,
+    upgrades: { ...d.upgrades },
+    characters,
+    stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned },
+    universes: d.universes,
+  };
 }
 
 const freshProgress = (): Progress => progressOf(defaultSave());
@@ -114,11 +122,16 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     else if (!dirty && current === userId) storageSet(CLOUD_DIRTY_KEY, '');
   }
 
-  /** Replaces the synced fields of the local save (the store's listeners see it as one change). */
-  function adopt(p: Progress): void {
+  /**
+   * Replaces the synced fields of the local save (the store's listeners see it as one change).
+   * `universes` keeps the larger count unless `replace` (another account's save is being loaded).
+   */
+  function adopt(p: Progress, replace = false): void {
     lastSynced = p;
-    if (sameProgress(progressOf(meta.data), p)) return;
+    const universes = replace ? p.universes : mergeUniverses(meta.data.universes, p.universes);
+    if (sameProgress(progressOf(meta.data), { ...p, universes })) return;
     meta.store.update((d) => {
+      d.universes = universes;
       d.fluff = p.fluff;
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
@@ -137,6 +150,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     if (!res.progress) return;
     if (res.accepted) {
       lastSynced = res.progress;
+      // The server keeps the larger Universes count (another device may have ended more).
+      const { universes } = res.progress;
+      if (universes > meta.data.universes) meta.store.update((d) => void (d.universes = universes));
       if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
       else schedule(debounceMs);
     } else if (compareProgress(progressOf(meta.data), res.progress) > 0) {
@@ -177,7 +193,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     const previous = storageGet(CLOUD_USER_KEY);
     if (previous && previous !== id) {
       // This device's save belongs to another account: start from this account's copy.
-      adopt(remote ?? freshProgress());
+      adopt(remote ?? freshProgress(), true);
       setDirty(false);
     } else if (!remote) {
       if (!isEmptyProgress(local)) await upload(local);

@@ -18,6 +18,7 @@ import type { Loadout } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
 import type { RunConfig } from '../../game/run';
 import type { AreaStats } from '../../game/runStats';
+import { getMeta } from '../../meta/meta';
 import { account as defaultAccount, type AccountClient } from '../../net/account';
 import {
   areaSubmission,
@@ -74,6 +75,8 @@ export class RunPosts {
     readonly ranked = true,
     /** Keepsakes tucked in for the Run (sent with every entry). */
     readonly loadout: Loadout = [],
+    /** The player's Universes count after the Run (sent with the Run board entry; omitted when absent). */
+    private readonly universesFor?: (e: GameEvents['runEnded']) => number,
   ) {}
 
   /** Initial state of a new entry. */
@@ -124,7 +127,8 @@ export class RunPosts {
     this.result = e;
     for (const a of e.stats.areas ?? []) this.addArea(a);
     if (!this.posts.has('run')) {
-      this.posts.set('run', { board: 'run', ...this.fresh(), build: (name) => submissionFromRun(e.stats, e.reason, name, this.runId) });
+      const universes = this.universesFor?.(e);
+      this.posts.set('run', { board: 'run', ...this.fresh(), build: (name) => submissionFromRun(e.stats, e.reason, name, this.runId, universes) });
     }
     this.changed();
   }
@@ -188,10 +192,12 @@ export function getLeaderboardPosting(): LeaderboardPosting | null {
 
 export function installLeaderboardPosting(
   game: Game,
-  opts: { client?: LeaderboardClient; account?: AccountClient } = {},
+  opts: { client?: LeaderboardClient; account?: AccountClient; universes?: (e: GameEvents['runEnded']) => number } = {},
 ): LeaderboardPosting {
   const client = opts.client ?? defaultClient;
   const account = opts.account ?? defaultAccount;
+  // awardRun is idempotent per Run and counts a Universe victory, so the count is current whichever runEnded listener runs first.
+  const universes = opts.universes ?? ((e: GameEvents['runEnded']) => getMeta().awardRun(e).universes);
   let current: RunPosts | null = null;
   /** Whether the current Run counts (see RunPosts.ranked). */
   let ranked = true;
@@ -217,7 +223,7 @@ export function installLeaderboardPosting(
   game.events.on('runStarted', () => {
     const run = game.run;
     ranked = isRankedRun(game.debug, run?.config);
-    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked, run?.loadout ?? []);
+    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked, run?.loadout ?? [], universes);
   });
   game.events.on('areaCompleted', (e) => {
     if (!current) return;
@@ -245,7 +251,7 @@ export function installLeaderboardPosting(
         current.finish(e);
         return current;
       }
-      const posts = new RunPosts(client, e.stats.characterId, e.stats.difficulty, true, e.stats.loadout ?? []);
+      const posts = new RunPosts(client, e.stats.characterId, e.stats.difficulty, true, e.stats.loadout ?? [], universes);
       posts.finish(e);
       return posts;
     },

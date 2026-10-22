@@ -15,10 +15,10 @@ export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
   AND to_regclass('public.area_scores_user_idx') IS NOT NULL
-  AND (SELECT count(*) = 3 FROM information_schema.columns
+  AND (SELECT count(*) = 5 FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND ((table_name = 'player_progress' AND column_name = 'characters')
-            OR (table_name = 'leaderboard_scores' AND column_name = 'loadout')
+          AND ((table_name = 'player_progress' AND column_name IN ('characters', 'universes'))
+            OR (table_name = 'leaderboard_scores' AND column_name IN ('loadout', 'universes'))
             OR (table_name = 'area_scores' AND column_name = 'loadout'))) AS ready`;
 
 export const SCHEMA: readonly string[] = [
@@ -124,6 +124,8 @@ export const SCHEMA: readonly string[] = [
   // The Run's Loadout: [{ type, grade }] (0–2 Keepsakes); NULL for entries from clients before Keepsakes.
   `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
   `ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
+  // Universes the player had ended when the Run was posted (a Universe victory counts itself); NULL for older clients.
+  `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS universes integer`,
 
   // --- Cloud save (Fluff, Upgrades, Keepsake Hoards, stats) for signed-in players ---
   `CREATE TABLE IF NOT EXISTS player_progress (
@@ -132,8 +134,11 @@ export const SCHEMA: readonly string[] = [
     upgrades jsonb NOT NULL,
     stats jsonb NOT NULL,
     characters jsonb NOT NULL DEFAULT '{}',
+    universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
   // Tables created before Keepsakes: each Character's Hoard and bosses beaten.
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}'`,
+  // Tables created before Act 9: Universe victories (only ever goes up).
+  `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0)`,
 ];

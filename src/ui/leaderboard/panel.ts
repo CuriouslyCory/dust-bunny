@@ -64,6 +64,16 @@ function difficultyBadge(difficulty: unknown): HTMLElement | null {
   });
 }
 
+/** Small badge in a Run board entry's Tier cell once the player has ended a Universe (older entries have no count). */
+function universesBadge(universes: number | undefined): HTMLElement | null {
+  if (!universes || universes < 1) return null;
+  return h('span', {
+    className: 'lb-universes',
+    textContent: `🌀${universes.toLocaleString()}`,
+    title: `${universes.toLocaleString()} Universe${universes === 1 ? '' : 's'} ended`,
+  });
+}
+
 const COLUMNS: Record<'run' | 'area', string[]> = {
   run: ['#', 'Name', 'Bunny', 'Score', 'Tier', 'Time'],
   area: ['#', 'Name', 'Bunny', 'Score', 'Size', 'Time'],
@@ -221,6 +231,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
   function row(e: AnyLeaderboardEntry, rank: number | string, mine: boolean): HTMLTableRowElement {
     const badge = difficultyBadge(e.difficulty);
     const pips = loadoutPips(e.loadout);
+    const universes = 'area' in e ? null : universesBadge(e.universes);
     const mark = marks ? [e.verified ? verifiedMark() : anonymousMark()] : [];
     const area = 'area' in e;
     const run = e as LeaderboardEntry;
@@ -233,7 +244,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
       h('td', { className: 'lb-score', textContent: e.score.toLocaleString() }),
       area
         ? areaSizeCell(e as AreaLeaderboardEntry)
-        : h('td', { textContent: run.victory ? '★' : String(run.tierReached), title: getTier(run.tierReached).name }),
+        : h('td', { title: getTier(run.tierReached).name }, run.victory ? '★' : String(run.tierReached), ...(universes ? [universes] : [])),
       h('td', { textContent: fmtTime(e.durationMs), title: area ? 'Time in the area' : 'Run time' }),
     );
   }

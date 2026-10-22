@@ -9,6 +9,9 @@
  * grows), then more Runs; on a tie the server copy wins on download and the upload wins on the
  * server (so spending Fluff, which changes neither counter, still syncs). Felting and shedding
  * Keepsakes change neither counter either: they sync like spending.
+ *
+ * `universes` (Universe victories) never goes down: both sides keep the larger of the two copies
+ * (`mergeUniverses`), whichever copy wins otherwise.
  */
 import { KEEPSAKE_STACK_MAX, keepsakeTypesForCharacter, parseSharedHoardKey } from './keepsakes.js';
 import { SCORE_TIER_MIN_RADII } from './score.js';
@@ -36,6 +39,8 @@ export interface Progress {
   /** Character id → Hoard and bosses beaten (Characters with neither are left out). */
   characters: Record<string, ProgressCharacter>;
   stats: ProgressStats;
+  /** Universe victories (missing on older bundles: 0, and the stored count is kept). */
+  universes: number;
 }
 
 /** Generous sanity bounds: they stop garbage, not determined cheating (the game runs on the client). */
@@ -122,9 +127,12 @@ export function validateProgress(body: unknown): ProgressValidation {
   const characters = validateCharacters(body.characters);
   if (!characters.ok) return characters;
 
+  const universes = body.universes ?? 0;
+  if (!isCount(universes, PROGRESS_BOUNDS.count)) return fail('universes', 'universes must be a non-negative integer.');
+
   return {
     ok: true,
-    value: { fluff: body.fluff, upgrades, characters: characters.value, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } },
+    value: { fluff: body.fluff, upgrades, characters: characters.value, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned }, universes },
   };
 }
 
@@ -133,12 +141,18 @@ export function compareProgress(a: Progress, b: Progress): number {
   return a.stats.totalFluffEarned - b.stats.totalFluffEarned || a.stats.runs - b.stats.runs;
 }
 
+/** The Universes count after merging two copies: it only ever goes up. */
+export function mergeUniverses(a: number | undefined, b: number | undefined): number {
+  return Math.max(a ?? 0, b ?? 0);
+}
+
 /** True when the progress is a fresh, never-played save. */
 export function isEmptyProgress(p: Progress): boolean {
   return (
     p.fluff === 0 &&
     p.stats.runs === 0 &&
     p.stats.totalFluffEarned === 0 &&
+    (p.universes ?? 0) === 0 &&
     Object.keys(p.upgrades).length === 0 &&
     Object.keys(p.characters ?? {}).length === 0
   );
@@ -170,6 +184,7 @@ export function sameProgress(a: Progress, b: Progress): boolean {
   const sb = b.stats;
   return (
     a.fluff === b.fluff &&
+    (a.universes ?? 0) === (b.universes ?? 0) &&
     sa.runs === sb.runs &&
     sa.wins === sb.wins &&
     sa.bestRadius === sb.bestRadius &&
