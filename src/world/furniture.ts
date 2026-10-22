@@ -65,6 +65,10 @@ export const FURNITURE: Record<string, FurnitureDef> = {
   region_city_core: { id: 'region_city_core', name: 'City Centre', w: 8, d: 7, h: 9, clearance: 0 },
   region_hill: { id: 'region_hill', name: 'Hill', w: 12, d: 9, h: 4, clearance: 0 },
   region_ridge: { id: 'region_ridge', name: 'Ridge', w: 20, d: 7, h: 3.5, clearance: 0 },
+  // Continent (Continent units, 1 = 10 km): mountain ranges that stand as obstacles (long axis along
+  // local X), snow-capped; the generator jitters w / d / h per instance.
+  continent_range: { id: 'continent_range', name: 'Mountain Range', w: 16, d: 6, h: 4.4, clearance: 0 },
+  continent_massif: { id: 'continent_massif', name: 'Massif', w: 10, d: 8, h: 4.8, clearance: 0 },
 };
 
 /** Footprint after rotation by quarter turns. */

@@ -16,7 +16,7 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   // Overcast noon from altitude: a high, soft sun and a bright grey sky fill.
   region: { sky: '#f2f4f6', ground: '#6b7458', sun: '#eef0f2', intensity: 1.7, dir: [-0.25, 1.9, 0.3] },
   // Dusk from the stratosphere: a warm sun low in the west (long shadows) and a cool blue-violet fill.
-  continent: { sky: '#b3b0e0', ground: '#5d5160', sun: '#ffb26b', intensity: 2.6, dir: [-0.9, 0.42, 0.18] },
+  continent: { sky: '#c6c2f2', ground: '#6a5a68', sun: '#ffb877', intensity: 3.3, dir: [-0.9, 0.42, 0.18] },
 };
 
 export class Lighting {

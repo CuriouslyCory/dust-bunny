@@ -17,14 +17,14 @@ export type OutdoorZoneType = 'yard' | 'street' | 'sidewalk' | 'driveway' | 'par
 export type CityZoneType = 'avenue' | 'pavement' | 'plaza' | 'parking' | 'square';
 /** Region zones, seen from a few kilometres up: fields, highways, a river, towns, woods and the landfill. */
 export type RegionZoneType = 'farmland' | 'highway' | 'river' | 'town' | 'woods' | 'landfill';
-/** Continent zones, seen from the stratosphere: plains, mountains, lakes, desert, tundra and the ruins of cities. */
-export type ContinentZoneType = 'plains' | 'mountains' | 'lakes' | 'desert' | 'tundra' | 'ruins';
+/** Continent zones, seen from the stratosphere: plains, mountains, lakes, rivers, desert, tundra and the ruins of cities. */
+export type ContinentZoneType = 'plains' | 'mountains' | 'lakes' | 'rivers' | 'desert' | 'tundra' | 'ruins';
 export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
 export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
 export const REGION_ZONE_TYPES: readonly RegionZoneType[] = ['farmland', 'highway', 'river', 'town', 'woods', 'landfill'];
-export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mountains', 'lakes', 'desert', 'tundra', 'ruins'];
+export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mountains', 'lakes', 'rivers', 'desert', 'tundra', 'ruins'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
@@ -64,13 +64,15 @@ export type FloorMaterialId =
   | 'townRoofs'
   | 'forest'
   | 'landfill'
-  // Continent (from the stratosphere, 1 unit = 10 km). Placeholder textures until the Continent look lands.
+  // Continent (from the stratosphere, 1 unit = 10 km): grassland, mountain relief, lake and river water, dunes,
+  // snow, ash over ruined street grids, and the ocean past the coast.
   | 'steppe'
   | 'highlands'
   | 'lakeWater'
   | 'desertSand'
   | 'tundraSnow'
-  | 'ruinsAsh';
+  | 'ruinsAsh'
+  | 'ocean';
 
 export interface Room {
   id: string;
@@ -159,6 +161,17 @@ export interface GroundMarking {
   layer?: number;
 }
 
+/**
+ * A route across the map that lane / trail Hazards can follow (the Continent's rivers and glacier
+ * lanes): an axis-aligned polyline in course order (source first), `width` across. Data only.
+ */
+export interface MapRoute {
+  id: string;
+  kind: 'river' | 'glacier';
+  points: Array<{ x: number; z: number }>;
+  width: number;
+}
+
 export interface HouseLayout {
   area: AreaId;
   seed: number;
@@ -174,4 +187,6 @@ export interface HouseLayout {
   spawn: { x: number; z: number; roomId: string };
   exit?: ExitDoor;
   markings?: GroundMarking[];
+  /** Rivers and glacier lanes (the Continent), for Hazards that follow a course. */
+  routes?: MapRoute[];
 }
