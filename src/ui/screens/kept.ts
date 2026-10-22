@@ -20,7 +20,16 @@ export function openUnderTheCouch(game: Game, characterId?: string): void {
   game.go('underTheCouch', { back: 'characterSelect', characterId });
 }
 
-function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerender: () => void): HTMLElement {
+/** The line under the options: whether a pick was made and until when it can change. */
+export type ChoiceNote = (chosen: boolean) => string;
+
+const resultsNote: ChoiceNote = (chosen) => (chosen ? 'Kept. You can still change it until you leave.' : 'Leaving keeps the highlighted one.');
+
+/**
+ * A first-kill choose-1-of-3 card for `run.drops[index]`: clicking an option swaps the credited
+ * Keepsake (tracker.choose) and calls `rerender`. Also shown by the in-Run reveal.
+ */
+export function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerender: () => void, note: ChoiceNote = resultsNote): HTMLElement {
   const tracker = getKeepsakeTracker();
   const grade = getGrade(drop.ref.grade);
   const options = drop.offer!.map((type) => {
@@ -46,7 +55,7 @@ function choiceCard(run: RunKeepsakes, index: number, drop: KeepsakeDrop, rerend
     { className: 'kept-choice' },
     h('p', { className: 'kept-choice-head', textContent: `First ${grade.bossName} for ${getCharacter(run.characterId).name}: choose what it left (${grade.material}).` }),
     h('div', { className: 'kept-options' }, ...options),
-    h('p', { className: 'kept-choice-note', textContent: drop.chosen ? 'Kept. You can still change it until you leave.' : 'Leaving keeps the highlighted one.' }),
+    h('p', { className: 'kept-choice-note', textContent: note(!!drop.chosen) }),
   );
   card.style.setProperty('--grade', grade.color);
   return card;
