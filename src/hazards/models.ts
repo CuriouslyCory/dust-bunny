@@ -4,7 +4,8 @@
  * (the broom's origin is the top of the handle), and the same named animatable nodes
  * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper / garbage_truck
  * `brush_l` / `brush_r`, robo_mower `blade`, floor_scrubber `brush`, sprinkler and
- * pressure_washer `head`; all spin about Y).
+ * pressure_washer `head`, landfill_compactor `beacon`, incinerator `brush_l` / `brush_r`; all spin
+ * about Y; crop_duster `propeller` spins about Z).
  * If another module already registered a factory for an id, it is kept.
  */
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
@@ -32,6 +33,15 @@ export const HAZARD_MODEL_SIZES = {
   street_flusher: { w: 263, d: 691.7, h: 286 },
   litter_vacuum: { w: 87.8, d: 174.6, h: 160.5 },
   garbage_truck: { w: 273, d: 924.4, h: 381 },
+  // Region (real size, cm; scaled to Region units by size / modelSize, see src/data/hazards.ts).
+  // Footprints from the Blender brief; reconciled with public/models/catalog.json once the GLBs land.
+  landfill_compactor: { w: 470, d: 700, h: 380 },
+  freight_train: { w: 310, d: 2200, h: 450 },
+  snowplow: { w: 440, d: 1040, h: 350 },
+  crop_duster: { w: 1120, d: 820, h: 300 },
+  river_barge: { w: 480, d: 1400, h: 300 },
+  water_bomber: { w: 2800, d: 2200, h: 700 },
+  incinerator: { w: 2400, d: 3600, h: 2600 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -501,6 +511,202 @@ function garbageTruck(): Object3D {
   return g;
 }
 
+// ── Region Hazards (real size in cm; front +Z, origin bottom-centre) ──
+
+/** Box rotated about X (ramps, tilted parts), bottom-centre at (x, y, z) before the tilt. */
+function tiltedBox(g: Object3D, w: number, h: number, d: number, x: number, y: number, z: number, tilt: number, m: MeshStandardMaterial): Mesh {
+  const mesh = shadow(new Mesh(new BoxGeometry(w, h, d), m));
+  mesh.position.set(x, y + h / 2, z);
+  mesh.rotation.x = tilt;
+  g.add(mesh);
+  return mesh;
+}
+
+function landfillCompactor(): Object3D {
+  // Four spiked steel drums, yellow body, cab with the roof `beacon`, dozer blade at the front (+Z).
+  const g = new Group();
+  const yellow = mat('#e8b20e', 0.5, 0.1);
+  const steel = mat('#8a8f96', 0.4, 0.7);
+  const dark = mat('#2b2d31', 0.5, 0.3);
+  for (const x of [-165, 165]) {
+    for (const z of [-200, 200]) {
+      wheel(g, x, 95, z, 95, 110, steel);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const cleat = addBox(g, 116, 16, 22, x, 87 + Math.cos(a) * 97, z + Math.sin(a) * 97, dark);
+        cleat.rotation.x = -a;
+      }
+    }
+  }
+  addBox(g, 230, 130, 520, 0, 70, -10, yellow);
+  addBox(g, 220, 90, 170, 0, 200, -170, yellow);
+  addBox(g, 160, 115, 150, 0, 200, 40, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 180, 14, 175, 0, 315, 40, yellow);
+  // Blade on two push arms.
+  addBox(g, 470, 150, 28, 0, 15, 330, steel);
+  rod(g, new Vector3(-110, 120, 200), new Vector3(-150, 90, 318), 14, dark);
+  rod(g, new Vector3(110, 120, 200), new Vector3(150, 90, 318), 14, dark);
+  const beacon = new Group();
+  beacon.name = 'beacon';
+  beacon.position.set(0, 329, 40);
+  addCylinder(beacon, 14, 16, 30, 0, 0, 0, glow('#ff8a00', 2), 12);
+  addBox(beacon, 34, 10, 8, 0, 12, 13, glow('#ffd400', 2));
+  g.add(beacon);
+  return g;
+}
+
+function freightTrain(): Object3D {
+  // Diesel locomotive: blue cab at the front (+Z), long red hood, two bogies, cowcatcher.
+  const g = new Group();
+  const red = mat('#b3261e', 0.5, 0.15);
+  const blue = mat('#1f3b73', 0.5, 0.15);
+  const dark = mat('#24272c', 0.6, 0.4);
+  const yellow = mat('#f2c230', 0.5);
+  addBox(g, 290, 60, 2050, 0, 60, 0, dark);
+  for (const z of [-820, -660, 660, 820]) for (const x of [-140, 140]) wheel(g, x, 50, z, 50, 22, mat('#1b1b1b', 0.8, 0.3));
+  addBox(g, 270, 270, 1500, 0, 120, -260, red);
+  for (let i = 0; i < 4; i++) addCylinder(g, 55, 55, 14, 0, 390, -880 + i * 230, dark, 14);
+  addBox(g, 300, 300, 400, 0, 120, 750, blue);
+  addBox(g, 262, 90, 6, 0, 300, 953, mat('#9ec9ff', 0.1, 0.5));
+  addBox(g, 302, 34, 6, 0, 170, 953, yellow);
+  for (const x of [-95, 95]) addBox(g, 30, 22, 4, x, 230, 956, glow('#fff3b0', 1.8));
+  addBox(g, 300, 10, 1500, 0, 230, -260, yellow);
+  tiltedBox(g, 280, 50, 90, 0, 10, 1020, 0.5, mat('#8a8f96', 0.4, 0.7));
+  return g;
+}
+
+function snowplow(): Object3D {
+  // Orange plow truck: angled yellow blade at the front (+Z), cab, salt hopper behind.
+  const g = new Group();
+  const orange = mat('#f07f1a', 0.5, 0.1);
+  const dark = mat('#2b2d31', 0.5, 0.3);
+  const tyre = mat('#1b1b1b', 0.85);
+  addBox(g, 230, 60, 820, 0, 55, -60, dark);
+  for (const x of [-118, 118]) for (const z of [230, -250, -390]) wheel(g, x, 55, z, 55, 34, tyre);
+  addBox(g, 240, 200, 190, 0, 100, 230, orange);
+  addBox(g, 220, 80, 4, 0, 205, 326, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 150, 14, 30, 0, 300, 230, dark);
+  for (const x of [-50, 50]) addCylinder(g, 10, 10, 18, x, 314, 230, glow('#ff8a00', 2), 12);
+  // Salt hopper: a V body with a dark load on top.
+  addBox(g, 240, 170, 460, 0, 115, -230, orange);
+  addBox(g, 210, 18, 430, 0, 285, -230, mat('#d9d6cc', 0.9));
+  // Blade: angled across the front, on a push frame.
+  const blade = addBox(g, 430, 130, 22, 0, 10, 420, mat('#f2c230', 0.5));
+  blade.rotation.y = 0.28;
+  rod(g, new Vector3(-80, 70, 330), new Vector3(-90, 70, 408), 9, dark);
+  rod(g, new Vector3(80, 70, 330), new Vector3(90, 70, 432), 9, dark);
+  return g;
+}
+
+function cropDuster(): Object3D {
+  // Yellow biplane, nose +Z: `propeller` spins about local Z; spray bar under the lower wing.
+  const g = new Group();
+  const yellow = mat('#f2c230', 0.45, 0.1);
+  const red = mat('#c62828', 0.5);
+  const dark = mat('#2b2d31', 0.5, 0.3);
+  const body = shadow(new Mesh(new CylinderGeometry(60, 34, 760, 12), yellow));
+  body.rotation.x = Math.PI / 2;
+  body.position.set(0, 170, 0);
+  g.add(body);
+  addBox(g, 1120, 14, 160, 0, 110, 120, yellow);
+  addBox(g, 1060, 14, 150, 0, 268, 140, yellow);
+  for (const x of [-400, 400]) rod(g, new Vector3(x, 124, 120), new Vector3(x, 268, 140), 6, dark);
+  addBox(g, 360, 10, 100, 0, 170, -330, yellow);
+  addBox(g, 10, 120, 110, 0, 180, -345, red);
+  addBox(g, 70, 40, 90, 0, 220, -40, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 920, 8, 8, 0, 96, 70, mat('#9aa0a6', 0.3, 0.7));
+  for (let i = 0; i < 7; i++) addCylinder(g, 6, 6, 8, -420 + i * 140, 88, 70, glow('#c6e86b', 1.6), 8);
+  for (const x of [-120, 120]) {
+    rod(g, new Vector3(x * 0.4, 130, 200), new Vector3(x, 40, 210), 5, dark);
+    wheel(g, x, 40, 210, 40, 18, mat('#1b1b1b', 0.85));
+  }
+  const propeller = new Group();
+  propeller.name = 'propeller';
+  propeller.position.set(0, 170, 392);
+  addCylinder(propeller, 16, 16, 30, 0, -15, 0, red, 10).rotation.x = Math.PI / 2;
+  for (const r of [0, Math.PI / 2]) {
+    const blade = shadow(new Mesh(new BoxGeometry(250, 20, 6), dark));
+    blade.rotation.z = r;
+    propeller.add(blade);
+  }
+  g.add(propeller);
+  return g;
+}
+
+function riverBarge(): Object3D {
+  // Rusty barge with heaps of gravel, pushed by a red tug at the back (−Z).
+  const g = new Group();
+  const hull = mat('#6b4a33', 0.8, 0.2);
+  addBox(g, 480, 110, 1000, 0, 0, 120, hull);
+  addBox(g, 360, 110, 160, 0, 0, 700, hull);
+  addBox(g, 484, 14, 1004, 0, 96, 120, mat('#2b2d31', 0.6, 0.3));
+  for (const z of [430, 140, -150]) addCylinder(g, 30, 190, 120, 0, 110, z, mat('#5c5a55', 0.95), 8);
+  addBox(g, 440, 100, 250, 0, 0, -510, mat('#c62828', 0.5, 0.1));
+  addBox(g, 200, 110, 140, 0, 100, -540, mat('#f1efe8', 0.5, 0.1));
+  addBox(g, 190, 36, 4, 0, 160, -469, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 220, 10, 160, 0, 210, -540, mat('#2b2d31', 0.5));
+  for (const x of [-60, 60]) addCylinder(g, 14, 14, 80, x, 220, -590, mat('#111111', 0.7), 10);
+  return g;
+}
+
+function waterBomber(): Object3D {
+  // Amphibious water bomber: high wing with two engines, T-tail, belly tank doors; nose +Z.
+  const g = new Group();
+  const yellow = mat('#f2c230', 0.45, 0.1);
+  const red = mat('#c62828', 0.5);
+  const dark = mat('#2b2d31', 0.5, 0.3);
+  addBox(g, 300, 300, 1800, 0, 120, -50, yellow);
+  addBox(g, 304, 40, 1804, 0, 230, -50, red);
+  const nose = shadow(new Mesh(new CylinderGeometry(20, 150, 300, 12), yellow));
+  nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, 270, 990);
+  g.add(nose);
+  addBox(g, 220, 70, 120, 0, 380, 760, mat('#1d3557', 0.15, 0.6));
+  addBox(g, 2800, 30, 320, 0, 430, 120, yellow);
+  for (const x of [-560, 560]) {
+    const nacelle = shadow(new Mesh(new CylinderGeometry(70, 80, 420, 12), dark));
+    nacelle.rotation.x = Math.PI / 2;
+    nacelle.position.set(x, 420, 260);
+    g.add(nacelle);
+    addCylinder(g, 170, 170, 6, x, 420, 472, mat('#9aa0a6', 0.3, 0.6), 18).rotation.x = Math.PI / 2;
+  }
+  for (const x of [-1250, 1250]) {
+    rod(g, new Vector3(x, 430, 120), new Vector3(x, 330, 120), 8, dark);
+    addBox(g, 60, 50, 260, x, 280, 120, red);
+  }
+  addBox(g, 20, 280, 260, 0, 400, -860, red);
+  addBox(g, 900, 20, 200, 0, 680, -880, yellow);
+  addBox(g, 140, 10, 500, 0, 115, 100, glow('#3aa8ff', 1.2));
+  return g;
+}
+
+function incinerator(): Object3D {
+  // Rail-mounted waste plant: feed conveyor ramp at the front (+Z) between the intake rollers
+  // `brush_l` / `brush_r`, glowing furnace mouth, chimney behind (top at (0, 2600, −600)).
+  const g = new Group();
+  const concrete = mat('#7a7f86', 0.85, 0.1);
+  const dark = mat('#2b2d31', 0.6, 0.4);
+  const steel = mat('#8a8f96', 0.4, 0.7);
+  const yellow = mat('#f2b705', 0.5);
+  for (const x of [-1000, 1000]) {
+    addBox(g, 70, 40, 3500, x, 0, 0, steel);
+    for (const z of [-1150, -850, 850, 1150]) wheel(g, x, 120, z, 120, 90, dark);
+  }
+  addBox(g, 2400, 160, 3000, 0, 200, 0, dark);
+  addBox(g, 2000, 1000, 1600, 0, 360, -200, concrete);
+  addBox(g, 2100, 60, 1700, 0, 1360, -200, mat('#4a4f56', 0.7, 0.2));
+  for (let i = 0; i < 5; i++) addBox(g, 2010, 60, 60, 0, 420 + i * 200, 605, yellow);
+  addBox(g, 900, 420, 24, 0, 480, 606, glow('#ff5a1f', 2.2));
+  tiltedBox(g, 820, 40, 1150, 0, 560, 1080, 0.42, mat('#1d1f24', 0.8));
+  for (const x of [-430, 430]) tiltedBox(g, 40, 120, 1150, x, 560, 1080, 0.42, yellow);
+  for (const x of [-1100, 1100]) addCylinder(g, 260, 260, 900, x, 360, -880, concrete, 18);
+  addCylinder(g, 220, 300, 1240, 0, 1360, -600, concrete, 20);
+  for (const y of [1900, 2250]) addCylinder(g, 232, 232, 90, 0, y, -600, mat('#c62828', 0.5), 20);
+  addCylinder(g, 200, 200, 30, 0, 2570, -600, glow('#ff7a1a', 2), 20);
+  g.add(discBrush('brush_l', -620, 360, 1500, 300), discBrush('brush_r', 620, 360, 1500, 300));
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -519,6 +725,13 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   street_flusher: streetFlusher,
   litter_vacuum: litterVacuum,
   garbage_truck: garbageTruck,
+  landfill_compactor: landfillCompactor,
+  freight_train: freightTrain,
+  snowplow,
+  crop_duster: cropDuster,
+  river_barge: riverBarge,
+  water_bomber: waterBomber,
+  incinerator,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

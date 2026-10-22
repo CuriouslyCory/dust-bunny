@@ -10,9 +10,15 @@
  * Sprinkler and Leaf Blower ≈ 64, Robotic Mower ≈ 79, Lawn Mower ≈ 93, Street Sweeper ≈ 214
  * (≈ 182 after one chip, ≈ 155 after two). City: Mini Scrubber ≈ 200, Pressure Washer ≈ 243,
  * Floor Scrubber ≈ 271, Litter Vacuum ≈ 314, Street Flusher ≈ 429, Garbage Truck ≈ 800 (≈ 680
- * after one chip, ≈ 578 after two).
+ * after one chip, ≈ 578 after two). Region (in its unit, 1 = 10 m): Mini Compactor ≈ 1.07, Landfill
+ * Compactor ≈ 1.5, Crop Duster ≈ 1.79, River Barge ≈ 2.14, Snowplow ≈ 2.43, Water Bomber ≈ 3.29,
+ * Freight Train ≈ 3.5, Incinerator ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two).
  *
  * `mass` is the growth multiplier when absorbed (Debris are ~1), so Hazards are a big gain.
+ *
+ * Lengths and speeds are in the Area's world unit: cm up to the City, 10 m in the Region
+ * (`AREAS[area].unit`), so `knockbackCm`, `suctionReach`, `coneRange`… of a Region Hazard are in
+ * Region units.
  *
  * Knockback is a displacement: max(knockbackCm, knockbackRadii × Bunny radius) in cm.
  * Suction strength is a fraction of the Bunny's max speed at the strongest point, so it
@@ -126,6 +132,8 @@ export interface LaneTuning {
   /** Seconds the Hazard stops after a non-sticking hit. */
   hitPause: number;
   modelId: HazardModelId;
+  /** Hazard size the unscaled model represents (model scale = size / modelSize; default: size, i.e. unscaled). */
+  modelSize?: number;
   /** Model node rolled about X while moving (null: none). */
   spinNode: string | null;
 }
@@ -200,6 +208,11 @@ export interface TurretTuning {
   /** A droplet hit soaks the Bunny: speed × wetMultiplier for wetSeconds (0: no slow). */
   wetSeconds: number;
   wetMultiplier: number;
+  /** Model node spun about its local Z at spinRate rad/s while active (the Crop Duster's `propeller`). */
+  spinNode?: string;
+  spinRate?: number;
+  /** Droplet colour (default: water blue). */
+  dropletColor?: string;
 }
 
 export const SPRAY_BOTTLE: TurretTuning = {
@@ -304,6 +317,9 @@ export interface AirConeTuning {
   modelId: HazardModelId;
   /** Hazard size the unscaled model represents (the model is scaled by size / modelSize). */
   modelSize: number;
+  /** Blow mode: while the blast reaches the Bunny it is soaked, speed × wetMultiplier for wetSeconds (default: none). */
+  wetSeconds?: number;
+  wetMultiplier?: number;
 }
 
 export const UPRIGHT_VACUUM: AirConeTuning = {
@@ -376,6 +392,33 @@ export interface BossTuning {
   modelId: HazardModelId;
   /** Boss size the unscaled model represents at full size (the model is scaled by size / modelSize). */
   modelSize: number;
+  /** Optional ranged volley while hunting (the Incinerator's chimney ash). */
+  ash?: AshTuning;
+}
+
+/**
+ * A boss's ranged volley (the Incinerator's chimney): every `interval` s while it hunts (or
+ * recovers) on screen it locks an amber lane at its target for `telegraph` s, then fires `count`
+ * pellets along it. A pellet hit deals `damage` with knockback and sheds `shedFraction` of the
+ * Bunny's volume.
+ */
+export interface AshTuning {
+  interval: number;
+  telegraph: number;
+  count: number;
+  /** Seconds between pellets. */
+  gap: number;
+  speed: number;
+  radius: number;
+  range: number;
+  /** Random spread per pellet (radians). */
+  spread: number;
+  damage: number;
+  knockbackCm: number;
+  knockbackRadii: number;
+  shedFraction: number;
+  /** Launch point along the boss's facing, as a fraction of its size (negative: behind the centre). */
+  originOffset: number;
 }
 
 export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
@@ -712,39 +755,226 @@ export const GARBAGE_TRUCK: BossTuning = {
   modelSize: 430,
 };
 
-// ── Region Hazards (Tiers 10–11, 1 world unit = 10 m, Bunny radius ≈ 0.85–4.5 units) ──
-// PRELIMINARY: the Garbage Truck and mini scrubbers scaled to Region units (× 0.005, a 700 cm City
-// Bunny ≈ a 3.5 unit Region Bunny). The Region's own Hazards replace these numbers.
+// ── Region Hazards (Tiers 10–11, 1 world unit = 10 m, Bunny radius ≈ 0.65–4.5 units) ──
+// Region units throughout. Speeds keep roughly the City's ratios to the Bunny's max speed
+// (6 × radius units/s). The Blender models are real-size (cm), so `modelSize` is the model's
+// footprint radius in cm, scaling it to `size` units; heights follow the model (model height ×
+// size / modelSize). Tier 10 Hazards are a threat on arrival (r ≈ 0.65–0.9) and food by late
+// Tier 10 / early Tier 11; the Tier 11 newcomers (Freight Train, Water Bomber) are food before
+// the Incinerator is.
 
-/** Mini compactors summoned by the Incinerator. */
-export const MINI_COMPACTOR: RoombaTuning = {
-  ...MINI_SCRUBBER,
-  size: 0.7,
+/** Landfill Compactor: Roomba behaviour across the fields, with a pull from its packer wheels; spins its roof `beacon`. */
+export const LANDFILL_COMPACTOR: RoombaTuning = {
+  size: 1.05,
+  /** Model 380 cm tall × 1.05 / 360. */
   height: 1.1,
+  mass: 4,
+  damage: 1,
   knockbackCm: 1.75,
-  speed: regionTiers(4.5, 6.5),
+  knockbackRadii: 2.5,
+  speed: regionTiers(1.9, 4),
+  turnInterval: [2.5, 5],
+  turnAngle: 1.8,
+  suctionReach: 0.6,
+  suctionStrength: 0.2,
+  modelId: 'landfill_compactor',
+  /** The model's footprint radius (cm). */
+  modelSize: 360,
+  spinNode: 'beacon',
+  spinRate: 4,
+};
+
+/** Mini compactors summoned by the Incinerator: smaller, faster Landfill Compactors (food for a Tier 11 Bunny). */
+export const MINI_COMPACTOR: RoombaTuning = {
+  ...LANDFILL_COMPACTOR,
+  size: 0.75,
+  height: 0.8,
+  knockbackCm: 1.2,
+  speed: regionTiers(5, 6.5),
   suctionReach: 0.4,
-  modelId: 'floor_scrubber',
+  suctionStrength: 0.1,
+};
+
+/** Snowplow: lane patrol along a road; a hit plows the Bunny off the lane and sheds mass (no sticking). */
+export const SNOWPLOW: LaneTuning = {
+  size: 1.7,
+  /** Model 350 cm tall × 1.7 / 520. */
+  height: 1.15,
+  mass: 4,
+  damage: 1,
+  speed: regionTiers(2.6, 5),
+  laneMin: 6,
+  laneMax: 28,
+  endPause: 0.8,
+  stickSeconds: 0,
+  releaseInvulnerability: 0,
+  shedFraction: 0.07,
+  releaseCm: 2.5,
+  releaseRadii: 3.5,
+  hitPause: 1,
+  modelId: 'snowplow',
+  modelSize: 520,
+  spinNode: null,
+};
+
+/** Freight Train: a long, fast lane; the locomotive knocks the Bunny off the track and sheds mass. */
+export const FREIGHT_TRAIN: LaneTuning = {
+  size: 2.45,
+  /** Model 450 cm tall × 2.45 / 1100. */
+  height: 1,
+  mass: 4,
+  damage: 1,
+  speed: regionTiers(6, 9),
+  laneMin: 20,
+  laneMax: 110,
+  endPause: 1.2,
+  stickSeconds: 0,
+  releaseInvulnerability: 0,
+  shedFraction: 0.08,
+  releaseCm: 3,
+  releaseRadii: 3.5,
+  hitPause: 0.5,
+  modelId: 'freight_train',
+  modelSize: 1100,
+  spinNode: null,
+};
+
+/** Crop Duster: turret circling on the spot, aims a lane, then dusts a burst of pesticide that soaks (slows). */
+export const CROP_DUSTER: TurretTuning = {
+  size: 1.25,
+  /** Model 300 cm tall × 1.25 / 560. */
+  height: 0.67,
+  mass: 3,
+  damage: 1,
+  knockbackCm: 0.6,
+  knockbackRadii: 0.5,
+  range: regionTiers(8, 13),
+  turnRate: 1.4,
+  telegraph: regionTiers(0.8, 0.65),
+  burst: 6,
+  burstGap: 0.09,
+  cooldown: regionTiers(2.4, 1.8),
+  dropletSpeed: regionTiers(8.5, 13),
+  dropletRadius: 0.14,
+  spread: 0.09,
+  nozzleHeight: 0.5,
+  modelId: 'crop_duster',
+  modelSize: 560,
+  aimNode: null,
+  idleSpin: 0.5,
+  wetSeconds: 2,
+  wetMultiplier: 0.55,
+  spinNode: 'propeller',
+  spinRate: 30,
+  dropletColor: '#c6e86b',
+};
+
+/** River Barge: Mop behaviour on the river (its def prefers `river` zones), leaving a wide wake that slows. */
+export const RIVER_BARGE: MopTuning = {
+  size: 1.5,
+  /** Model 300 cm tall × 1.5 / 700. */
+  height: 0.64,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 2.2,
+  knockbackRadii: 3,
+  speed: regionTiers(1.6, 2.6),
+  waypoints: 4,
+  patrolRange: 18,
+  trailSpacing: 0.7,
+  trailLife: 10,
+  trailFade: 0.4,
+  trailRadius: 1.2,
+  slowMultiplier: 0.5,
+  modelId: 'river_barge',
+  modelSize: 700,
+};
+
+/** Water Bomber: amber cone warm-up, then a water drop that blasts the Bunny away (Leaf Blower) and soaks it. */
+export const WATER_BOMBER: AirConeTuning = {
+  size: 2.3,
+  /** Model 700 cm tall × 2.3 / 1400. */
+  height: 1.15,
+  mass: 3.5,
+  damage: 1,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  shedFraction: 0,
+  speed: regionTiers(1.8, 2.6),
+  turnRate: 0.7,
+  coneHalfAngle: 0.42,
+  coneRange: 13,
+  /** Push speed at the nozzle: faster than the Bunny can roll into it. */
+  suctionStrength: 1.15,
+  warmup: 1,
+  on: 1.8,
+  off: 2.6,
+  mode: 'blow',
+  blowDebrisSize: 0.35,
+  debrisSpeed: 10,
+  nozzleOffset: 0.5,
+  modelId: 'water_bomber',
+  modelSize: 1400,
+  wetSeconds: 1.5,
+  wetMultiplier: 0.6,
 };
 
 /**
  * The Incinerator (region boss, Tier 11): rail-mounted waste plant. Needs Bunny radius ≈ 4 units
- * at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.9 after two (Tier 11 starts at 3).
+ * at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 11 starts at 3). Its feed
+ * conveyor sucks the Bunny in while it hunts, its chimney fires ash volleys that shed mass, towns
+ * and the map edge stun its charges, and it summons mini compactors. Absorbing it clears the
+ * Region (the last built Area, so the Run is won).
  */
 export const INCINERATOR: BossTuning = {
-  ...GARBAGE_TRUCK,
   size: 2.8,
+  /** The model's footprint radius (1800 cm × 2.8 / 1800) plus a margin, like the Garbage Truck's. */
   contactRadius: 2.95,
-  height: 2.5,
+  /** Model 2600 cm tall × 2.8 / 1800. */
+  height: 4,
+  mass: 6,
+  damage: 1,
   knockbackCm: 4,
-  huntSpeed: 6.5,
+  knockbackRadii: 3,
+  shedFraction: 0.04,
+  introTime: 3,
+  huntSpeed: 6,
+  turnRate: 1.4,
+  huntTime: [2.5, 4],
   chargeTrigger: 35,
-  chargeSpeed: 25,
+  telegraph: 1.4,
+  chargeSpeed: 24,
   chargeDistance: 45,
-  suctionReach: 3.5,
+  stunTime: 3,
+  recover: 1,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  suctionReach: 4,
+  suctionStrength: 0.35,
+  summonInterval: 14,
+  summonCount: 2,
+  maxMinis: 4,
   miniId: 'mini_compactor',
+  brushSpin: 10,
   onDefeat: 'openExit',
-  modelSize: GARBAGE_TRUCK.modelSize * (2.8 / GARBAGE_TRUCK.size),
+  modelId: 'incinerator',
+  modelSize: 1800,
+  ash: {
+    interval: 5.5,
+    telegraph: 0.9,
+    count: 5,
+    gap: 0.14,
+    speed: 17,
+    radius: 0.32,
+    range: 34,
+    spread: 0.14,
+    damage: 1,
+    knockbackCm: 1,
+    knockbackRadii: 0.6,
+    shedFraction: 0.03,
+    /** The chimney stands ≈ 600 cm behind the centre of the 1800 cm footprint. */
+    originOffset: -0.33,
+  },
 };
 
 export interface TierSpawnTable {
@@ -761,7 +991,10 @@ export const DIRECTOR = {
   graceSeconds: 12,
   /** Speed multiplier ramp within a Tier (start → end). */
   speedRamp: [1, 1.15] as const,
-  /** Spawn ring: inner = view radius + hazard size + margin; width = max(view radius, ringMin). */
+  /**
+   * Spawn ring: inner = view radius + hazard size + margin; width = max(view radius, ringMin).
+   * `spawnMargin`, `ringMin` and `despawnMin` are real cm (divided by the Area's unit).
+   */
   spawnMargin: 15,
   ringMin: 60,
   /** Despawn when farther than max(view radius × despawnViewMul, despawnMin) for despawnDelay seconds. */
@@ -863,16 +1096,35 @@ export interface AreaDirector {
 }
 
 /**
- * Region director (after the city): spawn tables for Bunny Tiers 10–11, indexed from
- * `firstTier`. PLACEHOLDER until the Region Hazards land (no spawns).
+ * Region director (after the city): spawn tables for Bunny Tiers 10–11, indexed from `firstTier`
+ * (the Bunny arrives late in Tier 9, r ≈ 0.65–0.9 units, and uses the Tier 10 table). Region
+ * Hazards are sized for a 0.65–4.5 unit Bunny.
  */
 export const REGION_DIRECTOR = {
   firstTier: 10,
   /** No Hazards for this long after arriving. */
   graceSeconds: 10,
   tiers: [
-    { budget: [0, 0], interval: [8, 6], types: {} },
-    { budget: [0, 0], interval: [8, 6], types: {} },
+    // Tier 10 (arrival, r ≈ 0.65–3): compactors, crop dusters, snowplows and barges, light at
+    // first; all of them turn into food by early Tier 11.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { landfill_compactor: { weight: 1, max: 2 }, crop_duster: { weight: 1, max: 2 }, snowplow: { weight: 0.8, max: 1 }, river_barge: { weight: 0.7, max: 1 } },
+    },
+    // Tier 11 (r ≥ 3): Freight Trains and Water Bombers join, and the Incinerator arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        landfill_compactor: { weight: 1.2, max: 3 },
+        freight_train: { weight: 1, max: 2 },
+        water_bomber: { weight: 0.9, max: 2 },
+        snowplow: { weight: 0.6, max: 1 },
+        river_barge: { weight: 0.5, max: 1 },
+        crop_duster: { weight: 0.4, max: 1 },
+      },
+    },
   ] as readonly TierSpawnTable[],
 };
 

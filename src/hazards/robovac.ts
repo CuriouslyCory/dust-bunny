@@ -13,6 +13,13 @@
  * buildings and the concrete barrier stun its charges, and it summons mini scrubbers. Absorbing
  * it opens the highway on-ramp to the region.
  *
+ * The Incinerator (region, Tier 11, INCINERATOR): rail-mounted waste plant. Its feed conveyor sucks
+ * the Bunny in while it hunts, towns and the map edge stun its charges, it summons mini compactors,
+ * and its chimney fires ash volleys (`BossTuning.ash`): an amber lane locks on the target, then a
+ * burst of ash pellets flies along it; a hit deals damage and sheds mass (`shedMass`). The volley
+ * aims through `aimTarget` (the Decoy pops it, `lure.shot`; nothing while the Bunny is hidden),
+ * only starts on screen, and a planted Tumble takes nothing (its damage filter and `shedMass`).
+ *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
@@ -23,7 +30,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -31,7 +38,11 @@ import { maxSpeedFor } from '../systems/movement';
 import { absorbRadiusFor, activeLure, aimTarget, applySuction, bunnySheltered, hazardFloorFree, hitBunny, knockbackCm, moveCircle, pullLure, randomIn, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, yawOf } from './common';
 import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
 import { HazardManager, hazardRegistry, type HazardDef } from './index';
+import { projectileMaterial, Volley, type Projectile } from './projectiles';
 import { scatterDebris, shedMass } from './shed';
+
+/** The ash volley's phase: waiting, amber lane locked on the target, pellets leaving the chimney. */
+export type AshState = 'idle' | 'telegraph' | 'firing';
 
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
 
@@ -66,6 +77,16 @@ export class RoboVac9000 extends BaseHazard {
   readonly minis = new Set<number>();
   private readonly lane;
   private readonly stunRing;
+  /** Ash volley (bosses with `cfg.ash`): phase, timers, locked aim and pellets in flight. */
+  ashState: AshState = 'idle';
+  private ashTimer = 0;
+  private ashLeft = 0;
+  /** Locked volley direction (yaw) and launch point. */
+  ashYaw = 0;
+  private ashX = 0;
+  private ashZ = 0;
+  private readonly ashVolley: Volley | null = null;
+  private readonly ashLane;
 
   constructor(
     id: number,
@@ -85,6 +106,18 @@ export class RoboVac9000 extends BaseHazard {
     this.lane.visible = false;
     this.stunRing = this.addDecal(ringDecal(1, 1.18, DECAL_COLORS.warn, 0.7));
     this.stunRing.visible = false;
+    const ash = cfg.ash;
+    this.ashLane = this.addDecal(laneDecal(1, (ash?.radius ?? 1) * 4, DECAL_COLORS.warn, 0.45));
+    this.ashLane.visible = false;
+    if (ash) {
+      this.ashVolley = new Volley(this.object3d, projectileMaterial('#3a3836', '#ff6a1a', 1));
+      this.ashTimer = ash.interval;
+    }
+  }
+
+  /** Ash pellets in flight (empty for bosses without `cfg.ash`). */
+  get ash(): readonly Projectile[] {
+    return this.ashVolley?.items ?? [];
   }
 
   /** Visual + contact scale relative to full size. */
@@ -186,12 +219,81 @@ export class RoboVac9000 extends BaseHazard {
         break;
     }
 
+    if (c.ash) this.updateAsh(dt, run, c.ash);
+
     this.stunRing.visible = this.state === 'stunned';
     if (this.stunRing.visible) {
       this.stunRing.place(this.x, this.z);
       this.stunRing.root.scale.set(radius * 1.1, 1, radius * 1.1);
       this.stunRing.pulse(this.time, 0.5);
     }
+  }
+
+  /** Chimney position on the floor plane (`originOffset` × size along the facing). */
+  private ashOrigin(a: AshTuning): { x: number; z: number } {
+    const o = this.size * a.originOffset;
+    return { x: this.x + Math.sin(this.yaw) * o, z: this.z + Math.cos(this.yaw) * o };
+  }
+
+  /**
+   * Ash volley: every `interval` s while hunting or recovering on screen it locks a lane from the
+   * chimney at its aim target, then fires `count` pellets along it. Pellets in the air keep flying.
+   */
+  private updateAsh(dt: number, run: Run, a: AshTuning): void {
+    // A stun, or losing sight of the Bunny (Dust Cloud), cancels a volley that hasn't fired yet.
+    if (this.ashState === 'telegraph' && (this.state === 'stunned' || !aimTarget(run, this.x, this.z, a.range))) {
+      this.ashState = 'idle';
+      this.ashTimer = this.attackTime(run, a.interval) * 0.5;
+    }
+    this.ashTimer -= dt;
+    if (this.ashState === 'idle') {
+      if (this.ashTimer <= 0 && (this.state === 'hunt' || this.state === 'recover')) {
+        const o = this.ashOrigin(a);
+        const t = aimTarget(run, o.x, o.z, a.range);
+        if (t && Math.hypot(t.x - o.x, t.z - o.z) < a.range + t.radius && onScreen(run, this.x, this.z)) {
+          this.ashState = 'telegraph';
+          this.ashTimer = this.attackTime(run, a.telegraph);
+          this.ashYaw = yawOf(t.x - o.x, t.z - o.z);
+          this.emitTelegraph(run, 'ash', this.ashTimer);
+        } else {
+          this.ashTimer = 0.5;
+        }
+      }
+    } else if (this.ashState === 'telegraph') {
+      if (this.ashTimer <= 0) {
+        this.ashState = 'firing';
+        this.ashLeft = a.count;
+        this.ashTimer = 0;
+      }
+    } else if (this.ashTimer <= 0) {
+      const o = this.ashOrigin(a);
+      const yaw = this.ashYaw + this.rng.range(-a.spread, a.spread);
+      this.ashVolley!.fire(o.x, o.z, yaw, this.speed(run, a.speed), a.range, a.radius);
+      this.ashLeft--;
+      this.ashTimer = a.gap;
+      if (this.ashLeft <= 0) {
+        this.ashState = 'idle';
+        this.ashTimer = this.attackTime(run, a.interval);
+      }
+    }
+    if (this.ashState !== 'idle') {
+      // The lane stays locked where the volley was aimed; the launch point follows the chimney.
+      const o = this.ashOrigin(a);
+      this.ashX = o.x;
+      this.ashZ = o.z;
+    }
+    this.ashLane.visible = this.ashState === 'telegraph';
+    if (this.ashLane.visible) {
+      this.ashLane.place(this.ashX, this.ashZ, this.ashYaw);
+      this.ashLane.root.scale.set(1, 1, a.range);
+      this.ashLane.pulse(this.time, 1 - this.ashTimer / this.attackTime(run, a.telegraph));
+    }
+    const b = run.bunny;
+    this.ashVolley!.update(dt, run, this, { radius: a.radius, height: this.cfg.height * this.scale, blockHeight: this.cfg.height }, (p) => {
+      if (hitBunny(run, p.x, p.z, { damage: a.damage, source: this.def.id, knockbackCm: a.knockbackCm, knockbackRadii: a.knockbackRadii, dirX: p.vx, dirZ: p.vz }) && b.alive) {
+        shedMass(run, this.rng, a.shedFraction, this.def.id);
+      }
+    });
   }
 
   /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
@@ -249,7 +351,7 @@ export class RoboVac9000 extends BaseHazard {
     for (let n = 0; n < c.summonCount && this.minis.size < c.maxMinis; n++) {
       for (let tries = 0; tries < 8; tries++) {
         const a = this.rng.range(0, Math.PI * 2);
-        const d = c.contactRadius * this.scale + fp.radius + 9;
+        const d = c.contactRadius * this.scale + fp.radius + 9 / run.unit;
         const x = this.x + Math.cos(a) * d;
         const z = this.z + Math.sin(a) * d;
         if (!hazardFloorFree(run.house, x, z, fp.radius, fp.height)) continue;
@@ -290,6 +392,11 @@ export class RoboVac9000 extends BaseHazard {
       shedMass(run, this.rng, c.shedFraction, this.def.id);
     }
     separateFromBunny(run, this, radius, c.height);
+  }
+
+  override dispose(): void {
+    this.ashVolley?.clear();
+    super.dispose();
   }
 
   override onAbsorbed(run: Run): void {

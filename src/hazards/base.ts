@@ -82,7 +82,8 @@ export abstract class BaseHazard implements Hazard {
     const dx = this.x - b.x;
     const dz = this.z - b.z;
     const d = Math.hypot(dx, dz) || 1;
-    const step = Math.max(30, this.size * 2) * dt;
+    // At least 30 cm/s (in the Area's unit), else two Hazard sizes per second.
+    const step = Math.max(30 / run.unit, this.size * 2) * dt;
     const m = moveCircle(run.house, this.x, this.z, this.size, this.recoilHeight, (dx / d) * step, (dz / d) * step);
     this.x = m.x;
     this.z = m.z;
@@ -113,8 +114,8 @@ export abstract class BaseHazard implements Hazard {
     return d;
   }
 
-  /** Spins a named model node (GLB or procedural) about its local Y axis. */
-  protected spin(name: string, radians: number, axis: 'x' | 'y' = 'y'): void {
+  /** Spins a named model node (GLB or procedural) about a local axis (Y by default). */
+  protected spin(name: string, radians: number, axis: 'x' | 'y' | 'z' = 'y'): void {
     const node = this.model.getObjectByName(name);
     if (node) node.rotation[axis] += radians;
   }
@@ -125,7 +126,7 @@ export abstract class BaseHazard implements Hazard {
     return this.speed(run, tierValue(speeds, run.tier) * (a + (b - a) * tierProgress(run.bunny.realRadius)));
   }
 
-  /** A movement speed (cm/s) scaled by the Run's Difficulty (faster on Arcade and Hardcore). */
+  /** A movement speed (world units/s: cm/s up to the City) scaled by the Run's Difficulty (faster on Arcade and Hardcore). */
   protected speed(run: Run, cmPerSec: number): number {
     return cmPerSec * run.difficulty.hazardSpeed;
   }

@@ -7,14 +7,17 @@
  * after the amber warm-up the cone blasts the Bunny away from the nozzle (stronger up close)
  * and blows small Debris along. It only starts a blast while on screen.
  *
- * The Litter Vacuum (city, LITTER_VACUUM) is a street-scale Upright Vacuum in suction mode.
+ * The Litter Vacuum (city, LITTER_VACUUM) is a street-scale Upright Vacuum in suction mode. The
+ * Water Bomber (region, WATER_BOMBER) is a Leaf Blower whose blast also soaks the Bunny
+ * (`wetSeconds`: the `hazard:wet` slow, like the Mop's trail).
  *
  * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
  * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, type AirConeTuning } from '../data/hazards';
+import { HAZARD_RECOIL, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { isFloorFree } from '../systems/spawner';
@@ -24,6 +27,7 @@ import { maxSpeedFor } from '../systems/movement';
 import { activeLure, aimTarget, applyPush, applySuction, bunnySheltered, hitBunny, moveCircle, pullLure, separateFromBunny, suctionFalloff, suctionReachFor, turnTowards, wrapAngle, yawOf } from './common';
 import { DECAL_COLORS, sectorDecal } from './decals';
 import { hazardRegistry, tuningFootprint, type HazardDef } from './index';
+import { WET_SOURCE } from './mop';
 import { shedMass } from './shed';
 
 type VacuumState = 'off' | 'warmup' | 'on';
@@ -129,8 +133,12 @@ export class UprightVacuum extends BaseHazard {
     if (bunnySheltered(run, c.height) || !inCone(it.x, it.z, this.yaw, c.coneHalfAngle, range, b.x, b.z, b.radius)) return;
     const d = Math.hypot(b.x - it.x, b.z - it.z) - b.radius;
     const falloff = suctionFalloff(d, 0, range);
-    if (this.blows) applyPush(run, it.x, it.z, c.suctionStrength, falloff, dt);
-    else applySuction(run, it.x, it.z, c.suctionStrength, falloff, dt);
+    if (this.blows) {
+      if (applyPush(run, it.x, it.z, c.suctionStrength, falloff, dt) > 0 && c.wetSeconds) {
+        b.stats.removeSource(WET_SOURCE);
+        b.stats.add({ stat: 'speed', op: 'mul', value: c.wetMultiplier ?? 1, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: c.wetSeconds });
+      }
+    } else applySuction(run, it.x, it.z, c.suctionStrength, falloff, dt);
   }
 
   /** Blows loose small Debris in the cone away from the nozzle (stronger up close). */
@@ -195,5 +203,16 @@ export const litterVacuumDef = hazardRegistry.register({
   modelId: LITTER_VACUUM.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, LITTER_VACUUM);
+  },
+});
+
+export const waterBomberDef = hazardRegistry.register({
+  id: 'water_bomber',
+  name: 'Water Bomber',
+  footprint: tuningFootprint(WATER_BOMBER),
+  mass: WATER_BOMBER.mass,
+  modelId: WATER_BOMBER.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, WATER_BOMBER);
   },
 });

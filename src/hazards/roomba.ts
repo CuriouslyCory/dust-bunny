@@ -4,13 +4,15 @@
  * The boss's mini Roombas reuse this with MINI_ROOMBA tuning; outdoors the Robotic Mower
  * (ROBO_MOWER, weak blade pull) and the Street Sweeper's mini mowers (MINI_MOWER) do too, and in
  * the city the Floor Scrubber (FLOOR_SCRUBBER, weak scrub-brush pull, spins `brush`) and the
- * Garbage Truck's mini scrubbers (MINI_SCRUBBER).
+ * Garbage Truck's mini scrubbers (MINI_SCRUBBER); in the region the Landfill Compactor
+ * (LANDFILL_COMPACTOR, packer-wheel pull, spins its roof `beacon`) and the Incinerator's mini
+ * compactors (MINI_COMPACTOR).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { FLOOR_SCRUBBER, HAZARD_RECOIL, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
+import { FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, ROBO_MOWER, ROOMBA, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -164,6 +166,17 @@ export const miniScrubberDef = hazardRegistry.register({
   modelId: MINI_SCRUBBER.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_SCRUBBER);
+  },
+});
+
+export const landfillCompactorDef = hazardRegistry.register({
+  id: 'landfill_compactor',
+  name: 'Landfill Compactor',
+  footprint: tuningFootprint(LANDFILL_COMPACTOR),
+  mass: LANDFILL_COMPACTOR.mass,
+  modelId: LANDFILL_COMPACTOR.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, LANDFILL_COMPACTOR);
   },
 });
 

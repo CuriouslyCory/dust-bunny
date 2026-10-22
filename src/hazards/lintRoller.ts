@@ -5,12 +5,15 @@
  *
  * The Lawn Mower (outdoors) reuses the lane patrol with LAWN_MOWER tuning: no sticking; a hit
  * knocks the Bunny off the lane, mows some fluff off (sheds mass) and the mower stops briefly.
+ * In the region the Snowplow (SNOWPLOW) and the Freight Train (FREIGHT_TRAIN,
+ * long fast lanes) patrol the same way, with real-size models scaled by size / modelSize.
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
-import { LAWN_MOWER, LINT_ROLLER, type LaneTuning } from '../data/hazards';
+import { areaUnit } from '../data/areas';
+import { FREIGHT_TRAIN, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import type { HouseLayout } from '../world/types';
 import { BaseHazard } from './base';
@@ -32,8 +35,8 @@ type LaneShape = Pick<LaneTuning, 'size' | 'height' | 'laneMin' | 'laneMax'>;
 /** Longest axis-aligned lane through (x, z), capped at laneMax; null if shorter than laneMin. */
 export function planLane(house: HouseLayout, x: number, z: number, rng: Rng, c: LaneShape = LINT_ROLLER): Lane | null {
   const axes: Array<[number, number]> = rng.chance(0.5) ? [[1, 0], [0, 1]] : [[0, 1], [1, 0]];
-  // Probe step: 4 cm indoors, coarser for big outdoor lanes.
-  const step = Math.max(4, c.size / 4);
+  // Probe step: 4 cm indoors (in the Area's unit), coarser for big outdoor lanes.
+  const step = Math.max(4 / areaUnit(house.area), c.size / 4);
   let best: Lane | null = null;
   for (const [dx, dz] of axes) {
     const fwd = freeDistance(house, x, z, dx, dz, c.size, c.height, c.laneMax / 2, step);
@@ -66,6 +69,7 @@ export class LintRoller extends BaseHazard {
     private readonly cfg: LaneTuning = LINT_ROLLER,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
+    this.model.scale.setScalar(cfg.size / (cfg.modelSize ?? cfg.size));
     this.lane = planLane(run.house, x, z, rng, cfg);
     this.dir = rng.chance(0.5) ? 1 : -1;
     if (!this.lane) {
@@ -156,8 +160,9 @@ export class LintRoller extends BaseHazard {
     const side = this.sideOf(this.offX, this.offZ);
     b.rooted = 0;
     b.invulnerable = Math.max(b.invulnerable, c.releaseInvulnerability);
-    b.x = this.x + side.x * (this.size + b.radius + 0.5);
-    b.z = this.z + side.z * (this.size + b.radius + 0.5);
+    const gap = 0.5 / run.unit;
+    b.x = this.x + side.x * (this.size + b.radius + gap);
+    b.z = this.z + side.z * (this.size + b.radius + gap);
     knockbackCm(b, side.x, side.z, knockbackDistance(b.radius, c.releaseCm, c.releaseRadii));
   }
 
@@ -220,5 +225,27 @@ export const lawnMowerDef = hazardRegistry.register({
   modelId: LAWN_MOWER.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, LAWN_MOWER);
+  },
+});
+
+export const snowplowDef = hazardRegistry.register({
+  id: 'snowplow',
+  name: 'Snowplow',
+  footprint: tuningFootprint(SNOWPLOW),
+  mass: SNOWPLOW.mass,
+  modelId: SNOWPLOW.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, SNOWPLOW);
+  },
+});
+
+export const freightTrainDef = hazardRegistry.register({
+  id: 'freight_train',
+  name: 'Freight Train',
+  footprint: tuningFootprint(FREIGHT_TRAIN),
+  mass: FREIGHT_TRAIN.mass,
+  modelId: FREIGHT_TRAIN.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, FREIGHT_TRAIN);
   },
 });
