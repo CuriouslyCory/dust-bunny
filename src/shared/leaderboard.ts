@@ -102,7 +102,7 @@ export function runRadiusAllowed(sec: number): number {
   return BOUNDS.maxStartRadius + BOUNDS.maxGrowthPerSec * sec;
 }
 
-/** The Keepsakes tucked in for a Run (0–2 of the Character's own types, grades 1–10). */
+/** The Keepsakes tucked in for a Run (0–2 of the Character's own types, rarities 1–5). */
 export type LeaderboardLoadout = SharedKeepsakeRef[];
 
 /** What the client POSTs to `/api/leaderboard`. */
@@ -301,7 +301,7 @@ function validateCommon(body: unknown) {
   let loadout: LeaderboardLoadout | undefined;
   if (b.loadout !== undefined) {
     const parsed = parseLoadout(b.character, b.loadout);
-    if (!parsed) return fail('loadout', "loadout must hold up to 2 of the character's own Keepsakes, grades 1–10.");
+    if (!parsed) return fail('loadout', "loadout must hold up to 2 of the character's own Keepsakes, rarities 1–5.");
     loadout = parsed;
   }
 

@@ -47,6 +47,8 @@ export class Music {
   /** Hushed: the loop keeps time but plays nothing (the ending's held note and silence). */
   private hushed = false;
   private playing = false;
+  /** Held silent (the intro, until "Grow."): start() does nothing. */
+  private held = false;
   private timer: number | undefined;
   private nextTime = 0;
   private step = 0;
@@ -71,7 +73,7 @@ export class Music {
   }
 
   start(): void {
-    if (this.playing) return;
+    if (this.playing || this.held) return;
     this.playing = true;
     this.a.onReady(() => {
       if (!this.playing || this.timer !== undefined) return;
@@ -79,6 +81,13 @@ export class Music {
       this.step = 0;
       this.timer = window.setInterval(() => this.schedule(), TICK_MS);
     });
+  }
+
+  /** Holds the loop silent (stopping it) or lets it start again. */
+  hold(on: boolean): void {
+    this.held = on;
+    if (on) this.stop();
+    else this.start();
   }
 
   stop(): void {

@@ -15,7 +15,7 @@ import {
   SUPERNOVA_REMNANT,
   tierValue,
 } from '../data/hazards';
-import { gradeForBoss } from '../data/keepsakes';
+import { peakRarityForBoss } from '../data/keepsakes';
 import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
 import { installGameplay } from '../game/assembly';
@@ -126,7 +126,7 @@ describe('galaxy Hazards', () => {
     expect(hazardRegistry.require('sagittarius_a').boss).toBe(true);
     expect(SAGITTARIUS_A.miniId).toBeUndefined();
     expect(AREA_BOSSES.galaxy).toEqual({ id: 'sagittarius_a', tier: 19, arrivalDelay: 4 });
-    expect(gradeForBoss('sagittarius_a')).toBe(8);
+    expect(peakRarityForBoss('sagittarius_a')).toBe(4);
   });
 
   it('galaxy spawn tables list only galaxy Hazards, Supernovae from Tier 19, never Sagittarius A*', () => {

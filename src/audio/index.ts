@@ -12,6 +12,7 @@ import { isBossHazard, onLoose } from '../ui/looseEvents';
 import { settings } from '../ui/settings';
 import { EndingAudio } from './ending';
 import { AudioEngine } from './engine';
+import { IntroSounds } from './introSounds';
 import { Music } from './music';
 import { Sfx } from './sfx';
 import { musicIntensity } from './voices';
@@ -20,6 +21,8 @@ export interface GameAudio {
   engine: AudioEngine;
   sfx: Sfx;
   music: Music;
+  /** The diegetic intro's cues (src/story/intro.ts). */
+  intro: IntroSounds;
 }
 
 let instance: GameAudio | null = null;
@@ -33,7 +36,7 @@ export function installAudio(game: Game): GameAudio {
   const engine = new AudioEngine();
   const sfx = new Sfx(engine);
   const music = new Music(engine);
-  instance = { engine, sfx, music };
+  instance = { engine, sfx, music, intro: new IntroSounds(engine) };
 
   settings.subscribe((s) => engine.setVolumes({ master: s.masterVolume, music: s.musicVolume, sfx: s.sfxVolume, muted: s.muted }));
 

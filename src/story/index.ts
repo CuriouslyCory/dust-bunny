@@ -26,7 +26,7 @@ export function setStoryAvailable(on: boolean): void {
   available = on;
 }
 
-/** True unless this page turned the story off (`?autostart`); the ending plays even with captions off. */
+/** False for the page load when the story is off whatever the settings say (`?autostart`). */
 export function storyAvailable(): boolean {
   return available;
 }
@@ -53,7 +53,17 @@ export function captionDuration(caption: { holds: readonly number[] }): number {
   return caption.holds.reduce((sum, hold) => sum + hold, 0);
 }
 
-/** The intro plays on the first Play of a device while the story is on. */
+let introRequested = false;
+
+/** Settings → Replay intro: the next Run opens with the intro, seen or not. */
+export function requestIntro(on = true): void {
+  introRequested = on;
+}
+
+/**
+ * The intro plays on the first Run of a device while the story is on, and on the Run after Replay
+ * intro (once the page allows the story at all: not under `?autostart`).
+ */
 export function introDue(): boolean {
-  return storyOn() && !settings.value.introSeen;
+  return available && (introRequested || (settings.value.storyCaptions && !settings.value.introSeen));
 }

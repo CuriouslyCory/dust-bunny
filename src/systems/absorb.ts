@@ -43,15 +43,20 @@ export const magnetSystem: System = {
     const r = bunny.radius;
     const reach = r * (1 + m);
     const ratio = bunny.stats.get('absorbRatio');
+    // How far the Bunny moved this tick (movement and hazards run first): Dash, Sugar Rush, knockback, Hazard pushes.
+    const moved = Math.hypot(bunny.x - bunny.prevX, bunny.z - bunny.prevZ);
     scratch.length = 0;
-    debris.query(bunny.x, bunny.z, reach + r * ratio, scratch);
-    const step = TUNING.magnetPullSpeed * r * dt;
+    debris.query(bunny.x, bunny.z, reach + r * ratio + moved, scratch);
+    // Outpace the Bunny's own movement so Debris in the field always closes in and can't be outrun.
+    const step = TUNING.magnetPullSpeed * r * dt + TUNING.magnetChase * moved;
     for (const d of scratch) {
       if (!canAbsorb(r, ratio, d.size) || debrisLocked(bunny, d)) continue;
       const dx = bunny.x - d.x;
       const dz = bunny.z - d.z;
       const dist = Math.hypot(dx, dz);
-      if (dist < 1e-6 || dist > reach + d.size) continue;
+      if (dist < 1e-6) continue;
+      // In the field now, or at the start of the tick (a sudden Dash can carry the Bunny past it).
+      if (dist > reach + d.size && Math.hypot(bunny.prevX - d.x, bunny.prevZ - d.z) > reach + d.size) continue;
       const s = Math.min(step, dist);
       debris.move(d, d.x + (dx / dist) * s, d.z + (dz / dist) * s);
     }

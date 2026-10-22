@@ -74,6 +74,7 @@ blender -b --factory-startup --python tools/blender/render_preview.py -- --unive
 | `laundry_basket` | furniture | `public/models/laundry_basket.glb` | 27 | 48 | 51.2 × 51.2 | +Z | Round wicker basket with clothes piled in. | 1364 | 41.0 |
 | `shoe` | prop | `public/models/shoe.glb` | 14.6 | 11.3 | 10 × 28.7 | +Z | Sneaker, toe points +Z. | 772 | 23.8 |
 | `sock` | prop | `public/models/sock.glb` | 16.7 | 2.8 | 23.2 × 25.2 | +Z | Lying flat, L-shaped. | 548 | 16.6 |
+| `slipper` | prop | `public/models/slipper.glb` | 13.4 | 7.8 | 26.4 × 10.8 | +Z | Right house slipper, used for both feet. Toe along +X like the recipe (not +Z). Thick rounded sole, padded plush toe box over the front half with a fluffy rolled trim and a pom, open heel. The plush upper is the largest material (the one a GLB_TINTED id takes the instance colour on). | 1383 | 30.4 |
 | `toy_car` | prop | `public/models/toy_car.glb` | 6.6 | 4.8 | 6.4 × 12.3 | +Z | Front faces +Z. | 564 | 24.6 |
 | `book` | prop | `public/models/book.glb` | 13.7 | 3.1 | 15.1 × 23 | +Z | Lying flat, spine on -X. | 156 | 7.9 |
 | `tv_remote` | prop | `public/models/tv_remote.glb` | 9.3 | 2.2 | 5 × 18.2 | +Z | IR end points +Z. | 380 | 18.8 |
@@ -213,7 +214,7 @@ blender -b --factory-startup --python tools/blender/render_preview.py -- --unive
 
 \* Continent models: units of 100 m (see Conventions). Globe models: units of 10 km (see Globe scale). Solar System models: units of 0.0001 AU (see Solar scale). Galaxy models: light years (see Galaxy scale). Universe models: units of 100 kly (see Universe scale).
 
-Total: 158 models, 188564 triangles, 7493 KB.
+Total: 159 models, 189947 triangles, 7523 KB.
 
 ![Contact sheet](models-preview.png)
 

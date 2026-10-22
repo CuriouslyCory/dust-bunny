@@ -99,6 +99,11 @@ export class Game {
   ending: { render(renderer: WebGLRenderer): void } | null = null;
   /** Default config for the next Run (character select / shop write here). */
   nextRunConfig: Partial<RunConfig> = {};
+  /**
+   * Screen a new Run opens on instead of `playing` (null: `playing`). The story claims a first
+   * Run for the diegetic intro (src/story/install.ts).
+   */
+  runOpening: ((run: Run) => { screen: string; params?: unknown } | null) | null = null;
 
   private quality: Quality = 'high';
   private readonly lensing = new LensingPass();
@@ -181,8 +186,9 @@ export class Game {
           this.resultsTimer = null;
           if (this.run !== run) return;
           // A throttled tab can fire the caption timers late: wait while it is still playing too.
+          // Checked every 0.25 s at most, so results follow soon after the player dismisses the banner.
           const left = this.hud.bannerLeft;
-          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(show, Math.max(left, 0.1) * 1000);
+          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(show, Math.min(Math.max(left, 0.1), 0.25) * 1000);
           else this.go('results', e);
         };
         this.resultsTimer = window.setTimeout(show, VICTORY_HOLD_SECONDS * 1000);
@@ -230,7 +236,7 @@ export class Game {
 
   /**
    * Creates a fresh Run (disposing the old one) with its gameplay rules installed (see
-   * ./assembly.ts), emits runStarted and switches to the playing screen.
+   * ./assembly.ts), emits runStarted and switches to the playing screen (or `runOpening`'s).
    */
   startRun(config: Partial<RunConfig> = {}): Run {
     this.disposeRun();
@@ -252,7 +258,8 @@ export class Game {
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
     this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId });
-    this.go('playing');
+    const opening = this.runOpening?.(run) ?? null;
+    this.go(opening?.screen ?? 'playing', opening?.params);
     return run;
   }
 
@@ -316,7 +323,7 @@ export class Game {
       this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
       this.universeSky.update(frameDt, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
-      this.lighting.update(this.rig.target, this.rig.distance);
+      this.lighting.update(this.rig.viewTarget, this.rig.viewDistance);
     }
     this.hud.update(frameDt);
     this.renderer.render(this.scene, this.camera);

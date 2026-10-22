@@ -539,6 +539,29 @@
       "category": "prop"
     },
     {
+      "triangles": 1383,
+      "footprintRadius": 13.4,
+      "height": 7.8,
+      "minY": 0.0,
+      "maxY": 7.8,
+      "sizeX": 26.4,
+      "sizeZ": 10.8,
+      "id": "slipper",
+      "file": "models/slipper.glb",
+      "bytes": 31096,
+      "notes": "Right house slipper, used for both feet. Toe along +X like the recipe (not +Z). Thick rounded sole, padded plush toe box over the front half with a fluffy rolled trim and a pom, open heel. The plush upper is the largest material (the one a GLB_TINTED id takes the instance colour on).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop"
+    },
+    {
       "triangles": 564,
       "footprintRadius": 6.6,
       "height": 4.8,

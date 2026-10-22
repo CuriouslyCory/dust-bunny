@@ -21,6 +21,7 @@
   "laundry_basket": { "file": "laundry_basket.glb", "fit": "none" },
   "shoe": { "file": "shoe.glb", "fit": "none" },
   "sock": { "file": "sock.glb", "fit": "none" },
+  "slipper": { "file": "slipper.glb", "fit": "none" },
   "toy_car": { "file": "toy_car.glb", "fit": "none" },
   "book": { "file": "book.glb", "fit": "none" },
   "tv_remote": { "file": "tv_remote.glb", "fit": "none" },

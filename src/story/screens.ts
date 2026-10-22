@@ -1,16 +1,18 @@
 /**
- * Story screens: the intro (static cards over dust motes, docs/story.md "Intro sequence") and the
- * chapter card shown on arriving in an Area (the ending is ./endingScreen.ts). All are built on
- * `storyCards`, a caption player. Captions appear whole (no typewriter): fade in, hold, fade out.
+ * Story screens: the intro (the diegetic camera move inside the new Run, docs/story.md "Intro
+ * sequence", played by ./intro.ts) and the chapter card shown on arriving in an Area (the ending is
+ * ./endingScreen.ts). All are built on `storyCards`, a caption player. Captions appear whole (no
+ * typewriter): fade in, hold, fade out.
  */
 import { STORY, type StoryLine, type StoryPanel } from '../data/story';
 import type { Game } from '../game/game';
 import { button, isKey } from '../ui/components';
 import { h, registerScreen } from '../ui/screens';
-import { dustMotes } from '../ui/screens/builtin';
 import { settings } from '../ui/settings';
-import { CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming, type CardPanel } from './narrator';
 import type { AreaId } from '../world/types';
+import { DiegeticIntro } from './intro';
+import { aimUnderCouch, introStage } from './introScript';
+import { CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming, type CardPanel } from './narrator';
 
 /** Pointer or key held this long skips the whole sequence. */
 const HOLD_TO_SKIP = 0.6;
@@ -21,9 +23,10 @@ export interface StoryCards {
   el: HTMLElement;
   /**
    * Plays `panels` from the first; `done` runs once, when the last ends or on skip. `onPanel`
-   * runs as each panel starts (the ending's shots and sound cues follow it).
+   * runs as each panel starts, with its timing (narrator.ts `panelTiming`; the intro's camera and
+   * the ending's shots and sound cues follow it).
    */
-  play<P extends CardPanel>(panels: readonly P[], done: () => void, onPanel?: (panel: P, index: number) => void): void;
+  play<P extends CardPanel>(panels: readonly P[], done: () => void, onPanel?: (panel: P, index: number, timing: { reveal: number; hold: number }) => void): void;
   /** The panel showing (-1 when idle), seconds since it started and its total hold. */
   readonly index: number;
   readonly elapsed: number;
@@ -42,7 +45,7 @@ export function storyCards(): StoryCards {
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
   let panels: readonly CardPanel[] = [];
-  let onPanel: ((panel: CardPanel, index: number) => void) | undefined;
+  let onPanel: ((panel: CardPanel, index: number, timing: { reveal: number; hold: number }) => void) | undefined;
   let index = -1;
   let t = 0;
   /** The current panel's timing at the reading pace (narrator.ts `panelTiming`). */
@@ -61,7 +64,7 @@ export function storyCards(): StoryCards {
     second.classList.remove('show');
     void el.offsetWidth;
     if (p.caption) first.classList.add('show');
-    onPanel?.(p, i);
+    onPanel?.(p, i, timing);
   };
   const end = (): void => {
     const f = finish;
@@ -88,7 +91,7 @@ export function storyCards(): StoryCards {
     play(next, done, each) {
       panels = next;
       finish = done;
-      onPanel = each as ((panel: CardPanel, index: number) => void) | undefined;
+      onPanel = each as typeof onPanel;
       if (panels.length) show(0);
       else end();
     },
@@ -115,11 +118,6 @@ export function storyCards(): StoryCards {
  */
 export function linePanels(line: StoryLine, heading = ''): StoryPanel[] {
   return captions(line).map((caption, i) => ({ caption, hold: captionHold(caption, i === 0 ? heading : '') + CAPTION_FADE_OUT }));
-}
-
-export interface IntroParams {
-  /** Runs when the intro ends or is skipped (default: back to the title). */
-  done?: () => void;
 }
 
 export interface ChapterParams {
@@ -165,31 +163,47 @@ export function registerStoryScreens(): void {
     simulate: false,
     create(game) {
       const cards = storyCards();
-      let done: (() => void) | undefined;
+      let intro: DiegeticIntro | null = null;
       let active = false;
+      /** Control unlocks: the Run plays on from where the camera is going. */
       const finish = (): void => {
         settings.update({ introSeen: true });
+        intro?.finish();
+        intro = null;
         if (!active) return;
         active = false;
         game.input.sample(); // drop a Dash queued by the Space presses that advanced the cards
-        (done ?? (() => game.go('title')))();
+        if (game.run && !game.run.ended) game.go('playing');
+        else game.go('title');
       };
       const skip = button('Skip', () => cards.skip(), { variant: 'ghost', size: 'sm', icon: '⏭', className: 'story-skip' });
       const hint = h('p', { className: 'story-hint', textContent: 'Space / tap: next · hold to skip' });
-      const el = h('div', { className: 'story-stage story-intro' }, dustMotes(36), cards.el, h('div', { className: 'story-foot' }, hint, skip));
+      const black = h('div', { className: 'story-black' });
+      const el = h('div', { className: 'story-stage story-intro' }, black, cards.el, h('div', { className: 'story-foot' }, hint, skip));
       const press = pressHandler(el, () => cards.advance(), () => cards.skip());
       let keyHeld = 0;
-      /** A key went down on this screen (a key still held from the title's Play must not skip). */
+      /** A key went down on this screen (a key still held from the last menu must not skip). */
       let keyPressedHere = false;
       return {
         el,
-        enter(params) {
-          done = (params as IntroParams | undefined)?.done;
+        enter() {
           active = true;
           keyHeld = 0;
           keyPressedHere = false;
           press.reset();
-          cards.play(STORY.intro, finish);
+          const run = game.run;
+          const stage = run && game.view && run.area === 'house' ? introStage(run.house) : null;
+          if (!run || !stage) {
+            finish();
+            return;
+          }
+          const debris: Array<{ x: number; z: number; size: number }> = [];
+          run.debris.forEach((d) => debris.push(d));
+          intro = new DiegeticIntro(game, aimUnderCouch(stage, debris), settings.value.reducedMotion);
+          black.style.opacity = '1';
+          // Story captions off (only possible from Replay intro): the shots play without the words.
+          el.classList.toggle('captions-off', !settings.value.storyCaptions);
+          cards.play(STORY.intro, finish, (_panel, i, timing) => intro?.enterShot(i, timing.hold, STORY.intro[i]?.caption2 ? timing.reveal : 0));
         },
         exit() {
           // Left some other way: still counts as seen, but doesn't navigate.
@@ -200,6 +214,10 @@ export function registerStoryScreens(): void {
         update(dt) {
           press.tick(dt);
           cards.update(dt);
+          if (intro) {
+            intro.update(dt);
+            black.style.opacity = intro.black.toFixed(3);
+          }
         },
         onKey(e) {
           if (isKey(e, 'Escape')) {

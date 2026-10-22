@@ -16,7 +16,7 @@ import {
   tierValue,
   UNIVERSE_DIRECTOR,
 } from '../data/hazards';
-import { gradeForBoss } from '../data/keepsakes';
+import { peakRarityForBoss } from '../data/keepsakes';
 import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
 import { createRun, installGameplay } from '../game/assembly';
@@ -125,7 +125,7 @@ describe('universe Hazards', () => {
     for (const t of GALAXY_DIRECTOR.tiers) for (const id of UNIVERSE_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
     expect(tierValue(GAMMA_RAY_BURST.range, 21)).toBe(GAMMA_RAY_BURST.range[20]);
     expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', tier: 21, arrivalDelay: 4 });
-    expect(gradeForBoss('the_expansion')).toBe(9);
+    expect(peakRarityForBoss('the_expansion')).toBe(5);
   });
 
   it('the director spawns universe Hazards and brings the Expansion 4 s after Tier 21', () => {

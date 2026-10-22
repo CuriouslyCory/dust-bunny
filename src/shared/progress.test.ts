@@ -86,10 +86,10 @@ describe('universes', () => {
 });
 
 describe('characters (Keepsake Hoards)', () => {
-  const hoards = { lint: { hoard: { 'thick_clog:1': 4, 'reclaim:2': 1 }, bossesBeaten: ['robovac_9000', 'street_sweeper'] } };
+  const hoards = { lint: { hoard: { 'thick_clog:common': 4, 'reclaim:rare': 1 }, bossesBeaten: ['robovac_9000', 'street_sweeper'] } };
 
   it('accepts Hoards, drops empty cells and Characters, and reads a missing field as {}', () => {
-    const v = validateProgress(p({ characters: { ...hoards, zap: { hoard: { 'arc:3': 0 }, bossesBeaten: [] } } }));
+    const v = validateProgress(p({ characters: { ...hoards, zap: { hoard: { 'arc:epic': 0 }, bossesBeaten: [] } } }));
     expect(v).toEqual({ ok: true, value: p({ characters: hoards }) });
     const { characters: _c, ...older } = p();
     const old = validateProgress(older);
@@ -100,14 +100,21 @@ describe('characters (Keepsake Hoards)', () => {
     expect(o2.ok && o2.value.stats.keepsakesEarned).toBe(0);
   });
 
+  it('converts Hoard keys from before rarities (grades 1–10, two to a rarity), adding their counts', () => {
+    // A stored row from before rarities, as production held it.
+    const v = validateProgress(p({ characters: { zap: { hoard: { 'arc:5': 1, 'live_wire:1': 1, 'live_wire:2': 1, 'static_cling:9': 60, 'static_cling:10': 60 }, bossesBeaten: ['ice_sheet'] } } }));
+    expect(v.ok && v.value.characters).toEqual({ zap: { hoard: { 'arc:epic': 1, 'live_wire:common': 2, 'static_cling:mythic': 99 }, bossesBeaten: ['ice_sheet'] } });
+  });
+
   it.each([
     ['unknown character', { bob: { hoard: {}, bossesBeaten: [] } }, 'characters'],
     ['prototype key', JSON.parse('{"constructor": {"hoard": {}, "bossesBeaten": []}}') as unknown, 'characters'],
-    ["another character's type", { lint: { hoard: { 'arc:1': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
-    ['grade 11', { lint: { hoard: { 'reclaim:11': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
-    ['grade 01', { lint: { hoard: { 'reclaim:01': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
-    ['count over 99', { lint: { hoard: { 'reclaim:1': 100 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
-    ['fractional count', { lint: { hoard: { 'reclaim:1': 1.5 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ["another character's type", { lint: { hoard: { 'arc:common': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ['an unknown rarity', { lint: { hoard: { 'reclaim:ultra': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ['old grade 11', { lint: { hoard: { 'reclaim:11': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ['old grade 01', { lint: { hoard: { 'reclaim:01': 1 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ['count over 99', { lint: { hoard: { 'reclaim:common': 100 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
+    ['fractional count', { lint: { hoard: { 'reclaim:common': 1.5 }, bossesBeaten: [] } }, 'characters.lint.hoard'],
     ['missing bossesBeaten', { lint: { hoard: {} } }, 'characters.lint'],
     ['bad boss id', { lint: { hoard: {}, bossesBeaten: ['Robo Vac'] } }, 'characters.lint.bossesBeaten'],
     ['array', [], 'characters'],
@@ -119,10 +126,10 @@ describe('characters (Keepsake Hoards)', () => {
 
   it('compares Hoards in sameProgress but not in compareProgress', () => {
     const a = p({ characters: hoards });
-    const reordered = { lint: { hoard: { 'reclaim:2': 1, 'thick_clog:1': 4 }, bossesBeaten: ['street_sweeper', 'robovac_9000'] } };
+    const reordered = { lint: { hoard: { 'reclaim:rare': 1, 'thick_clog:common': 4 }, bossesBeaten: ['street_sweeper', 'robovac_9000'] } };
     expect(sameProgress(a, p({ characters: reordered }))).toBe(true);
     expect(sameProgress(a, p())).toBe(false);
-    expect(sameProgress(a, p({ characters: { lint: { ...hoards.lint, hoard: { 'thick_clog:1': 1, 'thick_clog:2': 1, 'reclaim:2': 1 } } } }))).toBe(false);
+    expect(sameProgress(a, p({ characters: { lint: { ...hoards.lint, hoard: { 'thick_clog:common': 1, 'thick_clog:rare': 1, 'reclaim:rare': 1 } } } }))).toBe(false);
     // Felting changes the Hoard (and spends Fluff) but no lifetime counter.
     expect(compareProgress(a, p({ fluff: 0 }))).toBe(0);
     expect(isEmptyProgress(p({ fluff: 0, upgrades: {}, characters: hoards }, { runs: 0, totalFluffEarned: 0 }))).toBe(false);

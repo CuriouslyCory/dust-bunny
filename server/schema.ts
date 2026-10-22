@@ -121,7 +121,8 @@ export const SCHEMA: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS area_scores_ip_idx ON area_scores (ip_hash, created_at)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS area_scores_run_idx ON area_scores (run_id, area) WHERE run_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, score DESC) WHERE user_id IS NOT NULL`,
-  // The Run's Loadout: [{ type, grade }] (0–2 Keepsakes); NULL for entries from clients before Keepsakes.
+  // The Run's Loadout: [{ type, rarity }] (0–2 Keepsakes; rows from before rarities hold { type, grade }, 1–10,
+  // read as rarities by parseLoadout); NULL for entries from clients before Keepsakes.
   `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
   `ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
   // Universes the player had ended when the Run was posted (a Universe victory counts itself); NULL for older clients.

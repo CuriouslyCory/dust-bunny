@@ -162,20 +162,26 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     // Its own fake IP, clear of the per-IP limits the other tests use.
     const post = (path: string, body: unknown) =>
       call(leaderboardApi, path, { method: 'POST', body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-loadout` } });
-    const loadout = [{ type: 'thick_clog', grade: 2 }, { type: 'thick_clog', grade: 2 }];
+    const loadout = [{ type: 'thick_clog', rarity: 2 }, { type: 'thick_clog', rarity: 2 }];
+    // Entries also carry `grade` (rarity × 2) for tabs still running the bundle from before rarities.
+    const returned = loadout.map((k) => ({ ...k, grade: k.rarity * 2 }));
     const withLoadout = await post('/api/leaderboard', { ...submission(`T${RUN}k`), loadout });
     expect(withLoadout.status).toBe(201);
-    expect(((await withLoadout.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual(loadout);
+    expect(((await withLoadout.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual(returned);
+    // A client from before rarities sends grades 1–10: stored as rarities.
+    const legacy = await post('/api/leaderboard', { ...submission(`T${RUN}g`), loadout: [{ type: 'thick_clog', grade: 7 }] });
+    expect(legacy.status).toBe(201);
+    expect(((await legacy.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual([{ type: 'thick_clog', rarity: 4, grade: 8 }]);
     const older = await post('/api/leaderboard', submission(`T${RUN}o`));
     expect(older.status).toBe(201);
     expect('loadout' in ((await older.json()) as { entry: object }).entry).toBe(false);
-    const bad = await post('/api/leaderboard', { ...submission(`T${RUN}b`), loadout: [{ type: 'arc', grade: 1 }] });
+    const bad = await post('/api/leaderboard', { ...submission(`T${RUN}b`), loadout: [{ type: 'arc', rarity: 1 }] });
     expect(bad.status).toBe(400);
-    const area = await post('/api/leaderboard?board=house', { ...areaSub(`T${RUN}ka`), loadout: [{ type: 'grounding', grade: 1 }] });
+    const area = await post('/api/leaderboard?board=house', { ...areaSub(`T${RUN}ka`), loadout: [{ type: 'grounding', rarity: 1 }] });
     expect(area.status).toBe(201);
-    expect(((await area.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual([{ type: 'grounding', grade: 1 }]);
+    expect(((await area.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual([{ type: 'grounding', rarity: 1, grade: 2 }]);
     const top = (await (await call(leaderboardApi, '/api/leaderboard?character=lint')).json()) as { entries: Array<{ name: string; loadout?: unknown }> };
-    expect(top.entries.find((e) => e.name === `T${RUN}k`)?.loadout ?? loadout).toEqual(loadout);
+    expect(top.entries.find((e) => e.name === `T${RUN}k`)?.loadout ?? returned).toEqual(returned);
   });
 
   it('stores and returns universes on the Run board; older clients without it are still accepted', async () => {
@@ -277,7 +283,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
   it('syncs Keepsake Hoards and keeps them when an older bundle omits the field', async () => {
     const cookie = await signUp(`Ks${RUN}`);
     const put = async (p: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };
-    const hoards = { lint: { hoard: { 'reclaim:1': 3 }, bossesBeaten: ['robovac_9000'] } };
+    const hoards = { lint: { hoard: { 'reclaim:common': 3 }, bossesBeaten: ['robovac_9000'] } };
     const first = { ...progress(100, 100, 2, {}, hoards), stats: { ...progress(100, 100, 2).stats, keepsakesEarned: 3 } };
     expect(await put(first)).toMatchObject({ accepted: true, progress: first });
     // An older bundle: no characters, no keepsakesEarned.
@@ -289,8 +295,11 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect(res.progress.stats.keepsakesEarned).toBe(3);
     expect(res.progress.fluff).toBe(120);
     // Felting (fewer Keepsakes, less Fluff, same counters) still syncs.
-    const felted = progress(0, 130, 3, {}, { lint: { hoard: { 'reclaim:2': 1 }, bossesBeaten: ['robovac_9000'] } });
+    const felted = progress(0, 130, 3, {}, { lint: { hoard: { 'reclaim:rare': 1 }, bossesBeaten: ['robovac_9000'] } });
     expect((await put(felted)).progress.characters).toEqual(felted.characters);
+    // A bundle from before rarities uploads grades 1–10: stored as rarities, two grades to one.
+    const legacy = progress(0, 140, 4, {}, { lint: { hoard: { 'reclaim:3': 1, 'reclaim:4': 1 }, bossesBeaten: ['robovac_9000'] } });
+    expect((await put(legacy)).progress.characters).toEqual({ lint: { hoard: { 'reclaim:rare': 2 }, bossesBeaten: ['robovac_9000'] } });
     const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...felted, characters: { lint: { hoard: { 'arc:1': 1 }, bossesBeaten: [] } } }) });
     expect(bad.status).toBe(400);
   });

@@ -21,7 +21,7 @@ Rules for every story element:
 - **Skippable and silenceable.** A `Story captions` toggle in Settings (default on). Speedrunners and `?autostart` see none of it.
 - **Variations, not repeats.** Each beat has 2–4 alternate lines; the Run's seeded RNG picks one, so a tenth run still reads fresh.
 - **Captions appear whole.** No typewriter effect (deadpan arrives all at once). Fade in 200 ms, hold, fade out 300 ms. Respect `reduced motion`.
-- **Paced for a 10-year-old reader.** Narration that leaves the screen without input stays up for at least 100 words per minute (0.6 s a word) plus 0.5 s to find it, never less than 2.5 s and with no upper cap (`captionHold` in `src/story/narrator.ts`). A chapter card's first caption also covers its title; an intro panel's second caption waits until the first has been read. Status text (absorb toasts, Pickups, combat banners) is not narration and keeps its own timing.
+- **Paced for a 10-year-old reader.** Narration that leaves the screen without input stays up for at least 100 words per minute (0.6 s a word) plus 0.5 s to find it, never less than 2.5 s and with no upper cap (`captionHold` in `src/story/narrator.ts`). A chapter card's first caption also covers its title; an intro panel's second caption waits until the first has been read. Status text (absorb toasts, Pickups, combat banners) is not narration and keeps its own timing. Faster readers aren't held to it: every in-play banner has a ✕ (Enter on a keyboard) that dismisses it, caption and all, and on phones banners are about half size and sit above the Bunny.
 
 ## The arc at a glance
 
@@ -44,21 +44,21 @@ All nine Acts exist, with their story in the game: Act 8 (the Galaxy) with its s
 
 ## Intro sequence
 
-Plays once per save on the first `Play` (stored as `introSeen` in settings), and from `Settings → Replay intro`. Skipped by `?autostart`. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~38 s unskipped (the ~s column below is the authored minimum; panels hold longer when their captions need it to be read at 100 WPM).
+Plays once per save on the first `Play` (stored as `introSeen` in settings) while Story captions are on, after character select, and from `Settings → Replay intro` on the title (which starts a new Run with it, captions on or off; with them off the shots play without the words). Skipped by `?autostart` (which also hides Replay intro), and by Runs that start outside the House. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~38 s unskipped (the ~s column below is the authored minimum; panels hold longer when their captions need it to be read at 100 WPM).
 
 **It is diegetic.** The intro is a scripted camera move inside the real Run, not a separate cutscene: the Run is created, the camera starts at human eye height, and it dives under the couch to the actual spawn point where the Bunny's eyes open and the player gets control. The transition from story to gameplay is a single continuous shot.
 
 | # | Shot | Caption | Sound | ~s |
 |---|---|---|---|---|
-| 1 | Black. Fade up on the living-room floor from standing height, soft afternoon light, the couch at frame left. Nothing moves. | *This is a floor.* | Room tone. Clock. | 3 |
-| 2 | Same shot. Things fall into frame and land: a crumb, a staple, a coin that rolls and settles, a sock that just drops. Each lands with a small dust puff (existing particle system). | *Every day, people drop things on it.* | Tick · tink · thud, dry and close. | 4 |
-| 3 | A pair of slippers steps through frame, over the debris, and out. The debris stays. | *Nobody picks them up.* | Footsteps, receding. | 3 |
+| 1 | Black. Fade up on the living-room floor from standing height (out in the room, looking at the floor in front of one end of the couch), soft afternoon light, the couch at frame left. Nothing moves. | *This is a floor.* | Room tone. Clock. | 3 |
+| 2 | Same shot; the lens pushes in slowly. Things fall into frame and land: a crumb, a staple, a coin that rolls and settles, a sock that just drops. Each lands with a small dust puff (existing particle system). | *Every day, people drop things on it.* | Tick · tink · thud, dry and close. | 4 |
+| 3 | A pair of slippers steps through frame, over the debris, and out along the couch, between it and the coffee table. The debris stays. | *Nobody picks them up.* | Footsteps, receding. | 3 |
 | 4 | Camera lowers and pushes toward the gap under the couch skirt. The dark under there is full of lint. A faint shimmer runs across it (reuse Zap's `glow`). | *Under the couch, the dropped things reach a density the universe has no procedure for.* | Low hum rises. | 4 |
 | 5 | Hold on the lint pile. The shimmer gathers. Two eyes blink open in it. | *Physics does not have an explanation for what happens next.* <br> *Physics has decided not to look.* | Hum cuts to silence on the blink. | 4 |
 | 6 | Camera settles into the normal gameplay distance for Tier 1 (`cameraScale` 13). HUD fades in around the frame. | *It has one instinct.* <br><br> **Grow.** | A single soft bass note. Music loop starts on "Grow." | 3 |
 | 7 | Control unlocks. No further text; the first Debris absorbed pops the ordinary `+ Lint!` toast. | — | — | — |
 
-Notes: shot 2 is the thesis of the whole game and should be the most carefully animated thing in the intro; shots 1–3 can be a single pre-authored camera pose with the falling Debris placed by the spawner at scripted positions and dropped in from above. If the diegetic version is too much work for a first pass, the same seven captions work as static cards over the title screen's dust-mote background.
+Notes: shot 2 is the thesis of the whole game and should be the most carefully animated thing in the intro. Shots 1–3 are one camera position, worked out from wherever the couch is (`src/story/introScript.ts`); the lens pushes in during shot 2 so things the size of a crumb read from standing height. The dropped things are real Debris once they settle and stay for the Run. Advancing early lands whatever is still falling and lets the camera catch up; skipping always ends at the Tier 1 gameplay camera with control unlocked. With reduced motion the camera does not travel: it holds the close framing for shots 1–3 and cuts through black to the lint pile (shot 4) and to the gameplay camera (shot 6).
 
 ---
 

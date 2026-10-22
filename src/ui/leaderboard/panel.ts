@@ -16,7 +16,7 @@
 import type { GameEvents } from '../../core/events';
 import { CHARACTERS, getCharacter } from '../../data/characters';
 import { getDifficulty, isDifficultyId } from '../../data/difficulty';
-import { getGrade, getKeepsakeType, type KeepsakeTypeId } from '../../data/keepsakes';
+import { keepsakeLabel, getRarity, type KeepsakeTypeId } from '../../data/keepsakes';
 import { getTier } from '../../data/tiers';
 import { AREAS } from '../../data/areas';
 import { formatLength } from '../../data/units';
@@ -104,16 +104,16 @@ function postLine(p: BoardPost | undefined, board: BoardId): { text: string; err
   return { text: `${r.rank ? `Rank #${r.rank}${where}` : `Saved${where}`} · ${r.entry.score.toLocaleString()} pts${how}${r.nameCensored ? ' (name replaced)' : ''}` };
 }
 
-/** Two small grade-coloured pips for an entry's Loadout (none for entries from older clients). */
+/** Two small rarity-coloured pips for an entry's Loadout (none for entries from older clients). */
 function loadoutPips(loadout: AnyLeaderboardEntry['loadout']): HTMLElement | null {
   if (!loadout?.length) return null;
-  const labels = loadout.map((k) => `${getKeepsakeType(k.type as KeepsakeTypeId)?.name ?? k.type} · ${getGrade(k.grade).material}`);
+  const labels = loadout.map((k) => keepsakeLabel({ type: k.type as KeepsakeTypeId, rarity: k.rarity }));
   const el = h(
     'span',
     { className: 'lb-loadout', title: `Tucked in: ${labels.join(', ')}` },
     ...loadout.map((k) => {
       const pip = h('i', { className: 'lb-pip' });
-      pip.style.setProperty('--grade', getGrade(k.grade).color);
+      pip.style.setProperty('--rarity', getRarity(k.rarity).color);
       return pip;
     }),
   );

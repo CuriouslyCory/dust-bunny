@@ -1,5 +1,5 @@
 /**
- * Shared Keepsake UI pieces: grade pips, Keepsake chips, the Ability card's numbers with a
+ * Shared Keepsake UI pieces: rarity pips, Keepsake chips, the Ability card's numbers with a
  * Loadout applied, and the narrator caption line. Used by Character select, Under the Couch,
  * the results "Kept" section, the HUD reward moment and the leaderboard panel.
  */
@@ -7,7 +7,7 @@ import { abilityParamsFor } from '../abilities/keepsakeParams';
 import { getAbility, type AbilityId } from '../data/abilities';
 import {
   describeKeepsake,
-  getGrade,
+  getRarity,
   getKeepsakeType,
   keepsakeLabel,
   loadoutValue,
@@ -77,16 +77,16 @@ export function abilityCard(ability: AbilityId, loadout: Loadout): HTMLElement {
   );
 }
 
-/** A grade-coloured pip with the grade number. */
-export function gradePip(grade: number, opts: { small?: boolean } = {}): HTMLElement {
-  const g = getGrade(grade);
-  const pip = h('span', { className: `ks-pip${opts.small ? ' small' : ''}`, textContent: opts.small ? '' : String(g.grade) });
-  pip.style.setProperty('--grade', g.color);
-  pip.title = `Grade ${g.grade} · ${g.material}`;
+/** A rarity-coloured pip with the rarity's initial (C, R, E, L, M). */
+export function rarityPip(rarity: number, opts: { small?: boolean } = {}): HTMLElement {
+  const g = getRarity(rarity);
+  const pip = h('span', { className: `ks-pip${opts.small ? ' small' : ''}`, textContent: opts.small ? '' : g.name[0]! });
+  pip.style.setProperty('--rarity', g.color);
+  pip.title = g.name;
   return pip;
 }
 
-/** Icon, "Type · Material", grade pip; optional count and description. */
+/** Icon, "Type · Rarity", rarity pip; optional count and description. */
 export function keepsakeChip(ref: KeepsakeRef, opts: { count?: number; describe?: boolean } = {}): HTMLElement {
   const t = getKeepsakeType(ref.type);
   const el = h(
@@ -99,10 +99,10 @@ export function keepsakeChip(ref: KeepsakeRef, opts: { count?: number; describe?
       h('span', { className: 'ks-chip-name', textContent: keepsakeLabel(ref) }),
       ...(opts.describe ? [h('span', { className: 'ks-chip-desc', textContent: describeKeepsake(ref) })] : []),
     ),
-    gradePip(ref.grade),
+    rarityPip(ref.rarity),
     ...(opts.count !== undefined ? [h('span', { className: 'ks-chip-count', textContent: `×${opts.count}` })] : []),
   );
-  el.style.setProperty('--grade', getGrade(ref.grade).color);
+  el.style.setProperty('--rarity', getRarity(ref.rarity).color);
   return el;
 }
 

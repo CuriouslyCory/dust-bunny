@@ -1,21 +1,22 @@
 /**
  * Under the Couch: the Bunny's hoard. One tab per Character; its Hoard as a grid of Keepsake types
- * (rows) by grade (columns) with counts. Choosing a cell shows the Keepsake with Felt (3 → 1 of the
- * next grade, for 40 × g² Fluff, up to one grade above the best boss that Character has beaten)
- * and Shed (discard one for 10 × g² Fluff). Compact (phone) layouts show one list per type with
+ * (rows) by rarity (columns) with counts. Choosing a cell shows the Keepsake with Felt (3 → 1 of the
+ * next rarity, for 160 × r² Fluff, up to one rarity above the peak of the best boss that Character
+ * has beaten) and Shed (discard one for 40 × r² Fluff). Compact (phone) layouts show one list per type with
  * the buttons inline. Reachable from Character select and results (key U).
  *
  * Params: `{ back?: screenId, characterId?: string }` (default back: 'characterSelect').
  * Keys: 1–3 or Q/E switch Character, arrows move in the grid, F felts, X sheds, Esc / U go back.
  */
 import { CHARACTERS, DEFAULT_CHARACTER_ID, getCharacter } from '../../data/characters';
-import { FELT_INPUT, getGrade, keepsakeLabel, keepsakeTypesFor, MAX_GRADE, shedValue, type KeepsakeRef } from '../../data/keepsakes';
+import { AREA_BOSSES } from '../../data/hazards';
+import { BOSS_DROP_TABLES, FELT_INPUT, getRarity, keepsakeLabel, keepsakeTypesFor, MAX_RARITY, peakRarityForBoss, shedValue, type KeepsakeRef } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
 import { hoardEntries } from '../../meta/hoard';
 import { FIRST_FELT_CAPTION } from '../../meta/keepsakes';
 import { getMeta, type FeltCheck } from '../../meta/meta';
 import { COMPACT_QUERY, handleMenuKeys, isCompact, scrollArea } from '../components';
-import { gradePip, keepsakeChip, narrate } from '../keepsakeUi';
+import { rarityPip, keepsakeChip, narrate } from '../keepsakeUi';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
 
@@ -32,14 +33,18 @@ export function feltBlockedReason(characterId: string, check: FeltCheck, count: 
     case 'unknown':
       return 'Not one of this Bunny’s Keepsakes.';
     case 'max':
-      return `${getGrade(MAX_GRADE).material} is the highest grade.`;
+      return `${getRarity(MAX_RARITY).name} is the highest rarity.`;
     case 'count':
       return `Felting takes ${FELT_INPUT} of a kind (you have ${count}).`;
     case 'ceiling': {
       if (check.ceiling === 0) return `Beat a boss with ${name} to start felting.`;
-      const next = getGrade(check.ceiling);
-      const top = `${name} can felt up to grade ${check.ceiling} (${next.material})`;
-      return next.bossId ? `${top}. Beat the ${next.bossName} to go higher.` : `${top} until the ${next.bossName} arrives.`;
+      const top = `${name} can felt up to ${getRarity(check.ceiling).name}`;
+      // The first boss whose peak reaches the ceiling raises it.
+      const boss = BOSS_DROP_TABLES.find((t) => (peakRarityForBoss(t.bossId) ?? 0) >= check.ceiling);
+      if (!boss) return `${top}.`;
+      const the = /^The /.test(boss.bossName) ? `the ${boss.bossName.slice(4)}` : `the ${boss.bossName}`;
+      const built = Object.values(AREA_BOSSES).some((b) => b.id === boss.bossId);
+      return built ? `${top}. Beat ${the} to go higher.` : `${top} until ${the} arrives.`;
     }
     case 'full':
       return `Already holding 99 ${check.result ? keepsakeLabel(check.result) : ''}.`;
@@ -55,9 +60,9 @@ export function registerUnderTheCouchScreen(): void {
       const meta = getMeta();
       let back = 'characterSelect';
       let charIndex = 0;
-      /** Selected cell: type row and grade. */
+      /** Selected cell: type row and rarity. */
       let row = 0;
-      let grade = 1;
+      let rarity = 1;
       let active = false;
       let compact = isCompact();
 
@@ -75,22 +80,17 @@ export function registerUnderTheCouchScreen(): void {
 
       const character = () => CHARACTERS[charIndex]!;
       const types = () => keepsakeTypesFor(character().id);
-      const selected = (): KeepsakeRef => ({ type: types()[row]!.id, grade });
+      const selected = (): KeepsakeRef => ({ type: types()[row]!.id, rarity });
 
-      /** Grades shown as columns: at least 3, up to the ceiling or the best one held. */
-      const columns = (): number => {
-        const id = character().id;
-        let best = 0;
-        for (const k of Object.keys(meta.hoardOf(id).hoard)) best = Math.max(best, Number(k.split(':')[1]) || 0);
-        return Math.min(MAX_GRADE, Math.max(3, meta.feltCeiling(id), best));
-      };
+      /** Rarities shown as columns: all five. */
+      const columns = (): number => MAX_RARITY;
 
       const felt = (ref: KeepsakeRef) => {
         const r = meta.felt(character().id, ref);
         if (!r.ok) return;
         status.textContent = `Felted three into ${keepsakeLabel(r.result)} for ${r.cost} Fluff.`;
         if (r.first) narrate(game, FIRST_FELT_CAPTION);
-        grade = r.result.grade;
+        rarity = r.result.rarity;
         render();
       };
       const shed = (ref: KeepsakeRef) => {
@@ -103,15 +103,15 @@ export function registerUnderTheCouchScreen(): void {
         const id = character().id;
         const count = meta.keepsakeCount(id, ref);
         const check = meta.feltCheck(id, ref);
-        const next = ref.grade < MAX_GRADE ? getGrade(ref.grade + 1) : null;
+        const next = ref.rarity < MAX_RARITY ? getRarity(ref.rarity + 1) : null;
         const feltBtn = h('button', {
           className: `btn btn-sm ${check.ok ? 'btn-primary primary' : 'btn-secondary'} utc-felt`,
           type: 'button',
-          textContent: next ? `Felt ${FELT_INPUT} → ${next.material} · ${check.cost ?? 0} ☁` : 'Felt',
+          textContent: next ? `Felt ${FELT_INPUT} → ${next.name} · ${check.cost ?? 0} ☁` : 'Felt',
         });
         feltBtn.disabled = !check.ok;
         feltBtn.onclick = () => felt(ref);
-        const shedBtn = h('button', { className: `btn btn-sm btn-secondary utc-shed${small ? ' utc-compact-btn' : ''}`, type: 'button', textContent: `Shed 1 · +${shedValue(ref.grade)} ☁` });
+        const shedBtn = h('button', { className: `btn btn-sm btn-secondary utc-shed${small ? ' utc-compact-btn' : ''}`, type: 'button', textContent: `Shed 1 · +${shedValue(ref.rarity)} ☁` });
         if (small) feltBtn.classList.add('utc-compact-btn');
         shedBtn.disabled = count < 1;
         shedBtn.onclick = () => shed(ref);
@@ -135,30 +135,29 @@ export function registerUnderTheCouchScreen(): void {
       const renderGrid = () => {
         const id = character().id;
         const cols = columns();
-        if (grade > cols) grade = cols;
+        if (rarity > cols) rarity = cols;
         const head = h('tr', {}, h('th', { className: 'utc-type-h', textContent: 'Keepsake' }));
         for (let g = 1; g <= cols; g++) {
-          const th = h('th', { className: 'utc-grade-h' }, gradePip(g), h('span', { className: 'utc-material', textContent: getGrade(g).material }));
-          th.title = `Grade ${g}: ${getGrade(g).material} (${getGrade(g).bossName})`;
+          const th = h('th', { className: 'utc-rarity-h' }, rarityPip(g), h('span', { className: 'utc-rarity-name', textContent: getRarity(g).name }));
           head.append(th);
         }
         const ceiling = meta.feltCeiling(id);
         const rows = types().map((t, r) => {
           const tr = h('tr', {}, h('th', { className: 'utc-type', scope: 'row' }, h('span', { className: 'utc-type-icon', textContent: t.icon }), t.name));
           for (let g = 1; g <= cols; g++) {
-            const ref = { type: t.id, grade: g };
+            const ref = { type: t.id, rarity: g };
             const n = meta.keepsakeCount(id, ref);
             const cell = h('button', { className: 'utc-cell', type: 'button', textContent: n ? String(n) : '·' });
-            cell.style.setProperty('--grade', getGrade(g).color);
+            cell.style.setProperty('--rarity', getRarity(g).color);
             cell.classList.toggle('has', n > 0);
             cell.classList.toggle('can-felt', n >= FELT_INPUT && g + 1 <= ceiling);
-            const sel = r === row && g === grade;
+            const sel = r === row && g === rarity;
             cell.classList.toggle('selected', sel);
             cell.setAttribute('aria-pressed', String(sel));
             cell.setAttribute('aria-label', `${keepsakeLabel(ref)}: ${n}`);
             cell.onclick = () => {
               row = r;
-              grade = g;
+              rarity = g;
               render();
               (body.querySelector('.utc-cell.selected') as HTMLElement | null)?.focus({ preventScroll: true });
             };
@@ -184,7 +183,7 @@ export function registerUnderTheCouchScreen(): void {
         body.replaceChildren(
           ...types().map((t) => {
             const owned: KeepsakeRef[] = [];
-            for (let g = 1; g <= MAX_GRADE; g++) if (meta.keepsakeCount(id, { type: t.id, grade: g }) > 0) owned.push({ type: t.id, grade: g });
+            for (let g = 1; g <= MAX_RARITY; g++) if (meta.keepsakeCount(id, { type: t.id, rarity: g }) > 0) owned.push({ type: t.id, rarity: g });
             return h(
               'section',
               { className: 'utc-list' },
@@ -207,7 +206,7 @@ export function registerUnderTheCouchScreen(): void {
         wallet.textContent = `☁ ${meta.fluff} Fluff`;
         const ceiling = meta.feltCeiling(c.id);
         ceilingLine.textContent =
-          ceiling === 0 ? `${c.name} hasn't beaten a boss yet. Bosses leave Keepsakes in the fur of the Bunny that absorbs them.` : `${c.name} can felt up to grade ${ceiling} · ${getGrade(ceiling).material}.`;
+          ceiling === 0 ? `${c.name} hasn't beaten a boss yet. Bosses leave Keepsakes in the fur of the Bunny that absorbs them.` : `${c.name} can felt up to ${getRarity(ceiling).name}.`;
         renderTabs();
         if (compact) renderLists();
         else renderGrid();
@@ -217,7 +216,7 @@ export function registerUnderTheCouchScreen(): void {
       const selectFirstOwned = () => {
         const first = hoardEntries(character().id, meta.hoardOf(character().id))[0];
         row = first ? Math.max(0, types().findIndex((t) => t.id === first.type)) : 0;
-        grade = first?.grade ?? 1;
+        rarity = first?.rarity ?? 1;
       };
 
       const setCharacter = (i: number) => {
@@ -290,10 +289,10 @@ export function registerUnderTheCouchScreen(): void {
           const focusCell = () => (body.querySelector('.utc-cell.selected') as HTMLElement | null)?.focus({ preventScroll: true });
           switch (e.code) {
             case 'ArrowLeft':
-              grade = Math.max(1, grade - 1);
+              rarity = Math.max(1, rarity - 1);
               break;
             case 'ArrowRight':
-              grade = Math.min(columns(), grade + 1);
+              rarity = Math.min(columns(), rarity + 1);
               break;
             case 'ArrowUp':
               row = Math.max(0, row - 1);

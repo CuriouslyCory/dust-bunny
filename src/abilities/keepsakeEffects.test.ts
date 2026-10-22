@@ -15,8 +15,8 @@ import { abilityParamsFor, baseAbilityParams, getAbilitySystem, getKeepsakeEffec
 
 const CHAR: Record<string, string> = Object.fromEntries(['lint', 'tumble', 'zap'].flatMap((c) => keepsakeTypesFor(c).map((t) => [t.id, c])));
 
-/** One Keepsake's value at a grade. */
-const val = (type: KeepsakeTypeId, key: string, grade: number) => effectValue(getKeepsakeType(type)!, key, grade);
+/** One Keepsake's value at a rarity. */
+const val = (type: KeepsakeTypeId, key: string, rarity: number) => effectValue(getKeepsakeType(type)!, key, rarity);
 
 /** A Run with no spawning, the given Loadout and a scriptable input (as in abilities.test.ts). */
 function setup(loadout: Loadout, characterId = CHAR[loadout[0]?.type ?? 'long_strand']!, seed = `keepsakes-${characterId}`) {
@@ -79,7 +79,7 @@ describe('Keepsake params', () => {
       const types = keepsakeTypesFor(c);
       for (const a of types) {
         for (const b of types) {
-          const loadout: Loadout = [{ type: a.id, grade: 4 }, { type: b.id, grade: 7 }];
+          const loadout: Loadout = [{ type: a.id, rarity: 4 }, { type: b.id, rarity: 5 }];
           expect(setup(loadout, c).sys.params).toEqual(abilityParamsFor(loadout));
         }
       }
@@ -87,8 +87,8 @@ describe('Keepsake params', () => {
   });
 
   it('two copies add together', () => {
-    const one = abilityParamsFor([{ type: 'long_reach', grade: 4 }]);
-    const two = abilityParamsFor([{ type: 'long_reach', grade: 4 }, { type: 'long_reach', grade: 4 }]);
+    const one = abilityParamsFor([{ type: 'long_reach', rarity: 4 }]);
+    const two = abilityParamsFor([{ type: 'long_reach', rarity: 4 }, { type: 'long_reach', rarity: 4 }]);
     expect(two.discharge.range - DISCHARGE.range).toBeCloseTo(2 * (one.discharge.range - DISCHARGE.range));
   });
 });
@@ -96,7 +96,7 @@ describe('Keepsake params', () => {
 describe('Lint · Decoy Keepsakes', () => {
   it('Long Strand: the Decoy lasts longer', () => {
     const extra = val('long_strand', 'duration', 4);
-    const { run, input, sys } = setup([{ type: 'long_strand', grade: 4 }]);
+    const { run, input, sys } = setup([{ type: 'long_strand', rarity: 4 }]);
     expect(sys.params.decoy.duration).toBeCloseTo(DECOY.duration + extra);
     const ctl = sys.controller as DecoyAbility;
     input.ability = true;
@@ -109,11 +109,11 @@ describe('Lint · Decoy Keepsakes', () => {
 
   it('Quick Shed: shorter cooldown, never below the Decoy duration', () => {
     const cut = val('quick_shed', 'cooldown', 4);
-    expect(abilityParamsFor([{ type: 'quick_shed', grade: 4 }]).decoy.cooldown).toBeCloseTo(DECOY.cooldown * (1 - cut));
-    const two10 = abilityParamsFor([{ type: 'quick_shed', grade: 10 }, { type: 'quick_shed', grade: 10 }]).decoy;
+    expect(abilityParamsFor([{ type: 'quick_shed', rarity: 4 }]).decoy.cooldown).toBeCloseTo(DECOY.cooldown * (1 - cut));
+    const twoMythic = abilityParamsFor([{ type: 'quick_shed', rarity: 5 }, { type: 'quick_shed', rarity: 5 }]).decoy;
     expect(DECOY.cooldown * (1 - 0.9)).toBeLessThan(DECOY.duration);
-    expect(two10.cooldown).toBe(two10.duration * KEEPSAKE_FLOORS.decoyCooldownPerDuration);
-    const { run, input, sys, events } = setup([{ type: 'quick_shed', grade: 4 }]);
+    expect(twoMythic.cooldown).toBe(twoMythic.duration * KEEPSAKE_FLOORS.decoyCooldownPerDuration);
+    const { run, input, sys, events } = setup([{ type: 'quick_shed', rarity: 4 }]);
     const ended = collect(events, 'abilityEnded');
     input.ability = true;
     run.update(1 / 60);
@@ -123,7 +123,7 @@ describe('Lint · Decoy Keepsakes', () => {
 
   it('Thick Clog: longer clog stun, bosses get half the bonus', () => {
     const bonus = val('thick_clog', 'clogStun', 4);
-    const { run, input, sys, events } = setup([{ type: 'thick_clog', grade: 4 }]);
+    const { run, input, sys, events } = setup([{ type: 'thick_clog', rarity: 4 }]);
     expect(sys.params.decoy.bossClogStun).toBeCloseTo(DECOY.clogStun + bonus / 2);
     const clogs = collect(events, 'hazardClogged');
     input.ability = true;
@@ -136,8 +136,8 @@ describe('Lint · Decoy Keepsakes', () => {
   });
 
   it('Dinner Bell: wanderers home in on the Decoy, aimers lure from further away', () => {
-    const g = 10;
-    const { run, input, sys } = setup([{ type: 'dinner_bell', grade: g }]);
+    const g = 5;
+    const { run, input, sys } = setup([{ type: 'dinner_bell', rarity: g }]);
     const b = run.bunny;
     b.setRadius(5);
     expect(sys.params.decoy.wandererLureRange).toBeCloseTo(val('dinner_bell', 'wanderRange', g));
@@ -158,7 +158,7 @@ describe('Lint · Decoy Keepsakes', () => {
 
   it('Reclaim: a spent Decoy leaves fibre worth its share of the Bunny volume', () => {
     const g = 4;
-    const { run, input, sys } = setup([{ type: 'reclaim', grade: g }]);
+    const { run, input, sys } = setup([{ type: 'reclaim', rarity: g }]);
     const b = run.bunny;
     b.setRadius(8);
     const newDebris = (fn: () => void) => {
@@ -195,7 +195,7 @@ describe('Tumble · Hunker Keepsakes', () => {
   it('Loose Roots: less cooldown per second held, never below 0.2 s', () => {
     const saved = val('loose_roots', 'perSecondSaved', 1);
     expect(saved).toBeGreaterThan(0);
-    const { run, input, sys, events } = setup([{ type: 'loose_roots', grade: 1 }]);
+    const { run, input, sys, events } = setup([{ type: 'loose_roots', rarity: 1 }]);
     const ended = collect(events, 'abilityEnded');
     plant(run, input);
     step(run, 2);
@@ -203,12 +203,12 @@ describe('Tumble · Hunker Keepsakes', () => {
     run.update(1 / 60);
     const held = (sys.controller as HunkerAbility).held;
     expect(ended[0]!.cooldown).toBeCloseTo(HUNKER.cooldownBase + (HUNKER.cooldownPerSecondHeld - saved) * held);
-    expect(abilityParamsFor([{ type: 'loose_roots', grade: 10 }, { type: 'loose_roots', grade: 10 }]).hunker.cooldownPerSecondHeld).toBe(KEEPSAKE_FLOORS.hunkerPerSecondHeld);
+    expect(abilityParamsFor([{ type: 'loose_roots', rarity: 5 }, { type: 'loose_roots', rarity: 5 }]).hunker.cooldownPerSecondHeld).toBe(KEEPSAKE_FLOORS.hunkerPerSecondHeld);
   });
 
   it('Bristle Back: a Hazard touching the planted Tumble is stunned and knocked back', () => {
     const g = 4;
-    const { run, input } = setup([{ type: 'bristle_back', grade: g }]);
+    const { run, input } = setup([{ type: 'bristle_back', rarity: g }]);
     const b = run.bunny;
     b.setRadius(5);
     plant(run, input);
@@ -224,7 +224,7 @@ describe('Tumble · Hunker Keepsakes', () => {
 
   it('Snowball: magnet bonus while planted, on top of the cap', () => {
     const bonus = val('snowball', 'magnet', 4);
-    const { run, input } = setup([{ type: 'snowball', grade: 4 }], 'tumble');
+    const { run, input } = setup([{ type: 'snowball', rarity: 4 }], 'tumble');
     const b = run.bunny;
     b.stats.add({ stat: 'magnetRadius', op: 'add', value: 5, source: 'test:perk' }); // far over the 0.75 cap
     const capped = b.stats.get('magnetRadius');
@@ -258,18 +258,18 @@ describe('Tumble · Hunker Keepsakes', () => {
       return { parts, stunned };
     };
     const base = chipped([]);
-    const dw = chipped([{ type: 'dead_weight', grade: g }]);
+    const dw = chipped([{ type: 'dead_weight', rarity: g }]);
     expect(dw.stunned - base.stunned).toBeCloseTo(val('dead_weight', 'bossStun', g), 1);
     expect(dw.parts - base.parts).toBe(Math.round(val('dead_weight', 'extraParts', g)));
   });
 
-  it('Thick Undercoat: always-on knockback resistance and suction, below the cap (two grade-10 copies land on it)', () => {
+  it('Thick Undercoat: always-on knockback resistance and suction, below the cap (two mythic copies land on it)', () => {
     const g = 4;
-    const { run } = setup([{ type: 'thick_undercoat', grade: g }]);
+    const { run } = setup([{ type: 'thick_undercoat', rarity: g }]);
     const s = run.bunny.stats;
     expect(s.get('knockbackResistance')).toBeCloseTo(0.5 + val('thick_undercoat', 'knockbackResistance', g));
     expect(s.get('suctionMultiplier')).toBeCloseTo(1 - val('thick_undercoat', 'suction', g));
-    const two = setup([{ type: 'thick_undercoat', grade: 10 }, { type: 'thick_undercoat', grade: 10 }]).run.bunny.stats;
+    const two = setup([{ type: 'thick_undercoat', rarity: 5 }, { type: 'thick_undercoat', rarity: 5 }]).run.bunny.stats;
     expect(two.get('knockbackResistance')).toBeCloseTo(0.9);
     expect(two.get('suctionMultiplier')).toBeCloseTo(0.6);
     // A Perk on top can't go past the cap.
@@ -291,7 +291,7 @@ describe('Zap · Discharge Keepsakes', () => {
 
   it('Live Wire: the meter fills faster', () => {
     const rate = val('live_wire', 'fillRate', 4);
-    const { run, sys } = setup([{ type: 'live_wire', grade: 4 }]);
+    const { run, sys } = setup([{ type: 'live_wire', rarity: 4 }]);
     const ctl = sys.controller as DischargeAbility;
     const perSec = maxSpeedFor(run.bunny) / run.bunny.radius;
     roll(run, ctl, (DISCHARGE.fillDistance / perSec) * 0.5);
@@ -300,7 +300,7 @@ describe('Zap · Discharge Keepsakes', () => {
 
   it('Long Reach: targets further away', () => {
     const extra = val('long_reach', 'range', 4);
-    const { run, sys } = setup([{ type: 'long_reach', grade: 4 }]);
+    const { run, sys } = setup([{ type: 'long_reach', rarity: 4 }]);
     const ctl = sys.controller as DischargeAbility;
     const b = run.bunny;
     b.setRadius(6);
@@ -313,7 +313,7 @@ describe('Zap · Discharge Keepsakes', () => {
   });
 
   it('Arc: the Discharge jumps to another non-boss Hazard near the first', () => {
-    const { run, input, sys, events } = setup([{ type: 'arc', grade: 4 }]);
+    const { run, input, sys, events } = setup([{ type: 'arc', rarity: 4 }]);
     const ctl = sys.controller as DischargeAbility;
     const b = run.bunny;
     b.setRadius(6);
@@ -333,7 +333,7 @@ describe('Zap · Discharge Keepsakes', () => {
 
   it('Static Cling: magnet bonus while the meter is at least half full, capped', () => {
     const bonus = val('static_cling', 'magnet', 4);
-    const { run, sys } = setup([{ type: 'static_cling', grade: 4 }]);
+    const { run, sys } = setup([{ type: 'static_cling', rarity: 4 }]);
     const ctl = sys.controller as DischargeAbility;
     const s = run.bunny.stats;
     const m0 = s.get('magnetRadius');
@@ -343,8 +343,8 @@ describe('Zap · Discharge Keepsakes', () => {
     ctl.charge = 0.2;
     roll(run, ctl, 1 / 60);
     expect(s.get('magnetRadius')).toBeCloseTo(m0);
-    // Two grade-10 copies stay under Zap's 2.2 cap, and a Perk on top stops at it.
-    const two = setup([{ type: 'static_cling', grade: 10 }, { type: 'static_cling', grade: 10 }]);
+    // Two mythic copies stay under Zap's 2.2 cap, and a Perk on top stops at it.
+    const two = setup([{ type: 'static_cling', rarity: 5 }, { type: 'static_cling', rarity: 5 }]);
     const ctl2 = two.sys.controller as DischargeAbility;
     two.run.bunny.stats.add({ stat: 'magnetRadius', op: 'add', value: 3, source: 'test:perk' });
     ctl2.charge = 0.6;
@@ -354,13 +354,13 @@ describe('Zap · Discharge Keepsakes', () => {
 
   it('Grounding: less suction while the meter is full, never below the 1.2 floor', () => {
     const cut = val('grounding', 'suction', 4);
-    const { run, sys } = setup([{ type: 'grounding', grade: 4 }]);
+    const { run, sys } = setup([{ type: 'grounding', rarity: 4 }]);
     const ctl = sys.controller as DischargeAbility;
     const s = run.bunny.stats;
     ctl.charge = 1;
     roll(run, ctl, 1 / 60);
     expect(s.get('suctionMultiplier')).toBeCloseTo(1.5 * (1 - cut));
-    const two = setup([{ type: 'grounding', grade: 10 }, { type: 'grounding', grade: 10 }]);
+    const two = setup([{ type: 'grounding', rarity: 5 }, { type: 'grounding', rarity: 5 }]);
     const ctl2 = two.sys.controller as DischargeAbility;
     two.run.bunny.stats.add({ stat: 'suctionMultiplier', op: 'mul', value: 0.5, source: 'test:perk' });
     ctl2.charge = 1;

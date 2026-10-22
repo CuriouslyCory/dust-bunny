@@ -26,9 +26,10 @@
  * boss fight: the Run starts at Tier 5 (fresh Bunny, four random Perks) and stops when the
  * Robo-Vac 9000 is absorbed, so `wins` there is the boss win rate.
  *
- * Keepsakes: --loadout=<type>:<grade>,<type>:<grade> tucks those Keepsakes in for the Character
+ * Keepsakes: --loadout=<type>:<rarity>,<type>:<rarity> tucks those Keepsakes in for the Character
  * they belong to (the other Characters play without); --loadout=max gives every Character its
- * MAX_LOADOUTS pair at grade 6 (the strongest legal pair today, see MAX_LOADOUTS).
+ * MAX_LOADOUTS pair at mythic (the strongest legal pair: any boss can drop mythic, see MAX_LOADOUTS).
+ * Rarities can be given as 1–5 or by id (--loadout=arc:epic).
  *
  * Leaderboards: --validate builds the Run board and Area board submissions every Run would post
  * (submissionFromRun / areaSubmission) and checks them with validateSubmission /
@@ -41,7 +42,7 @@
  *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe]   start in a later area (as after its previous boss)
  *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
  *                 [--difficulty=casual|arcade|hardcore]
- *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]
+ *                 [--loadout=type:rarity,type:rarity | --loadout=max] [--validate]
  *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
  */
 import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from '../src/abilities';
@@ -67,7 +68,7 @@ import { inBeam, Pulsar } from '../src/hazards/pulsar';
 import { SagittariusA } from '../src/hazards/sagittariusA';
 import { getDifficulty } from '../src/data/difficulty';
 import { AREA_BOSSES, BROOM, tierValue } from '../src/data/hazards';
-import { getKeepsakeType, isLoadoutFor, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
+import { getKeepsakeType, isLoadoutFor, MAX_RARITY, rarityFromId, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
 import { areaSubmission, submissionFromRun } from '../src/net/leaderboard';
 import { areaRadiusAllowed, runRadiusAllowed, validateAreaSubmission, validateSubmission } from '../src/shared/leaderboard';
 import { progressRadius } from '../src/shared/score';
@@ -111,8 +112,8 @@ if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo')
 const validate = args.includes('--validate') && !bossOnly && !startArea;
 
 /**
- * --loadout=max: the strongest legal pair per Character, at MAX_GRADE_TODAY. Chosen by playing every pair
- * of that Character's types (duplicates included, 15 per Character) at grade 4 over seeds s1–s30
+ * --loadout=max: the strongest legal pair per Character, at mythic. Chosen by playing every pair
+ * of that Character's types (duplicates included, 15 per Character) at grade 4 of the old 1–10 scale (rare) over seeds s1–s30
  * (--minutes=25, default bot policies) and taking the most wins, then the fastest median win:
  * Lint Quick Shed + Reclaim (18/30 wins, base 12/30), Tumble Snowball ×2 (7/30, base 2/30), Zap
  * Static Cling + Grounding (26/30 in 14:02, base 21/30 in 14:57). Re-run that search when
@@ -123,18 +124,16 @@ const MAX_LOADOUTS: Record<string, readonly [KeepsakeTypeId, KeepsakeTypeId]> = 
   tumble: ['snowball', 'snowball'],
   zap: ['static_cling', 'grounding'],
 };
-/** Highest grade a Hoard can hold today: the Ice Sheet drops grade 5, Felting one above (feltCeiling). */
-const MAX_GRADE_TODAY = 6;
 
 /** The Loadout --loadout gives a Character ([] without the flag or when no listed type is its own). */
 function loadoutFor(characterId: string): Loadout {
   const spec = opt('loadout');
   if (!spec) return [];
-  if (spec === 'max') return (MAX_LOADOUTS[characterId] ?? []).map((type) => ({ type, grade: MAX_GRADE_TODAY }));
+  if (spec === 'max') return (MAX_LOADOUTS[characterId] ?? []).map((type) => ({ type, rarity: MAX_RARITY }));
   const refs: KeepsakeRef[] = spec.split(',').filter(Boolean).map((s) => {
     const [type, g] = s.split(':');
     if (!type || !getKeepsakeType(type)) throw new Error(`--loadout: unknown Keepsake type "${type}"`);
-    return { type: type as KeepsakeTypeId, grade: Number(g ?? MAX_GRADE_TODAY) };
+    return { type: type as KeepsakeTypeId, rarity: g === undefined ? MAX_RARITY : (rarityFromId(g) ?? Number(g)) };
   });
   const own = refs.filter((k) => getKeepsakeType(k.type)!.characterId === characterId);
   if (!isLoadoutFor(characterId, own)) throw new Error(`--loadout: not a legal Loadout for ${characterId}: ${spec}`);
@@ -898,7 +897,7 @@ for (const [id, s] of Object.entries(summary)) {
     const xs = [...s.expansion].sort((a, b) => a - b);
     console.log(`          the Expansion (spawn → collapse): median ${fmt(med(xs))}, range ${fmt(xs[0])}–${fmt(xs[xs.length - 1])} (${xs.length} collapses / ${s.fights.the_expansion} fights), Big Rips ${s.rips}, deaths during the fight ${s.expansionDeaths}`);
   }
-  if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.grade}`).join(', ')}`);
+  if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.rarity}`).join(', ')}`);
   if (validate) {
     const pct = (x: number) => `${Math.round(x * 100)}%`;
     const areas = Object.entries(s.v.areaHeadroom).map(([a, x]) => `${a} ${pct(x)}`).join(', ');
