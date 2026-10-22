@@ -34,6 +34,7 @@
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
  *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city|region|continent|globe]   start in a later area (as after its previous boss)
+ *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
  *                 [--difficulty=casual|arcade|hardcore]
  *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]
  *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
@@ -91,6 +92,8 @@ const fixedPerks = opt('perks')?.split(',');
 const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Boolean).map((s) => [s.split(':')[0]!, Number(s.split(':')[1] ?? 1)]));
 const startArea = AREA_ORDER.includes(opt('area') as AreaId) && opt('area') !== 'house' ? (opt('area') as AreaId) : undefined;
 const difficulty = getDifficulty(opt('difficulty')).id;
+/** --radius=R: the Bunny starts at radius R (the start Area's units), e.g. --area=globe --radius=3.05 starts at Tier 15 for the boss fight. */
+const startRadius = opt('radius') === undefined ? undefined : Number(opt('radius'));
 const seeds = args.filter((a) => !a.startsWith('--'));
 const seedCount = Number(opt('seeds') ?? 0);
 if (seeds.length === 0 && seedCount > 0) for (let i = 1; i <= seedCount; i++) seeds.push(`s${i}`);
@@ -683,6 +686,7 @@ for (const characterId of chars) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
     const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea, loadout }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
+    if (startRadius !== undefined) run.bunny.setRadius(startRadius);
     events.on('hazardSpawned', (e) => {
       if (BOSS_IDS.includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
     });

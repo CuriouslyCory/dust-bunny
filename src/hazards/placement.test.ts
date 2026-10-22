@@ -3,7 +3,14 @@ import { EventBus } from '../core/events';
 import {
   AREA_BOSSES,
   AREA_DIRECTORS,
+  ASAT_LASER,
   BROOM,
+  DEBRIS_SATELLITE,
+  GLOBE_HURRICANE,
+  MINI_SWEEPER,
+  ORBITAL_SWEEPER,
+  REENTRY_BURN,
+  SPACE_STATION,
   CROP_DUSTER,
   DIRECTOR_EXCLUDE,
   FLOOR_SCRUBBER,
@@ -50,7 +57,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ICE_SHEET };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ORBITAL_SWEEPER };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -85,12 +92,12 @@ const TUNING: Record<string, { size: number; height: number }> = {
   volcano: VOLCANO,
   river_surge: RIVER_SURGE,
   hurricane: HURRICANE,
-  // Globe placeholders (Continent behaviours and tuning).
-  debris_satellite: TORNADO,
-  space_station: GLACIER_TONGUE,
-  asat_laser: VOLCANO,
-  reentry_burn: RIVER_SURGE,
-  globe_hurricane: HURRICANE,
+  debris_satellite: DEBRIS_SATELLITE,
+  space_station: SPACE_STATION,
+  asat_laser: ASAT_LASER,
+  reentry_burn: REENTRY_BURN,
+  globe_hurricane: GLOBE_HURRICANE,
+  mini_sweeper: MINI_SWEEPER,
   ...BOSSES,
 };
 

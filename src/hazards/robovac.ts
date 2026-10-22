@@ -25,6 +25,11 @@
  * mountain range stuns it (`crashStuns`), it bulldozes instead of sucking, and it calves icebergs
  * (`summon`, `scatterChips`, `onCrashStun`) instead of summoning minis.
  *
+ * The Orbital Sweeper (globe, Tier 15, ORBITAL_SWEEPER) is a subclass in orbitalSweeper.ts: only a
+ * charge into the Moon stuns it (`chargeBlocked`, `crashStuns`), its capture net pulls at the front
+ * instead of radial suction, its twin lasers are the `ash` volley in red, and it summons a Kessler
+ * swarm of mini sweepers.
+ *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
@@ -112,10 +117,10 @@ export class RoboVac9000 extends BaseHazard {
     this.stunRing = this.addDecal(ringDecal(1, 1.18, DECAL_COLORS.warn, 0.7));
     this.stunRing.visible = false;
     const ash = cfg.ash;
-    this.ashLane = this.addDecal(laneDecal(1, (ash?.radius ?? 1) * 4, DECAL_COLORS.warn, 0.45));
+    this.ashLane = this.addDecal(laneDecal(1, (ash?.radius ?? 1) * 4, ash?.laneColor ?? DECAL_COLORS.warn, 0.45));
     this.ashLane.visible = false;
     if (ash) {
-      this.ashVolley = new Volley(this.object3d, projectileMaterial('#3a3836', '#ff6a1a', 1));
+      this.ashVolley = new Volley(this.object3d, projectileMaterial(ash.color ?? '#3a3836', ash.glow ?? '#ff6a1a', 1));
       this.ashTimer = ash.interval;
     }
   }
@@ -202,6 +207,8 @@ export class RoboVac9000 extends BaseHazard {
         const m = this.drive(run, step, radius, this.chargeDirX, this.chargeDirZ);
         this.charged += step;
         this.lane.setOpacity(0.25);
+        // Something that isn't map geometry may also end the charge (the Orbital Sweeper's Moon).
+        if (!m.hit && this.chargeBlocked(run, radius)) m.hit = true;
         if (m.hit && this.crashStuns(run, radius)) {
           this.lane.visible = false;
           this.hitThisStun = false;
@@ -345,6 +352,14 @@ export class RoboVac9000 extends BaseHazard {
    */
   protected crashStuns(_run: Run, _radius: number): boolean {
     return true;
+  }
+
+  /**
+   * Checked every charge step that didn't hit map geometry: true ends the charge as a crash (then
+   * `crashStuns` decides about the stun). Nothing by default; the Orbital Sweeper runs into the Moon.
+   */
+  protected chargeBlocked(_run: Run, _radius: number): boolean {
+    return false;
   }
 
   /** Called right after a crash stun (the Ice Sheet calves icebergs). */

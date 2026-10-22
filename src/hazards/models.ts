@@ -1,12 +1,14 @@
 /**
  * Procedural fallbacks for the Hazard models (used when no .glb override is loaded).
- * They follow docs/models.md: cm units (Continent ones: Continent units), +Z forward, origin at the floor contact point
+ * They follow docs/models.md: cm units (Continent ones: Continent units, Globe ones: Globe units), +Z forward, origin at the floor contact point
  * (the broom's origin is the top of the handle), and the same named animatable nodes
  * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper / garbage_truck
  * `brush_l` / `brush_r`, robo_mower `blade`, floor_scrubber `brush`, sprinkler and
  * pressure_washer `head`, landfill_compactor `beacon`, incinerator `brush_l` / `brush_r`, tornado
  * `funnel`, hurricane `bands`; all spin about Y; crop_duster `propeller` spins about Z; volcano
- * `crater` at the vent; ice_sheet `calving_l` / `calving_r` hide when they calve).
+ * `crater` at the vent; ice_sheet `calving_l` / `calving_r` hide when they calve; debris_satellite
+ * `panels`, asat_laser `head` and globe_hurricane `spiral` turn about Y; space_station `arrays`
+ * tilts about X; orbital_sweeper `net` and `wings` (flaps about Z)).
  * If another module already registered a factory for an id, it is kept.
  */
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
@@ -50,6 +52,14 @@ export const HAZARD_MODEL_SIZES = {
   river_surge: { w: 2.2, d: 1.9, h: 0.2 },
   hurricane: { w: 5.75, d: 5.75, h: 0.4 },
   ice_sheet: { w: 6, d: 4.02, h: 0.63 },
+  // Globe (public/models/catalog.json in 10 km units ÷ 100: Globe units, as loaded at scale 0.01).
+  debris_satellite: { w: 2.77, d: 1.76, h: 0.8 },
+  space_station: { w: 2.56, d: 1.38, h: 0.33 },
+  asat_laser: { w: 2.36, d: 2.65, h: 0.68 },
+  reentry_burn: { w: 0.92, d: 2.43, h: 0.47 },
+  globe_hurricane: { w: 6.22, d: 6.16, h: 0.42 },
+  orbital_sweeper: { w: 5.04, d: 3.9, h: 1.35 },
+  mini_sweeper: { w: 1, d: 0.54, h: 0.29 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -850,6 +860,178 @@ function iceSheet(): Object3D {
   return g;
 }
 
+// ── Globe Hazards (Globe units: the GLBs are authored at 1 = 10 km and loaded at scale 0.01, so
+// these fallbacks are built directly at the loaded size: 1 unit = 1,000 km) ──
+
+/** A cylinder lying along Z, centred on (x, y, z). */
+function tube(g: Object3D, rFront: number, rBack: number, length: number, x: number, y: number, z: number, m: MeshStandardMaterial, seg = 12): Mesh {
+  const mesh = shadow(new Mesh(new CylinderGeometry(rFront, rBack, length, seg), m));
+  mesh.rotation.x = Math.PI / 2;
+  mesh.position.set(x, y, z);
+  g.add(mesh);
+  return mesh;
+}
+
+/** A named child group at a pivot (the GLB's animatable nodes). */
+function node(g: Object3D, name: string, x: number, y: number, z: number): Group {
+  const n = new Group();
+  n.name = name;
+  n.position.set(x, y, z);
+  g.add(n);
+  return n;
+}
+
+function debrisSatellite(): Object3D {
+  // Dead satellite: gold-foil bus with a dish and a red beacon, loose fragments around it; the
+  // `panels` node (both solar wings, pivot (0, 0.34, 0)) spins about Y.
+  const g = new Group();
+  const foil = mat('#c9a54a', 0.35, 0.6);
+  addBox(g, 0.55, 0.45, 0.5, 0, 0.1, 0, foil);
+  addBox(g, 0.2, 0.42, 0.52, 0.2, 0.11, 0, mat('#3b332a', 0.9));
+  addCylinder(g, 0.22, 0.05, 0.08, 0, 0.55, 0.1, mat('#e8e8e4', 0.4), 14);
+  addCylinder(g, 0.03, 0.03, 0.08, 0, 0.6, -0.15, glow('#ff3b30', 2.4), 8);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.3;
+    const r = 0.6 + (i % 3) * 0.2;
+    const f = addBox(g, 0.12, 0.05, 0.08, Math.cos(a) * r, 0.02, Math.sin(a) * r, mat('#9a9a9a', 0.6, 0.3));
+    f.rotation.y = a;
+  }
+  const panels = node(g, 'panels', 0, 0.34, 0);
+  const panel = mat('#2b3f7a', 0.3, 0.4);
+  for (const s of [-1, 1]) {
+    const w = s > 0 ? 0.75 : 1.05;
+    const wing = addBox(panels, w, 0.03, 0.5, s * (0.3 + w / 2), -0.015, 0, panel);
+    wing.rotation.x = s * 0.44;
+  }
+  return g;
+}
+
+function spaceStation(): Object3D {
+  // Hovering station moving +Z: white modules along Z through the middle, a truss across it (X)
+  // with radiators and red / green nav lights; the `arrays` node (eight solar wings at the truss
+  // ends, pivot (0, 0.24, 0)) tilts about X.
+  const g = new Group();
+  const white = mat('#eef0f2', 0.5, 0.1);
+  tube(g, 0.13, 0.13, 1.1, 0, 0.27, 0, white);
+  tube(g, 0.1, 0.1, 0.3, 0, 0.27, 0.68, mat('#d8dadc', 0.5, 0.1));
+  tube(g, 0.11, 0.11, 0.5, 0.0, 0.27, -0.75, white);
+  addBox(g, 2.5, 0.06, 0.06, 0, 0.21, 0, mat('#a8acb0', 0.5, 0.5));
+  for (const x of [-0.5, 0.5]) addBox(g, 0.08, 0.02, 0.5, x, 0.24, 0, mat('#f6f6f4', 0.6));
+  addCylinder(g, 0.03, 0.03, 0.04, -1.25, 0.22, 0, glow('#ff3b30', 2.4), 8);
+  addCylinder(g, 0.03, 0.03, 0.04, 1.25, 0.22, 0, glow('#3bff6a', 2.4), 8);
+  const arrays = node(g, 'arrays', 0, 0.24, 0);
+  const panel = mat('#2f58b8', 0.3, 0.4);
+  for (const x of [-1.05, -0.8, 0.8, 1.05]) for (const z of [-0.36, 0.36]) addBox(arrays, 0.2, 0.015, 0.5, x, -0.0075, z, panel);
+  return g;
+}
+
+function asatLaser(): Object3D {
+  // Octagonal armoured pad with a hazard ring and solar petals; the `head` node (turret drum,
+  // barrel along +Z with a red lens at the muzzle (0, 0.5, 1.47)) turns about Y from (0, 0.2, 0).
+  const g = new Group();
+  addCylinder(g, 1.2, 1.2, 0.03, 0, 0, 0, mat('#e8c21a', 0.6), 8);
+  addCylinder(g, 1.05, 1.1, 0.12, 0, 0, 0, mat('#5a5e63', 0.7, 0.3), 8);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const p = addBox(g, 0.35, 0.02, 0.5, Math.cos(a) * 0.75, 0.12, Math.sin(a) * 0.75, mat('#2b3f7a', 0.3, 0.4));
+    p.rotation.y = -a;
+  }
+  addCylinder(g, 0.04, 0.04, 0.06, 0.85, 0.12, 0.3, glow('#ff3b30', 2.2), 8);
+  addCylinder(g, 0.04, 0.04, 0.06, -0.85, 0.12, -0.3, glow('#ff3b30', 2.2), 8);
+  const head = node(g, 'head', 0, 0.2, 0);
+  addCylinder(head, 0.32, 0.36, 0.22, 0, -0.08, 0, mat('#6b7076', 0.5, 0.4), 16);
+  addCylinder(head, 0.22, 0.05, 0.1, 0, 0.14, -0.3, mat('#e8e8e4', 0.4), 14);
+  tube(head, 0.06, 0.09, 1.2, 0, 0.3, 0.87, mat('#3a3e44', 0.4, 0.6));
+  tube(head, 0.07, 0.07, 0.04, 0, 0.3, 1.47, glow('#ff3b30', 2.6));
+  return g;
+}
+
+function reentryBurn(): Object3D {
+  // Re-entry capsule moving +Z: a white-hot heat shield at the front, the burnt back shell, an
+  // orange bow-shock collar, and a plasma trail streaming back to −Z.
+  const g = new Group();
+  tube(g, 0.42, 0.28, 0.35, 0, 0.22, 0.85, mat('#3a2e28', 0.9));
+  tube(g, 0.44, 0.44, 0.05, 0, 0.22, 1.05, glow('#fff1c8', 2.6));
+  tube(g, 0.5, 0.36, 0.18, 0, 0.2, 1.0, glow('#ff8a1a', 1.8));
+  const plasma = [glow('#fff3d6', 2.4), glow('#ffa53a', 2), glow('#ff5a1a', 1.8), glow('#c23a1a', 1.2)];
+  for (let i = 0; i < 4; i++) tube(g, 0.3 - i * 0.05, 0.25 - i * 0.05, 0.42, 0, 0.18 - i * 0.03, 0.47 - i * 0.42, plasma[i]!, 10);
+  addBox(g, 0.2, 0.05, 0.3, 0, 0, -1.05, mat('#6b625c', 0.95));
+  return g;
+}
+
+function globeHurricane(): Object3D {
+  // A hurricane seen from orbit: a clear eye (r 0.4) ringed by the eyewall; the `spiral` node
+  // (overcast and five spiral arms out to r ≈ 3.1) spins about Y.
+  const g = new Group();
+  const ring = shadow(new Mesh(new TorusGeometry(0.55, 0.16, 8, 28), mat('#f2f5f8', 0.9)));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.2;
+  g.add(ring);
+  const spiral = node(g, 'spiral', 0, 0, 0);
+  const cloud = [mat('#f4f7f9', 0.95), mat('#c9d2da', 0.95)];
+  for (let arm = 0; arm < 5; arm++) {
+    for (let i = 0; i < 9; i++) {
+      const a = (arm / 5) * Math.PI * 2 + i * 0.3;
+      const r = 0.8 + i * 0.29;
+      const puff = addBox(spiral, 0.7 - i * 0.04, 0.14, 0.34, Math.cos(a) * r, 0.1 + (i % 2) * 0.04, Math.sin(a) * r, cloud[(arm + i) % 2]!);
+      puff.rotation.y = -a;
+    }
+  }
+  rod(spiral, new Vector3(1.6, 0.3, 0.3), new Vector3(1.75, 0.05, 0.55), 0.02, glow('#e8f4ff', 2.4));
+  return g;
+}
+
+function orbitalSweeper(): Object3D {
+  // The Orbital Sweeper, front +Z: a white octagonal bus with red bands, a dust-bin canister on its
+  // back, a red visor eye and a cyan engine glow at the back. `net` (the intake funnel and the
+  // orange capture net domed ahead of it, tip at z ≈ 2.3; pivot (0, 0.58, 0.5)) and `wings` (two
+  // solar wings, 4.9 tip to tip; pivot (0, 0.58, −0.4)). Laser lenses at (±0.8, 0.62, 0.84).
+  const g = new Group();
+  const white = mat('#eef0f2', 0.45, 0.15);
+  const red = mat('#c8282c', 0.5, 0.1);
+  tube(g, 0.45, 0.45, 2.2, 0, 0.58, -0.15, white, 8);
+  for (const z of [0.5, -0.6]) tube(g, 0.47, 0.47, 0.12, 0, 0.58, z, red, 8);
+  addCylinder(g, 0.32, 0.32, 0.45, 0, 0.95, -0.35, mat('#9aa0a6', 0.5, 0.4), 14);
+  addBox(g, 0.5, 0.1, 0.06, 0, 0.72, 0.95, glow('#ff2a1a', 2.4));
+  addCylinder(g, 0.05, 0.05, 0.08, 0, 1.4, -0.35, glow('#ffb020', 2.4), 8);
+  tube(g, 0.3, 0.36, 0.12, 0, 0.58, -1.3, glow('#5fe6ff', 2.2), 12);
+  for (const s of [-1, 1]) {
+    addBox(g, 0.36, 0.05, 0.08, s * 0.62, 0.6, 0.6, mat('#a8acb0', 0.5, 0.5));
+    tube(g, 0.06, 0.08, 0.5, s * 0.8, 0.62, 0.6, mat('#3a3e44', 0.4, 0.6));
+    tube(g, 0.06, 0.06, 0.04, s * 0.8, 0.62, 0.86, glow('#ff3b30', 2.6));
+  }
+  const net = node(g, 'net', 0, 0.58, 0.5);
+  const funnel = tube(net, 1.1, 0.4, 0.6, 0, 0, 0.55, mat('#f2f2ee', 0.5, 0.1), 16);
+  funnel.scale.set(1, 1, 0.45);
+  tube(net, 1.14, 1.14, 0.06, 0, 0, 0.86, mat('#e8c21a', 0.5), 16).scale.set(1, 1, 0.45);
+  tube(net, 0.38, 0.38, 0.03, 0, 0, 0.3, glow('#5fe6ff', 2), 14);
+  const mesh = shadow(new Mesh(new CylinderGeometry(0.05, 1.05, 0.95, 16, 1, true), mat('#ff7a1a', 0.8)));
+  mesh.rotation.x = Math.PI / 2;
+  mesh.scale.set(1, 1, 0.45);
+  mesh.position.set(0, 0, 1.35);
+  net.add(mesh);
+  const wings = node(g, 'wings', 0, 0.58, -0.4);
+  const panel = mat('#2f58b8', 0.3, 0.4);
+  for (const s of [-1, 1]) {
+    addBox(wings, 0.6, 0.04, 0.04, s * 0.75, -0.02, 0, mat('#a8acb0', 0.5, 0.5));
+    for (let i = 0; i < 3; i++) addBox(wings, 0.55, 0.02, 0.75, s * (1.15 + i * 0.58), -0.01, 0, panel);
+  }
+  return g;
+}
+
+function miniSweeper(): Object3D {
+  // Kessler-swarm minion, front +Z: a small white hexagonal bus with a red band, a red eye, an
+  // intake funnel with a cyan throat and two solar wings. Static.
+  const g = new Group();
+  addCylinder(g, 0.18, 0.18, 0.18, 0, 0.06, 0, mat('#eef0f2', 0.45, 0.15), 6);
+  addCylinder(g, 0.185, 0.185, 0.03, 0, 0.13, 0, mat('#c8282c', 0.5, 0.1), 6);
+  addBox(g, 0.1, 0.03, 0.02, 0, 0.18, 0.17, glow('#ff2a1a', 2.4));
+  tube(g, 0.14, 0.07, 0.12, 0, 0.15, 0.24, mat('#f2f2ee', 0.5, 0.1), 12);
+  tube(g, 0.06, 0.06, 0.02, 0, 0.15, 0.2, glow('#5fe6ff', 2), 10);
+  for (const s of [-1, 1]) addBox(g, 0.28, 0.015, 0.2, s * 0.36, 0.15, -0.02, mat('#2f58b8', 0.3, 0.4));
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -881,6 +1063,13 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   river_surge: riverSurge,
   hurricane,
   ice_sheet: iceSheet,
+  debris_satellite: debrisSatellite,
+  space_station: spaceStation,
+  asat_laser: asatLaser,
+  reentry_burn: reentryBurn,
+  globe_hurricane: globeHurricane,
+  orbital_sweeper: orbitalSweeper,
+  mini_sweeper: miniSweeper,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

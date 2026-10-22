@@ -8,16 +8,20 @@
  * In the region the Snowplow (SNOWPLOW) and the Freight Train (FREIGHT_TRAIN,
  * long fast lanes) patrol the same way, with real-size models scaled by size / modelSize. In the
  * continent the Glacier Tongue (GLACIER_TONGUE) creeps along its lane, slow and heavy; its def
- * prefers `tundra` and `mountains` zones (GLACIER_ZONES) when the map has them.
+ * prefers `tundra` and `mountains` zones (GLACIER_ZONES) when the map has them. On the Globe the
+ * Space Station (SPACE_STATION) joins the nearest orbit lane (`layout.routes` of kind 'orbit',
+ * `orbitLane`; the route's copy nearest it on the wrap-around map) and patrols east–west along it.
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, type LaneTuning } from '../data/hazards';
+import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
+import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
+import { nearestImageX, wrapWidth } from '../world/wrap';
 import { BaseHazard } from './base';
 import { bunnySheltered, freeDistance, hitBunny, knockbackCm, knockbackDistance, pushBunnyOut, yawOf } from './common';
 import { DECAL_COLORS, laneDecal } from './decals';
@@ -51,6 +55,71 @@ export function planLane(house: HouseLayout, x: number, z: number, rng: Rng, c: 
   return best;
 }
 
+/**
+ * An east–west lane along the `orbit` route nearest (x, z), if one runs within `reach` of it: the
+ * lane is centred on x (moved onto the route's extent), up to laneMax long and clear of obstacles.
+ * On a map that wraps east–west the route's copy nearest x is used (routes are stored in the
+ * canonical strip), and a route spanning the whole lap has no ends. Null if no route is in reach
+ * or the lane would be shorter than laneMin.
+ */
+export function orbitLane(house: HouseLayout, x: number, z: number, reach: number, c: LaneShape): Lane | null {
+  const width = wrapWidth(house);
+  let best: { x: number; z: number; min: number; max: number; d: number } | null = null;
+  for (const route of house.routes ?? []) {
+    if (route.kind !== 'orbit') continue;
+    const xs = route.points.map((p) => p.x);
+    const span = Math.max(...xs) - Math.min(...xs);
+    const fullLap = width > 0 && span >= width - 1e-6;
+    for (let i = 0; i + 1 < route.points.length; i++) {
+      const a = route.points[i]!;
+      const b = route.points[i + 1]!;
+      if (a.z !== b.z) continue; // orbit lanes run east–west
+      let min = Math.min(a.x, b.x);
+      let max = Math.max(a.x, b.x);
+      if (fullLap) {
+        min = -Infinity;
+        max = Infinity;
+      } else {
+        // The copy of the segment nearest x.
+        const shift = nearestImageX(house, (min + max) / 2, x) - (min + max) / 2;
+        min += shift;
+        max += shift;
+      }
+      // The Hazard's disc stays on the route: its centre keeps `size` from each end.
+      if (max - min < c.size * 2) continue;
+      const px = Math.min(max - c.size, Math.max(min + c.size, x));
+      const d = Math.hypot(px - x, a.z - z);
+      if (d <= reach && (!best || d < best.d)) best = { x: px, z: a.z, min, max, d };
+    }
+  }
+  if (!best) return null;
+  const step = Math.max(4 / areaUnit(house.area), c.size / 4);
+  const half = c.laneMax / 2;
+  const fwd = Math.min(best.max - c.size - best.x, freeDistance(house, best.x, best.z, 1, 0, c.size, c.height, half, step));
+  const back = Math.min(best.x - best.min - c.size, freeDistance(house, best.x, best.z, -1, 0, c.size, c.height, half, step));
+  if (fwd + back < c.laneMin) return null;
+  return { ax: best.x - back, az: best.z, bx: best.x + fwd, bz: best.z, length: fwd + back };
+}
+
+/**
+ * The orbit lane for a lane Hazard spawned at (x, z), and where on it (0..1) it starts. A spawn
+ * point off screen (the director's) stays off screen: if joining the lane would bring it into
+ * view, it starts further along the lane, away from the Bunny.
+ */
+function joinOrbit(run: Run, x: number, z: number, reach: number, c: LaneShape): { lane: Lane; t: number } | null {
+  const lane = orbitLane(run.house, x, z, reach, c);
+  if (!lane) return null;
+  const onLane = (px: number) => (px - lane.ax) / lane.length;
+  if (onScreen(run, x, z, c.size)) return { lane, t: onLane(x) };
+  const away = Math.sign(x - run.bunny.x) || 1;
+  let px = x;
+  for (let i = 0; i < 60 && onScreen(run, px, lane.az, c.size); i++) px += away * c.size;
+  if (px === x) return { lane, t: onLane(x) };
+  // Re-centre the lane on the new start (it stays on the same route).
+  const moved = orbitLane(run.house, px, lane.az, reach, c);
+  return moved ? { lane: moved, t: (px - moved.ax) / moved.length } : { lane, t: Math.min(1, Math.max(0, onLane(px))) };
+}
+
 export class LintRoller extends BaseHazard {
   private readonly lane: Lane | null;
   /** 0..1 position along the lane, and direction (+1 towards b). */
@@ -72,14 +141,17 @@ export class LintRoller extends BaseHazard {
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
     this.model.scale.setScalar(cfg.size / (cfg.modelSize ?? cfg.size));
-    this.lane = planLane(run.house, x, z, rng, cfg);
+    const orbit = cfg.orbitReach ? joinOrbit(run, x, z, cfg.orbitReach, cfg) : null;
+    this.lane = orbit?.lane ?? planLane(run.house, x, z, rng, cfg);
     this.dir = rng.chance(0.5) ? 1 : -1;
     if (!this.lane) {
       this.dead = true;
       return;
     }
     const l = this.lane;
-    this.t = Math.hypot(x - l.ax, z - l.az) / Math.max(1, l.length);
+    this.t = orbit ? orbit.t : Math.hypot(x - l.ax, z - l.az) / Math.max(1, l.length);
+    this.x = l.ax + (l.bx - l.ax) * this.t;
+    this.z = l.az + (l.bz - l.az) * this.t;
     const decal = this.addDecal(laneDecal(l.length + this.size * 2, this.size * 2, DECAL_COLORS.warn, 0.16));
     const ux = (l.bx - l.ax) / l.length;
     const uz = (l.bz - l.az) / l.length;
@@ -265,5 +337,17 @@ export const glacierTongueDef = hazardRegistry.register({
   modelId: GLACIER_TONGUE.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, GLACIER_TONGUE);
+  },
+});
+
+/** Globe lane patrol: a space station along an orbit lane (SPACE_STATION, `orbitReach`). */
+export const spaceStationDef = hazardRegistry.register({
+  id: 'space_station',
+  name: 'Space Station',
+  footprint: tuningFootprint(SPACE_STATION),
+  mass: SPACE_STATION.mass,
+  modelId: SPACE_STATION.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, SPACE_STATION);
   },
 });
