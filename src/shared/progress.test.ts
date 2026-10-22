@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { UPGRADES } from '../data/upgrades';
 import { defaultSave } from '../meta/save';
+import { BOUNDS as LEADERBOARD_BOUNDS } from './leaderboard';
 import { compareProgress, isEmptyProgress, PROGRESS_BOUNDS, sameProgress, validateProgress, type Progress } from './progress';
 
 const p = (over: Partial<Progress> = {}, stats: Partial<Progress['stats']> = {}): Progress => ({
@@ -25,6 +26,11 @@ describe('validateProgress', () => {
     expect(validateProgress({ fluff: fresh.fluff, upgrades: fresh.upgrades, characters: fresh.characters, stats: fresh.stats }).ok).toBe(true);
   });
 
+  it('accepts any best radius the leaderboard accepts (a Globe Run reaches millions of cm)', () => {
+    expect(validateProgress(p({}, { bestRadius: 6_711_310, bestTier: 13 })).ok).toBe(true);
+    expect(PROGRESS_BOUNDS.bestRadius).toBe(LEADERBOARD_BOUNDS.maxRadius.max);
+  });
+
   it.each([
     ['not an object', 'x', 'body'],
     ['negative fluff', p({ fluff: -1 }), 'fluff'],
@@ -36,6 +42,7 @@ describe('validateProgress', () => {
     ['too many upgrades', p({ upgrades: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`u${i}`, 1])) }), 'upgrades'],
     ['missing stats', { fluff: 1, upgrades: {} }, 'stats'],
     ['wins above runs', p({}, { wins: 4 }), 'stats.wins'],
+    ['huge radius', p({}, { bestRadius: PROGRESS_BOUNDS.bestRadius + 1 }), 'stats.bestRadius'],
     ['NaN radius', p({}, { bestRadius: Number.NaN }), 'stats.bestRadius'],
     ['string total', p({}, { totalFluffEarned: '9' as unknown as number }), 'stats.totalFluffEarned'],
   ])('rejects %s', (_, body, field) => {
