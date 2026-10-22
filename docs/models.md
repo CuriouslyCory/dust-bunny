@@ -4,7 +4,7 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 
 ## Conventions
 
-- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. Exception: the Continent models (`tools/blender/continent.py`, rows whose notes start with "Continent scale") use 1 unit = 100 m, because one Continent world unit is 10 km = 100 units; load them at scale 0.01 (`"scale": 0.01` in `manifest.json`). Their sizes in the table are in those 100 m units, and their catalog entries carry `"units": "100 m"`. The Globe models (`tools/blender/globe.py`, notes starting "Globe scale") use 1 unit = 10 km: see Globe scale below.
+- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. Exception: the Continent models (`tools/blender/continent.py`, rows whose notes start with "Continent scale") use 1 unit = 100 m, because one Continent world unit is 10 km = 100 units; load them at scale 0.01 (`"scale": 0.01` in `manifest.json`). Their sizes in the table are in those 100 m units, and their catalog entries carry `"units": "100 m"`. The Globe models (`tools/blender/globe.py`, notes starting "Globe scale") use 1 unit = 10 km: see Globe scale below. The Solar System models (`tools/blender/solar.py`, notes starting "Solar scale") use 1 unit = 0.0001 AU: see Solar scale below.
 - Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).
 - Origin: bottom centre at the floor contact point (y = 0). The broom is the exception: see its row.
 - No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light, street sweeper beacon and headlights, city vehicle beacons, headlights and signs, street lamp and tower crown lights, region vehicle beacons and light bars, the Incinerator's furnace glow, volcano lava, Ice Sheet crevasses and eyes, storm lightning).
@@ -16,18 +16,24 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 
 One Globe world unit is 1,000 km, so the Globe models (`tools/blender/globe.py`) are authored at 1 unit = 10 km (100 units per world unit) and loaded at `"scale": 0.01` in `manifest.json`, the same factor as the Continent. Their catalog entries carry `"units": "10 km"` and their table sizes are in those 10 km units: multiply by 0.01 for Globe world units (the Orbital Sweeper's 255 footprint radius is 2.55 world units). Hazards load with fit none + collapse, so the hazard code scales them by `size / modelSize`; Debris props are normalised to their Debris size by `src/entities/debrisGeometry.ts`, so only their shape and proportions matter (the Moon is drawn at its true 1,737 km radius).
 
+## Solar scale
+
+One Solar System world unit is 0.01 AU, so the Solar System models (`tools/blender/solar.py`) are authored at 1 unit = 0.0001 AU (about 15,000 km; 100 units per world unit) and loaded at `"scale": 0.01` like the Globe models. Their catalog entries carry `"units": "0.0001 AU"` and their table sizes are in those units: multiply by 0.01 for Solar System world units (the Sun's 292 footprint radius is 2.92 world units). Hazards load with fit none + collapse and are scaled by `size / modelSize`; Debris props are normalised to their Debris size, so they are drawn at a convenient size (planets: radius 100, resting on the floor, rings flat in XZ) and only their proportions matter. The camera looks down from the +Z side, so the Sun's eyes, Jupiter's Great Red Spot and Pluto's heart face +Z and upwards. Saturn's and the ice giant's rings count in the footprint radius, so their spheres draw at 1 / 2.28 and 1 / 1.58 of the Debris size.
+
 ## Rebuild
 
 ```sh
 blender -b --factory-startup --python tools/blender/build_all.py
 # only some models:
 blender -b --factory-startup --python tools/blender/build_all.py -- roomba broom
-# contact sheets -> docs/models-preview.png (cm models), docs/models-preview-continent.png and docs/models-preview-globe.png
+# contact sheets -> docs/models-preview.png (cm models), docs/models-preview-continent.png, docs/models-preview-globe.png and docs/models-preview-solar.png
 blender -b --factory-startup --python tools/blender/render_preview.py
 # only the Continent sheet:
 blender -b --factory-startup --python tools/blender/render_preview.py -- --continent
 # only the Globe sheet:
 blender -b --factory-startup --python tools/blender/render_preview.py -- --globe
+# only the Solar System sheet:
+blender -b --factory-startup --python tools/blender/render_preview.py -- --solar
 ```
 
 ## Catalogue
@@ -130,10 +136,30 @@ blender -b --factory-startup --python tools/blender/render_preview.py -- --globe
 | `rocket_stage` | prop | `public/models/rocket_stage.glb` | 36.9 | 19.2 | 18.7 × 69 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Spent upper stage lying on its side, long axis along Z: white tank with an orange insulation band and a black ring, interstage collar at the front (+Z), engine bell at the back (-Z). | 624 | 22.6 |
 | `space_junk` | prop | `public/models/space_junk.glb` | 34.2 | 16 | 60.8 × 55.7 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A loose cluster of orbital junk: a torn solar panel, a bent truss, a spherical tank, a broken dish and scraps of foil and hull. | 616 | 30.8 |
 | `cloud_swirl` | prop | `public/models/cloud_swirl.glb` | 59 | 9.5 | 105.9 × 99.4 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A small weather system seen from orbit: a white cloud spiral (three trailing arms round a puffy core) with blue-grey shading. | 510 | 15.9 |
+| `rogue_asteroid` | hazard | `public/models/rogue_asteroid.glb` | 109.6 | 80.4 | 179.7 × 200.5 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Wanderer that pulls. A lumpy, cratered rock (about 140 x 115 x 80) with four pebbles caught in its gravity at r 80 to 105; scattered gravel on the floor in body. rock node (the rock and its pebbles) spins about its local Y axis; pivot at the rock centre (0, 40, 0). Animated nodes: `rock` at (0.0, 40.0, 0.0). | 1780 | 57.5 |
+| `comet` | hazard | `public/models/comet.glb` | 383.8 | 119.8 | 251.2 × 485.7 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Lane patrol riding an orbit. Comet moving +Z: an icy dark nucleus (radius 60, centre (0, 60, 0)) with frost patches and sunward jets, inside a glowing coma skirt (r 100); a curved cream dust tail and a straight blue ion tail stream back to -Z (to z = -375). tail node (both tails) has its pivot at the nucleus centre (0, 60, 0); scale it along Z / flutter it about Y. Nucleus radius 60 = 0.6 world units at scale 0.01. Animated nodes: `tail` at (0.0, 60.0, 0.0). | 2188 | 58.2 |
+| `sunspot` | hazard | `public/models/sunspot.glb` | 135.9 | 77.4 | 248.5 × 245.1 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Turret that fires flare bolts. A dark umbra (r 50) in a filamentary orange penumbra (r 106) with a bright faculae rim, flat on the floor. head node: a twisted magnetic flux tube (three emissive strands) rising from the back of the umbra and arching forward to a white-hot muzzle facing +Z; it turns about Y through its pivot at the origin (0, 0, 0). Muzzle at (0, 39, 77.3) in model space. Animated nodes: `head` at (0.0, 0.0, 0.0). | 1646 | 59.5 |
+| `sungrazer` | hazard | `public/models/sungrazer.glb` | 152.1 | 51 | 136 × 204.2 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Trail-layer that lays an icy trail. A sungrazing comet moving +Z: a small white-hot head (r 20) at (0, 22, 46) in a yellow coma collar, and a short, wide tail fanning back to -Z (white, then orange, then icy blue at the end, where the trail continues). | 524 | 16.2 |
+| `solar_flare` | hazard | `public/models/solar_flare.glb` | 230.3 | 120.7 | 190.9 × 315.2 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Cone blaster (blow). A bright flare ribbon patch (r 90) with two dark footpoints at x = +-58, and five flame tongues licking out to +Z (to r 240): the blast faces +Z. loop node: an arcade of three twisted emissive plasma loops (the tallest 120 high) rooted at the footpoints; it pulses / spins about its local Y axis; pivot at the origin (0, 0, 0). Animated nodes: `loop` at (0.0, 0.0, 0.0). | 2746 | 88.9 |
+| `the_sun` | hazard | `public/models/the_sun.glb` | 294.4 | 379.1 | 583.3 × 585.3 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Boss. The Sun: a granulated emissive ball (radius 270, squashed to 0.7 in Y: height 378, centre (0, 189, 0)) with a face on the +Z side: two dark sunspot eyes with white glints under heavy penumbra brows (eye centres at (-97.8, 286.3, 209.8) and (97.8, 286.3, 209.8)). corona node: a fringe of 32 flame tongues round the equator (to r 294), spins about Y; pivot at the centre (0, 189, 0). prominence_l / prominence_r: twisted plasma loops over the left (-X) / right (+X) shoulders, pivot on the surface midway between their roots; hide them when chipped. Animated nodes: `corona` at (0.0, 189.0, 0.0), `prominence_l` at (-226.44, 291.94, 0.0), `prominence_r` at (226.44, 291.94, 0.0). | 7768 | 218.1 |
+| `asteroid` | prop | `public/models/asteroid.glb` | 59.5 | 79.9 | 107.3 × 98.3 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A lumpy, cratered potato of grey-brown rock (about 120 x 100 x 80). | 1280 | 33.1 |
+| `asteroid_cluster` | prop | `public/models/asteroid_cluster.glb` | 84.9 | 51.7 | 143.5 × 122.1 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose clump of six rocks of different sizes, the biggest in the middle. | 1920 | 54.4 |
+| `comet_nucleus` | prop | `public/models/comet_nucleus.glb` | 73.9 | 79.6 | 144.1 × 106.3 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A two-lobed dark comet nucleus (a rubber duck like 67P) with white frost patches and two pale sunward jets. | 2600 | 58.0 |
+| `voyager_1` | prop | `public/models/voyager_1.glb` | 101.3 | 37.5 | 146.2 × 148.4 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Voyager 1: a big white dish facing up on a ten-sided silver bus with a gold record, the RTG boom (three dark power cylinders) to -X, the science boom and scan platform to +X, and the long magnetometer boom trailing back to -Z. | 864 | 36.9 |
+| `moonlet` | prop | `public/models/moonlet.glb` | 102 | 201.6 | 200.3 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A small grey moon: a cratered sphere (radius 100) resting on the floor, darker crater floors and pale rims. | 1280 | 32.4 |
+| `icy_moon` | prop | `public/models/icy_moon.glb` | 100.5 | 200.5 | 200.7 × 200.3 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An icy moon like Europa: a white and cream sphere (radius 100) criss-crossed by tan-brown crack lines. | 1760 | 42.2 |
+| `rocky_planet` | prop | `public/models/rocky_planet.glb` | 100 | 200 | 200 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A generic terrestrial planet: a light grey sphere (radius 100) with paler highlands, darker plains and a few craters; light so per-instance tints recolour it (if listed in GLB_TINTED). | 1280 | 30.0 |
+| `mars` | prop | `public/models/mars.glb` | 100 | 200 | 200 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Mars: a rust-red sphere (radius 100) with a white north polar cap on top, dark albedo markings, paler deserts and the dark gash of Valles Marineris on the camera side. | 2376 | 52.3 |
+| `venus` | prop | `public/models/venus.glb` | 100 | 200 | 200 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Venus: a pale yellow sphere (radius 100) wrapped in swirling cloud bands (a sideways Y pattern). | 1512 | 42.3 |
+| `jupiter` | prop | `public/models/jupiter.glb` | 100 | 200 | 200 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Jupiter: a banded sphere (radius 100; cream zones, rust and brown belts, greyish poles) with the Great Red Spot; the axis is tipped 42 deg back (away from the camera) so the bands run across the face the camera sees and the Red Spot sits just below its middle. | 2952 | 73.4 |
+| `saturn` | prop | `public/models/saturn.glb` | 228 | 200 | 456 × 456 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Saturn: a pale gold banded sphere (radius 100) with a flat ring system in the XZ plane round its equator (C ring 124-152, B ring 153-195, Cassini gap, A ring 203-228). | 3920 | 100.2 |
+| `ice_giant` | prop | `public/models/ice_giant.glb` | 158 | 200 | 316 × 316 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An ice giant (Uranus / Neptune): a smooth cyan sphere (radius 100) with faint paler and darker bands and one thin, faint flat ring (r 150-158). | 1960 | 49.2 |
+| `dwarf_planet` | prop | `public/models/dwarf_planet.glb` | 100 | 200 | 200 × 200 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Pluto: a tan sphere (radius 100) with a dark reddish-brown equatorial belt and the pale heart (Tombaugh Regio) on the camera side. | 2656 | 57.2 |
+| `prominence` | prop | `public/models/prominence.glb` | 60 | 84.6 | 120 × 54 | +Z | Solar scale: 1 unit = 0.0001 AU (about 15,000 km), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A chip of the Sun: a twisted plasma arc (yellow, orange and red strands) rooted in a glowing orange patch, spanning X. | 868 | 29.9 |
 
-\* Continent models: units of 100 m (see Conventions). Globe models: units of 10 km (see Globe scale).
+\* Continent models: units of 100 m (see Conventions). Globe models: units of 10 km (see Globe scale). Solar System models: units of 0.0001 AU (see Solar scale).
 
-Total: 96 models, 136090 triangles, 5510 KB.
+Total: 116 models, 179970 triangles, 6700 KB.
 
 ![Contact sheet](models-preview.png)
 
@@ -144,3 +170,7 @@ Continent models (Act 5):
 Globe models (Act 6):
 
 ![Globe contact sheet](models-preview-globe.png)
+
+Solar System models (Act 7):
+
+![Solar System contact sheet](models-preview-solar.png)

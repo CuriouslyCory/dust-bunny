@@ -1,7 +1,8 @@
 """Render contact sheets of the exported models: docs/models-preview.png
 (the cm-scale models), docs/models-preview-continent.png (the Continent
-models, authored at 1 unit = 100 m) and docs/models-preview-globe.png (the
-Globe models, 1 unit = 10 km).
+models, authored at 1 unit = 100 m), docs/models-preview-globe.png (the
+Globe models, 1 unit = 10 km) and docs/models-preview-solar.png (the Solar
+System models, 1 unit = 0.0001 AU).
 
 Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py
@@ -9,6 +10,8 @@ Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py -- --continent
     # only the Globe sheet:
     blender -b --factory-startup --python tools/blender/render_preview.py -- --globe
+    # only the Solar System sheet:
+    blender -b --factory-startup --python tools/blender/render_preview.py -- --solar
     # debug: bigger tiles of some models to /tmp (add --top for a steep,
     # game-camera-like view)
     blender -b --factory-startup --python tools/blender/render_preview.py -- roomba --top
@@ -147,7 +150,7 @@ def render_sheet(scene, models, out_path, tmp, view_dir=VIEW_DIR):
         if m.get("units", "cm") == "cm":
             label = (f"{m['id']}  r{m['footprintRadius']:g} "
                      f"h{m['height']:g} cm  {m['triangles']} tris")
-        else:  # Continent / Globe units, rounded so the label fits the tile
+        else:  # Continent / Globe / Solar units, rounded so the label fits the tile
             label = (f"{m['id']}  r{m['footprintRadius']:.0f} "
                      f"h{m['height']:.0f} ({m['units']})  "
                      f"{m['triangles']} tris")
@@ -196,7 +199,8 @@ def main():
     setup_render(scene)
     sheets = [("cm", "models-preview.png", None),
               ("100 m", "models-preview-continent.png", "--continent"),
-              ("10 km", "models-preview-globe.png", "--globe")]
+              ("10 km", "models-preview-globe.png", "--globe"),
+              ("0.0001 AU", "models-preview-solar.png", "--solar")]
     picked = {flag for _, _, flag in sheets} & flags
     for units, name, flag in sheets:
         if picked and flag not in picked:
