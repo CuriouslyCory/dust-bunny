@@ -4,7 +4,7 @@
  * The variant is seeded by the Run seed and the beat, so it doesn't depend on what else was said.
  */
 import { Rng } from '../core/rng';
-import { STORY, type Story, type StoryLine, type StoryPanel } from '../data/story';
+import { STORY, type Story, type StoryLine } from '../data/story';
 import { getTier } from '../data/tiers';
 import { AREA_ORDER, type AreaId } from '../world/types';
 
@@ -74,12 +74,20 @@ export function captionHold(text: string, heading = ''): number {
   return Math.max(CAPTION_MIN, readingSeconds(`${heading} ${text}`) + CAPTION_LEAD);
 }
 
+/** A card of a scripted sequence: the intro's panels and the ending's shots (which may have no caption). */
+export interface CardPanel {
+  caption?: string;
+  caption2?: string;
+  hold: number;
+}
+
 /**
  * When a scripted panel's second caption appears and how long the panel holds: the second caption
  * waits until the first has been read, and the panel stays until both have (plus the fade out).
- * The authored `hold` is a minimum for pacing.
+ * The authored `hold` is a minimum for pacing; a panel without a caption holds exactly that.
  */
-export function panelTiming(panel: StoryPanel): { reveal: number; hold: number } {
+export function panelTiming(panel: CardPanel): { reveal: number; hold: number } {
+  if (!panel.caption) return { reveal: panel.hold, hold: panel.hold };
   const first = captionHold(panel.caption);
   if (!panel.caption2) return { reveal: first, hold: Math.max(panel.hold, first + CAPTION_FADE_OUT) };
   const reveal = readingSeconds(panel.caption) + CAPTION_LEAD;

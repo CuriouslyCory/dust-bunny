@@ -52,7 +52,7 @@ const HOLE = { footprint: 3.2, height: 5.4 };
 /** Starfield: points on the disc and in the deep field, the camera distance at which every point shows, and the deep field's tile (units). */
 const STARS = { disc: 42000, deep: 26000, ref: 30, deepTile: 640, deepDepth: 0.9 };
 
-function radialTexture(stops: ReadonlyArray<readonly [number, string]>): CanvasTexture {
+export function radialTexture(stops: ReadonlyArray<readonly [number, string]>): CanvasTexture {
   const S = 256;
   const c = document.createElement('canvas');
   c.width = c.height = S;
@@ -116,12 +116,13 @@ void main() {
   gl_FragColor = vec4(vColor * (core + halo) * vAlpha, 1.0);
 }`;
 
-interface StarLayer {
+export interface StarLayer {
   points: Points;
   uniforms: Record<string, { value: unknown }>;
 }
 
-function starLayer(n: number, fill: (i: number, pos: Float32Array, col: Float32Array, size: Float32Array) => void, deep: boolean): StarLayer {
+/** Instanced points (the Galaxy's stars, the Universe's galaxies): `deep` layers are tiled round the camera target every `tile` units. */
+export function starLayer(n: number, fill: (i: number, pos: Float32Array, col: Float32Array, size: Float32Array) => void, deep: boolean, tile = STARS.deepTile): StarLayer {
   const pos = new Float32Array(n * 3);
   const col = new Float32Array(n * 3);
   const size = new Float32Array(n);
@@ -140,7 +141,7 @@ function starLayer(n: number, fill: (i: number, pos: Float32Array, col: Float32A
     uPixelRatio: { value: 1 },
     uTime: { value: 0 },
     uCenter: { value: new Vector3() },
-    uTile: { value: deep ? STARS.deepTile : 0 },
+    uTile: { value: deep ? tile : 0 },
   };
   const mat = new ShaderMaterial({
     uniforms,

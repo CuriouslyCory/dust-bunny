@@ -54,8 +54,10 @@ export interface RunStats {
   globeCleared?: boolean;
   /** True once the Sun was absorbed (the heliopause gate to the galaxy opened). */
   solarSystemCleared?: boolean;
-  /** True once Sagittarius A* was absorbed. */
+  /** True once Sagittarius A* was absorbed (the intergalactic gate out of the halo opened). */
   galaxyCleared?: boolean;
+  /** True once the Expansion collapsed (the Run was won). */
+  universeCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
   /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */

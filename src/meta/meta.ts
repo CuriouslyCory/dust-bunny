@@ -8,6 +8,7 @@ import type { DifficultyId } from '../data/difficulty';
 import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_RARITY, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
+import { AREA_ORDER } from '../world/types';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
 import { browserStorage, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore } from './save';
@@ -25,6 +26,16 @@ export interface RunAward {
   fluff: number;
   total: number;
   newBestRadius: boolean;
+  /** The player's Universes count after this Run (one more than before after a Universe victory). */
+  universes: number;
+}
+
+/** The Area whose `victory` ends the story (the Universe; the only Area that emits one). */
+const LAST_AREA = AREA_ORDER[AREA_ORDER.length - 1]!;
+
+/** True for a Run that won the last Area: it counts one more Universe. */
+export function endsUniverse(e: Pick<GameEvents['runEnded'], 'reason' | 'stats'>): boolean {
+  return e.reason === 'victory' && e.stats.area === LAST_AREA;
 }
 
 export type BuyResult = { ok: true; level: number; cost: number } | { ok: false; reason: 'maxed' | 'unknown' | 'poor' };
@@ -96,9 +107,15 @@ export class MetaProgress {
     return upgradeModifiers(this.store.data.upgrades);
   }
 
+  /** Universe victories so far (the title shows "Universe N" with N = universes + 1). */
+  get universes(): number {
+    return this.store.data.universes;
+  }
+
   /**
-   * Credits Fluff and records stats for a finished Run. Idempotent per runEnded payload, so
-   * both the results screen and the event listener may call it.
+   * Credits Fluff and records stats for a finished Run, and counts a Universe victory in
+   * `universes`. Idempotent per runEnded payload, so both the results screen and the event
+   * listener may call it.
    */
   awardRun(e: GameEvents['runEnded']): RunAward {
     const prev = this.awarded.get(e);
@@ -112,8 +129,9 @@ export class MetaProgress {
       d.stats.bestRadius = Math.max(d.stats.bestRadius, e.stats.maxRadius);
       d.stats.bestTier = Math.max(d.stats.bestTier, e.stats.tierReached);
       d.stats.totalFluffEarned += fluff;
+      if (endsUniverse(e)) d.universes++;
     });
-    const award = { fluff, total: this.store.data.fluff, newBestRadius };
+    const award = { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
     this.awarded.set(e, award);
     return award;
   }

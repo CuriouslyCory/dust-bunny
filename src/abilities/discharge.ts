@@ -6,8 +6,9 @@
  * fillDistance; below drainSpeedFraction of max speed it drains drainPerSec per second.
  *
  * When full, the nearest Hazard whose edge is within `range` Bunny radii of the Bunny's surface
- * is the target (spark marker). Absorbable Hazards, Grounded bosses and bosses inside the 6 s
- * Ability-stun limit are skipped. Tapping shorts it out and empties the meter:
+ * is the target (spark marker). Intangible Hazards (the Expansion), absorbable Hazards, Grounded
+ * bosses and bosses inside the 6 s Ability-stun limit are skipped. Tapping shorts it out and
+ * empties the meter:
  *   - non-boss (minis included): destroyed, bursting into scrapPieces absorbable scrap of
  *     scrapSize × r (scatterDebris), none of its own mass; plus up to extraTargets more non-boss
  *     Hazards within arcRange r of the first (Arc);
@@ -108,7 +109,7 @@ export class DischargeAbility implements AbilityController {
 
   /** Can this Hazard be shorted out right now? */
   canTarget(h: Hazard): boolean {
-    if (h.dead || bunnyCanAbsorb(this.system.run, h.size)) return false;
+    if (h.dead || h.intangible || bunnyCanAbsorb(this.system.run, h.size)) return false;
     if (isBoss(h)) return !(h.groundedFor && h.groundedFor > 0) && this.system.canStunBoss(h);
     return true;
   }

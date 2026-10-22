@@ -11,13 +11,15 @@
  * mass every `interval` s on it). The Sungrazer (solar system, SUNGRAZER) roams the same way and its
  * icy tail trail slows. The Supernova Remnant (galaxy, SUPERNOVA_REMNANT) roams slowly, its `shell`
  * breathing (`pulseNode`), and leaves a trail of glowing filament rings (`trailRing`) that slows.
+ * The Cosmic Void (universe, COSMIC_VOID) roams the same way and leaves a near-black trail that
+ * swallows the floor's glow (`trailOpacity`) and slows.
  *
  * On a map that wraps east–west the spawn zone's rect is moved to the Mop's lap (rooms are stored
  * once, in the canonical strip), so the waypoints stay around it.
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D, RingGeometry } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { COSMIC_VOID, HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -52,6 +54,8 @@ export class Mop extends BaseHazard {
   private stuckTime = 0;
   readonly puddles: Puddle[] = [];
   private readonly trail: InstancedMesh;
+  /** A faint ring round each drop (`trailRim`: the Cosmic Void's dark trail on dark space). */
+  private readonly rim: InstancedMesh | null = null;
   private readonly maxPuddles: number;
   /** Burning trail (`cfg.burn`): seconds until it can burn the Bunny again, and burns so far. */
   private burnTimer = 0;
@@ -100,12 +104,22 @@ export class Mop extends BaseHazard {
     // Discs (wet puddles), or rings for a filament trail (`trailRing`, the Supernova Remnant).
     const geom = cfg.trailRing ? new RingGeometry(0.62, 1, 20) : new CircleGeometry(1, 20);
     geom.rotateX(-Math.PI / 2);
-    const material = new MeshBasicMaterial({ color: cfg.trailColor ?? DECAL_COLORS.wet, transparent: true, opacity: cfg.burn || cfg.trailRing ? 0.5 : 0.35, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const material = new MeshBasicMaterial({ color: cfg.trailColor ?? DECAL_COLORS.wet, transparent: true, opacity: cfg.trailOpacity ?? (cfg.burn || cfg.trailRing ? 0.5 : 0.35), depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.trail = new InstancedMesh(geom, material, this.maxPuddles);
     this.trail.count = 0;
     this.trail.frustumCulled = false;
     this.trail.renderOrder = 1;
     this.object3d.add(this.trail);
+    if (cfg.trailRim) {
+      const rimGeom = new RingGeometry(0.9, 1, 24);
+      rimGeom.rotateX(-Math.PI / 2);
+      const rimMat = new MeshBasicMaterial({ color: cfg.trailRim, transparent: true, opacity: 0.45, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      this.rim = new InstancedMesh(rimGeom, rimMat, this.maxPuddles);
+      this.rim.count = 0;
+      this.rim.frustumCulled = false;
+      this.rim.renderOrder = 1;
+      this.object3d.add(this.rim);
+    }
   }
 
   protected tick(dt: number, run: Run): void {
@@ -177,9 +191,14 @@ export class Mop extends BaseHazard {
       _dummy.scale.set(s, 1, s);
       _dummy.updateMatrix();
       this.trail.setMatrixAt(i, _dummy.matrix);
+      this.rim?.setMatrixAt(i, _dummy.matrix);
     }
     this.trail.count = n;
     this.trail.instanceMatrix.needsUpdate = true;
+    if (this.rim) {
+      this.rim.count = n;
+      this.rim.instanceMatrix.needsUpdate = true;
+    }
   }
 
   onContact(run: Run): void {
@@ -193,6 +212,11 @@ export class Mop extends BaseHazard {
     this.trail.geometry.dispose();
     (this.trail.material as MeshBasicMaterial).dispose();
     this.trail.dispose();
+    if (this.rim) {
+      this.rim.geometry.dispose();
+      (this.rim.material as MeshBasicMaterial).dispose();
+      this.rim.dispose();
+    }
     super.dispose();
   }
 }
@@ -277,5 +301,17 @@ export const supernovaRemnantDef = hazardRegistry.register({
   modelId: SUPERNOVA_REMNANT.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, SUPERNOVA_REMNANT);
+  },
+});
+
+/** Universe trail-layer: a cosmic void drifting across zones; its trail slows (COSMIC_VOID). */
+export const cosmicVoidDef = hazardRegistry.register({
+  id: 'cosmic_void',
+  name: 'Cosmic Void',
+  footprint: tuningFootprint(COSMIC_VOID),
+  mass: COSMIC_VOID.mass,
+  modelId: COSMIC_VOID.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, COSMIC_VOID);
   },
 });

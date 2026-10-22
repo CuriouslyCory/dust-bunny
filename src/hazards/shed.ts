@@ -7,6 +7,7 @@ import type { Rng } from '../core/rng';
 import type { DebrisType } from '../data/debris';
 import { TUNING } from '../data/tuning';
 import type { Run } from '../game/run';
+import type { AreaId } from '../world/types';
 import { isFloorFree } from '../systems/spawner';
 import { growthFactorAt } from '../systems/absorb';
 
@@ -43,9 +44,11 @@ export function planShed(radius: number, fraction: number, absorbRatio: number, 
 
 /**
  * Debris type whose catalogue size is closest to `size`, preferring types valid at this Tier. Types
- * the spawner never makes (no room weights: the Ice Sheet's calved icebergs) are left out.
+ * the spawner never makes (no room weights: the Ice Sheet's calved icebergs) are left out. With
+ * `area`, only that Area's types count (the Galaxy and the Universe share a size ladder), unless it has none.
  */
-export function pickShedType(types: readonly DebrisType[], size: number, tier: number): DebrisType | undefined {
+export function pickShedType(types: readonly DebrisType[], size: number, tier: number, area?: AreaId): DebrisType | undefined {
+  if (area && types.some((t) => (t.area ?? 'house') === area)) types = types.filter((t) => (t.area ?? 'house') === area);
   let best: DebrisType | undefined;
   let bestScore = Infinity;
   for (const t of types) {
@@ -61,7 +64,7 @@ export function pickShedType(types: readonly DebrisType[], size: number, tier: n
 }
 
 /** Scatters `count` Debris of about `size` in a ring [inner, outer] around (x, z). Returns how many landed. */
-export function scatterDebris(run: Run, rng: Rng, x: number, z: number, count: number, size: number, inner: number, outer: number, type = pickShedType(run.debris.types, size, run.tier)): number {
+export function scatterDebris(run: Run, rng: Rng, x: number, z: number, count: number, size: number, inner: number, outer: number, type = pickShedType(run.debris.types, size, run.tier, run.area)): number {
   if (!type || count <= 0 || size <= 0) return 0;
   const index = run.debris.types.indexOf(type);
   let placed = 0;
@@ -84,7 +87,7 @@ export function shedMass(run: Run, rng: Rng, fraction: number, source: string): 
   if (b.hunkered) return planShed(b.radius, 0, ratio);
   const approx = planShed(b.radius, fraction, ratio);
   if (approx.volume <= 0) return approx;
-  const type = pickShedType(run.debris.types, approx.pieceSize, run.tier);
+  const type = pickShedType(run.debris.types, approx.pieceSize, run.tier, run.area);
   const plan = planShed(b.radius, fraction, ratio, growthFactorAt(b.realRadius), type?.mass ?? 1);
   const x = b.x;
   const z = b.z;

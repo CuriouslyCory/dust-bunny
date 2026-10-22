@@ -58,6 +58,12 @@ import {
   SAGITTARIUS_A,
   SUPERNOVA,
   SUPERNOVA_REMNANT,
+  COLLIDING_GALAXY,
+  COSMIC_VOID,
+  DARK_ENERGY_GUST,
+  GAMMA_RAY_BURST,
+  QUASAR,
+  THE_EXPANSION,
 } from '../data/hazards';
 import { areaUnit } from '../data/areas';
 import { getTier } from '../data/tiers';
@@ -120,6 +126,11 @@ const TUNING: Record<string, { size: number; height: number }> = {
   pulsar: PULSAR,
   supernova_remnant: SUPERNOVA_REMNANT,
   supernova: SUPERNOVA,
+  quasar: QUASAR,
+  colliding_galaxy: COLLIDING_GALAXY,
+  gamma_ray_burst: GAMMA_RAY_BURST,
+  cosmic_void: COSMIC_VOID,
+  dark_energy_gust: DARK_ENERGY_GUST,
   ...BOSSES,
 };
 
@@ -132,16 +143,18 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   broom: { radius: BROOM.sweepRadius * 0.5, height: 10 },
   // Bosses use their full-size contact radius rather than their absorb size.
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
+  // The Expansion is no body (it centres on the Bunny at once): its footprint only places its arrival.
+  the_expansion: { radius: THE_EXPANSION.footprint, height: THE_EXPANSION.height },
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis (if it summons any). */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();
   for (const t of AREA_DIRECTORS[area].tiers) for (const id of Object.keys(t.types)) ids.add(id);
   const boss = AREA_BOSSES[area].id;
   ids.add(boss);
-  const mini = BOSSES[boss]!.miniId;
+  const mini = BOSSES[boss]?.miniId;
   if (mini) ids.add(mini);
   return [...ids];
 }
@@ -285,7 +298,7 @@ describe('Hazard placement knowledge', () => {
       const ids = new Set(placements.map((p) => p.id));
       expect(ids.has(AREA_BOSSES[area].id), `${area} boss`).toBe(true);
       // Bosses with a summon (the Ice Sheet calves icebergs instead).
-      const mini = BOSSES[AREA_BOSSES[area].id]!.miniId;
+      const mini = BOSSES[AREA_BOSSES[area].id]?.miniId;
       if (mini) expect(ids.has(mini), `${area} minis`).toBe(true);
       expect(ids.size).toBeGreaterThan(3);
     });

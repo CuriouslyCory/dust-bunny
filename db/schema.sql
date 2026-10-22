@@ -86,7 +86,7 @@ ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS run_id text;
 CREATE UNIQUE INDEX IF NOT EXISTS leaderboard_scores_run_idx ON leaderboard_scores (run_id) WHERE run_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS leaderboard_scores_user_idx ON leaderboard_scores (user_id, score DESC) WHERE user_id IS NOT NULL;
 
--- Area boards: one row per Area (house | neighborhood | city | region | continent | globe | solar_system | galaxy) a Run cleared. Radii are in the Area's unit (the Region's is 10 m, the Continent's 10 km, the Globe's 1,000 km, the Solar System's 0.01 AU, the Galaxy's 100 ly).
+-- Area boards: one row per Area (house | neighborhood | city | region | continent | globe | solar_system | galaxy | universe) a Run cleared. Radii are in the Area's unit (the Region's is 10 m, the Continent's 10 km, the Globe's 1,000 km, the Solar System's 0.01 AU, the Galaxy's 100 ly, the Universe's 10 Mly).
 CREATE TABLE IF NOT EXISTS area_scores (
   id              bigserial PRIMARY KEY,
   area            text        NOT NULL,
@@ -118,16 +118,24 @@ CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, s
 ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 
+-- Universes the player had ended when the Run was posted (a Universe victory counts itself);
+-- NULL for entries from clients before Act 9.
+ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS universes integer;
+
 -- Cloud save for signed-in players: Fluff wallet, Upgrade levels (id → level), lifetime stats,
 -- and per Character its Keepsake Hoard ("type:rarityId" → count, e.g. "thick_clog:epic"; rows from
--- before rarities use "type:1"…"type:10", converted on read) and bosses beaten.
+-- before rarities use "type:1"…"type:10", converted on read) bosses beaten, and Universe
+-- victories (only ever goes up).
 CREATE TABLE IF NOT EXISTS player_progress (
   user_id    text        PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
   fluff      integer     NOT NULL CHECK (fluff >= 0),
   upgrades   jsonb       NOT NULL,
   stats      jsonb       NOT NULL,
   characters jsonb       NOT NULL DEFAULT '{}',
+  universes  integer     NOT NULL DEFAULT 0 CHECK (universes >= 0),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 -- Tables created before Keepsakes.
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}';
+-- Tables created before Act 9.
+ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0);

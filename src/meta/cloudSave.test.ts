@@ -10,10 +10,11 @@ const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map:
   return { map, getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v) };
 };
 
-const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}): Progress => ({
+const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, universes = 0): Progress => ({
   fluff,
   upgrades,
   characters: {},
+  universes,
   stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
 });
 
@@ -34,9 +35,14 @@ function fakeServer() {
     const v = validateProgress(JSON.parse(String(init.body)));
     if (!v.ok) return Response.json({ error: 'invalid' }, { status: 400 });
     puts.push(v.value);
-    if (stored && compareProgress(v.value, stored) < 0) return Response.json({ accepted: false, progress: stored });
-    rows.set(user, v.value);
-    return Response.json({ accepted: true, progress: v.value });
+    // Universes only go up, whether or not the upload is stored.
+    const universes = Math.max(v.value.universes, stored?.universes ?? 0);
+    if (stored && compareProgress(v.value, stored) < 0) {
+      rows.set(user, { ...stored, universes });
+      return Response.json({ accepted: false, progress: rows.get(user) });
+    }
+    rows.set(user, { ...v.value, universes });
+    return Response.json({ accepted: true, progress: rows.get(user) });
   });
   return {
     rows,
@@ -87,7 +93,7 @@ function fakeAccount() {
 
 function setup(local: Progress | null, storageInit: Record<string, string> = {}) {
   const meta = new MetaProgress(memStorage());
-  if (local) meta.store.update((d) => Object.assign(d, { fluff: local.fluff, upgrades: local.upgrades, stats: local.stats }));
+  if (local) meta.store.update((d) => Object.assign(d, { fluff: local.fluff, upgrades: local.upgrades, stats: local.stats, universes: local.universes }));
   const server = fakeServer();
   const acct = fakeAccount();
   const storage = memStorage(storageInit);
@@ -131,9 +137,33 @@ describe('cloud save', () => {
   it("loads the account's own progress when the device last synced another account", async () => {
     const s = setup(prog(900, 900, 30, { extra_heart: 2 }), { [CLOUD_USER_KEY]: 'other' });
     await s.signIn('u2');
-    expect(progressOf(s.meta.data)).toEqual(progressOf({ ...s.meta.data, fluff: 0, upgrades: {}, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0, feltings: 0 }, characters: {} }));
+    expect(progressOf(s.meta.data)).toEqual(progressOf({ ...s.meta.data, fluff: 0, upgrades: {}, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0, feltings: 0 }, characters: {}, universes: 0 }));
     expect(s.server.puts).toEqual([]);
     expect(s.storage.map.get(CLOUD_USER_KEY)).toBe('u2');
+  });
+
+  it('never lowers universes: adopting keeps the larger count and the server keeps it too', async () => {
+    const s = setup(prog(10, 100, 4, {}, 2), { [CLOUD_USER_KEY]: 'u1' });
+    s.server.rows.set('u1', prog(300, 500, 12, {}, 1));
+    await s.signIn('u1');
+    expect(s.meta.fluff).toBe(300);
+    expect(s.meta.universes).toBe(2);
+    expect(s.server.rows.get('u1')!.universes).toBe(2);
+
+    // Local is ahead but the server has more Universes (another device): both end at the max.
+    const t = setup(prog(10, 800, 20, {}, 1), { [CLOUD_USER_KEY]: 'u1' });
+    t.server.rows.set('u1', prog(300, 500, 12, {}, 4));
+    await t.signIn('u1');
+    expect(t.server.rows.get('u1')).toEqual(prog(10, 800, 20, {}, 4));
+    expect(t.meta.universes).toBe(4);
+    expect(t.cloud.status).toBe('synced');
+  });
+
+  it("replaces universes when loading another account's save", async () => {
+    const s = setup(prog(900, 900, 30, {}, 3), { [CLOUD_USER_KEY]: 'other' });
+    s.server.rows.set('u2', prog(5, 50, 2, {}, 1));
+    await s.signIn('u2');
+    expect(s.meta.universes).toBe(1);
   });
 
   it('uploads changes after a short delay, including spending Fluff', async () => {

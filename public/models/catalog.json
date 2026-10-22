@@ -3589,6 +3589,525 @@
       },
       "category": "prop",
       "units": "1 ly"
+    },
+    {
+      "triangles": 1256,
+      "footprintRadius": 122.0,
+      "height": 347.0,
+      "minY": 1.0,
+      "maxY": 348.0,
+      "sizeX": 244.0,
+      "sizeZ": 244.0,
+      "id": "quasar",
+      "file": "models/quasar.glb",
+      "bytes": 47268,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Wanderer with pull. A blazing white-blue core (radius 26, centre (0, 96, 0)) in a white ring with a four-point cyan glare. disk node: the accretion disc, a flat, slightly bowled sheet from r 34 to 122, white, cyan, blue, violet and indigo with an orange rim in three trailing spiral arms; spins about Y; pivot at the core centre (0, 96, 0). jets node: twin narrow jets on the spin axis, north up to y 348 (white core in a cyan sheath with blue knots), south down into a violet splash (r 84) on the floor; pivot at the core centre (0, 96, 0) (pulse with scale Y).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "disk": {
+          "pivot": [
+            0.0,
+            96.0,
+            0.0
+          ]
+        },
+        "jets": {
+          "pivot": [
+            0.0,
+            96.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 580,
+      "footprintRadius": 197.4,
+      "height": 21.0,
+      "minY": 3.1,
+      "maxY": 24.2,
+      "sizeX": 231.9,
+      "sizeZ": 306.8,
+      "id": "colliding_galaxy",
+      "file": "models/colliding_galaxy.glb",
+      "bytes": 40720,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Lane patrol. Two small spiral galaxies mid-merger, travelling +Z: galaxy_a (pale blue-white, radius 66, in front, pivot at its centre (-34.0, 14.0, 46.0)) and galaxy_b (warm peach, radius 56, behind, pivot (40.0, 18.0, -34.0)), both flat in XZ, each spinning about its own Y (they turn in opposite senses: galaxy_b's arms wind the other way). body: a pink starburst bridge between them and two tidal tails of stars streaming back to -Z (to z -190).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "galaxy_a": {
+          "pivot": [
+            -34.0,
+            14.0,
+            46.0
+          ]
+        },
+        "galaxy_b": {
+          "pivot": [
+            40.0,
+            18.0,
+            -34.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 1146,
+      "footprintRadius": 160.0,
+      "height": 81.7,
+      "minY": 0.5,
+      "maxY": 82.2,
+      "sizeX": 179.5,
+      "sizeZ": 248.3,
+      "id": "gamma_ray_burst",
+      "file": "models/gamma_ray_burst.glb",
+      "bytes": 46212,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Turret. body: the hypernova's ejecta, a dark violet glow disc (r 86) ringed by orange and red shell fragments. head node: the collapsing star (radius 24, centre (0, 58, 0), white-hot with violet infall bands) in a violet and red collapsar disc, carrying a flared nozzle and a narrow white beam in a violet sheath along +Z (a short counter-jet on -Z); it aims about Y through its pivot at the origin (0, 0, 0). Nozzle mouth at (0, 58, 39); beam tip (the muzzle) at (0, 58, 160).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 1162,
+      "footprintRadius": 105.0,
+      "height": 164.0,
+      "minY": 0.0,
+      "maxY": 164.0,
+      "sizeX": 202.9,
+      "sizeZ": 202.9,
+      "id": "cosmic_void",
+      "file": "models/cosmic_void.glb",
+      "bytes": 50444,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Trail-layer (slows). A dark bubble (radius 82, centre (0, 82, 0)), near-black with a dim indigo limb and three faint web strands over the top, ringed round its silhouette by 30 tiny bright galaxies and a thin web ring. shell node: the bubble and its rim; pulse it (scale); pivot at its centre (0, 82, 0). body: a CMB-orange glow ring on the floor round its foot (r 100.04).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "shell": {
+          "pivot": [
+            0.0,
+            82.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 1014,
+      "footprintRadius": 235.9,
+      "height": 85.5,
+      "minY": 1.0,
+      "maxY": 86.5,
+      "sizeX": 211.0,
+      "sizeZ": 328.2,
+      "id": "dark_energy_gust",
+      "file": "models/dark_energy_gust.glb",
+      "bytes": 38204,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Cone blaster (blow). body: a violet and indigo swirl on the floor (r 92) and three curling violet gust wisps blowing out to +Z (to r 230, +-22 degrees). core node: a swirling violet ball (radius 34, centre (0, 52, 0)) with two tilted rings and a flared nozzle facing +Z; swells (scale); pivot at its centre (0, 52, 0). Nozzle mouth (emit point) at (0, 52, 64).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "core": {
+          "pivot": [
+            0.0,
+            52.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 2256,
+      "footprintRadius": 374.8,
+      "height": 67.9,
+      "minY": 0.5,
+      "maxY": 68.4,
+      "sizeX": 699.0,
+      "sizeZ": 723.6,
+      "id": "the_expansion",
+      "file": "models/the_expansion.glb",
+      "bytes": 103656,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Boss (not a body: a frame round the Bunny, hollow inside r 130). grid node: the comoving metric lattice, five glowing concentric circles (r 130 to 300) and 24 radial spokes, curving up into a shallow bowl (y 2 at r 130 to 42 at r 300), with 12 orange chevrons pointing outwards at the rim; scale it outwards (X/Z) as space stretches; pivot at the origin (0, 0, 0). ring node: a CMB-orange band (r 322) with tick marks, and ten tiny galaxies flying off it outwards (to r about 372) with streaks behind them; turns about Y; pivot at the origin. body: a faint orange rim on the floor under the ring.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "grid": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "ring": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 232,
+      "footprintRadius": 103.5,
+      "height": 22.0,
+      "minY": 0.0,
+      "maxY": 22.0,
+      "sizeX": 203.0,
+      "sizeZ": 196.0,
+      "id": "spiral_galaxy",
+      "file": "models/spiral_galaxy.glb",
+      "bytes": 15380,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A face-on spiral galaxy lying flat: a cream bulge, two trailing pale blue-white arms with pink star-forming knots, on a faint blue haze disc (r 100). Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 256,
+      "footprintRadius": 103.7,
+      "height": 22.0,
+      "minY": 0.0,
+      "maxY": 22.0,
+      "sizeX": 196.0,
+      "sizeZ": 196.0,
+      "id": "barred_spiral",
+      "file": "models/barred_spiral.glb",
+      "bytes": 14952,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A barred spiral lying flat: a cream bulge crossed by a golden bar (along X), with two arms sweeping from the bar's ends, on a faint haze disc (r 100). Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 240,
+      "footprintRadius": 100.0,
+      "height": 116.0,
+      "minY": 0.0,
+      "maxY": 116.0,
+      "sizeX": 200.0,
+      "sizeZ": 200.0,
+      "id": "elliptical_galaxy",
+      "file": "models/elliptical_galaxy.glb",
+      "bytes": 12400,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A smooth, egg-shaped elliptical galaxy (100 x 76 x 58) glowing cream at the middle to amber at the edge, with a few globular-cluster points and a dim halo ring. Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 664,
+      "footprintRadius": 100.0,
+      "height": 50.0,
+      "minY": 0.0,
+      "maxY": 50.0,
+      "sizeX": 197.0,
+      "sizeZ": 200.0,
+      "id": "lenticular_galaxy",
+      "file": "models/lenticular_galaxy.glb",
+      "bytes": 21824,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A lenticular (S0) galaxy: a smooth lens-shaped disc (r 100) with a bright round bulge, a faint outer ring and a thin dust lane, no arms. Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 350,
+      "footprintRadius": 122.4,
+      "height": 33.3,
+      "minY": 0.0,
+      "maxY": 33.3,
+      "sizeX": 179.5,
+      "sizeZ": 225.7,
+      "id": "irregular_galaxy",
+      "file": "models/irregular_galaxy.glb",
+      "bytes": 21536,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An irregular galaxy (Magellanic-like): a lopsided clump of lumpy blue-white star clouds with hot pink star-forming knots and a ragged haze. Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            1.13,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 228,
+      "footprintRadius": 108.0,
+      "height": 60.0,
+      "minY": 0.0,
+      "maxY": 60.0,
+      "sizeX": 200.0,
+      "sizeZ": 200.0,
+      "id": "dwarf_galaxy",
+      "file": "models/dwarf_galaxy.glb",
+      "bytes": 15580,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A dwarf spheroidal galaxy: a faint, loose, squashed puff (r 70) with a dozen scattered star points and a dim halo (r 100). Pale, so a tintAll colour reads.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 360,
+      "footprintRadius": 102.5,
+      "height": 11.4,
+      "minY": 0.0,
+      "maxY": 11.4,
+      "sizeX": 184.2,
+      "sizeZ": 142.0,
+      "id": "galaxy_pair",
+      "file": "models/galaxy_pair.glb",
+      "bytes": 22876,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). An interacting pair: a pale spiral (r 52) and a smaller warm companion (r 38) linked by a bridge of stars, with one tidal tail curling away.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -4.28,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 562,
+      "footprintRadius": 110.0,
+      "height": 21.0,
+      "minY": 0.0,
+      "maxY": 21.0,
+      "sizeX": 206.0,
+      "sizeZ": 201.0,
+      "id": "galaxy_group",
+      "file": "models/galaxy_group.glb",
+      "bytes": 33016,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose group of seven small galaxies (three spirals, three ellipticals, one edge-on disc) on a faint web-blue haze (r 100).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 790,
+      "footprintRadius": 105.9,
+      "height": 71.7,
+      "minY": 0.0,
+      "maxY": 71.7,
+      "sizeX": 204.6,
+      "sizeZ": 200.0,
+      "id": "galaxy_cluster",
+      "file": "models/galaxy_cluster.glb",
+      "bytes": 45416,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A rich galaxy cluster: a giant cream elliptical at the heart of a dense ball of 36 tiny galaxies (r 66), on a faint violet-pink hot-gas halo (r 100) with a thin halo ring.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 338,
+      "footprintRadius": 123.8,
+      "height": 24.0,
+      "minY": 0.0,
+      "maxY": 24.0,
+      "sizeX": 231.2,
+      "sizeZ": 49.2,
+      "id": "filament_knot",
+      "file": "models/filament_knot.glb",
+      "bytes": 20216,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A short strand of the cosmic web: a bright pale-blue filament (thickest in the middle) curving along X on a dim glow ribbon, with a bright knot at its middle and nine tiny galaxies strung along it.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -0.5,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 808,
+      "footprintRadius": 96.1,
+      "height": 46.9,
+      "minY": 0.0,
+      "maxY": 46.9,
+      "sizeX": 176.7,
+      "sizeZ": 172.0,
+      "id": "supercluster_node",
+      "file": "models/supercluster_node.glb",
+      "bytes": 43040,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A supercluster node where four filaments of the cosmic web meet: a bright white-blue knot ringed with tiny galaxies, filament stubs radiating out to r 100 with galaxies along them, on a faint glow.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -0.6,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 384,
+      "footprintRadius": 105.0,
+      "height": 49.9,
+      "minY": 0.0,
+      "maxY": 49.9,
+      "sizeX": 210.0,
+      "sizeZ": 60.0,
+      "id": "radio_galaxy",
+      "file": "models/radio_galaxy.glb",
+      "bytes": 20704,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A radio galaxy: a small cream elliptical with two thin white jets along X feeding two billowing orange-red radio lobes with hot spots at their outer ends; spans X (about 200).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
+    },
+    {
+      "triangles": 896,
+      "footprintRadius": 106.0,
+      "height": 92.3,
+      "minY": 0.0,
+      "maxY": 92.3,
+      "sizeX": 202.5,
+      "sizeZ": 202.6,
+      "id": "great_attractor",
+      "file": "models/great_attractor.glb",
+      "bytes": 42776,
+      "notes": "Universe scale: 1 unit = 100 kly (100,000 light years), load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). The Great Attractor (a one-off): a big warm glowing knot (r 48) of white, gold and orange, swarmed by tiny galaxies and fed by five streams of galaxies spiralling in from r 100, on a warm halo.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 kly"
     }
   ]
 }

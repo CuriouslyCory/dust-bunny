@@ -23,6 +23,7 @@ import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
 import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
 import { GalaxySky } from '../fx/galaxy';
+import { installCmb, showCmb, UniverseSky } from '../fx/universe';
 import { SolarSky, VICTORY_HOLD_SECONDS } from '../fx/solar';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
@@ -36,9 +37,15 @@ import { settings } from '../ui/settings';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
 import { AREA_ORDER, type AreaId } from '../world/types';
+import { afterRunEnded } from '../story/ending';
+import type { EndingParams } from '../story/endingScreen';
+import { storyAvailable } from '../story/index';
 import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import { RunView } from './runView';
+
+/** Seconds between the last Area's victory and the ending (the last absorb lands first). */
+const ENDING_LEAD_SECONDS = 0.8;
 
 export interface GameOptions {
   debug?: boolean;
@@ -51,9 +58,11 @@ const BACKGROUND = '#3b2f2a';
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
  * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts),
- * and the Galaxy's violet-black (its painted floor carries the nebula backdrop and the disc, galaxyTextures.ts; the stars are fx/galaxy.ts).
+ * and the Galaxy's violet-black (its painted floor carries the nebula backdrop and the disc, galaxyTextures.ts; the stars are fx/galaxy.ts),
+ * and the Universe's near black (its painted floor carries the cosmic web, universeTextures.ts; the galaxies are fx/universe.ts,
+ * and the CMB overlay tints the screen's edges orange).
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c', universe: '#020204' };
 
 export class Game {
   readonly events = new EventBus();
@@ -71,17 +80,23 @@ export class Game {
   readonly solarSky: SolarSky;
   /** The Galaxy's Sagittarius A*, core glow, light and starfield (fx/galaxy.ts). */
   readonly galaxySky: GalaxySky;
+  /** The Universe's galaxies, node glows and light (fx/universe.ts). */
+  readonly universeSky: UniverseSky;
   /** Pending results screen after a Solar System victory (held so the light can go out). */
   private resultsTimer: number | null = null;
   /** Continent horizon overlay (null without a canvas container). */
   private horizon: HTMLElement | null = null;
   /** The Globe's limb, starfield and sun overlay (null without a canvas container). */
   private limb: HTMLElement | null = null;
+  /** The Universe's CMB tint at the screen's edges (null without a canvas container). */
+  private cmb: HTMLElement | null = null;
   readonly sun: DirectionalLight;
   readonly debug: boolean;
 
   run: Run | null = null;
   view: RunView | null = null;
+  /** The ending's scene while the `ending` screen is up (src/story/endingScreen.ts): rendered instead of the Run. */
+  ending: { render(renderer: WebGLRenderer): void } | null = null;
   /** Default config for the next Run (character select / shop write here). */
   nextRunConfig: Partial<RunConfig> = {};
   /**
@@ -124,6 +139,10 @@ export class Game {
       installVignette(canvas.parentElement);
       this.horizon = installHorizon(canvas.parentElement, AREA_SKY.continent);
       this.limb = installLimb(canvas.parentElement, AREA_SKY.globe);
+      this.cmb = installCmb(canvas.parentElement);
+      settings.subscribe((v) => {
+        if (this.cmb) showCmb(this.cmb, this.run?.area === 'universe', v.reducedMotion);
+      });
     }
 
     this.input.add(new KeyboardInput(window, () => TUNING.camera.yaw));
@@ -134,6 +153,7 @@ export class Game {
     this.hud = new Hud(this);
     this.solarSky = new SolarSky(this.scene, this.lighting, this.hud);
     this.galaxySky = new GalaxySky(this.scene, this.lighting);
+    this.universeSky = new UniverseSky(this.scene, this.lighting);
     addDefaultHudWidgets(this.hud, this);
     this.hud.visible = false;
     this.uiLayer.append(this.hud.el);
@@ -151,6 +171,20 @@ export class Game {
     this.events.on('runEnded', (e) => {
       // A victory (the last built Area's boss absorbed) holds the results back so it is seen and the
       // narrator's line is read.
+      // A victory in the last Area plays the ending first (then the results); not with ?autostart.
+      if (this.run && afterRunEnded(e.reason, this.run.area, storyAvailable()) === 'ending') {
+        const run = this.run;
+        // The Universe's cleared line plays first (ui/areaHud.ts); the ending waits until it has been read.
+        const open = (): void => {
+          this.resultsTimer = null;
+          if (this.run !== run) return;
+          const left = this.hud.bannerLeft;
+          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(open, Math.min(Math.max(left, 0.1), 0.25) * 1000);
+          else this.go('ending', { result: e } satisfies EndingParams);
+        };
+        this.resultsTimer = window.setTimeout(open, ENDING_LEAD_SECONDS * 1000);
+        return;
+      }
       if (e.reason === 'victory') {
         const run = this.run;
         const show = (): void => {
@@ -244,6 +278,7 @@ export class Game {
     this.resultsTimer = null;
     this.solarSky.attach(null);
     this.galaxySky.attach(null);
+    this.universeSky.attach(null);
     this.view?.dispose();
     this.run?.dispose();
     this.view = null;
@@ -259,8 +294,10 @@ export class Game {
     this.lighting.setArea(area);
     this.solarSky.attach(this.run);
     this.galaxySky.attach(this.run);
+    this.universeSky.attach(this.run);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
     if (this.limb) showHorizon(this.limb, area === 'globe');
+    if (this.cmb) showCmb(this.cmb, area === 'universe', settings.value.reducedMotion);
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
     for (const a of AREA_ORDER) if (a !== 'house') this.canvas.parentElement?.classList.toggle(a, area === a);
   }
@@ -279,6 +316,10 @@ export class Game {
 
   private render(alpha: number, frameDt: number): void {
     this.screens.update(frameDt);
+    if (this.ending) {
+      this.ending.render(this.renderer);
+      return;
+    }
     // Sagittarius A*'s pull bends the camera (src/fx/lensing.ts).
     const lens = findLens(this.run);
     if (this.view) {
@@ -286,6 +327,7 @@ export class Game {
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
+      this.universeSky.update(frameDt, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
       this.lighting.update(this.rig.viewTarget, this.rig.viewDistance);
     }
     this.hud.update(frameDt);

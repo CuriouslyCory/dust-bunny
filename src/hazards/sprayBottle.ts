@@ -244,3 +244,4 @@ export const sunspotDef = hazardRegistry.register({
     return new SprayBottle(id, this, x, z, rng, SUNSPOT);
   },
 });
+

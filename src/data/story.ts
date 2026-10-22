@@ -11,13 +11,32 @@ export const STORY_CAPTION_MAX = 140;
 
 export type StoryLine = string | readonly string[];
 
-/** One card of a scripted sequence (the intro now, the ending later). */
+/** One card of a scripted sequence (the intro). */
 export interface StoryPanel {
   caption: string;
   /** Second caption, shown under the first after a beat. */
   caption2?: string;
   /** Seconds on screen when not skipped. */
   hold: number;
+}
+
+/** The ending's shots in order (docs/story.md "Ending sequence"); src/fx/ending.ts draws each. */
+export type EndingShot = 'bunny' | 'core' | 'bang' | 'planet' | 'fire' | 'stick' | 'speck' | 'the_end' | 'question' | 'fade';
+
+/**
+ * Sound cues of the ending (src/audio/ending.ts plays them when a shot starts): a single held
+ * note, the note stopping into true silence, the Bang (thump and shimmer), the Tier 1 theme
+ * returning quietly, rocks and fire, footsteps receding, room tone with a hum, a staple landing.
+ */
+export type EndingCue = 'held_note' | 'silence' | 'bang' | 'theme' | 'fire' | 'footsteps' | 'room_tone' | 'staple';
+
+/** One shot of the ending: its caption (some have none), minimum seconds and sound cue. */
+export interface EndingPanel {
+  shot: EndingShot;
+  caption?: string;
+  /** Seconds on screen (a caption's reading time can stretch it, see narrator.ts `panelTiming`). */
+  hold: number;
+  cue?: EndingCue;
 }
 
 /** The chapter that an Area is. Its chapter number is its position in AREA_ORDER. */
@@ -34,6 +53,8 @@ export interface AreaStory {
 
 export interface Story {
   intro: readonly StoryPanel[];
+  /** Played between the Universe's victory and the results (the `ending` screen). */
+  ending: readonly EndingPanel[];
   /** Tier-up lines keyed by Tier id (src/data/tiers.ts); every Tier after the first has some. */
   tiers: Readonly<Record<string, readonly StoryLine[]>>;
   /** Every Area must have a chapter: adding an AreaId without one does not compile. */
@@ -50,6 +71,19 @@ export const STORY: Story = {
     { caption: 'Under the couch, the dropped things reach a density the universe has no procedure for.', hold: 4.5 },
     { caption: 'Physics does not have an explanation for what happens next.', caption2: 'Physics has decided not to look.', hold: 4.5 },
     { caption: 'It has one instinct.', caption2: 'Grow.', hold: 3.5 },
+  ],
+
+  ending: [
+    { shot: 'bunny', caption: 'Everything is in one place.', hold: 4, cue: 'held_note' },
+    { shot: 'core', caption: 'This has happened before.', hold: 3, cue: 'silence' },
+    { shot: 'bang', hold: 3, cue: 'bang' },
+    { shot: 'planet', caption: 'Eventually, somewhere, a planet cools.', hold: 6, cue: 'theme' },
+    { shot: 'fire', caption: 'Eventually, something clever figures out fire.', hold: 5, cue: 'fire' },
+    { shot: 'stick', caption: 'It does not pick up after itself.', hold: 4, cue: 'footsteps' },
+    { shot: 'speck', hold: 2.5, cue: 'room_tone' },
+    { shot: 'the_end', hold: 2 },
+    { shot: 'question', hold: 3, cue: 'staple' },
+    { shot: 'fade', hold: 1.2 },
   ],
 
   tiers: {
@@ -99,6 +133,12 @@ export const STORY: Story = {
     // Act 8 · The Galaxy
     dust_nebula: ['It is now mostly hydrogen, lint, and a sock.'],
     dust_cluster: ['The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.'],
+    // Act 9 · The Universe
+    dust_singularity: [
+      'It has stopped being a dust bunny in any sense a dust bunny would recognise. It does not recognise anything. It has one instinct.',
+      "A galaxy with 300 billion stars and, probably, someone's couch.",
+    ],
+    everything: ['Everything that was ever dropped is here now. Everything that was ever dropped is it.'],
   },
 
   areas: {
@@ -173,6 +213,17 @@ export const STORY: Story = {
         ],
       ],
     },
+    universe: {
+      title: 'One Place',
+      entered: ['Everything that was ever dropped is out here somewhere. It intends to check.'],
+      cleared: ['Nothing is anywhere else now. Everything is in one place.'],
+      boss: [
+        [
+          'The universe has one cleaning method left: spread everything out so thin that nothing is anywhere.',
+          'Given enough time it always works. It does not have enough time.',
+        ],
+      ],
+    },
   },
 
   debris: {
@@ -185,5 +236,7 @@ export const STORY: Story = {
     continent_whole: ['A whole continent. Its tectonic plate is still moving, slightly, out of habit.'],
     // The Galaxy: the map places a rogue planet beside the spawn (src/world/galaxy.ts).
     free_floating_planet: ['A rogue planet, drifting between stars for a billion years. Finally, something happens to it.'],
+    // The Universe: the map places the Great Attractor on the node by the spawn (src/world/universe.ts).
+    great_attractor: ['The Great Attractor. For a billion years it has pulled whole galaxies towards it. Now it knows how that feels.'],
   },
 };

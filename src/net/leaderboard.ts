@@ -314,8 +314,11 @@ export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
 
 export type LeaderboardClient = ReturnType<typeof createLeaderboardClient>;
 
-/** Builds a Run board submission from Run results (score computed with the shared formula). */
-export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: string, runId?: string): ScoreSubmission {
+/**
+ * Builds a Run board submission from Run results (score computed with the shared formula).
+ * `universes`: the player's Universes count after this Run (meta save), left out when unknown.
+ */
+export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: string, runId?: string, universes?: number): ScoreSubmission {
   const fields = {
     maxRadius: Math.round(stats.maxRadius * 100) / 100,
     debrisAbsorbed: stats.debrisAbsorbed,
@@ -325,7 +328,7 @@ export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: s
     difficulty: stats.difficulty ?? DEFAULT_DIFFICULTY,
   };
   const loadout = (stats.loadout ?? []).map(({ type, rarity }) => ({ type, rarity }));
-  return { name, character: stats.characterId, ...fields, score: computeScore(fields), ...(runId ? { runId } : {}), loadout };
+  return { name, character: stats.characterId, ...fields, score: computeScore(fields), ...(runId ? { runId } : {}), loadout, ...(universes !== undefined ? { universes } : {}) };
 }
 
 /** Builds an Area board submission for a cleared Area. */

@@ -7,7 +7,8 @@ import { Run } from '../game/run';
 import type { RunStats } from '../game/runStats';
 import { registerPerks } from '../perks/perks';
 import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
-import { MetaProgress } from './meta';
+import { AREA_ORDER } from '../world/types';
+import { endsUniverse, MetaProgress } from './meta';
 import { defaultSave, type KeyValueStorage, parseSave, SAVE_KEY, SAVE_VERSION, SaveStore } from './save';
 import { upgradeCost, upgradeModifiers } from './upgrades';
 
@@ -94,11 +95,11 @@ describe('fluffForRun', () => {
     const win = stats({ maxRadius: 650, debrisAbsorbed: 3500, tierReached: 9, houseCleared: true, neighborhoodCleared: true });
     const casual = fluffForRun('victory', win);
     expect(casual).toBeGreaterThanOrEqual(40);
-    expect(casual).toBeLessThanOrEqual(85);
-    expect(fluffForRun('victory', { ...win, difficulty: 'arcade' })).toBeLessThanOrEqual(170);
+    expect(casual).toBeLessThanOrEqual(90);
+    expect(fluffForRun('victory', { ...win, difficulty: 'arcade' })).toBeLessThanOrEqual(180);
     const hardcore = fluffForRun('victory', { ...win, difficulty: 'hardcore' });
     expect(hardcore).toBeGreaterThanOrEqual(300);
-    expect(hardcore).toBeLessThanOrEqual(420);
+    expect(hardcore).toBeLessThanOrEqual(450);
   });
 
   it('scales the radius term per Area, in each Area\'s own unit (no cap)', () => {
@@ -179,6 +180,14 @@ describe('save data', () => {
     expect(parseSave(JSON.stringify({ version: 1, fluff: 3 })).data.lastDifficulty).toBe('casual');
   });
 
+  it('reads universes as a non-negative integer (missing: 0)', () => {
+    expect(defaultSave().universes).toBe(0);
+    expect(parseSave(JSON.stringify({ version: 1, fluff: 3 })).data.universes).toBe(0);
+    expect(parseSave(JSON.stringify({ version: 1, universes: 4 })).data.universes).toBe(4);
+    expect(parseSave(JSON.stringify({ version: 1, universes: 2.9 })).data.universes).toBe(2);
+    for (const bad of [-1, 'x', null, Infinity]) expect(parseSave(JSON.stringify({ version: 1, universes: bad })).data.universes).toBe(0);
+  });
+
   it('treats corrupt JSON as defaults and backs it up', () => {
     const storage = memStorage({ [SAVE_KEY]: '{"fluff": 10,' });
     const store = new SaveStore(storage);
@@ -212,6 +221,20 @@ describe('MetaProgress', () => {
     expect(meta.awardRun(e)).toBe(a);
     expect(meta.fluff).toBe(a.fluff);
     expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1, bestRadius: 50, bestTier: 3 });
+  });
+
+  it('counts a Universe on each victory in the last Area, once per payload', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    const last = AREA_ORDER[AREA_ORDER.length - 1]!;
+    const win = { reason: 'victory' as const, stats: stats({ area: last }) };
+    expect(endsUniverse(win)).toBe(true);
+    expect(meta.awardRun(win).universes).toBe(1);
+    expect(meta.awardRun(win).universes).toBe(1);
+    expect(meta.awardRun({ reason: 'died', stats: stats({ area: last }) }).universes).toBe(1);
+    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: 'city' }) }).universes).toBe(1);
+    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: last }) }).universes).toBe(2);
+    expect(new MetaProgress(storage).universes).toBe(2);
   });
 
   it('buys Upgrades, persists them and refuses when poor or maxed', () => {

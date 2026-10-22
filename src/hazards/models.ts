@@ -13,7 +13,9 @@
  * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide when chipped;
  * black_hole and sagittarius_a `disk`, globular_cluster `swarm` and pulsar `head` turn about Y;
  * supernova_remnant `shell` and supernova `core` pulse (scale); sagittarius_a `jet_n` swells (scale
- * Y) and hides when chipped, `jet_s` stays).
+ * Y) and hides when chipped, `jet_s` stays); quasar `disk`, colliding_galaxy `galaxy_a` / `galaxy_b`,
+ * gamma_ray_burst `head` and the_expansion `ring` turn about Y; quasar `jets` pulse (scale Y);
+ * cosmic_void `shell` and dark_energy_gust `core` pulse (scale); the_expansion `grid` stretches (scale X/Z).
  * If another module already registered a factory for an id, it is kept.
  */
 import { BoxGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, RingGeometry, TorusGeometry, Vector3, type Object3D } from 'three';
@@ -79,6 +81,13 @@ export const HAZARD_MODEL_SIZES = {
   supernova_remnant: { w: 1.72, d: 2.11, h: 1.14 },
   supernova: { w: 1.86, d: 3.18, h: 1.11 },
   sagittarius_a: { w: 6.4, d: 6.4, h: 5.39 },
+  // Universe (public/models/catalog.json in 100 kly units ÷ 100: Universe units, as loaded at scale 0.01).
+  quasar: { w: 2.44, d: 2.44, h: 3.47 },
+  colliding_galaxy: { w: 2.32, d: 3.07, h: 0.21 },
+  gamma_ray_burst: { w: 1.8, d: 2.48, h: 0.82 },
+  cosmic_void: { w: 2.03, d: 2.03, h: 1.64 },
+  dark_energy_gust: { w: 2.11, d: 3.28, h: 0.86 },
+  the_expansion: { w: 6.99, d: 7.24, h: 0.68 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -1345,6 +1354,127 @@ function sagittariusA(): Object3D {
   return g;
 }
 
+function quasar(): Object3D {
+  // A blazing core (r 0.26, centre (0, 0.96, 0)) with two eyes on its +Z side; the `disk` node
+  // (pivot at the core) is the accretion disc (r 0.34–1.22, spins about Y); the `jets` node (pivot
+  // at the core) holds twin jets up to y 3.47 and down to the floor (pulse with scale Y).
+  const g = new Group();
+  ball(g, 0.26, 0, 0.96, 0, glow('#f4fbff', 3), 1, 1);
+  eyes(g, 0.1, 1.04, 0.22, 0.045, '#2a1a40');
+  const disk = node(g, 'disk', 0, 0.96, 0);
+  annulus(disk, 0.34, 0.75, '#bfeaff', 0.85);
+  annulus(disk, 0.75, 1.22, '#8a5ad8', 0.55);
+  const jets = node(g, 'jets', 0, 0.96, 0);
+  const jetMat = new MeshBasicMaterial({ color: '#cfeaff', transparent: true, opacity: 0.6, depthWrite: false, side: DoubleSide });
+  const north = new Mesh(new CylinderGeometry(0.04, 0.12, 2.5, 10, 1, true), jetMat);
+  north.position.y = 1.25;
+  const south = new Mesh(new CylinderGeometry(0.12, 0.3, 0.96, 10, 1, true), jetMat);
+  south.position.y = -0.48;
+  jets.add(north, south);
+  return g;
+}
+
+function collidingGalaxy(): Object3D {
+  // Two spiral galaxies mid-merger travelling +Z: `galaxy_a` (blue-white, r 0.66, pivot
+  // (-0.34, 0.14, 0.46)) in front and `galaxy_b` (peach, r 0.56, pivot (0.4, 0.18, -0.34)) behind,
+  // each spinning about its own Y; a pink bridge between them and tidal tails back to z -1.9.
+  const g = new Group();
+  const a = node(g, 'galaxy_a', -0.34, 0.14, 0.46);
+  addCylinder(a, 0.66, 0.66, 0.04, 0, 0, 0, glow('#9ab8ff', 1.2), 24);
+  ball(a, 0.16, 0, 0.06, 0, glow('#fff1c8', 2.4), 0.6, 1);
+  const b = node(g, 'galaxy_b', 0.4, 0.18, -0.34);
+  addCylinder(b, 0.56, 0.56, 0.04, 0, 0, 0, glow('#ffc8a0', 1.2), 24);
+  ball(b, 0.14, 0, 0.06, 0, glow('#fff1c8', 2.4), 0.6, 1);
+  ball(g, 0.12, 0.03, 0.16, 0.06, glow('#ff8ad0', 2), 0.6, 0);
+  for (const s of [-1, 1]) {
+    const tail = new Mesh(new BoxGeometry(0.08, 0.02, 1.4), glow('#c8d8ff', 0.9));
+    tail.position.set(s * 0.45, 0.08, -1.2);
+    tail.rotation.y = s * 0.25;
+    g.add(tail);
+  }
+  return g;
+}
+
+function gammaRayBurst(): Object3D {
+  // The hypernova's ejecta: a dark violet disc (r 0.86) on the floor. The `head` node (pivot at
+  // the origin, aims about Y) holds the collapsing star (r 0.24, centre (0, 0.58, 0)), a nozzle
+  // mouth at (0, 0.58, 0.39) and a narrow beam along +Z to the muzzle at (0, 0.58, 1.6).
+  const g = new Group();
+  addCylinder(g, 0.86, 0.86, 0.02, 0, 0, 0, glow('#5a3a9a', 0.8), 24);
+  const head = node(g, 'head', 0, 0, 0);
+  ball(head, 0.24, 0, 0.58, 0, glow('#f2f8ff', 3), 1, 1);
+  flatRing(head, 0.36, 0.03, 0.58, glow('#b48cff', 1.8));
+  const nozzle = new Mesh(new ConeGeometry(0.14, 0.2, 12, 1, true), glow('#c08cff', 1.6));
+  nozzle.rotation.x = Math.PI / 2;
+  nozzle.position.set(0, 0.58, 0.32);
+  head.add(nozzle);
+  const beam = new Mesh(new CylinderGeometry(0.05, 0.05, 1.21, 8, 1, true), new MeshBasicMaterial({ color: '#f2f8ff', transparent: true, opacity: 0.55, depthWrite: false, side: DoubleSide }));
+  beam.rotation.x = Math.PI / 2;
+  beam.position.set(0, 0.58, 0.995);
+  head.add(beam);
+  return g;
+}
+
+function cosmicVoid(): Object3D {
+  // An empty bubble: the `shell` node (pivot (0, 0.82, 0), pulses) is a near-black sphere (r 0.82)
+  // with a dim indigo limb; a CMB-orange glow ring (r 1) lies on the floor round its foot.
+  const g = new Group();
+  flatRing(g, 1, 0.025, 0.01, glow('#ff9a5a', 1.2));
+  const shell = node(g, 'shell', 0, 0.82, 0);
+  ball(shell, 0.82, 0, 0, 0, mat('#06040c', 1), 1, 2);
+  flatRing(shell, 0.82, 0.03, 0, glow('#6a4ab8', 1.4));
+  return g;
+}
+
+function darkEnergyGust(): Object3D {
+  // A violet swirl (r 0.92) on the floor and three gust wisps blowing out to +Z (to r 2.3, ±22°);
+  // the `core` node (pivot (0, 0.52, 0), swells) is a swirling violet ball (r 0.34) with a nozzle
+  // facing +Z, its mouth at (0, 0.52, 0.64).
+  const g = new Group();
+  addCylinder(g, 0.92, 0.92, 0.01, 0, 0, 0, glow('#3a2470', 0.8), 24);
+  const core = node(g, 'core', 0, 0.52, 0);
+  ball(core, 0.34, 0, 0, 0, glow('#7a4ad8', 1.4), 1, 2);
+  flatRing(core, 0.42, 0.025, 0, glow('#c8a8ff', 1.6));
+  const nozzle = new Mesh(new ConeGeometry(0.16, 0.3, 12, 1, true), glow('#b48cff', 1.4));
+  nozzle.rotation.x = -Math.PI / 2;
+  nozzle.position.set(0, 0, 0.49);
+  core.add(nozzle);
+  for (const a of [-0.38, 0, 0.38]) {
+    const wisp = new Mesh(new ConeGeometry(0.14, 1.6, 10, 1, true), new MeshBasicMaterial({ color: '#d8c0ff', transparent: true, opacity: 0.35, depthWrite: false, side: DoubleSide }));
+    wisp.rotation.set(-Math.PI / 2, 0, -a);
+    wisp.position.set(Math.sin(a) * 1.5, 0.4, Math.cos(a) * 1.5);
+    g.add(wisp);
+  }
+  return g;
+}
+
+function theExpansion(): Object3D {
+  // Not a body: a frame round the Bunny, hollow inside r 1.3. The `grid` node (pivot at the
+  // origin, scales outward in X/Z) is the comoving lattice: five glowing circles (r 1.3–3) and 24
+  // spokes; the `ring` node (pivot at the origin, turns about Y) is a CMB-orange band (r 3.22)
+  // with small galaxies flying off it.
+  const g = new Group();
+  const grid = node(g, 'grid', 0, 0, 0);
+  for (let i = 0; i < 5; i++) {
+    const r = 1.3 + (i / 4) * 1.7;
+    flatRing(grid, r, 0.012, 0.02 + i * 0.1, glow(i === 4 ? '#ffb070' : '#6f9aff', 1.4));
+  }
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const spoke = new Mesh(new BoxGeometry(0.02, 0.02, 1.7), glow('#4f78d8', 1.1));
+    spoke.position.set(Math.sin(a) * 2.15, 0.22, Math.cos(a) * 2.15);
+    spoke.rotation.set(-0.23, a, 0);
+    grid.add(spoke);
+  }
+  const ring = node(g, 'ring', 0, 0, 0);
+  flatRing(ring, 3.22, 0.04, 0.45, glow('#ff8a4a', 1.8));
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    ball(ring, 0.07, Math.sin(a) * 3.5, 0.45, Math.cos(a) * 3.5, glow(i % 2 ? '#fff1c8' : '#9ab8ff', 2.2), 0.5, 0);
+  }
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -1395,6 +1525,12 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   supernova_remnant: supernovaRemnant,
   supernova,
   sagittarius_a: sagittariusA,
+  quasar,
+  colliding_galaxy: collidingGalaxy,
+  gamma_ray_burst: gammaRayBurst,
+  cosmic_void: cosmicVoid,
+  dark_energy_gust: darkEnergyGust,
+  the_expansion: theExpansion,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

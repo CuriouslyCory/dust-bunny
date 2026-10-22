@@ -85,7 +85,7 @@ export class KeepsakeEffects implements System {
     const ratio = b.stats.get('absorbRatio');
     const fraction = this.totals.reclaimVolume;
     const approx = planShed(b.radius, fraction, ratio);
-    const type = run.debris.types.find((t) => t.id === RECLAIM_DEBRIS) ?? pickShedType(run.debris.types, approx.pieceSize, run.tier);
+    const type = run.debris.types.find((t) => t.id === RECLAIM_DEBRIS) ?? pickShedType(run.debris.types, approx.pieceSize, run.tier, run.area);
     const plan = planShed(b.radius, fraction, ratio, growthFactorAt(b.realRadius), type?.mass ?? 1);
     return scatterDebris(run, this.system.rng, x, z, plan.pieces, plan.pieceSize, b.radius * 0.3, b.radius * 2, type);
   }

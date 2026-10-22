@@ -104,7 +104,7 @@ describe('validateSubmission', () => {
   it('rejects wrong types and out-of-range numbers', () => {
     expect(err({ ...submission(), maxRadius: '12' })).toBe('maxRadius');
     expect(err(submission({ maxRadius: Number.NaN }))).toBe('maxRadius');
-    expect(err(submission({ maxRadius: 1e23 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 1e28 }))).toBe('maxRadius');
     expect(err(submission({ debrisAbsorbed: 1.5 }))).toBe('debrisAbsorbed');
     expect(err(submission({ debrisAbsorbed: -1 }))).toBe('debrisAbsorbed');
     expect(err(submission({ tierReached: 6 }))).toBe('tierReached');
@@ -121,7 +121,7 @@ describe('validateSubmission', () => {
     // Growth without Debris.
     expect(err(submission({ maxRadius: 10, debrisAbsorbed: 0 }))).toBe('maxRadius');
     // Growth too fast for the duration.
-    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 15_000 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 50, tierReached: 5, durationMs: 12_000 }))).toBe('maxRadius');
     // Absorbing too fast.
     expect(err(submission({ debrisAbsorbed: 100_000, durationMs: 60_000 }))).toBe('debrisAbsorbed');
   });
@@ -249,5 +249,31 @@ describe('loadout', () => {
     expect(ok.ok && ok.value.loadout).toEqual([{ type: 'snowball', rarity: 1 }]);
     const bad = validateAreaSubmission({ ...body, loadout: [{ type: 'reclaim', rarity: 1 }] });
     expect(bad.ok ? null : bad.field).toBe('loadout');
+  });
+});
+
+describe('universes', () => {
+  const win = (over: Partial<ScoreSubmission> = {}) =>
+    submission({ maxRadius: 820, tierReached: 9, debrisAbsorbed: 9000, durationMs: 1_900_000, victory: true, ...over });
+
+  it('is optional (older clients, null included) and returned when sent', () => {
+    const old = validateSubmission(win());
+    expect(old.ok && 'universes' in old.value).toBe(false);
+    const nul = validateSubmission({ ...win(), universes: null });
+    expect(nul.ok && 'universes' in nul.value).toBe(false);
+    const r = validateSubmission(win({ universes: 3 }));
+    expect(r.ok && r.value.universes).toBe(3);
+    const lost = validateSubmission(submission({ universes: 0 }));
+    expect(lost.ok && lost.value.universes).toBe(0);
+  });
+
+  it('is an integer from 0 to 100,000, and a victory counts itself', () => {
+    expect(err(submission({ universes: -1 }))).toBe('universes');
+    expect(err(submission({ universes: 1.5 }))).toBe('universes');
+    expect(err(submission({ universes: 100_001 }))).toBe('universes');
+    expect(err({ ...submission(), universes: '2' })).toBe('universes');
+    expect(err(submission({ universes: 100_000 }))).toBeNull();
+    expect(err(win({ universes: 0 }))).toBe('universes');
+    expect(err(win({ universes: 1 }))).toBeNull();
   });
 });

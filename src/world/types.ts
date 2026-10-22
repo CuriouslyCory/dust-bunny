@@ -1,9 +1,9 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-/** Which world a layout describes: the house floor, the street outside, the city, the region, the continent, the globe, the solar system, then the galaxy. */
-export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent' | 'globe' | 'solar_system' | 'galaxy';
-export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy'];
+/** Which world a layout describes: the house floor, the street outside, the city, the region, the continent, the globe, the solar system, the galaxy, then the universe. */
+export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent' | 'globe' | 'solar_system' | 'galaxy' | 'universe';
+export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system', 'galaxy', 'universe'];
 
 /** The area after `area` (null for the last one). */
 export function nextArea(area: AreaId): AreaId | null {
@@ -32,7 +32,13 @@ export type SolarZoneType = 'corona' | 'inner_orbits' | 'asteroid_belt' | 'outer
  * and the thin stellar `halo` at the edge.
  */
 export type GalaxyZoneType = 'galactic_core' | 'bar' | 'inner_arms' | 'dust_lanes' | 'outer_arms' | 'halo';
-export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType | GlobeZoneType | SolarZoneType | GalaxyZoneType;
+/**
+ * Universe zones, the cosmic web seen from outside: the `superclusters` at the web's nodes, the
+ * bright `filaments` joining them, the thinner `sheets` beside the filaments and the empty `voids`
+ * between (voids slow the Bunny).
+ */
+export type UniverseZoneType = 'superclusters' | 'filaments' | 'sheets' | 'voids';
+export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType | GlobeZoneType | SolarZoneType | GalaxyZoneType | UniverseZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
 export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
@@ -41,6 +47,7 @@ export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mo
 export const GLOBE_ZONE_TYPES: readonly GlobeZoneType[] = ['oceans', 'shelves', 'landmasses', 'archipelagos', 'icecaps'];
 export const SOLAR_ZONE_TYPES: readonly SolarZoneType[] = ['corona', 'inner_orbits', 'asteroid_belt', 'outer_orbits', 'kuiper_belt'];
 export const GALAXY_ZONE_TYPES: readonly GalaxyZoneType[] = ['galactic_core', 'bar', 'inner_arms', 'dust_lanes', 'outer_arms', 'halo'];
+export const UNIVERSE_ZONE_TYPES: readonly UniverseZoneType[] = ['superclusters', 'filaments', 'sheets', 'voids'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
@@ -70,9 +77,13 @@ export function isGalaxyZone(type: RoomType): type is GalaxyZoneType {
   return (GALAXY_ZONE_TYPES as readonly string[]).includes(type);
 }
 
+export function isUniverseZone(type: RoomType): type is UniverseZoneType {
+  return (UNIVERSE_ZONE_TYPES as readonly string[]).includes(type);
+}
+
 /** The area a room / zone type belongs to. */
 export function zoneArea(type: RoomType): AreaId {
-  return isGalaxyZone(type) ? 'galaxy' : isSolarZone(type) ? 'solar_system' : isGlobeZone(type) ? 'globe' : isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
+  return isUniverseZone(type) ? 'universe' : isGalaxyZone(type) ? 'galaxy' : isSolarZone(type) ? 'solar_system' : isGlobeZone(type) ? 'globe' : isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
 }
 
 export type FloorMaterialId =
@@ -115,7 +126,12 @@ export type FloorMaterialId =
   | 'galaxyCore'
   | 'galaxyArm'
   | 'galaxyDust'
-  | 'galaxyHalo';
+  | 'galaxyHalo'
+  // Universe (the cosmic web, 1 unit = 10 Mly): the bright nodes and filaments, the faint sheets and the dark voids.
+  | 'universeNode'
+  | 'universeFilament'
+  | 'universeSheet'
+  | 'universeVoid';
 
 export interface Room {
   id: string;
@@ -187,7 +203,8 @@ export interface DebrisPlacement {
  * region's westbound motorway out to the continent (closed until the Incinerator is absorbed) or
  * the continent's launch corridor up to orbit on the north coast (closed until the Ice Sheet is absorbed) or
  * the globe's escape trajectory over the North Pole (closed until the Orbital Sweeper is absorbed) or
- * the solar system's heliopause gate on the north edge of the ecliptic (closed until the Sun is absorbed).
+ * the solar system's heliopause gate on the north edge of the ecliptic (closed until the Sun is absorbed) or
+ * the galaxy's intergalactic gate out of the halo (closed until Sagittarius A* is absorbed).
  * While closed it is an obstacle; `rect` is the opening in the outer wall / hedge.
  */
 export interface ExitDoor {
@@ -209,13 +226,13 @@ export interface GroundMarking {
 
 /**
  * A route across the map that lane / trail Hazards can follow (the Continent's rivers and glacier
- * lanes, the Globe's orbit lanes, the Solar System's orbit rings, the Galaxy's orbits round the core): a polyline in course order (source
- * first), `width` across; axis-aligned except the Solar System's and the Galaxy's rings, which are closed loops round the
+ * lanes, the Globe's orbit lanes, the Solar System's orbit rings, the Galaxy's orbits round the core, the Universe's filaments): a polyline in course order (source
+ * first), `width` across; axis-aligned except the Universe's filaments (straight, node to node) and the Solar System's and the Galaxy's rings, which are closed loops round the
  * Sun / the galactic core (first point repeated last). Data only.
  */
 export interface MapRoute {
   id: string;
-  kind: 'river' | 'glacier' | 'orbit';
+  kind: 'river' | 'glacier' | 'orbit' | 'filament';
   points: Array<{ x: number; z: number }>;
   width: number;
 }

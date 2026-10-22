@@ -5,7 +5,7 @@
  *   POST /api/leaderboard[?board=…]  body: submission            -> 201 { entry, rank, nameCensored }
  *
  * Boards: `run` (default: whole Runs, body ScoreSubmission, rows LeaderboardEntry) and one Area
- * board per Area, `house` | `neighborhood` | `city` | `region` | `continent` | `globe` | `solar_system` | `galaxy` (a Run clearing that Area, body
+ * board per Area, `house` | `neighborhood` | `city` | `region` | `continent` | `globe` | `solar_system` | `galaxy` | `universe` (a Run clearing that Area, body
  * AreaScoreSubmission, rows AreaLeaderboardEntry). See src/shared/leaderboard.ts.
  *
  * A POST with a valid session cookie (see server/auth.ts) stores the player's user id, and the entry
@@ -28,6 +28,8 @@
  * Entries carry the Run's Loadout (`loadout`: up to two `{ type, rarity }` Keepsakes, column
  * `loadout jsonb`, NULL for older clients that send none; rows and clients from before rarities use
  * `{ type, grade }`, 1–10, read and accepted as rarities by `parseLoadout`).
+ * Run board entries also carry `universes` (the player's Universe victories when posting; column
+ * `universes integer`, NULL for clients from before Act 9).
  *
  * Every Difficulty shares one board: submitted scores already include the Difficulty
  * multiplier (see src/shared/score.ts), and each entry carries its `difficulty`.
@@ -86,6 +88,8 @@ interface Row {
   // Run board
   tier_reached?: number;
   victory?: boolean;
+  /** NULL for entries from clients before Act 9. */
+  universes?: number | null;
   // Area boards
   area?: string;
   radius_in?: number;
@@ -111,14 +115,19 @@ function common(r: Row) {
   };
 }
 
-const toRunEntry = (r: Row): LeaderboardEntry => ({ ...common(r), tierReached: Number(r.tier_reached), victory: Boolean(r.victory) });
+const toRunEntry = (r: Row): LeaderboardEntry => ({
+  ...common(r),
+  tierReached: Number(r.tier_reached),
+  victory: Boolean(r.victory),
+  ...(r.universes != null ? { universes: Number(r.universes) } : {}),
+});
 const toAreaEntry = (r: Row): AreaLeaderboardEntry => ({
   ...common(r),
   area: isAreaBoardId(r.area) ? r.area : 'house',
   radiusIn: Number(r.radius_in),
 });
 
-const RUN_COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, loadout, user_id IS NOT NULL AS verified, created_at';
+const RUN_COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, loadout, universes, user_id IS NOT NULL AS verified, created_at';
 const AREA_COLUMNS = 'id, area, name, character, score, radius_in, max_radius, debris_absorbed, duration_ms, difficulty, loadout, user_id IS NOT NULL AS verified, created_at';
 
 interface BoardSql {
@@ -225,8 +234,8 @@ function prepareInsert(board: BoardId, body: unknown): { columns: string[]; valu
     if (!r.ok) throw new HttpError(400, 'invalid', r.message, { field: r.field });
     const s = r.value;
     return {
-      columns: ['name', 'character', 'score', 'max_radius', 'debris_absorbed', 'tier_reached', 'duration_ms', 'victory', 'difficulty', 'run_id', 'loadout'],
-      values: [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, s.difficulty, s.runId ?? null, loadoutJson(s.loadout)],
+      columns: ['name', 'character', 'score', 'max_radius', 'debris_absorbed', 'tier_reached', 'duration_ms', 'victory', 'difficulty', 'run_id', 'loadout', 'universes'],
+      values: [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, s.difficulty, s.runId ?? null, loadoutJson(s.loadout), s.universes ?? null],
       runId: s.runId,
       nameCensored: s.nameCensored,
     };

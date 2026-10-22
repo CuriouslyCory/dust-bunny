@@ -14,14 +14,17 @@
  * In the Solar System the Comet (COMET, `ringReach`) rides the closed orbit ring nearest its spawn
  * one way round (`ringPath`, `ringPoint`): no ends, a short telegraph lane sliding ahead of it, its
  * `tail` fluttering (`flutterNode`). In the Galaxy the Globular Cluster (GLOBULAR_CLUSTER) rides
- * the galactic orbit rings the same way, its star `swarm` turning (`swirlNode`).
+ * the galactic orbit rings the same way, its star `swarm` turning (`swirlNode`). In the Universe
+ * the Colliding Galaxy (COLLIDING_GALAXY, `filamentReach`) patrols back and forth along the cosmic
+ * web filament nearest its spawn (`filamentLane`), its two galaxies turning opposite ways
+ * (`swirlNodes`).
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COLLIDING_GALAXY, COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -122,6 +125,65 @@ function joinOrbit(run: Run, x: number, z: number, reach: number, c: LaneShape):
   // Re-centre the lane on the new start (it stays on the same route).
   const moved = orbitLane(run.house, px, lane.az, reach, c);
   return moved ? { lane: moved, t: (px - moved.ax) / moved.length } : { lane, t: Math.min(1, Math.max(0, onLane(px))) };
+}
+
+/**
+ * A lane along the `filament` route nearest (x, z), if one passes within `reach` of it (the
+ * Universe's cosmic web; filaments are open node-to-node segments in any direction): centred on
+ * the point of the filament nearest (x, z), kept `size` from the filament's ends, up to laneMax
+ * long and clear of obstacles. Null if no filament is in reach or the lane would be shorter than
+ * laneMin.
+ */
+export function filamentLane(house: HouseLayout, x: number, z: number, reach: number, c: LaneShape): Lane | null {
+  let best: { px: number; pz: number; ux: number; uz: number; back: number; fwd: number; d: number } | null = null;
+  for (const route of house.routes ?? []) {
+    if (route.kind !== 'filament') continue;
+    for (let i = 0; i + 1 < route.points.length; i++) {
+      const a = route.points[i]!;
+      const b = route.points[i + 1]!;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (len < c.size * 2 + c.laneMin) continue;
+      const ux = (b.x - a.x) / len;
+      const uz = (b.z - a.z) / len;
+      const f = Math.min(len - c.size, Math.max(c.size, (x - a.x) * ux + (z - a.z) * uz));
+      const px = a.x + ux * f;
+      const pz = a.z + uz * f;
+      const d = Math.hypot(px - x, pz - z);
+      if (d <= reach && (!best || d < best.d)) best = { px, pz, ux, uz, back: f - c.size, fwd: len - c.size - f, d };
+    }
+  }
+  if (!best) return null;
+  const step = Math.max(4 / areaUnit(house.area), c.size / 4);
+  // Centred where it can be: a short side gives its slack to the other, up to laneMax in all.
+  const fwdRoom = Math.min(best.fwd, freeDistance(house, best.px, best.pz, best.ux, best.uz, c.size, c.height, c.laneMax, step));
+  const backRoom = Math.min(best.back, freeDistance(house, best.px, best.pz, -best.ux, -best.uz, c.size, c.height, c.laneMax, step));
+  const half = c.laneMax / 2;
+  const fwd = Math.min(fwdRoom, Math.max(half, c.laneMax - backRoom));
+  const back = Math.min(backRoom, c.laneMax - fwd);
+  if (fwd + back < c.laneMin) return null;
+  return { ax: best.px - best.ux * back, az: best.pz - best.uz * back, bx: best.px + best.ux * fwd, bz: best.pz + best.uz * fwd, length: fwd + back };
+}
+
+/**
+ * The filament lane for a lane Hazard spawned at (x, z), and where on it (0..1) it starts. A spawn
+ * point off screen (the director's) stays off screen: if joining the lane would bring it into
+ * view it starts further along, away from the Bunny; if the whole lane is in view it is null (the
+ * Hazard plans a lane through its spawn point instead).
+ */
+function joinFilament(run: Run, x: number, z: number, reach: number, c: LaneShape): { lane: Lane; t: number } | null {
+  const lane = filamentLane(run.house, x, z, reach, c);
+  if (!lane) return null;
+  const ux = (lane.bx - lane.ax) / lane.length;
+  const uz = (lane.bz - lane.az) / lane.length;
+  let s = Math.min(lane.length, Math.max(0, (x - lane.ax) * ux + (z - lane.az) * uz));
+  if (onScreen(run, x, z, c.size)) return { lane, t: s / lane.length };
+  const b = run.bunny;
+  const away = Math.sign((lane.ax + ux * s - b.x) * ux + (lane.az + uz * s - b.z) * uz) || 1;
+  for (let i = 0; i < 200 && onScreen(run, lane.ax + ux * s, lane.az + uz * s, c.size); i++) {
+    s += away * c.size;
+    if (s < 0 || s > lane.length) return null;
+  }
+  return { lane, t: s / lane.length };
 }
 
 /** A closed orbit ring (a `routes` polyline of kind 'orbit' whose last point is its first) as an arc-length path. */
@@ -240,7 +302,7 @@ export class LintRoller extends BaseHazard {
       return;
     }
     this.ringDecal = null;
-    const orbit = cfg.orbitReach ? joinOrbit(run, x, z, cfg.orbitReach, cfg) : null;
+    const orbit = cfg.orbitReach ? joinOrbit(run, x, z, cfg.orbitReach, cfg) : cfg.filamentReach ? joinFilament(run, x, z, cfg.filamentReach, cfg) : null;
     this.lane = orbit?.lane ?? planLane(run.house, x, z, rng, cfg);
     this.dir = rng.chance(0.5) ? 1 : -1;
     if (!this.lane) {
@@ -304,6 +366,7 @@ export class LintRoller extends BaseHazard {
       if (tail) tail.scale.set(1 + 0.06 * Math.sin(this.time * 7.3), 1, 1 + 0.08 * Math.sin(this.time * 4.1));
     }
     if (c.swirlNode) this.spin(c.swirlNode, dt * (c.swirlRate ?? 0));
+    if (c.swirlNodes) for (const [node, rate] of c.swirlNodes) this.spin(node, dt * rate);
     if (this.ring) {
       if (this.pause > 0) this.pause -= dt;
       else this.s += this.tierSpeed(run, c.speed) * dt * this.dir;
@@ -507,5 +570,17 @@ export const globularClusterDef = hazardRegistry.register({
   modelId: GLOBULAR_CLUSTER.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, GLOBULAR_CLUSTER);
+  },
+});
+
+/** Universe lane patrol: a galaxy on a collision course (COLLIDING_GALAXY). */
+export const collidingGalaxyDef = hazardRegistry.register({
+  id: 'colliding_galaxy',
+  name: 'Colliding Galaxy',
+  footprint: tuningFootprint(COLLIDING_GALAXY),
+  mass: COLLIDING_GALAXY.mass,
+  modelId: COLLIDING_GALAXY.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, COLLIDING_GALAXY);
   },
 });

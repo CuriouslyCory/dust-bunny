@@ -87,6 +87,18 @@ describe('RunPosts', () => {
     expect((await client.getTop()).entries[0]?.loadout).toEqual(loadout);
   });
 
+  it('sends the Universes count with the Run board entry only', async () => {
+    const { client } = offlineClient();
+    const seen: unknown[] = [];
+    const posts = new RunPosts(client, 'lint', 'casual', true, [], (e) => (seen.push(e), 4));
+    const e = { reason: 'died' as const, stats: stats([house, neighborhood]) };
+    posts.finish(e);
+    expect(seen).toEqual([e]);
+    await posts.post('Bea');
+    expect(posts.get('run')?.result?.entry).toMatchObject({ universes: 4 });
+    expect(posts.get('house')?.result?.entry).not.toHaveProperty('universes');
+  });
+
   it('ranks only Runs without debug tools that start in the house', () => {
     expect(isRankedRun(false, { area: undefined })).toBe(true);
     expect(isRankedRun(false, { area: 'house' })).toBe(true);

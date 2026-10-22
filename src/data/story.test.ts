@@ -14,6 +14,7 @@ function allCaptions(): Array<[string, string]> {
     out.push(['intro', p.caption]);
     if (p.caption2) out.push(['intro', p.caption2]);
   }
+  for (const p of STORY.ending) if (p.caption) out.push([`ending ${p.shot}`, p.caption]);
   for (const [id, lines] of Object.entries(STORY.tiers)) for (const l of lines) for (const c of parts(l)) out.push([`tier ${id}`, c]);
   for (const [area, a] of Object.entries(STORY.areas)) {
     out.push([`${area} title`, a.title]);

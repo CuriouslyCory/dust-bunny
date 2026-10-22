@@ -68,6 +68,14 @@ describe('leaderboard client', () => {
     expect(hard.score).toBe(Math.round(casual.score * 1.6));
   });
 
+  it('sends universes only when given, and the local board keeps it', async () => {
+    expect('universes' in submissionFromRun(stats, 'died', 'Alice')).toBe(false);
+    expect(submissionFromRun(stats, 'died', 'Alice', undefined, 2).universes).toBe(2);
+    const client = createLeaderboardClient({ storage: memoryStorage(), fetch: async () => new Response('not found', { status: 404 }) });
+    await client.submitScore(submissionFromRun(stats, 'died', 'Alice', undefined, 2));
+    expect((await client.getTop()).entries[0]?.universes).toBe(2);
+  });
+
   it('stores the difficulty locally and reads old local entries as casual', async () => {
     const storage = memoryStorage();
     const old = { id: 'old', name: 'Oldie', character: 'zap', score: 10, maxRadius: 1, debrisAbsorbed: 1, tierReached: 1, durationMs: 5000, victory: false, createdAt: '2025-01-01T00:00:00.000Z' };

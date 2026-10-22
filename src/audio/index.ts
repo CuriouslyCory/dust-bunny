@@ -10,6 +10,7 @@
 import type { Game } from '../game/game';
 import { isBossHazard, onLoose } from '../ui/looseEvents';
 import { settings } from '../ui/settings';
+import { EndingAudio } from './ending';
 import { AudioEngine } from './engine';
 import { IntroSounds } from './introSounds';
 import { Music } from './music';
@@ -103,7 +104,8 @@ export function installAudio(game: Game): GameAudio {
   ev.on('hazardClogged', (e) => sfx.clog(e.boss));
   // Weather (the Continent, the Globe's Hurricane, the Solar Flare, the Supernova): the gust, the Volcano's, the Ice Sheet's, the Sun's CME and Sagittarius A*'s charge rumble.
   ev.on('hazardTelegraph', (e) => {
-    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova') sfx.windRoar();
+    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare' || e.defId === 'supernova' || e.defId === 'dark_energy_gust') sfx.windRoar();
+    else if (e.defId === 'gamma_ray_burst') sfx.burstCharge(e.duration);
     else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun' || e.defId === 'sagittarius_a') && e.attack === 'charge')) sfx.rumble();
   });
   // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse), or Sagittarius A*'s indigestion.
@@ -111,6 +113,12 @@ export function installAudio(game: Game): GameAudio {
     const area = game.run?.area;
     if ((e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system' || area === 'galaxy')) || e.cause === 'indigestion') sfx.rumble(true);
   });
+  // The Expansion: a stretching drone while it is alive (the swells overlap), a rip, a crunch.
+  ev.on('bossTug', (e) => {
+    if (e.hubble > 0) sfx.expansionDrone(e.gravity);
+  });
+  ev.on('bossRip', () => sfx.rip());
+  ev.on('bossCollapse', (e) => sfx.crunch(e.duration));
   // Sagittarius A* gulps a star cluster.
   ev.on('bossSwallowed', () => sfx.rumble());
   ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
@@ -153,7 +161,11 @@ export function installAudio(game: Game): GameAudio {
 
   ev.on('paused', (e) => engine.setDuck(e.reason === 'paused' ? 0.35 : 0.6));
   ev.on('resumed', () => engine.setDuck(1));
+  // The ending (src/story/endingScreen.ts): a cue as each shot starts; leaving it fades what still sounds.
+  const ending = new EndingAudio(engine, music, sfx);
+  ev.on('storyCue', (e) => ending.cue(e.cue, settings.value.reducedMotion));
   ev.on('screenChanged', (e) => {
+    if (e.from === 'ending') ending.stop();
     if (e.to === 'title' || e.to === 'results') {
       engine.setDuck(1);
       music.setBoss(false);

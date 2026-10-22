@@ -67,10 +67,11 @@ function areaSub(name: string, extra: { maxRadius?: number; runId?: string; area
 const post = (path: string, body: unknown, cookie?: string) =>
   call(leaderboardApi, path, { method: 'POST', cookie, body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-boards` } });
 
-const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, characters: Progress['characters'] = {}): Progress => ({
+const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, characters: Progress['characters'] = {}, universes = 0): Progress => ({
   fluff,
   upgrades,
   characters,
+  universes,
   stats: { runs, wins: 0, bestRadius: 2.5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
 });
 
@@ -183,6 +184,21 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect(top.entries.find((e) => e.name === `T${RUN}k`)?.loadout ?? returned).toEqual(returned);
   });
 
+  it('stores and returns universes on the Run board; older clients without it are still accepted', async () => {
+    const post = (body: unknown) =>
+      call(leaderboardApi, '/api/leaderboard', { method: 'POST', body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-universes` } });
+    const withCount = await post({ ...submission(`T${RUN}u`), universes: 2 });
+    expect(withCount.status).toBe(201);
+    expect(((await withCount.json()) as { entry: { universes?: unknown } }).entry.universes).toBe(2);
+    const older = await post(submission(`T${RUN}uo`));
+    expect(older.status).toBe(201);
+    expect('universes' in ((await older.json()) as { entry: object }).entry).toBe(false);
+    expect((await post({ ...submission(`T${RUN}ub`), universes: -1 })).status).toBe(400);
+    const top = (await (await call(leaderboardApi, '/api/leaderboard?character=lint')).json()) as { entries: Array<{ name: string; universes?: unknown }> };
+    const listed = top.entries.find((e) => e.name === `T${RUN}u`);
+    if (listed) expect(listed.universes).toBe(2);
+  });
+
   it('keeps Area boards separate from the Run board and from each other', async () => {
     const res = await post('/api/leaderboard?board=house', areaSub(`T${RUN}h`, { maxRadius: 159 }));
     expect(res.status).toBe(201);
@@ -286,6 +302,20 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect((await put(legacy)).progress.characters).toEqual({ lint: { hoard: { 'reclaim:rare': 2 }, bossesBeaten: ['robovac_9000'] } });
     const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...felted, characters: { lint: { hoard: { 'arc:1': 1 }, bossesBeaten: [] } } }) });
     expect(bad.status).toBe(400);
+  });
+
+  it('never lowers universes, even when an upload is refused or an older bundle omits it', async () => {
+    const cookie = await signUp(`Uni${RUN}`);
+    const put = async (p: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };
+    expect(await put(progress(100, 100, 2, {}, {}, 2))).toMatchObject({ accepted: true, progress: { universes: 2 } });
+    // Accepted with a lower count (another device): the stored count stays.
+    expect(await put(progress(120, 130, 3, {}, {}, 1))).toMatchObject({ accepted: true, progress: { universes: 2 } });
+    // An older bundle without the field.
+    const { universes: _u, ...older } = progress(130, 140, 4);
+    expect(await put(older)).toMatchObject({ accepted: true, progress: { universes: 2 } });
+    // Refused (less lifetime progress), but its higher count is kept.
+    expect(await put(progress(0, 10, 1, {}, {}, 5))).toMatchObject({ accepted: false, progress: { fluff: 130, universes: 5 } });
+    expect((await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...older, universes: 1.5 }) })).status).toBe(400);
   });
 
   it('keeps the leaderboard working, anonymous only, when accounts are not configured', async () => {

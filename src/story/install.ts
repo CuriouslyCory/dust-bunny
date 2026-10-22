@@ -1,6 +1,6 @@
 /**
- * Browser wiring for the story (called once from main.ts): registers the intro and chapter
- * screens and tells one-off Debris lines. The other beats are hosted by the UI that already
+ * Browser wiring for the story (called once from main.ts): registers the intro, chapter and
+ * ending screens and tells one-off Debris lines. The other beats are hosted by the UI that already
  * shows that moment (see ./index.ts).
  */
 import { STORY, type StoryLine } from '../data/story';
@@ -9,6 +9,7 @@ import { absorbedName } from '../ui/looseEvents';
 import type { AreaId } from '../world/types';
 import { captionDuration, introDue, narrate, requestIntro, setStoryAvailable, storyCaption } from './index';
 import { introStage } from './introScript';
+import { registerEndingScreen } from './endingScreen';
 import { canShowChapter, registerStoryScreens, type ChapterParams } from './screens';
 
 export interface StoryOptions {
@@ -19,6 +20,7 @@ export interface StoryOptions {
 export function installStory(game: Game, opts: StoryOptions = {}): void {
   setStoryAvailable(opts.available ?? true);
   registerStoryScreens();
+  registerEndingScreen();
 
   // The intro is a camera move inside the new Run: a first Run (or the one after Replay intro)
   // opens on the intro screen rather than play, if it starts under the couch.

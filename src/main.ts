@@ -5,7 +5,7 @@
  *   ?character=zap  starting Character (lint | tumble | zap)
  *   ?difficulty=arcade  Difficulty (casual | arcade | hardcore; otherwise the last one picked)
  *   ?autostart      skip the title screen (and the story: no intro, no narrator)
- *   ?area=neighborhood|city|region|continent|globe|solar_system|galaxy  start Runs in a later area (skips the earlier ones; debug / testing)
+ *   ?area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe  start Runs in a later area (skips the earlier ones; debug / testing)
  */
 import './styles.css';
 import { installAudio } from './audio';

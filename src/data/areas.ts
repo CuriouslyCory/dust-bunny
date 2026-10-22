@@ -4,7 +4,7 @@
  * every size or distance in an Area's content are in its unit; the Run re-bases the Bunny on
  * entry so it arrives at ~1 unit and the House's Speck→Fluff curve repeats at each scale.
  */
-import { nextArea, type AreaId } from '../world/types';
+import { nextArea, type AreaId, type RoomType } from '../world/types';
 import type { LengthUnitId } from './units';
 
 export interface AreaTuning {
@@ -34,6 +34,11 @@ export interface AreaTuning {
    * either Area: Area stats, Fluff and scores count from the radius after the leap. Missing: no leap.
    */
   arrivalRadius?: number;
+  /**
+   * Zones the spawner fills more thinly (0..1: the share of spawn attempts that land there and are
+   * kept; missing zones are 1). The Universe's voids are nearly empty and its sheets sparse.
+   */
+  zoneDensity?: Partial<Record<RoomType, number>>;
 }
 
 export const AREAS: Record<AreaId, AreaTuning> = {
@@ -103,6 +108,25 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     readout: 'ly',
     fluffPerUnit: 1.5,
     arrivalRadius: 0.85,
+  },
+  // 1 world unit = 10 megalight-years (9.461e24 cm, 10 × the `Mly` rung in units.ts). The Galaxy
+  // ends at ≈400 ly (≈4e-5 units), so the Bunny leaps a fifth time, to 0.85 units (8.5 Mly;
+  // galaxies and clusters are drawn at play size, not to scale): Tier 20 starts at 1 and Tier 21
+  // (Everything) at 3. The readout is in Mly. The cosmic web is flat; the last Area. The voids
+  // are nearly empty and the sheets sparse (`zoneDensity`); growth is tuned so an `--area=` start
+  // reaches Tier 21 in about 3–4 minutes (docs/design.md, Universe pacing).
+  universe: {
+    name: 'The Universe',
+    tiers: [20, 21],
+    initialScatter: 2400,
+    startCluster: 120,
+    startClusterRadius: 11,
+    growth: 0.32,
+    unit: 9.461e24,
+    readout: 'Mly',
+    fluffPerUnit: 1.5,
+    arrivalRadius: 0.85,
+    zoneDensity: { voids: 0.08, sheets: 0.45 },
   },
 };
 

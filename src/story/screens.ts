@@ -1,7 +1,7 @@
 /**
  * Story screens: the intro (the diegetic camera move inside the new Run, docs/story.md "Intro
- * sequence", played by ./intro.ts) and the chapter card shown on arriving in an Area. Both are
- * built on `storyCards`, a caption player that the ending will reuse. Captions appear whole (no
+ * sequence", played by ./intro.ts) and the chapter card shown on arriving in an Area (the ending is
+ * ./endingScreen.ts). All are built on `storyCards`, a caption player. Captions appear whole (no
  * typewriter): fade in, hold, fade out.
  */
 import { STORY, type StoryLine, type StoryPanel } from '../data/story';
@@ -12,7 +12,7 @@ import { settings } from '../ui/settings';
 import type { AreaId } from '../world/types';
 import { DiegeticIntro } from './intro';
 import { aimUnderCouch, introStage } from './introScript';
-import { CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming } from './narrator';
+import { CAPTION_FADE_OUT, captionHold, captions, chapterOf, panelTiming, type CardPanel } from './narrator';
 
 /** Pointer or key held this long skips the whole sequence. */
 const HOLD_TO_SKIP = 0.6;
@@ -23,9 +23,14 @@ export interface StoryCards {
   el: HTMLElement;
   /**
    * Plays `panels` from the first; `done` runs once, when the last ends or on skip. `onPanel`
-   * runs as each panel shows, with its timing (narrator.ts `panelTiming`).
+   * runs as each panel starts, with its timing (narrator.ts `panelTiming`; the intro's camera and
+   * the ending's shots and sound cues follow it).
    */
-  play(panels: readonly StoryPanel[], done: () => void, onPanel?: (index: number, timing: { reveal: number; hold: number }) => void): void;
+  play<P extends CardPanel>(panels: readonly P[], done: () => void, onPanel?: (panel: P, index: number, timing: { reveal: number; hold: number }) => void): void;
+  /** The panel showing (-1 when idle), seconds since it started and its total hold. */
+  readonly index: number;
+  readonly elapsed: number;
+  readonly hold: number;
   /** Next panel now (the last one finishes the sequence). */
   advance(): void;
   /** Ends the sequence now. */
@@ -39,27 +44,27 @@ export function storyCards(): StoryCards {
   const el = h('div', { className: 'story-cards' }, first, second);
   el.setAttribute('role', 'status');
   el.setAttribute('aria-live', 'polite');
-  let panels: readonly StoryPanel[] = [];
+  let panels: readonly CardPanel[] = [];
+  let onPanel: ((panel: CardPanel, index: number, timing: { reveal: number; hold: number }) => void) | undefined;
   let index = -1;
   let t = 0;
   /** The current panel's timing at the reading pace (narrator.ts `panelTiming`). */
   let timing = { reveal: 0, hold: 0 };
   let finish: (() => void) | null = null;
-  let onPanel: ((index: number, timing: { reveal: number; hold: number }) => void) | undefined;
 
   const show = (i: number): void => {
     index = i;
     t = 0;
     const p = panels[i]!;
     timing = panelTiming(p);
-    first.textContent = p.caption;
+    first.textContent = p.caption ?? '';
     second.textContent = p.caption2 ?? '';
     second.hidden = !p.caption2;
     first.classList.remove('show');
     second.classList.remove('show');
     void el.offsetWidth;
-    first.classList.add('show');
-    onPanel?.(i, timing);
+    if (p.caption) first.classList.add('show');
+    onPanel?.(p, i, timing);
   };
   const end = (): void => {
     const f = finish;
@@ -74,10 +79,19 @@ export function storyCards(): StoryCards {
   };
   return {
     el,
-    play(next, done, panelShown) {
+    get index() {
+      return index;
+    },
+    get elapsed() {
+      return t;
+    },
+    get hold() {
+      return timing.hold;
+    },
+    play(next, done, each) {
       panels = next;
       finish = done;
-      onPanel = panelShown;
+      onPanel = each as typeof onPanel;
       if (panels.length) show(0);
       else end();
     },
@@ -117,7 +131,7 @@ export interface ChapterParams {
  * Tap / click: a quick press calls `tap`, a long one `hold`. `tick` runs per frame; `reset`
  * forgets a press still down (call it on enter / exit: its release may land on another screen).
  */
-function pressHandler(el: HTMLElement, tap: () => void, hold: () => void): { tick(dt: number): void; reset(): void } {
+export function pressHandler(el: HTMLElement, tap: () => void, hold: () => void): { tick(dt: number): void; reset(): void } {
   let held: number | null = null;
   el.addEventListener('pointerdown', (e) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -189,7 +203,7 @@ export function registerStoryScreens(): void {
           black.style.opacity = '1';
           // Story captions off (only possible from Replay intro): the shots play without the words.
           el.classList.toggle('captions-off', !settings.value.storyCaptions);
-          cards.play(STORY.intro, finish, (i, timing) => intro?.enterShot(i, timing.hold, STORY.intro[i]?.caption2 ? timing.reveal : 0));
+          cards.play(STORY.intro, finish, (_panel, i, timing) => intro?.enterShot(i, timing.hold, STORY.intro[i]?.caption2 ? timing.reveal : 0));
         },
         exit() {
           // Left some other way: still counts as seen, but doesn't navigate.

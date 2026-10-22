@@ -213,6 +213,8 @@ export function dropCaption(bossId: string, bossName: string): string {
       return 'The Sun is made of the same stuff as everything else, only hotter. It keeps some.';
     case 'sagittarius_a':
       return 'Caught at the edge of Sagittarius A* is lint that has been falling in for thirteen billion years. It keeps some.';
+    case 'the_expansion':
+      return 'The Expansion was holding everything apart, including some very old dust. It keeps some.';
     default:
       return `${bossName} was full of things somebody dropped. It keeps some.`;
   }

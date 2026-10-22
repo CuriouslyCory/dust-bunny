@@ -44,6 +44,8 @@ const TICK_MS = 60;
 export class Music {
   intensity = 0.15;
   private boss = false;
+  /** Hushed: the loop keeps time but plays nothing (the ending's held note and silence). */
+  private hushed = false;
   private playing = false;
   /** Held silent (the intro, until "Grow."): start() does nothing. */
   private held = false;
@@ -63,6 +65,11 @@ export class Music {
 
   setBoss(on: boolean): void {
     this.boss = on;
+  }
+
+  /** Stops (true) or restarts (false) new notes; notes already sounding ring out. */
+  hush(on: boolean): void {
+    this.hushed = on;
   }
 
   start(): void {
@@ -113,6 +120,7 @@ export class Music {
   }
 
   private playStep(step: number, t: number): void {
+    if (this.hushed) return;
     const a = this.a;
     const dest = a.music;
     const I = this.intensity;
