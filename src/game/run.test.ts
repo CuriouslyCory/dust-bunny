@@ -92,10 +92,14 @@ describe('Run (headless)', () => {
     run.openExit(); // the Incinerator fell: the motorway west opens
     expect(run.leaveArea()).toBe(true);
     expect(run.area).toBe('continent');
-    run.openExit(); // no exit in the last area: the Ice Sheet wins the Run instead
+    expect(run.canLeaveArea).toBe(false); // the launch corridor is still shut
+    run.openExit(); // the Ice Sheet fell: the launch corridor up to orbit opens
+    expect(run.leaveArea()).toBe(true);
+    expect(run.area).toBe('globe');
+    run.openExit(); // no exit in the last area: the Orbital Sweeper wins the Run instead
     expect(run.canLeaveArea).toBe(false);
     expect(run.leaveArea()).toBe(false);
-    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent']);
+    expect(entered).toEqual(['neighborhood', 'city', 'region', 'continent', 'globe']);
   });
 
   it('re-bases the Bunny into the Region unit on entry, keeping its real size', () => {
@@ -170,8 +174,13 @@ describe('Run (headless)', () => {
     expect(run.house.exit?.open).toBe(true);
     run.leaveArea();
     run.clearArea();
-    expect(order).toEqual(['exit:region', 'victory', 'end:victory']);
-    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, area: 'continent' });
+    expect(run.continentCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.endReason).toBeNull();
+    run.leaveArea();
+    run.clearArea();
+    expect(order).toEqual(['exit:region', 'exit:continent', 'victory', 'end:victory']);
+    expect(run.getStats()).toMatchObject({ cityCleared: true, regionCleared: true, continentCleared: true, globeCleared: true, area: 'globe' });
   });
 
   it('records each Area it plays and emits areaCompleted on leaving a cleared one', () => {
@@ -199,7 +208,7 @@ describe('Run (headless)', () => {
     expect(completed).toHaveLength(1); // dying mid-Area completes nothing
   });
 
-  it('counts the City and the Region as cleared once their exits open, and the Continent only on victory', () => {
+  it('counts the City, the Region and the Continent as cleared once their exits open, and the Globe only on victory', () => {
     const events = new EventBus();
     const run = new Run(events, { seed: 'city', characterId: 'zap', area: 'city' });
     expect(run.getStats().areas!.map((a) => a.area)).toEqual(['city']); // a debug start skips the earlier Areas
@@ -218,7 +227,16 @@ describe('Run (headless)', () => {
     expect(continent.tier).toBe(11);
     expect(continent.getStats().areas!.map((a) => a.area)).toEqual(['continent']);
     continent.clearArea();
-    expect(continent.endReason).toBe('victory');
+    expect(continent.endReason).toBeNull();
     expect(continent.getStats().areas![0]!.cleared).toBe(true);
+    // A debug start on the Globe begins at the Ice-Sheet-beaten size (44 km), then leaps to 850 km.
+    const globe = new Run(new EventBus(), { seed: 'globe', characterId: 'zap', area: 'globe' });
+    expect(globe.bunny.realRadius).toBeCloseTo(8.5e7);
+    expect(globe.bunny.radius).toBeCloseTo(0.85);
+    expect(globe.tier).toBe(13);
+    expect(globe.house.wrapX).toBe(true);
+    globe.clearArea();
+    expect(globe.endReason).toBe('victory');
+    expect(globe.getStats().areas![0]!.cleared).toBe(true);
   });
 });

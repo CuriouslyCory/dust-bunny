@@ -17,6 +17,8 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   region: { sky: '#f2f4f6', ground: '#6b7458', sun: '#eef0f2', intensity: 1.7, dir: [-0.25, 1.9, 0.3] },
   // Dusk from the stratosphere: a warm sun low in the west (long shadows) and a cool blue-violet fill.
   continent: { sky: '#c6c2f2', ground: '#6a5a68', sun: '#ffb877', intensity: 3.3, dir: [-0.9, 0.42, 0.18] },
+  // Orbit: a hard white sun from one side and blue Earth-shine from below (the hemisphere's ground colour).
+  globe: { sky: '#1a2138', ground: '#3d7fc4', sun: '#ffffff', intensity: 3.6, dir: [1, 0.55, -0.2] },
 };
 
 export class Lighting {

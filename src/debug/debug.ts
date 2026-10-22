@@ -28,6 +28,8 @@ export interface DebugTools {
   enterRegion(): void;
   /** Moves the Run to the continent, growing the Bunny to Incinerator-beaten size (then the arrival leap). */
   enterContinent(): void;
+  /** Moves the Run to the globe, growing the Bunny to Ice-Sheet-beaten size (then the arrival leap). */
+  enterGlobe(): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -77,6 +79,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterContinent() {
       goTo('continent');
+    },
+    enterGlobe() {
+      goTo('globe');
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

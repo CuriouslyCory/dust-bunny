@@ -104,7 +104,7 @@ describe('validateSubmission', () => {
   it('rejects wrong types and out-of-range numbers', () => {
     expect(err({ ...submission(), maxRadius: '12' })).toBe('maxRadius');
     expect(err(submission({ maxRadius: Number.NaN }))).toBe('maxRadius');
-    expect(err(submission({ maxRadius: 99_999_999 }))).toBe('maxRadius');
+    expect(err(submission({ maxRadius: 9_999_999_999 }))).toBe('maxRadius');
     expect(err(submission({ debrisAbsorbed: 1.5 }))).toBe('debrisAbsorbed');
     expect(err(submission({ debrisAbsorbed: -1 }))).toBe('debrisAbsorbed');
     expect(err(submission({ tierReached: 6 }))).toBe('tierReached');

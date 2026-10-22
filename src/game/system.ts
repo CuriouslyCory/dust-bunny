@@ -21,5 +21,7 @@ export const SYSTEM_ORDER = {
   collision: 500,
   pickups: 550,
   growth: 600,
+  /** Wrap-around maps: keeps Debris, Pickups and Hazards within half a lap of the Bunny (src/systems/wrap.ts). */
+  wrap: 680,
   spawner: 700,
 } as const;

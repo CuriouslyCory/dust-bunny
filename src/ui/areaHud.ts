@@ -25,10 +25,11 @@ const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; s
   neighborhood: { icon: '🏙️', label: 'Road to the city', go: 'roll on!', skip: 'Go to the city', cleared: 'Neighborhood cleared!', sub: 'The road barrier is up · head for the city' },
   city: { icon: '🛣️', label: 'Highway on-ramp', go: 'roll on!', skip: 'Take the highway', cleared: 'City cleared!', sub: 'The on-ramp is open · take the highway out' },
   region: { icon: '🌍', label: 'West to the continent', go: 'roll on!', skip: 'Head west', cleared: 'Region cleared!', sub: 'The motorway west is open · roll out to the continent' },
-  // The Continent is the last built Area: the Ice Sheet wins the Run (an exit to the Globe comes with Act 6).
+  continent: { icon: '🚀', label: 'Up to orbit', go: 'lift off!', skip: 'Leave the atmosphere', cleared: 'Continent cleared!', sub: 'The launch corridor is open · head north and up' },
+  // The Globe is the last built Area: the Orbital Sweeper wins the Run (an exit to the Solar System comes with Act 7).
 };
 
-/** "37 m", "1.2 km", "240 km": a compass distance (real cm) without the readout's decimals. */
+/** "37 m", "1.2 km", "240 km", "0.31 Earths": a compass distance (real cm) without the readout's decimals. */
 function formatDistance(cm: number): string {
   if (cm < 1e5) return `${(cm / 100).toFixed(0)} m`;
   return formatLength(cm, 'km');

@@ -75,8 +75,17 @@ describe('continent generation', () => {
     it(`builds a valid layout in Continent units (seed ${seed})`, () => {
       const g = generateContinent(seed);
       expect(g.area).toBe('continent');
-      // The last built Area: no exit (the Ice Sheet wins the Run).
-      expect(g.exit).toBeUndefined();
+      // The exit is the launch corridor up to orbit: a closed gate on the Arctic shore in the middle of the north coast.
+      const exit = g.exit!;
+      expect(exit.open).toBe(false);
+      expect(exit.dir).toEqual({ x: 0, z: -1 });
+      expect((exit.rect.minX + exit.rect.maxX) / 2).toBeGreaterThan(CONTINENT.width * 0.35);
+      expect((exit.rect.minX + exit.rect.maxX) / 2).toBeLessThan(CONTINENT.width * 0.65);
+      expect(exit.rect.minZ).toBeLessThan(CONTINENT.coastMax + 1);
+      expect(g.obstacles.find((o) => o.id === exit.obstacleId)?.rect).toEqual(exit.rect);
+      // The shore in front of it is land, clear of mountain ranges.
+      const front = { x: (exit.rect.minX + exit.rect.maxX) / 2, z: exit.rect.maxZ + 1 };
+      expect(g.obstacles.some((o) => o.kind === 'furniture' && Math.hypot(Math.max(0, o.rect.minX - front.x, front.x - o.rect.maxX), Math.max(0, o.rect.minZ - front.z, front.z - o.rect.maxZ)) < 20)).toBe(false);
       expect(g.bounds).toEqual({ minX: 0, minZ: 0, maxX: CONTINENT.width, maxZ: CONTINENT.depth });
       for (const r of g.rooms) expect(isContinentZone(r.type)).toBe(true);
       expect(new Set(g.rooms.map((r) => r.type))).toEqual(new Set(CONTINENT_ZONE_TYPES));

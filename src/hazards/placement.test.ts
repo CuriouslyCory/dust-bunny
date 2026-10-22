@@ -50,7 +50,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ICE_SHEET };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -85,6 +85,12 @@ const TUNING: Record<string, { size: number; height: number }> = {
   volcano: VOLCANO,
   river_surge: RIVER_SURGE,
   hurricane: HURRICANE,
+  // Globe placeholders (Continent behaviours and tuning).
+  debris_satellite: TORNADO,
+  space_station: GLACIER_TONGUE,
+  asat_laser: VOLCANO,
+  reentry_burn: RIVER_SURGE,
+  globe_hurricane: HURRICANE,
   ...BOSSES,
 };
 
@@ -99,7 +105,7 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis (if it summons any). */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();
@@ -285,6 +291,14 @@ function obstacleEdges(run: Run, n: number): { x: number; z: number }[] {
     if (!hazardFloorFree(run.house, x, z, r, 1e4)) continue;
     out.push({ x, z });
     if (out.length >= n) break;
+  }
+  // A map with no obstacles (the Globe, which wraps east–west): its seam and its polar edges.
+  if (!out.length && run.house.obstacles.length === 0) {
+    const b = run.house.bounds;
+    const mx = (b.minX + b.maxX) / 2;
+    const mz = (b.minZ + b.maxZ) / 2;
+    out.push({ x: b.minX + 0.5, z: mz }, { x: b.maxX - 0.5, z: mz }, { x: mx, z: b.minZ + r + 1 }, { x: mx, z: b.maxZ - r - 1 });
+    return out.slice(0, n);
   }
   if (!out.length) throw new Error('no furniture edge');
   return out;

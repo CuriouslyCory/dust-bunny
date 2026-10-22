@@ -44,9 +44,9 @@ const BACKGROUND = '#3b2f2a';
 /**
  * Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze, overcast
  * altitude haze, blue-violet dusk from the stratosphere (where the horizon overlay curves the
- * fog into the planet's limb, fx/horizon.ts).
+ * fog into the planet's limb, fx/horizon.ts), black space above the Globe.
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#03040a' };
 
 export class Game {
   readonly events = new EventBus();

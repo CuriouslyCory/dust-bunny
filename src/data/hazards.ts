@@ -1407,12 +1407,44 @@ export const CONTINENT_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Globe director (after the continent): spawn tables for Bunny Tiers 14–15, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 13 at 0.85 units, the arrival leap, and uses the
+ * Tier 14 table). Globe Hazards are sized for a 0.85–4.5 unit Bunny.
+ */
+export const GLOBE_DIRECTOR = {
+  firstTier: 14,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 14 (arrival, r ≈ 0.85–3): dead satellites, laser turrets, space stations and re-entry burns.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { debris_satellite: { weight: 1, max: 2 }, asat_laser: { weight: 1, max: 2 }, space_station: { weight: 0.8, max: 1 }, reentry_burn: { weight: 0.7, max: 1 } },
+    },
+    // Tier 15 (r ≥ 3): hurricanes join, and the Orbital Sweeper arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        debris_satellite: { weight: 1.2, max: 3 },
+        globe_hurricane: { weight: 0.9, max: 2 },
+        space_station: { weight: 0.8, max: 2 },
+        reentry_burn: { weight: 0.5, max: 1 },
+        asat_laser: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
   city: CITY_DIRECTOR,
   region: REGION_DIRECTOR,
   continent: CONTINENT_DIRECTOR,
+  globe: GLOBE_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -1422,10 +1454,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   city: { id: 'garbage_truck', tier: 9, arrivalDelay: 4 },
   region: { id: 'incinerator', tier: 11, arrivalDelay: 4 },
   continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
+  globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

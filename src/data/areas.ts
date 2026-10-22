@@ -56,6 +56,21 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     fluffPerUnit: 1.5,
     arrivalRadius: 0.85,
   },
+  // 1 world unit = 1,000 km. The Continent ends at ≈45 km (0.045 units), so the Bunny leaps again,
+  // to 0.85 units (850 km, 0.13 Earths): Tier 14 starts at 1 and Tier 15 at 3. The readout is in
+  // Earth radii (6,371 km). The map wraps east–west (`layout.wrapX`).
+  globe: {
+    name: 'The Globe',
+    tiers: [14, 15],
+    initialScatter: 2400,
+    startCluster: 120,
+    startClusterRadius: 11,
+    growth: 0.19,
+    unit: 1e8,
+    readout: 'Earths',
+    fluffPerUnit: 1.5,
+    arrivalRadius: 0.85,
+  },
 };
 
 /** Centimetres per world unit in `area`. */

@@ -48,8 +48,10 @@ export interface RunStats {
   cityCleared?: boolean;
   /** True once the Incinerator was absorbed (the motorway west to the continent opened). */
   regionCleared?: boolean;
-  /** True once the Ice Sheet was absorbed. */
+  /** True once the Ice Sheet was absorbed (the launch corridor up to orbit opened). */
   continentCleared?: boolean;
+  /** True once the Orbital Sweeper was absorbed. */
+  globeCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
   /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */

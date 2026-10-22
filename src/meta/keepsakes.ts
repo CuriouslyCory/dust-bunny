@@ -180,6 +180,8 @@ export function dropCaption(bossId: string, bossName: string, material: string):
       return 'The hopper contains things nobody should keep. It keeps some.';
     case 'ice_sheet':
       return 'The Ice Sheet carries the silt of a continent it scraped clean. It keeps some.';
+    case 'orbital_sweeper':
+      return "The Orbital Sweeper's net is full of flecks of everything humanity ever launched. It keeps some.";
     default:
       return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
   }

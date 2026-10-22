@@ -42,7 +42,7 @@ export interface BoardPost {
   error?: string;
 }
 
-const BOARD_NAMES: Record<BoardId, string> = { run: 'Full run', house: 'House', neighborhood: 'Neighborhood', city: 'City', region: 'Region', continent: 'Continent' };
+const BOARD_NAMES: Record<BoardId, string> = { run: 'Full run', house: 'House', neighborhood: 'Neighborhood', city: 'City', region: 'Region', continent: 'Continent', globe: 'Globe' };
 
 /** Short display name of a board (tab labels, toasts). */
 export function boardName(board: BoardId): string {

@@ -7,6 +7,7 @@ import type { Run } from '../game/run';
 import type { HouseLayout, Obstacle } from '../world/types';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from './absorb';
+import { canonicalX } from '../world/wrap';
 
 /** True if the Bunny can pass under this obstacle (diameter below its clearance). */
 export function passesUnder(radius: number, o: Obstacle): boolean {
@@ -101,7 +102,9 @@ const scratch: Debris[] = [];
 /** How deep a Debris disc at (x, z) sits in walls, furniture it can't slide under, or the house edge (0 = fits). */
 function debrisPenetration(house: HouseLayout, x: number, z: number, size: number): number {
   const bd = house.bounds;
-  let pen = Math.max(0, bd.minX - (x - size), x + size - bd.maxX, bd.minZ - (z - size), z + size - bd.maxZ);
+  x = canonicalX(house, x);
+  const edgeX = house.wrapX ? 0 : Math.max(bd.minX - (x - size), x + size - bd.maxX);
+  let pen = Math.max(0, edgeX, bd.minZ - (z - size), z + size - bd.maxZ);
   for (const o of house.obstacles) {
     if (o.kind === 'furniture' && o.clearance > size * 2) continue;
     const p = circleVsRect(x, z, size, o.rect);
@@ -144,16 +147,21 @@ export const collisionSystem: System = {
   update(_dt, run) {
     const b = run.bunny;
     const ratio = b.stats.get('absorbRatio');
-    const gapR = gapRadiusAt(run.house, b.x, b.z, b.radius);
-    const wallR = Math.min(gapR, wallRadiusAt(run.house, b.x, b.z, b.radius));
+    // On a map that wraps east–west the obstacles are stored once (canonical x): resolve them
+    // against the Bunny moved back by whole laps. Debris lives in the Bunny's own lap.
+    const lap = b.x - canonicalX(run.house, b.x);
+    const gapR = gapRadiusAt(run.house, b.x - lap, b.z, b.radius);
+    const wallR = Math.min(gapR, wallRadiusAt(run.house, b.x - lap, b.z, b.radius));
     b.squeeze = wallR / b.radius;
     for (let iter = 0; iter < 2; iter++) {
+      b.x -= lap;
       for (const o of run.house.obstacles) {
         if (passesUnder(b.radius, o)) continue;
         const rr = o.kind === 'wall' ? wallR : gapR;
         const p = o.exitDir && rectContains(o.rect, b.x, b.z) ? ejectThrough(b, o) : circleVsRect(b.x, b.z, rr, o.rect);
         if (p) applyPush(b, p);
       }
+      b.x += lap;
       scratch.length = 0;
       run.debris.queryOverlapping(b.x, b.z, b.radius, scratch);
       for (const d of scratch) {
@@ -167,7 +175,7 @@ export const collisionSystem: System = {
     }
     // The outer walls sit on the bounds, so a Bunny squeezed along one may come closer to the edge.
     const bd = run.house.bounds;
-    b.x = clamp(b.x, bd.minX + wallR, bd.maxX - wallR);
+    if (!run.house.wrapX) b.x = clamp(b.x, bd.minX + wallR, bd.maxX - wallR);
     b.z = clamp(b.z, bd.minZ + wallR, bd.maxZ - wallR);
   },
 };

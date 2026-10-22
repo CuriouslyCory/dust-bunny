@@ -13,3 +13,4 @@ import './iceSheet';
 import './roomba';
 import './sprayBottle';
 import './uprightVacuum';
+import './globe';

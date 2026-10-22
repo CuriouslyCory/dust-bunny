@@ -16,11 +16,13 @@ import { SYSTEM_ORDER, type System } from '../game/system';
 import { AREAS, areaDebrisTier } from '../data/areas';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
+import { canonicalX } from '../world/wrap';
 import { floorPointVisible, spawnView, viewRadiusFor } from './camera';
 import { passesUnder } from './collision';
 
 /** True if a Debris disc of radius `size` can sit at (x, z): inside a room, clear of walls and solid furniture. */
 export function isFloorFree(house: HouseLayout, x: number, z: number, size: number): RoomType | null {
+  x = canonicalX(house, x);
   const room = roomAt(house, x, z);
   if (!room) return null;
   for (const o of house.obstacles) {
@@ -40,6 +42,7 @@ export function isFloorFree(house: HouseLayout, x: number, z: number, size: numb
  * Bunny outgrew the gap). Debris poking out past the furniture edge stays reachable.
  */
 export function reachableBy(house: HouseLayout, x: number, z: number, size: number, radius: number): boolean {
+  x = canonicalX(house, x);
   for (const o of house.obstacles) {
     if (o.kind !== 'furniture' || passesUnder(radius, o)) continue;
     const r = o.rect;
@@ -173,9 +176,10 @@ export class DebrisSpawner implements System {
     // Sample the part of the house within `outer` that is off screen. Late in the Run the view
     // covers most of the house, so sample the clipped box rather than a ring (which would mostly
     // land outside the walls) and keep whatever slivers are hidden (usually behind the camera).
+    // A map that wraps east–west has no east or west edge.
     const bd = house.bounds;
-    const x0 = Math.max(bd.minX, bunny.x - outer);
-    const x1 = Math.min(bd.maxX, bunny.x + outer);
+    const x0 = house.wrapX ? bunny.x - outer : Math.max(bd.minX, bunny.x - outer);
+    const x1 = house.wrapX ? bunny.x + outer : Math.min(bd.maxX, bunny.x + outer);
     const z0 = Math.max(bd.minZ, bunny.z - outer);
     const z1 = Math.min(bd.maxZ, bunny.z + outer);
     const types = debris.types;

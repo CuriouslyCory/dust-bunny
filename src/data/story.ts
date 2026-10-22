@@ -85,6 +85,9 @@ export const STORY: Story = {
       'A mountain range. It had a name. It has a new one now: inside.',
     ],
     dust_pangaea: ['Plate tectonics usually takes two hundred million years to move this much material. It did it before lunch.'],
+    // Act 6 · The Globe
+    dust_moon: ['It has absorbed the Moon. The tides have questions.'],
+    dust_planet: ['From orbit, Earth is a pale blue marble. It is the marble now.', 'The Great Barrier Reef is absorbed. It was going anyway.'],
   },
 
   areas: {
@@ -125,6 +128,17 @@ export const STORY: Story = {
       entered: ['The planet has run out of machines. It falls back on weather.'],
       cleared: ['There is no more land. There is, however, up.'],
       boss: ['The planet tries the oldest cleaning method it knows: ice. It worked on the mammoths.'],
+    },
+    globe: {
+      title: 'The Marble',
+      entered: ['It leaves the atmosphere. The atmosphere does not try to stop it. The atmosphere is also Debris.'],
+      cleared: ['Earth is gone. This is reported by no one.'],
+      boss: [
+        [
+          "Humanity's final appliance is, fittingly, a vacuum cleaner for space.",
+          'Humanity is, at this point, mostly absorbed. They would have wanted it this way. They would not have, actually.',
+        ],
+      ],
     },
   },
 

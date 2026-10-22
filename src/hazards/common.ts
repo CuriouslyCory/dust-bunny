@@ -13,6 +13,7 @@ import { passesUnder } from '../systems/collision';
 import { maxSpeedFor } from '../systems/movement';
 import { roomAt } from '../world/house';
 import type { HouseLayout, Obstacle } from '../world/types';
+import { canonicalX } from '../world/wrap';
 
 /** True if `o` blocks a Hazard of this height (walls always; furniture unless it fits underneath). */
 export function hazardBlockedBy(o: Obstacle, height: number): boolean {
@@ -31,6 +32,9 @@ export interface MoveResult {
 
 /** Moves a circle by (dx, dz) and resolves it against walls, blocking furniture and the house bounds. */
 export function moveCircle(house: HouseLayout, x: number, z: number, radius: number, height: number, dx: number, dz: number): MoveResult {
+  // On a map that wraps east–west, resolve against the canonical copy of the obstacles and keep the lap.
+  const lap = x - canonicalX(house, x);
+  x -= lap;
   let px = x + dx;
   let pz = z + dz;
   let hit = false;
@@ -49,7 +53,7 @@ export function moveCircle(house: HouseLayout, x: number, z: number, radius: num
     }
   }
   const b = house.bounds;
-  const cx = clamp(px, b.minX + radius, b.maxX - radius);
+  const cx = house.wrapX ? px : clamp(px, b.minX + radius, b.maxX - radius);
   const cz = clamp(pz, b.minZ + radius, b.maxZ - radius);
   if (cx !== px) {
     nx += cx > px ? 1 : -1;
@@ -59,11 +63,12 @@ export function moveCircle(house: HouseLayout, x: number, z: number, radius: num
     nz += cz > pz ? 1 : -1;
     hit = true;
   }
-  return { x: cx, z: cz, hit, nx, nz };
+  return { x: cx + lap, z: cz, hit, nx, nz };
 }
 
 /** True if a Hazard disc fits at (x, z): inside a room and clear of anything that blocks it. */
 export function hazardFloorFree(house: HouseLayout, x: number, z: number, radius: number, height: number): boolean {
+  x = canonicalX(house, x);
   if (!roomAt(house, x, z)) return false;
   for (const o of house.obstacles) {
     if (hazardBlockedBy(o, height) && circleVsRect(x, z, radius, o.rect)) return false;

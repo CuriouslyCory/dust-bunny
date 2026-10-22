@@ -21,6 +21,7 @@ import type { Run } from '../game/run';
 import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { HazardManager, hazardRegistry, type Hazard } from './index';
+import { nearestImageX } from '../world/wrap';
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
   const { tiers: t, firstTier: first } = AREA_DIRECTORS[area];
@@ -189,7 +190,8 @@ export class HazardDirector {
     let bestD = inner * 0.5;
     const bd = house.bounds;
     for (let tries = 0; tries < 40; tries++) {
-      const x = this.rng.range(bd.minX, bd.maxX);
+      // On a map that wraps east–west, the copy of the spot nearest the Bunny.
+      const x = nearestImageX(house, this.rng.range(bd.minX, bd.maxX), b.x);
       const z = this.rng.range(bd.minZ, bd.maxZ);
       const d = Math.hypot(x - b.x, z - b.z);
       // Prefer hidden spots (behind the camera); otherwise the farthest one.

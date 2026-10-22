@@ -1,9 +1,9 @@
 /** Plain-data description of a generated house floor. No three.js here. */
 import type { Rect } from '../core/math';
 
-/** Which world a layout describes: the house floor, the street outside, the city, the region, then the continent. */
-export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent';
-export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent'];
+/** Which world a layout describes: the house floor, the street outside, the city, the region, the continent, then the globe. */
+export type AreaId = 'house' | 'neighborhood' | 'city' | 'region' | 'continent' | 'globe';
+export const AREA_ORDER: readonly AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe'];
 
 /** The area after `area` (null for the last one). */
 export function nextArea(area: AreaId): AreaId | null {
@@ -19,12 +19,15 @@ export type CityZoneType = 'avenue' | 'pavement' | 'plaza' | 'parking' | 'square
 export type RegionZoneType = 'farmland' | 'highway' | 'river' | 'town' | 'woods' | 'landfill';
 /** Continent zones, seen from the stratosphere: plains, mountains, lakes, rivers, desert, tundra and the ruins of cities. */
 export type ContinentZoneType = 'plains' | 'mountains' | 'lakes' | 'rivers' | 'desert' | 'tundra' | 'ruins';
-export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType;
+/** Globe zones, seen from orbit: open ocean, shallow shelf seas, landmasses, island chains and the polar ice caps. */
+export type GlobeZoneType = 'oceans' | 'shelves' | 'landmasses' | 'archipelagos' | 'icecaps';
+export type RoomType = IndoorRoomType | OutdoorZoneType | CityZoneType | RegionZoneType | ContinentZoneType | GlobeZoneType;
 export const ROOM_TYPES: readonly IndoorRoomType[] = ['living', 'kitchen', 'hallway', 'bedroom', 'bathroom'];
 export const OUTDOOR_ZONE_TYPES: readonly OutdoorZoneType[] = ['yard', 'street', 'sidewalk', 'driveway', 'park'];
 export const CITY_ZONE_TYPES: readonly CityZoneType[] = ['avenue', 'pavement', 'plaza', 'parking', 'square'];
 export const REGION_ZONE_TYPES: readonly RegionZoneType[] = ['farmland', 'highway', 'river', 'town', 'woods', 'landfill'];
 export const CONTINENT_ZONE_TYPES: readonly ContinentZoneType[] = ['plains', 'mountains', 'lakes', 'rivers', 'desert', 'tundra', 'ruins'];
+export const GLOBE_ZONE_TYPES: readonly GlobeZoneType[] = ['oceans', 'shelves', 'landmasses', 'archipelagos', 'icecaps'];
 
 export function isOutdoorZone(type: RoomType): type is OutdoorZoneType {
   return (OUTDOOR_ZONE_TYPES as readonly string[]).includes(type);
@@ -42,9 +45,13 @@ export function isContinentZone(type: RoomType): type is ContinentZoneType {
   return (CONTINENT_ZONE_TYPES as readonly string[]).includes(type);
 }
 
+export function isGlobeZone(type: RoomType): type is GlobeZoneType {
+  return (GLOBE_ZONE_TYPES as readonly string[]).includes(type);
+}
+
 /** The area a room / zone type belongs to. */
 export function zoneArea(type: RoomType): AreaId {
-  return isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
+  return isGlobeZone(type) ? 'globe' : isContinentZone(type) ? 'continent' : isRegionZone(type) ? 'region' : isCityZone(type) ? 'city' : isOutdoorZone(type) ? 'neighborhood' : 'house';
 }
 
 export type FloorMaterialId =
@@ -141,7 +148,8 @@ export interface DebrisPlacement {
  * The way to the next area: the house's front door (closed until the Robo-Vac 9000 is absorbed),
  * the neighborhood's road barrier to the city (closed until the Street Sweeper is absorbed),
  * the city's highway on-ramp to the region (closed until the Garbage Truck is absorbed) or the
- * region's westbound motorway out to the continent (closed until the Incinerator is absorbed).
+ * region's westbound motorway out to the continent (closed until the Incinerator is absorbed) or
+ * the continent's launch corridor up to orbit on the north coast (closed until the Ice Sheet is absorbed).
  * While closed it is an obstacle; `rect` is the opening in the outer wall / hedge.
  */
 export interface ExitDoor {
@@ -163,11 +171,11 @@ export interface GroundMarking {
 
 /**
  * A route across the map that lane / trail Hazards can follow (the Continent's rivers and glacier
- * lanes): an axis-aligned polyline in course order (source first), `width` across. Data only.
+ * lanes, the Globe's orbit lanes): an axis-aligned polyline in course order (source first), `width` across. Data only.
  */
 export interface MapRoute {
   id: string;
-  kind: 'river' | 'glacier';
+  kind: 'river' | 'glacier' | 'orbit';
   points: Array<{ x: number; z: number }>;
   width: number;
 }
@@ -187,6 +195,15 @@ export interface HouseLayout {
   spawn: { x: number; z: number; roomId: string };
   exit?: ExitDoor;
   markings?: GroundMarking[];
-  /** Rivers and glacier lanes (the Continent), for Hazards that follow a course. */
+  /** Rivers and glacier lanes (the Continent), orbit lanes (the Globe), for Hazards that follow a course. */
   routes?: MapRoute[];
+  /**
+   * The map wraps east–west (the Globe): rolling off `bounds.maxX` arrives at `bounds.minX`. World
+   * x is unbounded (the Bunny keeps its own coordinate as it circles the planet); everything static
+   * (rooms, obstacles, routes, the exit) is stored once in the canonical strip [minX, maxX) and
+   * looked up through `canonicalX` (src/world/wrap.ts). A wrapping layout has no obstacles that
+   * stop short of the full width (only east–west bands such as polar walls), so collision needs no
+   * wrapping. See docs/architecture.md, "Wrap-around".
+   */
+  wrapX?: boolean;
 }

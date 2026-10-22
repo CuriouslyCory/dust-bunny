@@ -33,6 +33,9 @@ export const TIERS: readonly TierDef[] = [
   // Continent (after the Incinerator; 1 world unit = 10 km, so these are 1 and 3 units).
   { index: 12, id: 'dustmass', name: 'Dustmass', minRadius: 1e6, cameraScale: 26, growth: 1 },
   { index: 13, id: 'dust_pangaea', name: 'Dust Pangaea', minRadius: 3e6, cameraScale: 27, growth: 1 },
+  // Globe (after the Ice Sheet; 1 world unit = 1,000 km, so these are 1 and 3 units).
+  { index: 14, id: 'dust_moon', name: 'Dust Moon', minRadius: 1e8, cameraScale: 28, growth: 1 },
+  { index: 15, id: 'dust_planet', name: 'Dust Planet', minRadius: 3e8, cameraScale: 29, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

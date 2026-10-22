@@ -19,7 +19,7 @@ import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { getMeta } from '../../meta/meta';
-import { CITY_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { formatLength } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
@@ -60,6 +60,7 @@ function fluffBonusLabel(e: RunResult): string {
   const difficulty = getDifficulty(e.stats.difficulty);
   const diff = difficulty.fluff !== 1 ? `${difficulty.name} ×${difficulty.fluff} · ` : '';
   if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · ${diff}`;
+  if (e.stats.continentCleared) return `Continent cleared ×${CONTINENT_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.regionCleared) return `Region cleared ×${REGION_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.cityCleared) return `City cleared ×${CITY_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
   if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
@@ -71,8 +72,23 @@ export function registerResultsSection(section: ResultsSection): void {
   sections.set(section.id, section);
 }
 
+/** Results subtitle for a Run that died: where it was swept up, or how close it came to the next Area. */
+function diedLine(s: RunResult['stats']): string | null {
+  if (s.area === 'globe') return 'Netted in orbit. The whole continent was yours, at least.';
+  if (s.continentCleared) return 'So close to orbit!';
+  if (s.area === 'continent') return 'Frozen out on the ice. The whole region was yours, at least.';
+  if (s.regionCleared) return 'So close to the continent!';
+  if (s.area === 'region') return 'Burnt down at the landfill. The whole city was yours, at least.';
+  if (s.cityCleared) return 'So close to the highway!';
+  if (s.area === 'city') return 'Hosed off the avenue. The whole neighborhood was yours, at least.';
+  if (s.neighborhoodCleared) return 'So close to the city!';
+  if (s.area !== 'house') return 'Swept off the street. The house was yours, at least.';
+  if (s.houseCleared) return 'So close to the front door!';
+  return null;
+}
+
 const VARIANTS = {
-  victory: { title: 'Victory!', sub: 'The Ice Sheet is part of you now. The whole continent is yours.', badge: '👑' },
+  victory: { title: 'Victory!', sub: 'The Orbital Sweeper is part of you now. The whole planet is yours.', badge: '👑' },
   died: { title: 'Swept up!', sub: 'The cleaning crew got you this time.', badge: '🧹' },
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
@@ -162,29 +178,11 @@ export function registerResultsScreen(): void {
           const inCity = s.area === 'city';
           const inRegion = s.area === 'region';
           const inContinent = s.area === 'continent';
+          const inGlobe = s.area === 'globe';
           card.dataset.variant = e.reason;
           badge.textContent = v.badge;
           title.textContent = v.title;
-          sub.textContent =
-            e.reason !== 'died'
-              ? v.sub
-              : inContinent
-                ? 'Frozen out on the ice. The whole region was yours, at least.'
-                : s.regionCleared
-                  ? 'So close to the continent!'
-                  : inRegion
-                    ? 'Burnt down at the landfill. The whole city was yours, at least.'
-                    : s.cityCleared
-                      ? 'So close to the highway!'
-                      : inCity
-                        ? 'Hosed off the avenue. The whole neighborhood was yours, at least.'
-                        : s.neighborhoodCleared
-                          ? 'So close to the city!'
-                          : outside
-                            ? 'Swept off the street. The house was yours, at least.'
-                            : s.houseCleared
-                              ? 'So close to the front door!'
-                              : v.sub;
+          sub.textContent = e.reason !== 'died' ? v.sub : (diedLine(s) ?? v.sub);
           const told = storyResultLine(e);
           story.hidden = !told;
           storyLead.textContent = told?.lead ?? '';
@@ -200,7 +198,8 @@ export function registerResultsScreen(): void {
           if (s.neighborhoodCleared) rows.push(['🌳', 'Neighborhood', inCity ? 'Cleared · made it downtown' : 'Cleared']);
           if (s.cityCleared) rows.push(['🏙️', 'City', inRegion ? 'Cleared · took the highway' : 'Cleared']);
           if (s.regionCleared) rows.push(['🗺️', 'Region', inContinent ? 'Cleared · rolled west' : 'Cleared']);
-          if (s.continentCleared) rows.push(['🌍', 'Continent', 'Cleared']);
+          if (s.continentCleared) rows.push(['🌍', 'Continent', inGlobe ? 'Cleared · reached orbit' : 'Cleared']);
+          if (s.globeCleared) rows.push(['🌐', 'Globe', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

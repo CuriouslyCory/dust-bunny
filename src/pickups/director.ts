@@ -4,13 +4,13 @@
  * maxOnFloor, despawns old or far-behind ones, and scales/animates floor Pickups with the
  * Bunny's radius so they stay collectable as it grows.
  */
-import { rectContains } from '../core/math';
 import { PICKUP_SPAWN as S } from '../data/pickups';
 import type { Run } from '../game/run';
 import { isFloorFree } from '../systems/spawner';
 import { viewRadiusFor } from '../systems/camera';
 import { pickupRegistry, type PickupManager } from './index';
 import { animatePickupObject } from './view';
+import { insideBounds } from '../world/wrap';
 
 export type PickupDirector = (dt: number, run: Run, manager: PickupManager) => void;
 
@@ -48,7 +48,7 @@ export function createPickupDirector(): PickupDirector {
       const d = mgr.rng.range(S.inner, S.outer) * viewR;
       const x = b.x + Math.cos(a) * d;
       const z = b.z + Math.sin(a) * d;
-      if (!rectContains(run.house.bounds, x, z) || !isFloorFree(run.house, x, z, r * 1.6)) continue;
+      if (!insideBounds(run.house, x, z) || !isFloorFree(run.house, x, z, r * 1.6)) continue;
       const def = mgr.rng.weighted(defs, (p) => p.spawnWeight);
       if (!def) return;
       const p = mgr.spawn(def.id, x, z, r);

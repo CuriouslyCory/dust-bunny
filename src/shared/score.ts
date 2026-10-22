@@ -9,34 +9,40 @@
 import { DEFAULT_DIFFICULTY, DIFFICULTY_SCORE_MULTIPLIER, type DifficultyId } from './difficulty.js';
 
 /** Tier start radii (real cm), mirrored from `src/data/tiers.ts` (a test keeps them in sync). */
-export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6];
+export const SCORE_TIER_MIN_RADII: readonly number[] = [1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8];
 export const SCORE_MAX_TIER = SCORE_TIER_MIN_RADII.length;
 
 /**
  * Arrival radius (in the Area's unit) of the Areas the Bunny leaps into on entry, mirrored from
- * `AREAS[area].arrivalRadius` (test-synced): the Continent's 0.85 units (8.5 km).
+ * `AREAS[area].arrivalRadius` (test-synced): the Continent's 0.85 units (8.5 km) and the Globe's
+ * 0.85 units (850 km).
  */
-export const SCORE_ARRIVAL_RADIUS = { continent: 0.85 } as const;
+export const SCORE_ARRIVAL_RADIUS = { continent: 0.85, globe: 0.85 } as const;
 
 /** The Continent's arrival radius in real cm (8.5 km): where the Run board's Continent band starts. */
 const CONTINENT_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.continent * 1e6;
+/** The Globe's arrival radius in real cm (850 km): where the Run board's Globe band starts. */
+const GLOBE_ARRIVAL_CM = SCORE_ARRIVAL_RADIUS.globe * 1e8;
 
 /**
  * The Run board's radius scale: each Act counts its growth in its own unit. Up to the City
  * (1 cm units) a centimetre is a centimetre; from `fromCm` on, a cm counts `perCm`, so one Region
- * unit (10 m) is worth 100 "cm" and so is one Continent unit (10 km). Later Acts add a band each,
- * keeping scores in plain float range.
+ * unit (10 m) is worth 100 "cm", and so are one Continent unit (10 km) and one Globe unit
+ * (1,000 km). Later Acts add a band each, keeping scores in plain float range.
  *
  * The size leap into the Continent (≈40 m → 8.5 km, docs/design.md) is not growth: the band from
  * 50 m (about the most a Region Bunny reaches; the Incinerator falls at ≈30–45 m) to the arrival
  * radius counts nothing, so arriving scores like a 50 m Region Bunny and only Continent growth
- * from 8.5 km adds.
+ * from 8.5 km adds. The leap into the Globe (≈45 km → 850 km) works the same way: nothing from 60 km
+ * (about the most a Continent Bunny reaches; the Ice Sheet falls at ≈30–45 km) to 850 km.
  */
 export const SCORE_RADIUS_BANDS: ReadonlyArray<{ fromCm: number; perCm: number }> = [
   { fromCm: 0, perCm: 1 },
   { fromCm: 1000, perCm: 0.1 },
   { fromCm: 5000, perCm: 0 },
   { fromCm: CONTINENT_ARRIVAL_CM, perCm: 1e-4 },
+  { fromCm: 6e6, perCm: 0 },
+  { fromCm: GLOBE_ARRIVAL_CM, perCm: 1e-6 },
 ];
 
 /** A real radius (cm) on the Run board's progress scale (see SCORE_RADIUS_BANDS). */
@@ -104,7 +110,7 @@ export function scoreTierForRadius(radius: number): number {
 // Area boards: one entry per Area a Run clears (see docs/architecture.md, Leaderboard).
 
 /** Area ids, in Run order, mirrored from `AREA_ORDER` in `src/world/types.ts` (test-synced). */
-export const SCORE_AREAS = ['house', 'neighborhood', 'city', 'region', 'continent'] as const;
+export const SCORE_AREAS = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe'] as const;
 export type ScoreArea = (typeof SCORE_AREAS)[number];
 
 export function isScoreArea(v: unknown): v is ScoreArea {
@@ -112,22 +118,22 @@ export function isScoreArea(v: unknown): v is ScoreArea {
 }
 
 /** Tier at which each Area's boss arrives, mirrored from `AREA_BOSSES` (test-synced): a clear needs it. */
-export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11, continent: 13 };
+export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11, continent: 13, globe: 15 };
 
 /**
  * Centimetres per world unit in each Area, mirrored from `AREAS[area].unit` (test-synced). Area
  * board radii are in the Area's own unit.
  */
-export const SCORE_AREA_UNIT: Readonly<Record<ScoreArea, number>> = { house: 1, neighborhood: 1, city: 1, region: 1000, continent: 1e6 };
+export const SCORE_AREA_UNIT: Readonly<Record<ScoreArea, number>> = { house: 1, neighborhood: 1, city: 1, region: 1000, continent: 1e6, globe: 1e8 };
 
 export const AREA_SCORE = {
   /** Points per unit (the Area's own unit) the Bunny grew in the Area: 100 per cm up to the City. */
-  perRadiusUnit: { house: 100, neighborhood: 100, city: 100, region: 10_000, continent: 10_000 } as Readonly<Record<ScoreArea, number>>,
+  perRadiusUnit: { house: 100, neighborhood: 100, city: 100, region: 10_000, continent: 10_000, globe: 10_000 } as Readonly<Record<ScoreArea, number>>,
   perDebris: 2,
   clearBonus: 3000,
   /** Points per second under the Area's par. */
   perSecUnderPar: 10,
-  parSec: { house: 720, neighborhood: 600, city: 900, region: 360, continent: 360 } as Readonly<Record<ScoreArea, number>>,
+  parSec: { house: 720, neighborhood: 600, city: 900, region: 360, continent: 360, globe: 360 } as Readonly<Record<ScoreArea, number>>,
 } as const;
 
 export interface AreaScoreInput {
@@ -145,9 +151,9 @@ export interface AreaScoreInput {
 
 /**
  * base  = round((maxRadius − radiusIn) × perRadiusUnit) + debrisAbsorbed × 2 + 3000
- *         + round(max(0, par − seconds) × 10)   (par: house 720 s, neighborhood 600 s, city 900 s, region and
- *                                                continent 360 s; perRadiusUnit 100 per cm up to the City,
- *                                                10,000 per Region or Continent unit)
+ *         + round(max(0, par − seconds) × 10)   (par: house 720 s, neighborhood 600 s, city 900 s, region,
+ *                                                continent and globe 360 s; perRadiusUnit 100 per cm up to
+ *                                                the City, 10,000 per Region, Continent or Globe unit)
  * score = round(base × DIFFICULTY_SCORE_MULTIPLIER[difficulty])
  */
 export function computeAreaScore(s: AreaScoreInput): number {

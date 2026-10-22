@@ -9,6 +9,7 @@
 import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { CITY_DEBRIS } from './cityDebris';
 import { CONTINENT_DEBRIS } from './continentDebris';
+import { GLOBE_DEBRIS } from './globeDebris';
 import { ICE_SHEET_DEBRIS } from './iceSheetDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
 import { REGION_DEBRIS } from './regionDebris';
@@ -409,6 +410,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
   ...REGION_DEBRIS,
   ...CONTINENT_DEBRIS,
   ...ICE_SHEET_DEBRIS,
+  ...GLOBE_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

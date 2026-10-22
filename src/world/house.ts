@@ -14,6 +14,7 @@ import { FURNITURE, furnitureObstacles, rotatedSize } from './furniture';
 import type { FurnishContext, WallSide } from './rooms';
 import { ROOM_TEMPLATES, SIDE_TURNS } from './rooms';
 import type { DebrisPlacement, Doorway, ExitDoor, FurnitureInstance, HouseLayout, IndoorRoomType, Obstacle, Room, Rug } from './types';
+import { canonicalX } from './wrap';
 
 export const HOUSE = {
   width: 1200,
@@ -267,7 +268,8 @@ export function openExit(layout: HouseLayout): boolean {
   return true;
 }
 
-/** Room containing a point (interior test against the wall centre-line rect). */
+/** Room containing a point (interior test against the wall centre-line rect; any lap of a wrapping map). */
 export function roomAt(layout: HouseLayout, x: number, z: number): Room | undefined {
-  return layout.rooms.find((r) => rectContains(r.rect, x, z));
+  const cx = canonicalX(layout, x);
+  return layout.rooms.find((r) => rectContains(r.rect, cx, z));
 }

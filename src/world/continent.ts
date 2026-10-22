@@ -20,16 +20,17 @@
  *
  * Mountain ranges are permanent obstacles (furniture `continent_range` in the cordillera and the
  * south-east range, `continent_massif` in the northern highlands; `mountainObstacleIds`), a
- * Bunny-wide `obstacleGap` from each other and from the sea. There is no exit: the Continent is the
- * last built Area, so the Ice Sheet wins the Run. The Bunny arrives at the east edge, rolling west
- * from the Region.
+ * Bunny-wide `obstacleGap` from each other and from the sea. The exit (`layout.exit`) is the launch
+ * corridor up to orbit: a stretch of the Arctic shore in the middle third of the north coast, barred
+ * until the Ice Sheet is absorbed; touching it once open leaves for the Globe. The Bunny arrives at
+ * the east edge, rolling west from the Region.
  */
 import type { Rect } from '../core/math';
 import { expandRect, rect, rectContains } from '../core/math';
 import { Rng } from '../core/rng';
 import { CONTINENT_DEBRIS } from '../data/continentDebris';
 import { FURNITURE, furnitureObstacles } from './furniture';
-import type { ContinentZoneType, DebrisPlacement, FloorMaterialId, FurnitureInstance, GroundMarking, HouseLayout, MapRoute, Obstacle } from './types';
+import type { ContinentZoneType, DebrisPlacement, ExitDoor, FloorMaterialId, FurnitureInstance, GroundMarking, HouseLayout, MapRoute, Obstacle } from './types';
 import { ZoneGrid } from './zoneGrid';
 
 export const CONTINENT = {
@@ -45,6 +46,8 @@ export const CONTINENT = {
   obstacleGap: 12,
   /** Debris spatial hash cell (units). */
   debrisCellSize: 1.5,
+  /** Width of the launch corridor on the north coast (the exit to the Globe). */
+  exitWidth: 8,
   /**
    * Real radius (cm) for Runs that start here (?area=continent): about the size after the
    * Incinerator (4.2 Region units, 42 m). Entering the Continent re-bases it, then the arrival leap
@@ -151,6 +154,19 @@ export function generateContinent(seed: string | number): HouseLayout {
   const inSea = (x: number, z: number, pad = 0) => sea.some((s) => rectContains(expandRect(s, pad), x, z));
   /** Depth of the north coast at x (how far the sea reaches south there). */
   const northCoast = (x: number) => Math.max(0, ...sea.filter((s) => s.minZ < 0 && x >= s.minX && x < s.maxX).map((s) => s.maxZ));
+
+  // ── The exit: the launch corridor up to orbit, a strip of the Arctic shore in the middle of the north coast ──
+  const exit: ExitDoor = (() => {
+    const erng = root.fork('continent:exit');
+    const hw = C.exitWidth / 2;
+    const cx = erng.int(Math.round(W * 0.38), Math.round(W * 0.62));
+    // The shoreline along the corridor: as far south as the sea reaches there.
+    let shore = 0;
+    for (let x = Math.floor(cx - hw); x < cx + hw; x++) shore = Math.max(shore, northCoast(x + 0.5));
+    return { rect: rect(cx - hw, shore - 1.5, cx + hw, shore), dir: { x: 0, z: -1 }, obstacleId: 'launch_gate', open: false };
+  })();
+  const exitX = (exit.rect.minX + exit.rect.maxX) / 2;
+  const exitZ = exit.rect.maxZ;
 
   // ── Tundra along the north, its southern edge wandering ──
   const tundraEdge: number[] = new Array(W).fill(0);
@@ -309,8 +325,9 @@ export function generateContinent(seed: string | number): HouseLayout {
   const rooms = grid.rooms();
   spawn.roomId = rooms.find((r) => rectContains(r.rect, spawn.x, spawn.z))!.id;
 
-  // ── The coast: the sea is the edge (no exit: the Continent is the last built Area) ──
+  // ── The coast: the sea is the edge; the launch gate bars the corridor until the Ice Sheet falls (an obstacle, not a wall) ──
   const walls: Obstacle[] = sea.map((r, i) => ({ id: `coast${i}`, kind: 'wall', rect: r, height: 0.3, clearance: 0 }));
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: 0.3, clearance: 0 };
 
   // ── Permanent obstacles: mountain ranges in the cordillera and the south-east range, a massif in the north ──
   const furniture: FurnitureInstance[] = [];
@@ -322,6 +339,8 @@ export function generateContinent(seed: string | number): HouseLayout {
     if (sea.some((s) => rectGap(s, r) < G)) return false;
     if (!grid.allOf(expandRect(r, 1), ['mountains'])) return false;
     if (pointRectDist(spawn.x, spawn.z, r) < 28) return false;
+    // Keep the shore in front of the launch corridor open.
+    if (pointRectDist(exitX, exitZ, r) < 2 * G) return false;
     if (furniture.some((f) => rectGap(f.rect, r) < G)) return false;
     const roomId = rooms.find((room) => rectContains(room.rect, x, z))!.id;
     furniture.push({ id: `${roomId}:${defId}${furniture.length}`, defId, roomId, x, z, quarterTurns, w, d, height: h, rect: r });
@@ -484,7 +503,7 @@ export function generateContinent(seed: string | number): HouseLayout {
     }
   }
 
-  const obstacles: Obstacle[] = [...walls, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
+  const obstacles: Obstacle[] = [...walls, gate, ...furniture.flatMap((f) => furnitureObstacles(f, FURNITURE[f.defId]!))];
   return {
     area: 'continent',
     seed: root.seed,
@@ -497,6 +516,7 @@ export function generateContinent(seed: string | number): HouseLayout {
     rugs: [],
     debrisPlacements,
     spawn,
+    exit,
     markings,
     routes,
   };

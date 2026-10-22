@@ -492,7 +492,7 @@ export class BunnyView {
     this.ball.scale.setScalar(r);
     this.shells.scale.setScalar(r);
     // Mountain peaks in the fur while in the Continent (grow in after the leap).
-    const continent = b.unit >= AREAS.continent.unit;
+    const continent = b.unit === AREAS.continent.unit;
     if (continent) this.peaks ??= this.buildPeaks();
     if (this.peaks) {
       if (continent && this.peakGrow < 1) {

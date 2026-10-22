@@ -47,6 +47,7 @@ import { buildContinentWater } from './continentCoast';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
 import type { AreaId, FloorMaterialId, HouseLayout } from './types';
+import { wrapCopies, wrapWidth } from './wrap';
 
 interface Fadeable {
   /** Original meshes, shown only while fading. */
@@ -70,16 +71,24 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3' };
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a' };
 /** How each Area's edge (`layout.walls`) is drawn. */
-const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast'> = { house: 'walls', neighborhood: 'hedges', city: 'barriers', region: 'ridges', continent: 'coast' };
+/** How the map's edge is drawn; `wrap`: none east–west (the map repeats) and nothing past the poles but the outer floor. */
+const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' | 'wrap'> = {
+  house: 'walls',
+  neighborhood: 'hedges',
+  city: 'barriers',
+  region: 'ridges',
+  continent: 'coast',
+  globe: 'wrap',
+};
 /** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean' };
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'tundraSnow' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across).
  */
-const GATE_SCALE: Partial<Record<AreaId, number>> = { neighborhood: 1, city: 3.5, region: 0.008 };
+const GATE_SCALE: Partial<Record<AreaId, number>> = { neighborhood: 1, city: 3.5, region: 0.008, continent: 0.03 };
 
 /** The Area is seen from altitude (its unit is above 1 cm): Region-style floors, markings and shadows. */
 function fromAltitude(area: AreaId): boolean {
@@ -100,6 +109,8 @@ export class HouseView {
   private doorOpen = 0;
   private beacon: Mesh | null = null;
   private time = 0;
+  /** On a map that wraps east–west: the map drawn three times (laps −1, 0, +1), moved to the camera's lap each frame. */
+  private lap: Group | null = null;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
@@ -111,12 +122,36 @@ export class HouseView {
     else if (edge === 'barriers') this.buildBarriers();
     else if (edge === 'ridges') this.buildRidges();
     else if (edge === 'coast') this.root.add(buildContinentWater(layout));
-    else this.buildWalls();
+    else if (edge === 'walls') this.buildWalls();
     this.buildFurniture();
     this.root.add(this.batch.build());
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
     else this.buildRoadGate();
+    if (layout.wrapX) this.buildLaps();
+  }
+
+  /**
+   * A map that wraps east–west: everything but the outer ground goes into one lap that is drawn
+   * again one width east and west (clones share geometry and materials), so the view sees the
+   * map carry on past either edge. `update` moves the laps to the camera's.
+   */
+  private buildLaps(): void {
+    const w = wrapWidth(this.layout);
+    const lap = new Group();
+    lap.name = 'laps';
+    const tile = new Group();
+    tile.name = 'lap:0';
+    for (const child of [...this.root.children]) (child.name === 'ground' ? lap : tile).add(child);
+    lap.add(tile);
+    for (const k of [-1, 1]) {
+      const copy = tile.clone();
+      copy.name = `lap:${k}`;
+      copy.position.x = k * w;
+      lap.add(copy);
+    }
+    this.root.add(lap);
+    this.lap = lap;
   }
 
   private buildFloors(): void {
@@ -544,6 +579,7 @@ export class HouseView {
 
   /** Fade anything blocking the line from the camera to the Bunny. */
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
+    if (this.lap) this.lap.position.x = wrapCopies(this.layout, camera.x)[1]!;
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides

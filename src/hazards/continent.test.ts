@@ -462,7 +462,7 @@ describe('the Ice Sheet', () => {
     expect(icebergs(run).length).toBeGreaterThan(n0 + 3);
   });
 
-  it('absorbing the Ice Sheet wins the Run (bossDefeated → victory → runEnded)', () => {
+  it('absorbing the Ice Sheet opens the launch corridor to the Globe (bossDefeated → exitOpened)', () => {
     const { run, events } = makeRun('ice-win');
     const p = moveToOpen(run, 20);
     const b = run.bunny;
@@ -476,9 +476,10 @@ describe('the Ice Sheet', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:ice_sheet', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:ice_sheet', 'exitOpened:continent']);
+    expect(run.ended).toBe(false);
     expect(run.continentCleared).toBe(true);
+    expect(run.house.exit?.open).toBe(true);
+    expect(run.canLeaveArea).toBe(true);
   });
 });
