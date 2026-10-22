@@ -9,14 +9,15 @@
  * flood surge across the plains with a wide muddy trail. The Re-entry Burn (globe, REENTRY_BURN)
  * roams across zones (`roam`) and its fire trail burns instead of slowing (`burn`: the Bunny sheds
  * mass every `interval` s on it). The Sungrazer (solar system, SUNGRAZER) roams the same way and its
- * icy tail trail slows.
+ * icy tail trail slows. The Supernova Remnant (galaxy, SUPERNOVA_REMNANT) roams slowly, its `shell`
+ * breathing (`pulseNode`), and leaves a trail of glowing filament rings (`trailRing`) that slows.
  *
  * On a map that wraps east–west the spawn zone's rect is moved to the Mop's lap (rooms are stored
  * once, in the canonical strip), so the waypoints stay around it.
  */
-import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
+import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D, RingGeometry } from 'three';
 import type { Rng } from '../core/rng';
-import { HAZARD_RECOIL, SUNGRAZER, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
+import { HAZARD_RECOIL, SUNGRAZER, SUPERNOVA_REMNANT, MOP, REENTRY_BURN, RIVER_BARGE, RIVER_SURGE, STREET_FLUSHER, type MopTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { roomAt } from '../world/house';
@@ -96,9 +97,10 @@ export class Mop extends BaseHazard {
     // Enough puddles to cover the trail at the fastest patrol speed (the house Mop keeps 60 cm/s).
     const fastest = Math.max(60 * cm, Math.max(...cfg.speed) * 1.2) * run.difficulty.hazardSpeed;
     this.maxPuddles = Math.ceil((cfg.trailLife * fastest) / cfg.trailSpacing) + 4;
-    const geom = new CircleGeometry(1, 20);
+    // Discs (wet puddles), or rings for a filament trail (`trailRing`, the Supernova Remnant).
+    const geom = cfg.trailRing ? new RingGeometry(0.62, 1, 20) : new CircleGeometry(1, 20);
     geom.rotateX(-Math.PI / 2);
-    const material = new MeshBasicMaterial({ color: cfg.trailColor ?? DECAL_COLORS.wet, transparent: true, opacity: cfg.burn ? 0.5 : 0.35, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const material = new MeshBasicMaterial({ color: cfg.trailColor ?? DECAL_COLORS.wet, transparent: true, opacity: cfg.burn || cfg.trailRing ? 0.5 : 0.35, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
     this.trail = new InstancedMesh(geom, material, this.maxPuddles);
     this.trail.count = 0;
     this.trail.frustumCulled = false;
@@ -149,6 +151,7 @@ export class Mop extends BaseHazard {
       b.stats.add({ stat: 'speed', op: 'mul', value: c.slowMultiplier, source: WET_SOURCE, priority: TIMED_PRIORITY, duration: 0.25 });
     }
     if (c.burn) this.burn(dt, run, c.burn, wet);
+    if (c.pulseNode) this.model.getObjectByName(c.pulseNode)?.scale.setScalar(1 + (c.pulseAmount ?? 0.1) * Math.sin(this.time * 2.6));
     this.syncTrail();
   }
 
@@ -262,5 +265,17 @@ export const sungrazerDef = hazardRegistry.register({
   modelId: SUNGRAZER.modelId,
   create(run, x, z, id, rng) {
     return new Mop(id, this, run, x, z, rng, SUNGRAZER);
+  },
+});
+
+/** Galaxy trail-layer: a supernova remnant whose gas trail slows (SUPERNOVA_REMNANT). */
+export const supernovaRemnantDef = hazardRegistry.register({
+  id: 'supernova_remnant',
+  name: 'Supernova Remnant',
+  footprint: tuningFootprint(SUPERNOVA_REMNANT),
+  mass: SUPERNOVA_REMNANT.mass,
+  modelId: SUPERNOVA_REMNANT.modelId,
+  create(run, x, z, id, rng) {
+    return new Mop(id, this, run, x, z, rng, SUPERNOVA_REMNANT);
   },
 });

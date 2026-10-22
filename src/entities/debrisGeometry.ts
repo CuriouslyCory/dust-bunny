@@ -97,11 +97,20 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
  */
 const GLB_TINTED = new Set(['shoe', 'sock', 'toy_car', 'book', 'car', 'bicycle', 'city_bus', 'food_truck', 'rocky_planet', 'icy_moon', 'ice_giant']);
 
-/** Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute. */
-export function modelDebrisGeometry(id: string, template: Object3D): BufferGeometry | null {
-  const parts = bakeParts(template, { attributes: [{ name: 'tint', itemSize: 1, value: () => [0] }] });
+/**
+ * Bakes a loaded model into a normalised Debris geometry with a `tint` mask attribute (1 where the
+ * instance colour applies: the largest material for GLB_TINTED ids, every part with `tintAll`) and
+ * an `emission` attribute (each part's material emission × intensity, for `material.glow`).
+ */
+export function modelDebrisGeometry(id: string, template: Object3D, tintAll = false): BufferGeometry | null {
+  const parts = bakeParts(template, {
+    attributes: [
+      { name: 'tint', itemSize: 1, value: () => [tintAll ? 1 : 0] },
+      { name: 'emission', itemSize: 3, value: (_mesh, mat) => (mat.emissive ? [mat.emissive.r * mat.emissiveIntensity, mat.emissive.g * mat.emissiveIntensity, mat.emissive.b * mat.emissiveIntensity] : [0, 0, 0]) },
+    ],
+  });
   if (parts.length === 0) return null;
-  if (GLB_TINTED.has(id)) {
+  if (GLB_TINTED.has(id) && !tintAll) {
     const area = new Map<string, number>();
     for (const p of parts) area.set(p.material.uuid, (area.get(p.material.uuid) ?? 0) + geometryArea(p.geometry));
     let best = '';
@@ -156,7 +165,7 @@ export function debrisGeometry(type: DebrisType): BufferGeometry {
   if (!g) {
     const modelId = type.model ?? type.id;
     const template = getModelTemplate(modelId);
-    const fromModel = template ? modelDebrisGeometry(modelId, template) : null;
+    const fromModel = template ? modelDebrisGeometry(modelId, template, !!type.material?.tintAll) : null;
     if (fromModel) glbTypes.add(type.id);
     g = fromModel ?? buildRecipeGeometry(type.recipe);
     geoCache.set(type.id, g);
@@ -179,12 +188,34 @@ export function debrisMaterial(type: DebrisType): MeshStandardMaterial {
     });
     if (glb) {
       // Instance colour only applies where the `tint` mask is set.
+      const glow = md.glow ?? 0;
+      if (glow > 0) {
+        // Self-lit: the baked per-part emission replaces the uniform emissive.
+        m.emissive.set('#000000');
+        m.userData.glow = { value: glow };
+      }
       m.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
           .replace('#include <common>', '#include <common>\nattribute float tint;')
           .replace('vColor.rgb *= instanceColor.rgb;', 'vColor.rgb *= mix(vec3(1.0), instanceColor.rgb, tint);');
+        if (glow > 0) {
+          shader.uniforms.uGlow = m!.userData.glow;
+          shader.vertexShader = shader.vertexShader
+            .replace('#include <common>', '#include <common>\nattribute vec3 emission;\nuniform float uGlow;\nvarying vec3 vEmission;')
+            .replace(
+              '#include <color_vertex>',
+              `#include <color_vertex>
+              vEmission = emission * uGlow;
+              #ifdef USE_INSTANCING_COLOR
+              vEmission *= mix(vec3(1.0), instanceColor.rgb, tint);
+              #endif`,
+            );
+          shader.fragmentShader = shader.fragmentShader
+            .replace('#include <common>', '#include <common>\nvarying vec3 vEmission;')
+            .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vEmission;');
+        }
       };
-      m.customProgramCacheKey = () => 'debris-glb-tint';
+      m.customProgramCacheKey = () => (glow > 0 ? 'debris-glb-glow' : 'debris-glb-tint');
     }
     matCache.set(type.id, m);
   }

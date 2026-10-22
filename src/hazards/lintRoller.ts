@@ -13,14 +13,15 @@
  * `orbitLane`; the route's copy nearest it on the wrap-around map) and patrols east–west along it.
  * In the Solar System the Comet (COMET, `ringReach`) rides the closed orbit ring nearest its spawn
  * one way round (`ringPath`, `ringPoint`): no ends, a short telegraph lane sliding ahead of it, its
- * `tail` fluttering (`flutterNode`).
+ * `tail` fluttering (`flutterNode`). In the Galaxy the Globular Cluster (GLOBULAR_CLUSTER) rides
+ * the galactic orbit rings the same way, its star `swarm` turning (`swirlNode`).
  *
  * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
  * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { COMET, FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COMET, FREIGHT_TRAIN, GLOBULAR_CLUSTER, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -302,6 +303,7 @@ export class LintRoller extends BaseHazard {
       const tail = this.model.getObjectByName(c.flutterNode);
       if (tail) tail.scale.set(1 + 0.06 * Math.sin(this.time * 7.3), 1, 1 + 0.08 * Math.sin(this.time * 4.1));
     }
+    if (c.swirlNode) this.spin(c.swirlNode, dt * (c.swirlRate ?? 0));
     if (this.ring) {
       if (this.pause > 0) this.pause -= dt;
       else this.s += this.tierSpeed(run, c.speed) * dt * this.dir;
@@ -493,5 +495,17 @@ export const cometDef = hazardRegistry.register({
   modelId: COMET.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, COMET);
+  },
+});
+
+/** Galaxy lane patrol: a globular cluster orbiting the galactic core (GLOBULAR_CLUSTER, ring riding like the Comet). */
+export const globularClusterDef = hazardRegistry.register({
+  id: 'globular_cluster',
+  name: 'Globular Cluster',
+  footprint: tuningFootprint(GLOBULAR_CLUSTER),
+  mass: GLOBULAR_CLUSTER.mass,
+  modelId: GLOBULAR_CLUSTER.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, GLOBULAR_CLUSTER);
   },
 });

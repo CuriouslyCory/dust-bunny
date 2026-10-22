@@ -13,7 +13,8 @@
  * Anti-Satellite Laser (globe, ASAT_LASER) turns only its `head`, scans while the Bunny is out of
  * range, and fires fast, narrow red bolts that do not soak; it is placed on landmasses. The Sunspot
  * (solar system, SUNSPOT) sweeps its flux-tube `head` like a pulsar beam, then fires a pulsed burst
- * of orange flare bolts; it is placed sunward of the Kuiper belt (SUNSPOT_ZONES).
+ * of orange flare bolts; it is placed sunward of the Kuiper belt (SUNSPOT_ZONES). The Galaxy's
+ * turret, the Pulsar, sweeps real beams instead of firing droplets (pulsar.ts).
  *
  * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
  * clogged by it), and a droplet that reaches the Decoy pops it.

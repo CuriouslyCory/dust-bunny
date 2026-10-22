@@ -42,7 +42,7 @@ describe('validateProgress', () => {
     ['too many upgrades', p({ upgrades: Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`u${i}`, 1])) }), 'upgrades'],
     ['missing stats', { fluff: 1, upgrades: {} }, 'stats'],
     ['wins above runs', p({}, { wins: 4 }), 'stats.wins'],
-    ['huge radius', p({}, { bestRadius: PROGRESS_BOUNDS.bestRadius + 1 }), 'stats.bestRadius'],
+    ['huge radius', p({}, { bestRadius: PROGRESS_BOUNDS.bestRadius * 1.01 }), 'stats.bestRadius'],
     ['NaN radius', p({}, { bestRadius: Number.NaN }), 'stats.bestRadius'],
     ['string total', p({}, { totalFluffEarned: '9' as unknown as number }), 'stats.totalFluffEarned'],
   ])('rejects %s', (_, body, field) => {

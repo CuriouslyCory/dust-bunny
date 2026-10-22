@@ -14,14 +14,15 @@
  * from the eyewall and the rain soaks it. The Globe's Hurricane (GLOBE_HURRICANE, a hurricane seen
  * from orbit) does the same, spinning its `spiral`, and is placed over oceans and shelf seas. The
  * Solar Flare (solar system, SOLAR_FLARE) is a dry blast from a plasma arch whose `loop` spins and
- * swells through the warm-up (`pulseNode`).
+ * swells through the warm-up (`pulseNode`). The Supernova (galaxy, SUPERNOVA) swells its star
+ * `core` through the warm-up, then a short, hard shock blast pushes the Bunny and loose Debris away.
  *
  * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
  * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { GLOBE_HURRICANE, SOLAR_FLARE, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { GLOBE_HURRICANE, SOLAR_FLARE, SUPERNOVA, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -268,5 +269,17 @@ export const solarFlareDef = hazardRegistry.register({
   modelId: SOLAR_FLARE.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, SOLAR_FLARE);
+  },
+});
+
+/** Galaxy cone blaster: a supernova blowing the Bunny away (SUPERNOVA). */
+export const supernovaDef = hazardRegistry.register({
+  id: 'supernova',
+  name: 'Supernova',
+  footprint: tuningFootprint(SUPERNOVA),
+  mass: SUPERNOVA.mass,
+  modelId: SUPERNOVA.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, SUPERNOVA);
   },
 });

@@ -10,10 +10,13 @@
  * `panels`, asat_laser `head` and globe_hurricane `spiral` turn about Y; space_station `arrays`
  * tilts about X; orbital_sweeper `net` and `wings` (flaps about Z); rogue_asteroid `rock`, sunspot
  * `head`, solar_flare `loop` and the_sun `corona` turn about Y; comet `tail` flutters (scale);
- * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide when chipped).
+ * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide when chipped;
+ * black_hole and sagittarius_a `disk`, globular_cluster `swarm` and pulsar `head` turn about Y;
+ * supernova_remnant `shell` and supernova `core` pulse (scale); sagittarius_a `jet_n` swells (scale
+ * Y) and hides when chipped, `jet_s` stays).
  * If another module already registered a factory for an id, it is kept.
  */
-import { BoxGeometry, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
+import { BoxGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Quaternion, RingGeometry, TorusGeometry, Vector3, type Object3D } from 'three';
 import { addBox, addCylinder, hasModel, mat, registerModel } from '../world/models';
 
 /** Native sizes from public/models/catalog.json (cm): footprint w (X) × d (Z), height h. */
@@ -69,6 +72,13 @@ export const HAZARD_MODEL_SIZES = {
   sungrazer: { w: 1.36, d: 2.04, h: 0.51 },
   solar_flare: { w: 1.91, d: 3.15, h: 1.21 },
   the_sun: { w: 5.83, d: 5.85, h: 3.79 },
+  // Galaxy (public/models/catalog.json in 1 ly units ÷ 100: Galaxy units, as loaded at scale 0.01).
+  black_hole: { w: 2.36, d: 2.36, h: 0.72 },
+  globular_cluster: { w: 1.62, d: 1.58, h: 1.28 },
+  pulsar: { w: 1.7, d: 3, h: 0.95 },
+  supernova_remnant: { w: 1.72, d: 2.11, h: 1.14 },
+  supernova: { w: 1.86, d: 3.18, h: 1.11 },
+  sagittarius_a: { w: 6.4, d: 6.4, h: 5.39 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -1173,6 +1183,168 @@ function theSun(): Object3D {
   return g;
 }
 
+// ── Galaxy Hazards (Galaxy units: the GLBs are authored at 1 = 1 ly and loaded at scale 0.01, so
+// these fallbacks are built directly at the loaded size: 1 unit = 100 ly; node names and pivots
+// match the GLBs, public/models/catalog.json) ──
+
+/** A flat glowing ring lying on the floor plane at height y (accretion discs, shock rings). */
+function flatRing(g: Object3D, radius: number, tube: number, y: number, m: MeshStandardMaterial): Mesh {
+  const mesh = new Mesh(new TorusGeometry(radius, tube, 8, 40), m);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = y;
+  g.add(mesh);
+  return mesh;
+}
+
+/** A flat annulus (inner..outer) lying in a node's XZ plane: accretion discs. */
+function annulus(g: Object3D, inner: number, outer: number, color: string, opacity: number): Mesh {
+  const mesh = new Mesh(new RingGeometry(inner, outer, 48, 1), new MeshBasicMaterial({ color, transparent: true, opacity, side: DoubleSide, depthWrite: false }));
+  mesh.rotation.x = -Math.PI / 2;
+  g.add(mesh);
+  return mesh;
+}
+
+/** Two glowing eyes at (±x, y, z). */
+function eyes(g: Object3D, x: number, y: number, z: number, radius: number, color: string): void {
+  for (const s of [-1, 1]) ball(g, radius, s * x, y, z, glow(color, 2.6), 1, 0);
+}
+
+function blackHole(): Object3D {
+  // A dark hole (r 0.36, centre y 0.48) in a white-hot photon ring (r 0.405), two hungry eyes on
+  // its +Z side (±0.137, 0.66, 0.28); the `disk` node (pivot at the hole's centre) holds the
+  // accretion disc (r 0.43–1.18) and turns about Y.
+  const g = new Group();
+  ball(g, 0.36, 0, 0.48, 0, mat('#020203', 1), 1, 2);
+  flatRing(g, 0.405, 0.025, 0.48, glow('#fff4e0', 2.6));
+  eyes(g, 0.137, 0.66, 0.28, 0.05, '#ffd27a');
+  const disk = node(g, 'disk', 0, 0.48, 0);
+  annulus(disk, 0.43, 0.75, '#ffb347', 0.85);
+  annulus(disk, 0.75, 1.18, '#d8507a', 0.55);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    ball(disk, 0.07, Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8, glow('#fff1c8', 2.2), 1, 0);
+  }
+  return g;
+}
+
+function globularCluster(): Object3D {
+  // A gold-white core (r 0.34, centre y 0.58) in a golden halo ring (r 0.52); the `swarm` node
+  // (pivot at the core) holds the star points out to r 0.95 and turns about Y.
+  const g = new Group();
+  ball(g, 0.34, 0, 0.58, 0, glow('#fff1c8', 2.2), 1, 1);
+  flatRing(g, 0.52, 0.03, 0.58, glow('#ffd27a', 1.8));
+  const swarm = node(g, 'swarm', 0, 0.58, 0);
+  for (let i = 0; i < 40; i++) {
+    const r = 0.4 + 0.55 * Math.cbrt((i + 0.5) / 40);
+    const a = i * 2.39996;
+    const y = ((i * 0.618) % 1) * 2 - 1;
+    const k = Math.sqrt(1 - y * y);
+    ball(swarm, 0.03 + (i % 3) * 0.015, Math.cos(a) * k * r, y * r * 0.55, Math.sin(a) * k * r, glow(i % 4 ? '#fff1c8' : i % 8 ? '#ffb26b' : '#cfe0ff', 2.2), 1, 0);
+  }
+  return g;
+}
+
+function pulsar(): Object3D {
+  // A violet pulsar-wind disc (r 0.84) on the floor; the `head` node (pivot at the origin) holds
+  // the white-hot neutron star (r 0.2, centre y 0.6), two magnetosphere rings and the twin
+  // lighthouse beams leaving the star at (0, 0.6, ±0.2), widening to r 0.28 at z ±1.5; it turns about Y.
+  const g = new Group();
+  addCylinder(g, 0.84, 0.84, 0.02, 0, 0, 0, glow('#8a5ad8', 0.9), 32);
+  const head = node(g, 'head', 0, 0, 0);
+  ball(head, 0.2, 0, 0.6, 0, glow('#f4fbff', 3), 1, 1);
+  for (const tilt of [0.5, -0.5]) {
+    const ring = new Mesh(new TorusGeometry(0.34, 0.015, 6, 32), glow('#9fd8ff', 2));
+    ring.position.y = 0.6;
+    ring.rotation.set(Math.PI / 2 + tilt, 0, 0);
+    head.add(ring);
+  }
+  for (const s of [-1, 1]) {
+    const beam = new Mesh(new ConeGeometry(0.28, 1.3, 14, 1, true), new MeshBasicMaterial({ color: '#cfeaff', transparent: true, opacity: 0.45, depthWrite: false, side: DoubleSide }));
+    beam.rotation.x = -s * (Math.PI / 2); // apex (+Y) back towards the star
+    beam.position.set(0, 0.6, s * (0.2 + 0.65));
+    head.add(beam);
+  }
+  return g;
+}
+
+function supernovaRemnant(): Object3D {
+  // A Crab-like remnant: the `shell` node (pivot (0, 0.58, 0)) is an oval web of glowing filaments
+  // (radii 0.86 × 0.56 × 1.04 along X, Y, Z) that breathes; inside it a blue glow and a white pulsar;
+  // a dim violet glow on the floor trails off behind it (−Z).
+  const g = new Group();
+  const trail = addCylinder(g, 0.7, 0.7, 0.01, 0, 0, -0.35, glow('#6a3a9a', 0.6), 24);
+  trail.scale.set(1, 1, 1.5);
+  ball(g, 0.3, 0, 0.58, 0, glow('#6fb8ff', 1.4), 1, 1);
+  ball(g, 0.05, 0, 0.58, 0, glow('#ffffff', 3), 1, 0);
+  const shell = node(g, 'shell', 0, 0.58, 0);
+  const web = new Group();
+  web.scale.set(0.86, 0.56, 1.04);
+  shell.add(web);
+  for (let i = 0; i < 6; i++) {
+    const ring = new Mesh(new TorusGeometry(1, 0.025, 6, 40), glow(i % 2 ? '#ff7ab8' : '#d68cff', 2));
+    ring.rotation.set(0, (i / 6) * Math.PI, 0);
+    web.add(ring);
+  }
+  const belt = new Mesh(new TorusGeometry(1, 0.03, 6, 40), glow('#ffb36b', 2));
+  belt.rotation.x = Math.PI / 2;
+  web.add(belt);
+  return g;
+}
+
+function supernova(): Object3D {
+  // A swelling, overheated star: the `core` node (pivot (0, 0.58, 0)) holds the star (r 0.54) and
+  // its strained eyes on the +Z side; a cyan shock ring (r 0.783) on the floor and five shock
+  // tongues fanning out to +Z (to r 2.4, ±30°). The blast leaves the nozzle at (0, 0.58, 0.54).
+  const g = new Group();
+  const core = node(g, 'core', 0, 0.58, 0);
+  ball(core, 0.54, 0, 0, 0, glow('#fff1c8', 2.6), 1, 2);
+  eyes(core, 0.17, 0.12, 0.48, 0.07, '#ff5a3a');
+  flatRing(g, 0.783, 0.04, 0.05, glow('#6fe8ff', 2.2));
+  for (let i = 0; i < 5; i++) {
+    const a = ((i - 2) / 2) * (Math.PI / 6);
+    const tongue = new Mesh(new ConeGeometry(0.18, 1.6, 8, 1, true), new MeshBasicMaterial({ color: i % 2 ? '#9fe8ff' : '#ffd27a', transparent: true, opacity: 0.5, depthWrite: false, side: DoubleSide }));
+    tongue.rotation.set(-Math.PI / 2, 0, 0); // apex (+Y) back towards the star
+    const holder = new Group();
+    holder.rotation.y = a;
+    tongue.position.set(0, 0.15, 0.8 + 0.8);
+    holder.add(tongue);
+    g.add(holder);
+  }
+  return g;
+}
+
+function sagittariusA(): Object3D {
+  // The boss, front +Z: a supermassive black hole (r 1.0, centre y 1.5) in a white-hot photon ring
+  // (r 1.09), two slit-pupilled eyes on its +Z side (±0.393, 2.0, 0.772); the `disk` node (pivot at
+  // the hole's centre) holds the accretion disc (r 1.16–3.2) and turns about Y; `jet_n` (pivot at
+  // the north pole (0, 2.5, 0)) rises to y 5.4; `jet_s` (pivot at the south pole (0, 0.5, 0)) runs
+  // down into a blue lobe (r 1.7) on the floor under the disc.
+  const g = new Group();
+  ball(g, 1, 0, 1.5, 0, mat('#010102', 1), 1, 3);
+  flatRing(g, 1.09, 0.05, 1.5, glow('#fff6e8', 2.8));
+  eyes(g, 0.393, 2.0, 0.772, 0.13, '#ffd27a');
+  for (const s of [-1, 1]) ball(g, 0.05, s * 0.393, 2.0, 0.9, mat('#0a0406', 1), 1, 0).scale.set(0.4, 1.6, 0.4);
+  const disk = node(g, 'disk', 0, 1.5, 0);
+  annulus(disk, 1.16, 1.7, '#fff1c8', 0.9);
+  annulus(disk, 1.7, 2.4, '#ff9a3a', 0.75);
+  annulus(disk, 2.4, 3.2, '#a03ad8', 0.5);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    ball(disk, 0.16, Math.cos(a) * 2.0, 0, Math.sin(a) * 2.0, glow('#ffe0b0', 2.4), 1, 0);
+  }
+  const jetN = node(g, 'jet_n', 0, 2.5, 0);
+  const n = new Mesh(new CylinderGeometry(0.12, 0.22, 2.9, 12, 1, true), new MeshBasicMaterial({ color: '#bfeaff', transparent: true, opacity: 0.7, depthWrite: false, side: DoubleSide }));
+  n.position.y = 1.45;
+  jetN.add(n);
+  ball(jetN, 0.18, 0, 2.9, 0, glow('#b48cff', 2.4), 1, 0);
+  const jetS = node(g, 'jet_s', 0, 0.5, 0);
+  const sj = new Mesh(new CylinderGeometry(0.2, 0.12, 0.5, 12, 1, true), new MeshBasicMaterial({ color: '#bfeaff', transparent: true, opacity: 0.6, depthWrite: false, side: DoubleSide }));
+  sj.position.y = -0.25;
+  jetS.add(sj);
+  addCylinder(g, 1.7, 1.7, 0.02, 0, 0, 0, glow('#3a6aff', 0.9), 32);
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -1217,6 +1389,12 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   sungrazer,
   solar_flare: solarFlare,
   the_sun: theSun,
+  black_hole: blackHole,
+  globular_cluster: globularCluster,
+  pulsar,
+  supernova_remnant: supernovaRemnant,
+  supernova,
+  sagittarius_a: sagittariusA,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

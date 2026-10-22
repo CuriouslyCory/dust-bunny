@@ -1,7 +1,9 @@
 /**
  * The Solar System (Act 7), in Solar System units (1 = 0.01 AU, `AREAS.solar_system.unit`): the
  * ecliptic seen from above, a flat disc round the Sun at the centre of the map. Pure data, same
- * shape as a house floor (HouseLayout); the map does not wrap and has no exit (the Sun wins the Run).
+ * shape as a house floor (HouseLayout); the map does not wrap. The exit (`layout.exit`) is the
+ * heliopause: a gate on the map's north bound, north-east of the Sun (the way Voyager 1 went), that
+ * opens onto the Galaxy once the Sun is absorbed (barred by an obstacle until then).
  *
  * Zones are rings by distance from the Sun: `corona` (round the Sun), `inner_orbits` (the rocky
  * planets), `asteroid_belt` (a cluttered ring: the generator scatters `beltRocks` asteroids in it on
@@ -24,7 +26,7 @@
  */
 import { rect, rectContains } from '../core/math';
 import { Rng } from '../core/rng';
-import type { DebrisPlacement, FloorMaterialId, HouseLayout, MapRoute, SolarZoneType } from './types';
+import type { DebrisPlacement, ExitDoor, FloorMaterialId, HouseLayout, MapRoute, Obstacle, SolarZoneType } from './types';
 import { ZoneGrid } from './zoneGrid';
 
 export const SOLAR = {
@@ -58,6 +60,10 @@ export const SOLAR = {
   /** Asteroids scattered in the belt by the generator (the spawner adds more), and per Trojan camp. */
   beltRocks: 600,
   trojans: 26,
+  /** Width of the heliopause gate on the north bound (the exit to the Galaxy, units). */
+  exitWidth: 16,
+  /** The gate's centre: this far east of the Sun's meridian [min, max] (units), the way Voyager 1 went. */
+  exitEast: [20, 90] as const,
   /** Voyager 1: this far from the spawn, north-east (on screen at arrival). */
   voyagerDistance: 7,
   /** Orbit ring width (units) for Hazards that follow one. */
@@ -209,6 +215,16 @@ export function generateSolarSystem(seed: number | string): HouseLayout {
     return { id: `orbit${i}`, kind: 'orbit', points, width: S.laneWidth };
   });
 
+  // ── The exit: the heliopause, a strip of the north bound north-east of the Sun ──
+  const exit: ExitDoor = (() => {
+    const erng = root.fork('solar:exit');
+    const ex = Math.round(cx + erng.range(S.exitEast[0], S.exitEast[1]));
+    const hw = S.exitWidth / 2;
+    return { rect: rect(ex - hw, 0, ex + hw, 1.5), dir: { x: 0, z: -1 }, obstacleId: 'heliopause_gate', open: false };
+  })();
+  // Bars the heliopause until the Sun falls (an obstacle, not a wall: the map edge is the bounds).
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: 0.3, clearance: 0 };
+
   return {
     area: 'solar_system',
     seed: root.seed,
@@ -217,10 +233,11 @@ export function generateSolarSystem(seed: number | string): HouseLayout {
     doorways: [],
     walls: [],
     furniture: [],
-    obstacles: [],
+    obstacles: [gate],
     rugs: [],
     debrisPlacements,
     spawn,
+    exit,
     routes,
   };
 }

@@ -3,7 +3,7 @@ import { getTier, MAX_TIER, TIERS, tierForRadius, tierProgress } from './tiers';
 
 describe('tiers', () => {
   it('has the five house thresholds and two per later Area (real cm)', () => {
-    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11]);
+    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11, 9.461e19, 2.8383e20]);
     expect(TIERS.map((t) => t.name)).toEqual([
       'Speck',
       'Fluff',
@@ -22,8 +22,10 @@ describe('tiers', () => {
       'Dust Planet',
       'Dust Giant',
       'Dust Star',
+      'Dust Nebula',
+      'Dust Cluster',
     ]);
-    expect(MAX_TIER).toBe(17);
+    expect(MAX_TIER).toBe(19);
   });
 
   it('looks up the Tier for a radius (thresholds inclusive)', () => {
@@ -47,6 +49,10 @@ describe('tiers', () => {
     expect(tierForRadius(850_000).index).toBe(11);
     expect(tierForRadius(1e6).index).toBe(12);
     expect(tierForRadius(3e6).index).toBe(13);
+    // The Galaxy's 100 ly units: the arrival leap (85 ly) is still Tier 17; Tier 18 at 1 unit, Tier 19 at 3.
+    expect(tierForRadius(0.85 * 9.461e19).index).toBe(17);
+    expect(tierForRadius(9.461e19).index).toBe(18);
+    expect(tierForRadius(2.8383e20).index).toBe(19);
   });
 
   it('reports progress towards the next Tier', () => {
@@ -58,12 +64,13 @@ describe('tiers', () => {
     expect(tierProgress(2e6)).toBeCloseTo(0.5);
     expect(tierProgress(2e8)).toBeCloseTo(0.5);
     expect(tierProgress(2.992e11)).toBeCloseTo(0.5);
-    expect(tierProgress(5e11)).toBe(1);
+    expect(tierProgress(1.8922e20)).toBeCloseTo(0.5);
+    expect(tierProgress(5e20)).toBe(1);
   });
 
   it('camera scale rises each Tier so Tier-up pulls the camera back', () => {
     for (let i = 1; i < TIERS.length; i++) expect(TIERS[i]!.cameraScale).toBeGreaterThan(TIERS[i - 1]!.cameraScale);
-    expect(getTier(99).index).toBe(17);
+    expect(getTier(99).index).toBe(19);
     expect(getTier(0).index).toBe(1);
   });
 });

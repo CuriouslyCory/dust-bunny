@@ -10,6 +10,13 @@ import type { StatBlock } from './stats';
  */
 export type DamageFilter = (amount: number, source: string) => number;
 
+/**
+ * What the Bunny is made of, for its look (BunnyView): `dust` until it absorbs Sagittarius A*,
+ * then `black_hole` (a dark core, an accretion disc of lint, a lensing shimmer; the eyes stay) for
+ * the rest of the Run, whatever Area comes next.
+ */
+export type BunnyForm = 'dust' | 'black_hole';
+
 const _axis = new Vector3();
 const _q = new Quaternion();
 
@@ -67,6 +74,8 @@ export class Bunny {
   hunkered = false;
   /** Zap's Static meter, 0..1 (null for Characters without one). Drives Zap's glow. */
   staticCharge: number | null = null;
+  /** Its look's form (set by the Run when the Galaxy is cleared; it never goes back). */
+  form: BunnyForm = 'dust';
 
   constructor(
     private readonly events: EventBus,

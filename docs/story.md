@@ -38,7 +38,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun, Jupiter in the way until Dust Star, Voyager 1, solar Hazards and the Sun), with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Acts 8–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun, Jupiter in the way until Dust Star, Voyager 1, solar Hazards and the Sun), with their story in the game, and Act 8 (the Galaxy) is playable: its chapter, Tier lines, the galactic disc with its spiral arms, dust lanes and starfield, the Bunny's black-hole look after Sagittarius A*, placeholder Hazards and a placeholder Sagittarius A* (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Act 8's Hazards and boss fight and Act 9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 
@@ -102,7 +102,7 @@ Lines below are the primary variant; alternates live in `src/data/story.ts`.
 | Garbage Truck arrives | *The Garbage Truck is the largest thing people built to make dropped things go away. It is about to learn where they go.* |
 | City cleared | *The city is gone. The thing that used to be a dust bunny rolls on. There is more ground.* |
 
-> Absorbing the Garbage Truck opens the highway on-ramp (the City cleared line plays on its banner). `victory` comes after the last built Area's boss (the Sun, until Act 8 gives the Solar System an exit) and moves to the end of Act 9 once it exists.
+> Absorbing the Garbage Truck opens the highway on-ramp (the City cleared line plays on its banner). `victory` comes after the last built Area's boss (Sagittarius A*, until Act 9 gives the Galaxy an exit) and moves to the end of Act 9 once it exists.
 
 ### Act 4 · The Region — *A State of Emergency*
 
@@ -155,14 +155,17 @@ The ecliptic plane: conveniently flat. Debris: asteroids, comets, moons, planets
 | The Sun arrives | *The Sun has been blowing dust out of the solar system for 4.6 billion years. It is a very large leaf blower. It is also, technically, Debris.* |
 | Solar System cleared | *The light goes out. It does not need the light.* |
 
+> Absorbing the Sun opens the heliopause, a gate on the ecliptic's north edge (the way Voyager 1 went), onto the Galaxy; the light still goes out, and the cleared line plays on the exit's banner.
+
 ### Act 8 · The Galaxy — *The Biggest Vacuum There Is*
 
-The galactic disc: also flat. Debris: stars, star clusters, nebulae, rogue planets. Black holes appear as Hazards (suction, the purest vacuum) and foreshadow what the Bunny is becoming. After Sagittarius A* the Bunny's look changes: a dark core, an accretion disc of lint.
+The galactic disc: also flat. Debris: stars, star clusters, nebulae, rogue planets. Black holes appear as Hazards (suction, the purest vacuum) and foreshadow what the Bunny is becoming. A rogue planet drifts beside the arrival point, a one-off with its own line (any rogue planet, the first absorbed), and a sock floats nearby for the Tier 18 line. After Sagittarius A* the Bunny's look changes for the rest of the Run: a dark core, an accretion disc of lint, a lensing shimmer; the eyes stay.
 
 | Beat | Line |
 |---|---|
 | Area entered | *Astronomers on a distant world classify it as a nebula. They are not wrong.* |
 | Tier 17 → 18 (Dust Nebula) | *It is now mostly hydrogen, lint, and a sock.* |
+| Rogue planet absorbed (one-off) | *A rogue planet, drifting between stars for a billion years. Finally, something happens to it.* |
 | Tier 18 → 19 (Dust Cluster) | *The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.* |
 | Sagittarius A* arrives | *At the centre of the galaxy is a hole four million times heavier than the Sun. It has been quietly cleaning the galactic core for thirteen billion years. It is the biggest vacuum there is. It is not big enough.* |
 | Galaxy cleared | *It has absorbed the thing that absorbs things. It is now that thing, with fur.* |
@@ -249,10 +252,10 @@ World units are centimetres and the Bunny ends the City at r ≈ 800 cm. Acts 4�
 | Continent | 10 km | 0.85 (the size leap) | 12: 1 · 13: 3 | `8.5 km` → `45 km` |
 | Globe | 1,000 km | 0.85 (the second size leap) | 14: 1 · 15: 3 | `0.13 Earths` → `≈ 0.6 Earths` (Earth radii: 1 unit = 0.157 Earths) |
 | Solar System | 0.01 AU | 0.85 (the third size leap) | 16: 1 · 17: 3 | `0.0085 AU` → `≈ 0.04 AU` |
-| Galaxy | 100 ly | ~1 | 18: 1 · 19: 3 | `300 ly` → `60,000 ly` |
+| Galaxy | 100 ly | 0.85 (the fourth size leap) | 18: 1 · 19: 3 | `85 ly` → `≈ 450 ly` |
 | Universe | 10 Mly | ~1 | 20: 1 · 21: 3 | `30 Mly` → `everything` |
 
-The Region ends at ≈ 40 m, far below 1 Continent unit, so the Continent declares an arrival radius (and the Globe another: the Continent ends at ≈ 45 km, 0.045 Globe units; and the Solar System a third: the Globe ends at ≈ 4,500 km, 0.003 Solar System units) and the Bunny leaps to it off screen behind the chapter card (`docs/design.md`, "The size leap"). Every Act after the City is "start at ~1, grow to ~3, boss at Tier +1" in its own units, which is the House's Speck→Fluff curve, so Hazard sizes, absorb ratios and camera scales all reuse the same shape. The only new code is the unit ladder for the radius readout, which is itself a running gag: the progress pill goes from `1.47 / 3 cm` to `1.47 / 3 Earths` without changing layout.
+The Region ends at ≈ 40 m, far below 1 Continent unit, so the Continent declares an arrival radius (and the Globe another: the Continent ends at ≈ 45 km, 0.045 Globe units; and the Solar System a third: the Globe ends at ≈ 4,500 km, 0.003 Solar System units; and the Galaxy a fourth: the Solar System ends at ≈ 0.045 AU, ≈ 7e-9 Galaxy units) and the Bunny leaps to it off screen behind the chapter card (`docs/design.md`, "The size leap"). Every Act after the City is "start at ~1, grow to ~3, boss at Tier +1" in its own units, which is the House's Speck→Fluff curve, so Hazard sizes, absorb ratios and camera scales all reuse the same shape. The only new code is the unit ladder for the radius readout, which is itself a running gag: the progress pill goes from `1.47 / 3 cm` to `1.47 / 3 Earths` without changing layout.
 
 ### The floor stays a floor
 
@@ -315,5 +318,4 @@ Spares for rotation, same voice. Add to `STORY.tiers[...]` as they are approved.
 - *A mountain range. It had a name. It has a new one now: inside.* (Dustmass)
 - *The Great Barrier Reef is absorbed. It was going anyway.* (Dust Planet)
 - *Saturn's rings are, strictly speaking, also dust that never got picked up. It feels seen.* (Dust Giant)
-- *A rogue planet, drifting between stars for a billion years. Finally, something happens to it.* (Dust Nebula)
 - *A galaxy with 300 billion stars and, probably, someone's couch.* (Dust Singularity)

@@ -96,6 +96,9 @@ export const STORY: Story = {
         'Jupiter is absorbed by a dust bunny. Irony is not a force of nature. It should be.',
       ],
     ],
+    // Act 8 · The Galaxy
+    dust_nebula: ['It is now mostly hydrogen, lint, and a sock.'],
+    dust_cluster: ['The Milky Way contains between 100 and 400 billion stars. It is going to find out exactly how many.'],
   },
 
   areas: {
@@ -159,6 +162,17 @@ export const STORY: Story = {
         ],
       ],
     },
+    galaxy: {
+      title: 'The Biggest Vacuum There Is',
+      entered: ['Astronomers on a distant world classify it as a nebula. They are not wrong.'],
+      cleared: ['It has absorbed the thing that absorbs things. It is now that thing, with fur.'],
+      boss: [
+        [
+          'At the centre of the galaxy is a hole four million times heavier than the Sun.',
+          'It has been quietly cleaning the galactic core for thirteen billion years. It is the biggest vacuum there is. It is not big enough.',
+        ],
+      ],
+    },
   },
 
   debris: {
@@ -169,5 +183,7 @@ export const STORY: Story = {
     moon: ['The Moon is gone. Somewhere, a werewolf has an unexpectedly quiet evening.'],
     voyager_1: ["Voyager 1 carried a golden record of humanity's greatest achievements. It is now, technically, inside a dust bunny."],
     continent_whole: ['A whole continent. Its tectonic plate is still moving, slightly, out of habit.'],
+    // The Galaxy: the map places a rogue planet beside the spawn (src/world/galaxy.ts).
+    free_floating_planet: ['A rogue planet, drifting between stars for a billion years. Finally, something happens to it.'],
   },
 };

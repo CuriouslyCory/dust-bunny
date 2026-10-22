@@ -17,10 +17,12 @@ import {
   WebGLRenderer,
   type DirectionalLight,
 } from 'three';
+import { bendCamera, findLens, LensingPass } from '../fx/lensing';
 import { Lighting } from '../fx/lighting';
 import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
 import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
+import { GalaxySky } from '../fx/galaxy';
 import { SolarSky, VICTORY_HOLD_SECONDS } from '../fx/solar';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
@@ -30,6 +32,7 @@ import { DEFAULT_CHARACTER_ID } from '../data/characters';
 import { TUNING } from '../data/tuning';
 import { CameraRig } from '../systems/camera';
 import { addDefaultHudWidgets, Hud } from '../ui/hud';
+import { settings } from '../ui/settings';
 import { ScreenManager } from '../ui/screens';
 import { setMaxAnisotropy } from '../world/materials';
 import { AREA_ORDER, type AreaId } from '../world/types';
@@ -47,9 +50,10 @@ const BACKGROUND = '#3b2f2a';
  * altitude haze, blue-violet dusk from the stratosphere (where the horizon overlay curves the
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
- * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts).
+ * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts),
+ * and the Galaxy's violet-black (its painted floor carries the nebula backdrop and the disc, galaxyTextures.ts; the stars are fx/galaxy.ts).
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c' };
 
 export class Game {
   readonly events = new EventBus();
@@ -65,6 +69,8 @@ export class Game {
   readonly lighting: Lighting;
   /** The Solar System's Sun, glare, light and the light going out (fx/solar.ts). */
   readonly solarSky: SolarSky;
+  /** The Galaxy's Sagittarius A*, core glow, light and starfield (fx/galaxy.ts). */
+  readonly galaxySky: GalaxySky;
   /** Pending results screen after a Solar System victory (held so the light can go out). */
   private resultsTimer: number | null = null;
   /** Continent horizon overlay (null without a canvas container). */
@@ -80,6 +86,7 @@ export class Game {
   nextRunConfig: Partial<RunConfig> = {};
 
   private quality: Quality = 'high';
+  private readonly lensing = new LensingPass();
   /** Screen that paused the Run, if it is paused mid-Run. */
   private pausedBy: string | null = null;
   private readonly raycaster = new Raycaster();
@@ -121,6 +128,7 @@ export class Game {
 
     this.hud = new Hud(this);
     this.solarSky = new SolarSky(this.scene, this.lighting, this.hud);
+    this.galaxySky = new GalaxySky(this.scene, this.lighting);
     addDefaultHudWidgets(this.hud, this);
     this.hud.visible = false;
     this.uiLayer.append(this.hud.el);
@@ -136,9 +144,9 @@ export class Game {
     this.resize();
 
     this.events.on('runEnded', (e) => {
-      // Winning in the Solar System: the light goes out first (fx/solar.ts) and the narrator's
-      // line is read, then the results.
-      if (e.reason === 'victory' && this.run?.area === 'solar_system') {
+      // A victory (the last built Area's boss absorbed) holds the results back so it is seen and the
+      // narrator's line is read.
+      if (e.reason === 'victory') {
         const run = this.run;
         const show = (): void => {
           this.resultsTimer = null;
@@ -228,6 +236,7 @@ export class Game {
     if (this.resultsTimer !== null) window.clearTimeout(this.resultsTimer);
     this.resultsTimer = null;
     this.solarSky.attach(null);
+    this.galaxySky.attach(null);
     this.view?.dispose();
     this.run?.dispose();
     this.view = null;
@@ -242,6 +251,7 @@ export class Game {
     this.fog.color.set(c);
     this.lighting.setArea(area);
     this.solarSky.attach(this.run);
+    this.galaxySky.attach(this.run);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
     if (this.limb) showHorizon(this.limb, area === 'globe');
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
@@ -262,13 +272,18 @@ export class Game {
 
   private render(alpha: number, frameDt: number): void {
     this.screens.update(frameDt);
+    // Sagittarius A*'s pull bends the camera (src/fx/lensing.ts).
+    const lens = findLens(this.run);
     if (this.view) {
+      bendCamera(this.rig, lens, settings.value.reducedMotion);
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
+      this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
       this.lighting.update(this.rig.target, this.rig.distance);
     }
     this.hud.update(frameDt);
     this.renderer.render(this.scene, this.camera);
+    if (this.view) this.lensing.render(this.renderer, this.scene, this.camera, lens, this.quality);
   }
 
   /** Render quality (see fx/quality.ts): shadows and pixel ratio. */

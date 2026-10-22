@@ -85,6 +85,15 @@ export function solarTiers(t16: number, t17: number): PerTier {
   return [t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t17];
 }
 
+/**
+ * Per-Tier values for galaxy Hazards (Tiers 18, 19), in Galaxy units (1 = 100 ly). Tiers 1–17
+ * repeat the Tier 18 value: the Bunny arrives in the Galaxy at Tier 17 (0.85 units, the arrival
+ * leap) and galaxy Hazards live only there.
+ */
+export function galaxyTiers(t18: number, t19: number): PerTier {
+  return [t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t19];
+}
+
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
 export interface RoombaTuning {
   size: number;
@@ -107,6 +116,8 @@ export interface RoombaTuning {
   /** Model node spun about Y while driving, at spinRate rad/s. */
   spinNode: string;
   spinRate: number;
+  /** A pull on loose Debris too (the Black Hole); its floor shows rings flowing inward. */
+  debrisPull?: DebrisPullTuning;
 }
 
 export const ROOMBA: RoombaTuning = {
@@ -179,6 +190,9 @@ export interface LaneTuning {
   ringReach?: number;
   /** Model node that flutters (scale) while moving: the Comet's `tail`. */
   flutterNode?: string;
+  /** Model node turned about Y at `swirlRate` rad/s all the time: the Globular Cluster's `swarm`. */
+  swirlNode?: string;
+  swirlRate?: number;
 }
 
 export const LINT_ROLLER: LaneTuning = {
@@ -319,6 +333,11 @@ export interface MopTuning {
    * i-frames) it sheds `shedFraction` of its volume. No damage; `slowMultiplier` still applies.
    */
   burn?: { shedFraction: number; interval: number };
+  /** Trail drops are rings rather than discs (the Supernova Remnant's filaments). */
+  trailRing?: boolean;
+  /** Model node that breathes (scale, ± `pulseAmount`) while it moves: the Supernova Remnant's `shell`. */
+  pulseNode?: string;
+  pulseAmount?: number;
 }
 
 export const MOP: MopTuning = {
@@ -1750,6 +1769,8 @@ export interface SunTuning extends BossTuning {
   eclipseGlow: number;
   /** Seconds before a chipped prominence (`prominence_l` / `prominence_r`) shows again. */
   prominenceRegrow: number;
+  /** Debris type its chips knock loose (default: the Sun's `prominence`, src/data/sunDebris.ts). */
+  chipTypeId?: string;
 }
 
 /**
@@ -1759,7 +1780,7 @@ export interface SunTuning extends BossTuning {
  * a charge into a giant planet the Bunny can't absorb yet stuns it (an eclipse: the glow dims and
  * the wind stops); chips are prominences (`prominence` Debris, src/data/sunDebris.ts). Needs Bunny
  * radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 17 starts
- * at 3). Absorbing it clears the Solar System (the last built Area, so the Run is won).
+ * at 3). Absorbing it clears the Solar System: the heliopause opens onto the Galaxy.
  */
 export const THE_SUN: SunTuning = {
   size: 2.8,
@@ -1821,6 +1842,326 @@ export const THE_SUN: SunTuning = {
   giants: { typeIds: ['jupiter', 'saturn', 'uranus', 'neptune', 'hot_jupiter'], fallbackId: 'hot_jupiter', interval: 8, range: 26, margin: 1.25, gap: 3 },
   eclipseGlow: 0.15,
   prominenceRegrow: 8,
+};
+
+// ── Galaxy Hazards (Tiers 18–19, 1 world unit = 100 ly, Bunny radius ≈ 0.85–4.5 units) ──
+// The Galaxy repeats the Solar System's shape (Tiers at 1 and 3 units, arrival at 0.85, boss
+// absorbable at ≈ 4). The GLBs are authored at 1 ly per unit and loaded at scale 0.01, so they
+// arrive in Galaxy units: `modelSize` is the catalog radius ÷ 100 of the part that is the Hazard's
+// body (public/models/catalog.json), and heights follow the model at that scale.
+// Tier 18 Hazards are a threat on arrival (r 0.85) and food by early Tier 19; the Tier 19
+// Supernova is food before Sagittarius A* is.
+
+/**
+ * A wanderer's pull on loose Debris (the Black Hole): Debris up to `maxSize` within `reach` of its
+ * edge drifts in at up to `speed` units/s (fading to 0 at `reach`) and spirals (`swirl` × that
+ * speed sideways). With `eat`, Debris that reaches its middle is swallowed (removed).
+ */
+export interface DebrisPullTuning {
+  reach: number;
+  speed: number;
+  swirl: number;
+  maxSize: number;
+  eat: boolean;
+}
+
+/** Black Hole: Roomba behaviour, the real vacuum: a slow drifter with a strong, long pull that also swallows loose Debris; spins its accretion `disk`. */
+export const BLACK_HOLE: RoombaTuning = {
+  size: 1.1,
+  /** Model top (84) × 1.1 / 1.18. */
+  height: 0.78,
+  mass: 4,
+  damage: 1,
+  knockbackCm: 1.8,
+  knockbackRadii: 2.5,
+  /** Slower than the Rogue Asteroid (2.4 / 4.2): it drifts. */
+  speed: galaxyTiers(2, 3.4),
+  turnInterval: [2, 4],
+  turnAngle: 1.4,
+  /** Twice the Rogue Asteroid's reach (1.5) and a much harder pull (0.3), still below the Bunny's speed. */
+  suctionReach: 3.2,
+  suctionStrength: 0.55,
+  modelId: 'black_hole',
+  /** The model's footprint radius (118 model units: the accretion disc's rim). */
+  modelSize: 1.18,
+  spinNode: 'disk',
+  spinRate: 2.4,
+  debrisPull: { reach: 4, speed: 3, swirl: 0.6, maxSize: 1.2, eat: true },
+};
+
+/**
+ * Globular Cluster: a lane patrol orbiting the galactic core on the orbit ring nearest its spawn
+ * (the Comet's ring riding, `ringReach`), its star `swarm` turning (`swirlNode`). A hit knocks the
+ * Bunny off the ring and sheds mass (no sticking).
+ */
+export const GLOBULAR_CLUSTER: LaneTuning = {
+  ...COMET,
+  size: 1.5,
+  /** Model top (132.5) × 1.5 / 0.94. */
+  height: 2.1,
+  speed: galaxyTiers(2.8, 4.2),
+  modelId: 'globular_cluster',
+  /** The model's footprint radius (93.8 model units: the star swarm's outer edge). */
+  modelSize: 0.94,
+  spinNode: null,
+  flutterNode: undefined,
+  swirlNode: 'swarm',
+  swirlRate: 0.8,
+};
+
+/**
+ * Pulsar: a turret whose `head` turns all the time, twin lighthouse beams leaving both ways
+ * (src/hazards/pulsar.ts). When the Bunny is in range and on screen, and a beam is about to sweep
+ * over it, both beams light up as red lanes with an amber wedge ahead of each showing the arc they
+ * will sweep (`telegraph`), then burn for `fire` s while still turning at `sweepRate`: a Bunny in
+ * either beam takes a hit, knocked onward and out. Then `cooldown`. Never moves.
+ */
+export interface PulsarTuning {
+  size: number;
+  height: number;
+  mass: number;
+  damage: number;
+  knockbackCm: number;
+  knockbackRadii: number;
+  /** Beam length from the centre. */
+  range: PerTier;
+  /** Beam width (full). */
+  beamWidth: number;
+  /** Turn rate of the head (rad/s) while idle, telegraphing and firing (one way round). */
+  sweepRate: PerTier;
+  telegraph: PerTier;
+  /** Seconds the beams burn. */
+  fire: number;
+  cooldown: PerTier;
+  /** Beam height above the floor (the star's centre) for the beam visuals and shelter checks. */
+  beamHeight: number;
+  modelId: HazardModelId;
+  /** Hazard size the unscaled model represents (the model is scaled by size / modelSize). */
+  modelSize: number;
+  /** The model node that turns (the beams). */
+  aimNode: string;
+  beamColor: string;
+}
+
+export const PULSAR: PulsarTuning = {
+  size: 1.3,
+  /** Model top (95.6) × 1.3 / 0.84. */
+  height: 1.48,
+  mass: 3,
+  damage: 1,
+  knockbackCm: 1.2,
+  knockbackRadii: 1,
+  range: galaxyTiers(9, 12),
+  beamWidth: 0.7,
+  /** Beam tip speed 0.6 × 9 = 5.4 units/s at Tier 18: well below the Bunny's. */
+  sweepRate: galaxyTiers(0.6, 0.7),
+  telegraph: galaxyTiers(1.1, 0.95),
+  fire: 1.3,
+  cooldown: galaxyTiers(2.8, 2.3),
+  /** The star's centre: model y 60 × 1.3 / 0.84. */
+  beamHeight: 0.93,
+  modelId: 'pulsar',
+  /** The pulsar-wind disc's radius (84 model units); the model's beams reach 150 (2.3 units here). */
+  modelSize: 0.84,
+  aimNode: 'head',
+  beamColor: '#9fd8ff',
+};
+
+/** Supernova Remnant: Mop behaviour, a slow filament shell drifting across zones; its glowing trail slows, its `shell` breathes. */
+export const SUPERNOVA_REMNANT: MopTuning = {
+  ...SUNGRAZER,
+  size: 1.4,
+  /** Model top (114.9) × 1.4 / 1.06. */
+  height: 1.52,
+  /** Slow: well below the Sungrazer's 2.8 / 4. */
+  speed: galaxyTiers(1.6, 2.2),
+  waypoints: 4,
+  patrolRange: 22,
+  trailSpacing: 0.55,
+  /** The filaments linger longer than the Sungrazer's tail (7 s). */
+  trailLife: 10,
+  trailFade: 0.5,
+  trailRadius: 1.05,
+  slowMultiplier: 0.5,
+  modelId: 'supernova_remnant',
+  /** The model's footprint radius (106.5 model units). */
+  modelSize: 1.06,
+  roam: true,
+  trailColor: '#d68cff',
+  trailRing: true,
+  pulseNode: 'shell',
+  pulseAmount: 0.08,
+};
+
+/** Supernova: Leaf Blower behaviour, an overheated star whose `core` swells through the warm-up, then a shock blast pushes the Bunny and loose Debris away. */
+export const SUPERNOVA: AirConeTuning = {
+  ...SOLAR_FLARE,
+  /** About the shock ring (r 78.3 model units) at model scale 2.3 / 0.783. */
+  size: 2.3,
+  /** Model top (112.6) × 2.3 / 0.783. */
+  height: 3.3,
+  knockbackCm: 3,
+  knockbackRadii: 2,
+  speed: galaxyTiers(1.6, 2.2),
+  turnRate: 0.55,
+  /** The model's shock tongues fan out ±30°. */
+  coneHalfAngle: 0.52,
+  coneRange: 14,
+  /** A short, hard blast: harder than the Solar Flare's 1.25, for less time. */
+  suctionStrength: 1.5,
+  /** The swelling is the telegraph. */
+  warmup: 1.4,
+  on: 1.1,
+  off: 2.8,
+  mode: 'blow',
+  blowDebrisSize: 1.1,
+  debrisSpeed: 14,
+  /** The nozzle on the star's front: model z 54 / 78.3. */
+  nozzleOffset: 0.69,
+  modelId: 'supernova',
+  /** The shock ring's radius (78.3 model units); the shock tongues reach 240 (7.1 units here). */
+  modelSize: 0.783,
+  spinNode: undefined,
+  spinRate: undefined,
+  pulseNode: 'core',
+  pulseAmount: 0.25,
+};
+
+/**
+ * Sagittarius A*'s pull on loose Debris: Debris up to `maxSize` within `reach` of its edge drifts
+ * in at up to `speed` units/s (fading to 0 at `reach`), spiralling (`swirl`), while it hunts,
+ * telegraphs, charges or recovers. Debris that reaches its horizon (`eatRadius` × its contact
+ * radius, plus a third of the Debris's size) is swallowed.
+ */
+export interface FeedTuning {
+  reach: number;
+  speed: number;
+  swirl: number;
+  maxSize: number;
+  eatRadius: number;
+}
+
+/**
+ * Indigestion: each star cluster it swallows (Debris types in `meals`, weighted) adds to its
+ * fullness, which counts the meals of the last `window` s; at `threshold` it is stunned (a cluster
+ * at least `bigSize` across is a whole `threshold` on its own). When it starts hunting, and every
+ * `interval` s of hunting, if less than `count` meals' worth of clusters is within `range` of it,
+ * `count` star clusters (`fallbackId`) land side by side between it and the Bunny (`gap` short of
+ * the Bunny's edge, within half its Debris pull), at least the type's size and `margin` × the
+ * largest size the Bunny can absorb (so the Bunny bumps into them rather than eating them).
+ */
+export interface IndigestionTuning {
+  meals: Readonly<Record<string, number>>;
+  threshold: number;
+  window: number;
+  bigSize: number;
+  fallbackId: string;
+  interval: number;
+  count: number;
+  range: number;
+  margin: number;
+  gap: number;
+}
+
+export interface SagittariusTuning extends BossTuning {
+  feed: FeedTuning;
+  clusters: IndigestionTuning;
+  /** Debris type its chips knock loose (`relativistic_jet`, src/data/galaxyDebris.ts). */
+  chipTypeId: string;
+  /** Seconds before a chipped `jet_n` shows again. */
+  jetRegrow: number;
+  /**
+   * The camera bend (src/fx/lensing.ts): lensing strength while it isn't pulling the Bunny
+   * (`idle`) and at full pull, and how far (fraction of the gap) and how much (radians of roll)
+   * the camera leans towards it at full pull.
+   */
+  lens: { idle: number; full: number; lean: number; roll: number };
+}
+
+/**
+ * Sagittarius A* (galaxy boss, Tier 19; src/hazards/sagittariusA.ts): the bosses' state machine
+ * reskinned as the biggest vacuum there is. It hunts inside a pull strong enough to bend the
+ * camera, its suction drags loose Debris in and swallows it (`feed`), and two star clusters
+ * swallowed within a few seconds give it indigestion: it is stunned and can be rammed
+ * (`clusters`). Its charges are lunges (the map edge ends one without a stun); its volley is a
+ * relativistic jet (`ash`); chips are `relativistic_jet` Debris. Needs Bunny radius 4 units at
+ * absorbRatio 0.7, 3.4 after one chip and 2.89 after two (Tier 19 starts at 3). Absorbing it
+ * clears the Galaxy (the last built Area, so the Run is won).
+ */
+export const SAGITTARIUS_A: SagittariusTuning = {
+  size: 2.8,
+  /** The hole (r 100 model units, 1.4 here) and the disc's bright inner ring round it. */
+  contactRadius: 2.5,
+  /** Model top (540.4: the north jet) × 2.8 / 2. */
+  height: 7.6,
+  mass: 6,
+  damage: 1,
+  knockbackCm: 4,
+  knockbackRadii: 3,
+  shedFraction: 0.05,
+  introTime: 3.5,
+  /** Slower than the Sun (5): its pull does the hunting. */
+  huntSpeed: 4.2,
+  turnRate: 1,
+  huntTime: [3.5, 5],
+  chargeTrigger: 24,
+  telegraph: 1.6,
+  chargeSpeed: 20,
+  chargeDistance: 28,
+  stunTime: 4.2,
+  recover: 1.2,
+  chipFactor: 0.85,
+  chipPieces: 8,
+  /** The strongest pull of any boss: half the Bunny's speed at the disc's edge, out to 12 units. */
+  suctionReach: 12,
+  suctionStrength: 0.5,
+  /** No minis. */
+  summonInterval: 999,
+  summonCount: 0,
+  maxMinis: 0,
+  brushSpin: 0,
+  onDefeat: 'openExit',
+  modelId: 'sagittarius_a',
+  /**
+   * Drawn larger than its absorb size, as the last boss: model scale 2.8 / 2 = 1.4, so the hole is
+   * 1.4 in radius and the accretion disc (r 320 model units) reaches 4.5, past the contact radius.
+   */
+  modelSize: 2,
+  /** The jet: a tight, fast bolt train along a locked violet lane. */
+  ash: {
+    interval: 6.5,
+    telegraph: 1.1,
+    count: 4,
+    gap: 0.1,
+    speed: 26,
+    radius: 0.4,
+    range: 30,
+    spread: 0.02,
+    damage: 1,
+    knockbackCm: 1,
+    knockbackRadii: 0.6,
+    shedFraction: 0.03,
+    originOffset: 0.5,
+    color: '#e6f4ff',
+    glow: '#6fd3ff',
+    laneColor: '#b48cff',
+  },
+  feed: { reach: 14, speed: 7, swirl: 0.5, maxSize: 8, eatRadius: 0.55 },
+  clusters: {
+    meals: { star_cluster: 1, open_cluster: 0.5 },
+    threshold: 2,
+    window: 6,
+    bigSize: 4.5,
+    fallbackId: 'star_cluster',
+    interval: 9,
+    count: 2,
+    range: 22,
+    margin: 1.2,
+    gap: 2.5,
+  },
+  chipTypeId: 'relativistic_jet',
+  jetRegrow: 6,
+  lens: { idle: 0.4, full: 1, lean: 0.22, roll: 0.1 },
 };
 
 export interface TierSpawnTable {
@@ -2067,6 +2408,37 @@ export const SOLAR_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Galaxy director (after the solar system): spawn tables for Bunny Tiers 18–19, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 17 at 0.85 units, the arrival leap, and uses the
+ * Tier 18 table). Placeholder budgets copied from the Solar System's.
+ */
+export const GALAXY_DIRECTOR = {
+  firstTier: 18,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 18 (arrival, r ≈ 0.85–3): black holes, pulsars, globular clusters and supernova remnants.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { black_hole: { weight: 1, max: 2 }, pulsar: { weight: 0.8, max: 2 }, globular_cluster: { weight: 0.9, max: 1 }, supernova_remnant: { weight: 0.7, max: 1 } },
+    },
+    // Tier 19 (r ≥ 3): supernovae join, and Sagittarius A* arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        black_hole: { weight: 1.2, max: 3 },
+        supernova: { weight: 0.9, max: 2 },
+        globular_cluster: { weight: 0.8, max: 2 },
+        supernova_remnant: { weight: 0.5, max: 1 },
+        pulsar: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
@@ -2075,6 +2447,7 @@ export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   continent: CONTINENT_DIRECTOR,
   globe: GLOBE_DIRECTOR,
   solar_system: SOLAR_DIRECTOR,
+  galaxy: GALAXY_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -2086,10 +2459,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
   globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
   solar_system: { id: 'the_sun', tier: 17, arrivalDelay: 4 },
+  galaxy: { id: 'sagittarius_a', tier: 19, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

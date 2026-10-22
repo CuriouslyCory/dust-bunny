@@ -9,6 +9,7 @@
 import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { CITY_DEBRIS } from './cityDebris';
 import { CONTINENT_DEBRIS } from './continentDebris';
+import { GALAXY_DEBRIS } from './galaxyDebris';
 import { GLOBE_DEBRIS } from './globeDebris';
 import { SOLAR_DEBRIS } from './solarDebris';
 import { SUN_DEBRIS } from './sunDebris';
@@ -41,6 +42,15 @@ export interface DebrisMaterial {
   metalness?: number;
   emissive?: string;
   emissiveIntensity?: number;
+  /**
+   * Self-lit GLB props (the Galaxy's stars and nebulae): each part glows with its Blender
+   * material's emission, baked per vertex (`emission`), times `glow`. Baking a prop into one
+   * vertex-coloured mesh otherwise drops per-part emission. Recipes (no model loaded, headless)
+   * use `emissive` instead, so set it to the prop's main colour too.
+   */
+  glow?: number;
+  /** GLB props: the instance colour (`colors`) multiplies every part (and its glow), not just the largest material. */
+  tintAll?: boolean;
 }
 
 export interface DebrisType {
@@ -421,6 +431,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
   ...GLOBE_DEBRIS,
   ...SOLAR_DEBRIS,
   ...SUN_DEBRIS,
+  ...GALAXY_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

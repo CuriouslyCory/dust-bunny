@@ -617,6 +617,33 @@ function landfillTexture(): HTMLCanvasElement {
 
 const floorCache = new Map<FloorMaterialId, FloorTextureInfo>();
 
+/**
+ * Dark space with `n` specks of starlight over a soft `glow` haze (the Galaxy's placeholder floors,
+ * Act 8 groundwork: the world pass paints the disc instead).
+ */
+function starfieldTexture(base: string, glow: string, speck: string, n: number): HTMLCanvasElement {
+  const S = 256;
+  const [c, ctx] = canvas(S, S);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, S, S);
+  const rng = new Rng(n);
+  ctx.fillStyle = glow;
+  for (let i = 0; i < 18; i++) {
+    ctx.globalAlpha = rng.range(0.04, 0.12);
+    ctx.beginPath();
+    ctx.arc(rng.range(0, S), rng.range(0, S), rng.range(20, 60), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = speck;
+  for (let i = 0; i < n; i++) {
+    ctx.globalAlpha = rng.range(0.15, 0.85);
+    const r = rng.range(0.4, 1.6);
+    ctx.fillRect(rng.range(0, S), rng.range(0, S), r, r);
+  }
+  ctx.globalAlpha = 1;
+  return c;
+}
+
 export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
   let info = floorCache.get(id);
   if (!info) {
@@ -715,6 +742,19 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
         break;
       case 'solarKuiper':
         info = { texture: toTexture(solarKuiperTexture()), worldSize: 40, roughness: 1 };
+        break;
+      // Galaxy floors (1 unit = 100 ly): placeholder starfields until the disc is painted.
+      case 'galaxyCore':
+        info = { texture: toTexture(starfieldTexture('#2a1a10', '#ffcf8a', '#fff1d0', 1400)), worldSize: 30, roughness: 1 };
+        break;
+      case 'galaxyArm':
+        info = { texture: toTexture(starfieldTexture('#0c1028', '#7a8cff', '#e8f0ff', 900)), worldSize: 40, roughness: 1 };
+        break;
+      case 'galaxyDust':
+        info = { texture: toTexture(starfieldTexture('#08060c', '#5a2a4a', '#b8a8c8', 160)), worldSize: 40, roughness: 1 };
+        break;
+      case 'galaxyHalo':
+        info = { texture: toTexture(starfieldTexture('#030308', '#2a2a5a', '#c9d4ff', 90)), worldSize: 50, roughness: 1 };
         break;
     }
     floorCache.set(id, info);

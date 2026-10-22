@@ -47,6 +47,7 @@ import { forestedMound, regionRoadblock } from './regionModels';
 import './continentModels';
 import { buildContinentWater } from './continentCoast';
 import { buildGlobeSurface, type GlobeSurfaceView } from './globeTextures';
+import { buildGalaxySurface, type GalaxySurfaceView } from './galaxyTextures';
 import { buildSolarSurface, type SolarSurfaceView } from './solarTextures';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
@@ -75,10 +76,11 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#030308' };
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#030308', galaxy: '#030308' };
 /**
  * How the map's edge is drawn; `wrap`: none east–west (the map repeats) and nothing past the poles
- * but the outer floor; `space`: painted into the floor (the Solar System's heliopause, solarTextures.ts).
+ * but the outer floor; `space`: painted into the floor (the Solar System's heliopause,
+ * solarTextures.ts; the Galaxy's halo thinning into the outer floor).
  */
 const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' | 'wrap' | 'space'> = {
   house: 'walls',
@@ -88,9 +90,10 @@ const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' 
   continent: 'coast',
   globe: 'wrap',
   solar_system: 'space',
+  galaxy: 'space',
 };
 /** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarSpace' };
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarSpace', galaxy: 'galaxyHalo' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across). The Continent's exit is a
@@ -132,6 +135,8 @@ export class HouseView {
   private globe: GlobeSurfaceView | null = null;
   /** The Solar System's painted ecliptic and orbit lanes (solarTextures.ts); `setDim` fades it when the light goes out. */
   solar: SolarSurfaceView | null = null;
+  /** The Galaxy's painted disc (galaxyTextures.ts). */
+  private galaxy: GalaxySurfaceView | null = null;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
@@ -149,7 +154,7 @@ export class HouseView {
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
     else if (layout.area === 'continent') this.buildLaunchCorridor();
-    else if (layout.area === 'globe') this.buildEscapeTrajectory();
+    else if (layout.area === 'globe' || layout.area === 'solar_system') this.buildEscapeTrajectory();
     else this.buildRoadGate();
     if (layout.wrapX) this.buildLaps();
   }
@@ -208,6 +213,12 @@ export class HouseView {
       // The ecliptic is one painted plane too (space, the Milky Way, the belt, the Kuiper belt) plus the orbit lanes.
       this.solar = buildSolarSurface(this.layout);
       this.root.add(this.solar.object);
+      return;
+    }
+    if (this.layout.area === 'galaxy') {
+      // The galactic disc is one painted plane too (the nebula backdrop, the arms, dust lanes, bulge and bar).
+      this.galaxy = buildGalaxySurface(this.layout);
+      this.root.add(this.galaxy.object);
       return;
     }
     // One mesh per floor material; UVs are world-space so a single shared texture tiles seamlessly.
@@ -594,6 +605,10 @@ export class HouseView {
    * bound, and a beam that leans north over the pole with rings streaming up it. Closed: amber
    * chevrons pulse, the bar glows, no beam. Open: the chevrons turn cyan and stream north, the bar
    * fades and the beam and its rings light up.
+   *
+   * The Solar System's exit, the heliopause gate on its north bound, reuses it as a placeholder
+   * (Act 8 groundwork): the same ribbon, bar and beam, drawn without fog or lights, so they still
+   * show after the Sun's light goes out.
    */
   private buildEscapeTrajectory(): void {
     const exit = this.layout.exit;
@@ -908,6 +923,7 @@ export class HouseView {
     this.batch.dispose();
     this.globe?.dispose();
     this.solar?.dispose();
+    this.galaxy?.dispose();
     this.root.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;

@@ -16,8 +16,10 @@
  * - The light goes out (`run.solarSystemCleared`): over `OUT_SECONDS` the Sun's glare, every light,
  *   the painted floor and the orbit lanes fade to near black and the Bunny's plasma flares
  *   (`BunnyView.plasmaBoost`), so only the Bunny's own glow is left, under the narrator's cleared
- *   line. Game holds the results screen back for `VICTORY_HOLD_SECONDS`, or until the line has been
- *   read, so the moment is seen.
+ *   line (the exit's cleared banner, ui/areaHud.ts). The heliopause gate opens at the same time
+ *   (it glows without light, HouseView.buildEscapeTrajectory) and the compass points to it.
+ *   Game holds the results screen back for `VICTORY_HOLD_SECONDS` after a victory, or until the
+ *   narrator's line has been read, so the moment is seen.
  */
 import {
   AdditiveBlending,
@@ -41,7 +43,6 @@ import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import type { RunView } from '../game/runView';
 import type { Hud } from '../ui/hud';
-import { captionDuration, narrate, storyCaption } from '../story';
 import { canAbsorbDebris, debrisLocked } from '../systems/absorb';
 import { createModel, hasModelOverride } from '../world/models';
 import { sunCentre } from '../world/solarSystem';
@@ -191,15 +192,9 @@ export class SolarSky {
     if (!run || !this.root.visible || !this.sun) return;
     this.time += dt;
     // The light goes out once the Sun is absorbed.
-    if (run.solarSystemCleared) {
-      if (this.outT === 0) {
-        // The narrator's cleared line over the dark (the results screen repeats it).
-        const line = narrate(run, { kind: 'cleared', area: 'solar_system' });
-        const caption = line ? storyCaption(line) : undefined;
-        this.hud.banner('The Sun is yours', { variant: 'good', duration: caption ? captionDuration(caption) : 3, caption });
-      }
-      this.outT = Math.min(1, this.outT + Math.max(dt, 1e-4) / OUT_SECONDS);
-    }
+    // (The heliopause opens with it: the cleared banner and the narrator's line come from the
+    // exit, ui/areaHud.ts.)
+    if (run.solarSystemCleared) this.outT = Math.min(1, this.outT + Math.max(dt, 1e-4) / OUT_SECONDS);
     const out = this.outT * this.outT * (3 - 2 * this.outT);
     const lit = 1 - out;
 

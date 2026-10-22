@@ -32,6 +32,7 @@ import { generateNeighborhood, NEIGHBORHOOD } from '../world/neighborhood';
 import { CONTINENT, generateContinent } from '../world/continent';
 import { GLOBE, generateGlobe } from '../world/globe';
 import { generateSolarSystem, SOLAR } from '../world/solarSystem';
+import { GALAXY, generateGalaxy } from '../world/galaxy';
 import { WrapSystem } from '../systems/wrap';
 import { generateRegion, REGION } from '../world/region';
 import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/types';
@@ -69,6 +70,8 @@ const AREA_WORLDS: Record<AreaId, { generate: (seed: string) => HouseLayout; cel
   globe: { generate: generateGlobe, cellSize: GLOBE.debrisCellSize, startRadius: GLOBE.debugStartRadiusCm },
   // Starts at the Orbital-Sweeper-beaten size; entering the Solar System then leaps to its arrival radius.
   solar_system: { generate: generateSolarSystem, cellSize: SOLAR.debrisCellSize, startRadius: SOLAR.debugStartRadiusCm },
+  // Starts at the Sun-beaten size; entering the Galaxy then leaps to its arrival radius.
+  galaxy: { generate: generateGalaxy, cellSize: GALAXY.debrisCellSize, startRadius: GALAXY.debugStartRadiusCm },
 };
 
 /** Real Bunny radius (cm) a Run starting in `area` begins with (about the size after the previous boss). */
@@ -98,7 +101,7 @@ export class Run {
   readonly difficulty: DifficultyDef;
   /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped). */
   readonly loadout: Loadout;
-  /** Current area's layout: the house floor, the neighborhood, the city, the region, the continent, the globe, the solar system (swapped by enterArea). */
+  /** Current area's layout: the house floor, the neighborhood, the city, the region, the continent, the globe, the solar system, the galaxy (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
   /** The Robo-Vac 9000 has been absorbed and the front door is open. */
@@ -113,8 +116,10 @@ export class Run {
   continentCleared = false;
   /** The Orbital Sweeper has been absorbed and the escape trajectory over the North Pole is open. */
   globeCleared = false;
-  /** The Sun has been absorbed (the last built Area: the Run is won). */
+  /** The Sun has been absorbed and the heliopause gate to the galaxy is open. */
   solarSystemCleared = false;
+  /** Sagittarius A* has been absorbed (the last built Area: the Run is won). */
+  galaxyCleared = false;
   /** Simulated second at which the Run entered the neighborhood (null while in the house). */
   neighborhoodAt: number | null = null;
   /** Simulated second at which the Run entered the city (null before). */
@@ -127,6 +132,8 @@ export class Run {
   globeAt: number | null = null;
   /** Simulated second at which the Run entered the solar system (null before). */
   solarSystemAt: number | null = null;
+  /** Simulated second at which the Run entered the galaxy (null before). */
+  galaxyAt: number | null = null;
   readonly bunny: Bunny;
   readonly debris: DebrisField;
   readonly hazards: HazardManager;
@@ -227,6 +234,11 @@ export class Run {
     if (area === 'continent') this.continentCleared = true;
     if (area === 'globe') this.globeCleared = true;
     if (area === 'solar_system') this.solarSystemCleared = true;
+    if (area === 'galaxy') {
+      this.galaxyCleared = true;
+      // It has absorbed the thing that absorbs things: a black hole with fur from now on.
+      this.bunny.form = 'black_hole';
+    }
   }
 
   /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */
@@ -289,10 +301,15 @@ export class Run {
     this.enterArea('solar_system');
   }
 
+  /** Leaves the solar system for the galaxy (debug / tests). */
+  enterGalaxy(): void {
+    this.enterArea('galaxy');
+  }
+
   /**
    * Moves the Run to a later area: swaps in its layout, clears Debris, Hazards and floor
    * Pickups, re-bases the Bunny into the new Area's unit (same real size, see `Bunny.rebase`) and,
-   * for an Area with an `arrivalRadius` (the Continent, the Globe, the Solar System), leaps it up to that radius (`Bunny.leapTo`,
+   * for an Area with an `arrivalRadius` (the Continent, the Globe, the Solar System, the Galaxy), leaps it up to that radius (`Bunny.leapTo`,
    * not growth: the Area's stats start after it), puts it at the area's spawn (healing
    * `difficulty.areaHeal` hearts: 1, none on Hardcore) and repopulates. The Bunny keeps its size, health, Perks and active Pickups. Every earlier area
    * counts as cleared. Emits areaEntered (RunView rebuilds the world view).
@@ -312,6 +329,7 @@ export class Run {
     if (area === 'continent') this.continentAt = this.time;
     if (area === 'globe') this.globeAt = this.time;
     if (area === 'solar_system') this.solarSystemAt = this.time;
+    if (area === 'galaxy') this.galaxyAt = this.time;
     const world = AREA_WORLDS[area];
     this.house = world.generate(this.config.seed);
     this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
@@ -356,7 +374,8 @@ export class Run {
     if (area === 'region') return this.regionCleared;
     if (area === 'continent') return this.continentCleared;
     if (area === 'globe') return this.globeCleared;
-    return this.solarSystemCleared;
+    if (area === 'solar_system') return this.solarSystemCleared;
+    return this.galaxyCleared;
   }
 
   /** The current Area's boss has been absorbed. */
@@ -435,6 +454,7 @@ export class Run {
       continentCleared: this.continentCleared,
       globeCleared: this.globeCleared,
       solarSystemCleared: this.solarSystemCleared,
+      galaxyCleared: this.galaxyCleared,
       areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
       loadout: this.loadout.map((k) => ({ ...k })),
     };

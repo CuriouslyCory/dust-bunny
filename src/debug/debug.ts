@@ -5,6 +5,7 @@
  *   - G: grow ×1.25 radius · Shift+G: shrink · T: jump to next Tier · ]/[: sim speed ×2 / ÷2
  *   - N: clear the current area (open its exit) and roll on to the next one
  */
+import type { BunnyForm } from '../entities/bunny';
 import { getTier, MAX_TIER } from '../data/tiers';
 import type { Game } from '../game/game';
 import { areaStartRadius } from '../game/run';
@@ -32,6 +33,10 @@ export interface DebugTools {
   enterGlobe(): void;
   /** Moves the Run to the solar system, growing the Bunny to Orbital-Sweeper-beaten size (then the arrival leap). */
   enterSolarSystem(): void;
+  /** Moves the Run to the galaxy, growing the Bunny to Sun-beaten size (then the arrival leap). */
+  enterGalaxy(): void;
+  /** Switches the Bunny's look (`black_hole`: as after Sagittarius A*), without ending the Run. */
+  setBunnyForm(form: BunnyForm): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -87,6 +92,12 @@ export function installDebug(game: Game): DebugTools {
     },
     enterSolarSystem() {
       goTo('solar_system');
+    },
+    enterGalaxy() {
+      goTo('galaxy');
+    },
+    setBunnyForm(form) {
+      if (game.run) game.run.bunny.form = form;
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

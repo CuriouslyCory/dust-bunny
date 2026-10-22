@@ -4,7 +4,8 @@
  * snaps to whole shadow texels to avoid shimmering while the Bunny moves. In the Solar System the
  * light comes from the Sun (`setSolar`: the centre Sun, or the boss while it is alive), so whatever
  * the Bunny rolls past is lit on its sunward side and shadows fall away from the Sun; `lit` fades
- * every light out (the Sun absorbed: the light goes out).
+ * every light out (the Sun absorbed: the light goes out). In the Galaxy the light comes from the
+ * galactic core the same way (src/fx/galaxy.ts).
  */
 import { AmbientLight, DirectionalLight, HemisphereLight, Vector3, type Scene, type WebGLRenderer } from 'three';
 import type { AreaId } from '../world/types';
@@ -25,6 +26,9 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   globe: { sky: '#26304a', ground: '#4a8fd8', sun: '#fffaf2', intensity: 3.4, dir: [0.9, 0.62, -0.55] },
   // The ecliptic: a warm, hard light from the Sun (its direction follows the Sun, `setSolar`) and a dim violet fill.
   solar_system: { sky: '#2a2140', ground: '#2a1c14', sun: '#ffe7b8', intensity: 3.8, dir: [0, 0.8, -1] },
+  // The galactic disc: a dim, cool blue-magenta fill (the nebulae) and a warm light from the core
+  // (its direction follows the core, or Sagittarius A* while it is alive: `setSolar`, src/fx/galaxy.ts).
+  galaxy: { sky: '#34337a', ground: '#4a1c52', sun: '#ffd6a8', intensity: 2.6, dir: [0, 0.8, -1] },
 };
 
 export class Lighting {

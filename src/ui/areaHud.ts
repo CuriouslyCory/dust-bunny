@@ -1,7 +1,8 @@
 /**
  * Area HUD: the "area cleared" banner and an exit compass while the area's exit is open (the
  * house's front door, the neighborhood's road to the city, the city's highway on-ramp to the
- * region, the region's motorway west to the continent), with a skip button that moves on
+ * region, the region's motorway west to the continent, the continent's launch corridor, the
+ * globe's escape trajectory, the solar system's heliopause), with a skip button that moves on
  * without rolling to the exit (Enter on a keyboard), then a fade-in and an arrival banner when
  * the Bunny arrives in the next area. With the narrator on (src/story/), the cleared banner carries
  * the Area's cleared line and arriving plays the chapter card before the arrival banner.
@@ -28,7 +29,8 @@ const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; s
   region: { icon: '🌍', label: 'West to the continent', go: 'roll on!', skip: 'Head west', cleared: 'Region cleared!', sub: 'The motorway west is open · roll out to the continent' },
   continent: { icon: '🚀', label: 'Up to orbit', go: 'lift off!', skip: 'Leave the atmosphere', cleared: 'Continent cleared!', sub: 'The launch corridor is open · head north and up' },
   globe: { icon: '☀️', label: 'Escape orbit', go: 'break free!', skip: 'Leave Earth behind', cleared: 'Globe cleared!', sub: 'The escape trajectory is open · head over the North Pole' },
-  // The Solar System is the last built Area: the Sun wins the Run (an exit to the Galaxy comes with Act 8).
+  solar_system: { icon: '🌌', label: 'Heliopause', go: 'cross it!', skip: 'Follow Voyager out', cleared: 'The Sun is yours', sub: 'The heliopause is open · head north, the way Voyager went' },
+  // The Galaxy is the last built Area: Sagittarius A* wins the Run (an exit to the Universe comes with Act 9).
 };
 
 /** "37 m", "1.2 km", "240 km", "0.31 Earths", "0.012 AU": a compass distance (real cm) without the readout's decimals. */
@@ -99,6 +101,17 @@ export function installAreaHud(game: Game): void {
     game.hud.flash('door-compass');
   });
 
+  // Winning in the last built Area (the Galaxy): its cleared line plays over the victory hold (the
+  // Bunny turning into a black hole), and Game waits until it has been read.
+  game.events.on('runEnded', (e) => {
+    const run = game.run;
+    if (e.reason !== 'victory' || !run || EXITS[run.area]) return;
+    const line = narrate(run, { kind: 'cleared', area: run.area });
+    if (!line) return;
+    const caption = storyCaption(line);
+    game.hud.banner(`${AREAS[run.area].name} is yours`, { variant: 'good', duration: Math.max(3, captionDuration(caption)), caption });
+  });
+
   const fade = h('div', { className: 'area-fade' });
   game.uiLayer.append(fade);
   const playFade = (dark: boolean) => {
@@ -110,7 +123,9 @@ export function installAreaHud(game: Game): void {
   game.events.on('areaEntered', (e) => {
     const boss = AREA_BOSSES[e.area];
     const bossName = hazardRegistry.get(boss.id)?.name;
-    const sub = bossName ? `Keep growing · the ${bossName} comes at ${getTier(boss.tier).name}` : 'Keep growing';
+    // "The Sun" keeps its own article; proper names (Sagittarius A*) take none.
+    const named = bossName && (/^The /.test(bossName) ? `the ${bossName.slice(4)}` : /^Sagittarius/.test(bossName) ? bossName : `the ${bossName}`);
+    const sub = named ? `Keep growing · ${named} comes at ${getTier(boss.tier).name}` : 'Keep growing';
     const arrive = (delay: number) => setTimeout(() => game.hud.banner(AREAS[e.area].name, { subtitle: sub, variant: 'tier', duration: 3.4 }), delay);
     // Chapter card first (the Run waits behind it), then the dark card lifts off the new Area.
     const card = showChapterCard(game, e.area, () => {

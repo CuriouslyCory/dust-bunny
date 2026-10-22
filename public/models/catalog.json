@@ -2958,6 +2958,614 @@
       },
       "category": "prop",
       "units": "0.0001 AU"
+    },
+    {
+      "triangles": 1216,
+      "footprintRadius": 118.0,
+      "height": 72.0,
+      "minY": 12.0,
+      "maxY": 84.0,
+      "sizeX": 236.0,
+      "sizeZ": 236.0,
+      "id": "black_hole",
+      "file": "models/black_hole.glb",
+      "bytes": 44028,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Wanderer with strong suction. A dark hole (radius 36, centre (0, 48, 0)) ringed by a white-hot photon ring (r 40.5), with two glowing hungry eyes on the +Z side (centres (-13.7, 66, 28) and (13.7, 66, 28)), looking up. disk node: the accretion disc, a flat, slightly bowled sheet from r 43 to 118 streaked white, gold, orange, red, magenta in three trailing spiral arms; spins about Y; pivot at the hole centre (0, 48, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "disk": {
+          "pivot": [
+            0.0,
+            48.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 696,
+      "footprintRadius": 93.8,
+      "height": 127.7,
+      "minY": 4.7,
+      "maxY": 132.5,
+      "sizeX": 162.2,
+      "sizeZ": 157.6,
+      "id": "globular_cluster",
+      "file": "models/globular_cluster.glb",
+      "bytes": 52140,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Lane patrol on an orbit. A glowing gold-white core (r 34, centre (0, 58, 0)) in a golden halo ring (r 52). swarm node: 64 star points (white, gold, orange, pale blue) packed densely round the core out to r 95, thinning outwards; spins about Y; pivot at the core centre (0, 58, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "swarm": {
+          "pivot": [
+            0.0,
+            58.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 992,
+      "footprintRadius": 150.5,
+      "height": 94.6,
+      "minY": 1.0,
+      "maxY": 95.6,
+      "sizeX": 170.4,
+      "sizeZ": 300.0,
+      "id": "pulsar",
+      "file": "models/pulsar.glb",
+      "bytes": 33404,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Turret with a rotating beam. head node: a white-hot neutron star (radius 20, centre (0, 60, 0)) in two magnetosphere rings, with two lighthouse beams (cones widening to r 28) along +Z and -Z out to 150; it turns about Y through its pivot at the origin (0, 0, 0). Beams emit from the star surface at (0, 60, +-20); the +Z beam tip (the muzzle) is at (0, 60, 150). body: a violet pulsar-wind glow disc (r 84) on the floor.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 736,
+      "footprintRadius": 106.5,
+      "height": 113.9,
+      "minY": 1.0,
+      "maxY": 114.9,
+      "sizeX": 171.7,
+      "sizeZ": 210.6,
+      "id": "supernova_remnant",
+      "file": "models/supernova_remnant.glb",
+      "bytes": 29972,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Slow trail-layer. A Crab-like remnant: an oval shell of glowing filaments (radii 86 x 56 x 104 along X, Y, Z; centre (0, 58, 0)) round a blue synchrotron glow with a white pulsar at its heart, on a dim violet glow that trails off behind it (-Z). shell node: the filament web; pulses (scale); pivot at the shell centre (0, 58, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "shell": {
+          "pivot": [
+            0.0,
+            58.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 1602,
+      "footprintRadius": 240.0,
+      "height": 111.1,
+      "minY": 1.5,
+      "maxY": 112.6,
+      "sizeX": 185.8,
+      "sizeZ": 318.4,
+      "id": "supernova",
+      "file": "models/supernova.glb",
+      "bytes": 53240,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Cone blaster. A swelling, overheated star (radius 54, centre (0, 58, 0)) with strained, angry eyes on the +Z side, on a cyan shock ring (r 78.3), and five shock tongues fanning out to +Z (to r 240, +-30 degrees): the blast faces +Z. core node: the star; pulses / swells (scale); pivot at its centre (0, 58, 0). Nozzle (emit point) on its front surface at (0, 58, 54).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "core": {
+          "pivot": [
+            0.0,
+            58.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 3746,
+      "footprintRadius": 320.0,
+      "height": 539.4,
+      "minY": 1.0,
+      "maxY": 540.4,
+      "sizeX": 640.0,
+      "sizeZ": 640.0,
+      "id": "sagittarius_a",
+      "file": "models/sagittarius_a.glb",
+      "bytes": 115248,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Boss. Sagittarius A*: a supermassive black hole (radius 100, centre (0, 150, 0)) in a white-hot photon ring (r 109), with two glowing, slit-pupilled eyes under heavy slanted brows and a thin magenta grin on its +Z side (eye centres (-39.3, 200, 77.2) and (39.3, 200, 77.2)), looking up. disk node: the accretion disc (r 116 to 320; white, gold, orange, red, magenta, violet and indigo in four spiral arms, with hot clumps); spins about Y; pivot at the hole centre (0, 150, 0). jet_n: the north relativistic jet, straight up from the pole to y 540 (a white core in a cyan sheath with blue knots and a violet tip); pivot at the north pole (0, 250, 0); pulse it (scale Y) or hide it when chipped. jet_s: the south jet, down from the south pole into a blue lobe (r 170) on the floor under the disc; pivot at the south pole (0, 50, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "disk": {
+          "pivot": [
+            0.0,
+            150.0,
+            0.0
+          ]
+        },
+        "jet_n": {
+          "pivot": [
+            0.0,
+            250.0,
+            0.0
+          ]
+        },
+        "jet_s": {
+          "pivot": [
+            0.0,
+            50.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 204,
+      "footprintRadius": 84.0,
+      "height": 132.0,
+      "minY": 0.0,
+      "maxY": 132.0,
+      "sizeX": 168.0,
+      "sizeZ": 146.7,
+      "id": "red_dwarf",
+      "file": "models/red_dwarf.glb",
+      "bytes": 11256,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A small red star: a mottled red ball (r 60) with six stubby corona rays (to r 84) and a dim red halo.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 228,
+      "footprintRadius": 96.0,
+      "height": 130.2,
+      "minY": 0.0,
+      "maxY": 130.2,
+      "sizeX": 192.0,
+      "sizeZ": 192.0,
+      "id": "yellow_star",
+      "file": "models/yellow_star.glb",
+      "bytes": 12476,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A Sun-like star: a yellow ball (r 60) with eight corona rays, long and short in turn (to r 96), on a pale yellow halo.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 228,
+      "footprintRadius": 118.8,
+      "height": 119.3,
+      "minY": 2.7,
+      "maxY": 122.0,
+      "sizeX": 237.6,
+      "sizeZ": 237.6,
+      "id": "blue_giant",
+      "file": "models/blue_giant.glb",
+      "bytes": 12632,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A hot blue giant: a blue-white ball (r 54) with a long four-point diffraction sparkle (to r 120) and four short diagonal rays, on a pale blue halo.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 232,
+      "footprintRadius": 106.6,
+      "height": 156.5,
+      "minY": 0.0,
+      "maxY": 156.5,
+      "sizeX": 196.5,
+      "sizeZ": 200.4,
+      "id": "red_giant",
+      "file": "models/red_giant.glb",
+      "bytes": 12568,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A bloated red giant: a big, lumpy ball (r 86) mottled orange and red with convection cells, in a wavy orange halo (to r 100); no rays.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 276,
+      "footprintRadius": 99.2,
+      "height": 74.7,
+      "minY": 8.0,
+      "maxY": 82.7,
+      "sizeX": 140.8,
+      "sizeZ": 140.8,
+      "id": "white_dwarf",
+      "file": "models/white_dwarf.glb",
+      "bytes": 12756,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A tiny, fierce white dwarf: a white-hot ball (r 32) inside a wide, thin ring of light (r 56 to 70) and four thin spikes (to r 100).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 224,
+      "footprintRadius": 100.0,
+      "height": 196.5,
+      "minY": 2.2,
+      "maxY": 198.7,
+      "sizeX": 194.0,
+      "sizeZ": 199.4,
+      "id": "brown_dwarf",
+      "file": "models/brown_dwarf.glb",
+      "bytes": 9932,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A failed star: a dim, banded ball (r 100) in browns and dusky magenta, faintly warm, like a big gas giant that never lit.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 372,
+      "footprintRadius": 94.1,
+      "height": 88.4,
+      "minY": 2.0,
+      "maxY": 90.4,
+      "sizeX": 180.0,
+      "sizeZ": 136.0,
+      "id": "binary_star",
+      "file": "models/binary_star.glb",
+      "bytes": 19476,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Two stars in a shared orbit: a yellow star (r 40) and a blue-white companion (r 28) on a pale orbit ring (r 62 to 68), with a glowing stream of gas between them; spans X.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 324,
+      "footprintRadius": 112.5,
+      "height": 47.0,
+      "minY": 1.0,
+      "maxY": 48.0,
+      "sizeX": 216.3,
+      "sizeZ": 206.6,
+      "id": "open_star_cluster",
+      "file": "models/open_star_cluster.glb",
+      "bytes": 17332,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose, young cluster (Pleiades-like): seven blue-white stars of mixed sizes, the three brightest with four-point sparkles, over a faint blue reflection-nebula haze (r 100).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 308,
+      "footprintRadius": 85.6,
+      "height": 103.6,
+      "minY": 1.0,
+      "maxY": 104.6,
+      "sizeX": 161.5,
+      "sizeZ": 160.0,
+      "id": "star_cluster",
+      "file": "models/star_cluster.glb",
+      "bytes": 22188,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A dense, compact ball of stars (the snack that stuns Sagittarius A*): a bright gold-white core (r 40) studded with twenty star points (white, gold, orange, blue) out to r 66, on a golden halo (r 80).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 328,
+      "footprintRadius": 102.8,
+      "height": 65.0,
+      "minY": 0.0,
+      "maxY": 65.0,
+      "sizeX": 187.9,
+      "sizeZ": 182.9,
+      "id": "emission_nebula",
+      "file": "models/emission_nebula.glb",
+      "bytes": 16784,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A glowing hydrogen cloud: soft, lumpy layers stacked off-centre (deep magenta outside, pink, then a pale pink core), a teal oxygen lobe, and three young stars peeking out; about 200 x 170, 60 high.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 286,
+      "footprintRadius": 115.8,
+      "height": 80.9,
+      "minY": 0.0,
+      "maxY": 80.9,
+      "sizeX": 216.8,
+      "sizeZ": 150.4,
+      "id": "dark_nebula",
+      "file": "models/dark_nebula.glb",
+      "bytes": 14036,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A cold cloud of dust: dark, lumpy billows (about 180 x 150, 60 high) lit from behind, so a glowing orange-pink rim shows round their edges, with a horse-head knob and two faint stars.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 342,
+      "footprintRadius": 99.1,
+      "height": 20.6,
+      "minY": 5.4,
+      "maxY": 26.0,
+      "sizeX": 196.3,
+      "sizeZ": 172.0,
+      "id": "planetary_nebula",
+      "file": "models/planetary_nebula.glb",
+      "bytes": 14316,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A Ring Nebula: a flat glowing ring (r 60, teal inside, orange outside) round a pale blue disc, a faint red outer shell (r 86 to 98) and a white dwarf at the centre.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 320,
+      "footprintRadius": 99.7,
+      "height": 200.0,
+      "minY": 0.0,
+      "maxY": 200.0,
+      "sizeX": 192.0,
+      "sizeZ": 197.0,
+      "id": "rogue_planet",
+      "file": "models/rogue_planet.glb",
+      "bytes": 12904,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A lonely rogue planet (r 100): dark slate blue with frosty patches and a frozen cap, eyes shut, dozing; it has drifted between stars for a billion years.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 344,
+      "footprintRadius": 104.1,
+      "height": 45.8,
+      "minY": 1.0,
+      "maxY": 46.8,
+      "sizeX": 192.0,
+      "sizeZ": 204.5,
+      "id": "comet_cloud",
+      "file": "models/comet_cloud.glb",
+      "bytes": 19904,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A loose shell of icy comets (an Oort cloud in miniature): ten small ice chunks with short glowing tails pointing outward, round a faint icy ring (r 60 to 96).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 388,
+      "footprintRadius": 84.2,
+      "height": 52.0,
+      "minY": 1.0,
+      "maxY": 53.0,
+      "sizeX": 50.0,
+      "sizeZ": 168.2,
+      "id": "relativistic_jet",
+      "file": "models/relativistic_jet.glb",
+      "bytes": 13192,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Sagittarius A*'s chip: a bolt of jet plasma flying +Z, a white-hot spindle in a cyan sheath with two blue knots and a bright head; about 160 long, radius 26.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 168,
+      "footprintRadius": 120.1,
+      "height": 26.0,
+      "minY": -3.1,
+      "maxY": 22.9,
+      "sizeX": 171.0,
+      "sizeZ": 163.0,
+      "id": "space_sock",
+      "file": "models/space_sock.glb",
+      "bytes": 11076,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). Mostly hydrogen, lint and a sock: a stripy magenta, white and cyan sock lying flat, adrift, with three little sparkles round it; about 180 long.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
+    },
+    {
+      "triangles": 240,
+      "footprintRadius": 99.0,
+      "height": 98.9,
+      "minY": 5.4,
+      "maxY": 104.3,
+      "sizeX": 180.0,
+      "sizeZ": 181.7,
+      "id": "cosmic_lint",
+      "file": "models/cosmic_lint.glb",
+      "bytes": 13312,
+      "notes": "Galaxy scale: 1 unit = 1 light year, load at scale 0.01. Debris prop (normalised to its Debris size, only proportions matter). A clump of cosmic lint (the Bunny's own kind, gone interstellar): a fuzzy lavender-grey ball (r 56) with stray fibres, in a faint pink hydrogen haze (r 90).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "1 ly"
     }
   ]
 }
