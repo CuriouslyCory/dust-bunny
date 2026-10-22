@@ -125,6 +125,11 @@ export class CameraRig {
   private framing: Framing = framingForAspect(16 / 9);
   readonly target = new Vector3();
   private readonly offsetDir = new Vector3();
+  /** Bend towards a gravity lens (`bend`, render-only): wanted and eased lean offset and roll. */
+  private readonly bendWant = { x: 0, z: 0, lean: 0, roll: 0 };
+  private readonly lean = new Vector3();
+  private roll = 0;
+  private readonly look = new Vector3();
 
   constructor(
     readonly camera: PerspectiveCamera,
@@ -162,7 +167,22 @@ export class CameraRig {
   snap(x: number, z: number, radius: number, tier: number): void {
     this.zoom = cameraDistanceFor(radius, tier);
     this.target.set(x, radius * 0.5, z);
+    this.lean.set(0, 0, 0);
+    this.roll = 0;
     this.apply();
+  }
+
+  /**
+   * Bends the camera towards a gravity lens at (x, z) (Sagittarius A*, src/fx/lensing.ts): the view
+   * leans `lean` × the gap towards it (at most a third of the camera distance) and rolls `roll`
+   * radians towards the side it is on. Eased in `update`; (0, 0, 0, 0) lets go.
+   */
+  bend(x: number, z: number, lean: number, roll: number): void {
+    const w = this.bendWant;
+    w.x = x;
+    w.z = z;
+    w.lean = lean;
+    w.roll = roll;
   }
 
   update(frameDt: number, x: number, z: number, radius: number, tier: number): void {
@@ -173,14 +193,40 @@ export class CameraRig {
     this.target.x += (x - this.target.x) * k;
     this.target.z += (z - this.target.z) * k;
     this.target.y = radius * 0.5;
+    this.updateBend(frameDt);
     this.apply();
+  }
+
+  private updateBend(frameDt: number): void {
+    const w = this.bendWant;
+    let lx = 0;
+    let lz = 0;
+    let roll = 0;
+    if (w.lean > 0 || w.roll !== 0) {
+      const dx = w.x - this.target.x;
+      const dz = w.z - this.target.z;
+      const gap = Math.hypot(dx, dz) || 1;
+      const len = Math.min(gap * w.lean, this.distance / 3);
+      lx = (dx / gap) * len;
+      lz = (dz / gap) * len;
+      // Roll towards the side of the screen the lens is on (screen right: the camera's +X on the floor).
+      const yaw = TUNING.camera.yaw;
+      const side = dx * Math.cos(yaw) - dz * Math.sin(yaw);
+      roll = -Math.sign(side) * w.roll * Math.min(1, Math.abs(side) / (gap * 0.5));
+    }
+    const k = 1 - Math.exp(-3 * frameDt);
+    this.lean.x += (lx - this.lean.x) * k;
+    this.lean.z += (lz - this.lean.z) * k;
+    this.roll += (roll - this.roll) * k;
   }
 
   private apply(): void {
     const c = TUNING.camera;
     const d = this.distance;
-    this.camera.position.copy(this.target).addScaledVector(this.offsetDir, d);
-    this.camera.lookAt(this.target);
+    this.look.copy(this.target).add(this.lean);
+    this.camera.position.copy(this.look).addScaledVector(this.offsetDir, d);
+    this.camera.lookAt(this.look);
+    if (this.roll !== 0) this.camera.rotateZ(this.roll);
     const near = Math.max(0.05, d * 0.02);
     const far = d * (c.fogFar + 1.5);
     if (Math.abs(this.camera.near - near) > near * 0.01 || Math.abs(this.camera.far - far) > far * 0.01) {

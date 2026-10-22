@@ -1,5 +1,5 @@
 /**
- * Boss HUD: stunned/chipped announcements via the shared HUD banner (the arrival banner is
+ * Boss HUD: stunned/chipped announcements (and Sagittarius A*'s star-cluster gulps) via the shared HUD banner (the arrival banner is
  * shown by the UI layer on bossSpawned) and a top-right status line with the Bunny radius
  * needed to absorb the current area boss. The UI layer may restyle `.hud-widget-boss-status`.
  */
@@ -20,7 +20,11 @@ export function installHazardHud(game: Game): void {
   game.events.on('bossSpawned', (e) => {
     bossId = e.hazardId;
   });
-  game.events.on('bossStunned', () => announce('Stunned!', 'Ram it!', 1.6));
+  game.events.on('bossStunned', (e) => (e.cause === 'indigestion' ? announce('Indigestion!', 'It ate too fast. Ram it!', 1.8) : announce('Stunned!', 'Ram it!', 1.6)));
+  // Sagittarius A* swallowed a star cluster: how full it is (two star clusters in a few seconds stun it).
+  game.events.on('bossSwallowed', (e) => {
+    if (e.fullness < e.threshold) announce('Gulp!', `Indigestion ${+e.fullness.toFixed(1)}/${e.threshold}`, 1.4);
+  });
   game.events.on('bossHit', (e) => {
     // absorbRadius is in the Area's unit (10 km in the Continent): show it in real units.
     const run = game.run;

@@ -34,6 +34,11 @@
  * planet the Bunny can't absorb yet stuns it (an eclipse), its solar wind pushes instead of
  * sucking, its flare volleys are the `ash` volley in orange, and its chips are prominences.
  *
+ * Sagittarius A* (galaxy, Tier 19, SAGITTARIUS_A) is a subclass in sagittariusA.ts: no crash stuns
+ * it; its pull swallows Debris, and two star clusters swallowed within a few seconds stun it
+ * (indigestion, `crashStun`). Its volley is a relativistic jet, its chips are jets, and its pull
+ * bends the camera.
+ *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
@@ -60,8 +65,11 @@ export type AshState = 'idle' | 'telegraph' | 'firing';
 
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
 
-/** What stunned the boss last: a wall crash, Spiky Dash, or an Ability (src/abilities). */
-export type BossStunCause = 'wall' | 'spiky' | 'decoy' | 'hunker' | 'discharge';
+/** What stunned the boss last: a wall crash, Sagittarius A*'s indigestion, Spiky Dash, or an Ability (src/abilities). */
+export type BossStunCause = 'wall' | 'indigestion' | 'spiky' | 'decoy' | 'hunker' | 'discharge';
+
+/** Stuns an Ability deals (src/abilities). */
+export type AbilityStunCause = Exclude<BossStunCause, 'wall' | 'indigestion' | 'spiky'>;
 
 /** Size after `hits` chips. */
 export function bossSizeAfterHits(hits: number, size = ROBOVAC_9000.size, chipFactor = ROBOVAC_9000.chipFactor): number {
@@ -214,13 +222,7 @@ export class RoboVac9000 extends BaseHazard {
         // Something that isn't map geometry may also end the charge (the Orbital Sweeper's Moon).
         if (!m.hit && this.chargeBlocked(run, radius)) m.hit = true;
         if (m.hit && this.crashStuns(run, radius)) {
-          this.lane.visible = false;
-          this.hitThisStun = false;
-          this.chipBonus = null;
-          this.stunCause = 'wall';
-          this.enter('stunned', c.stunTime);
-          this.onCrashStun(run);
-          run.events.emit('bossStunned', { hazardId: this.id, cause: 'wall' });
+          this.crashStun(run, 'wall');
         } else if (m.hit || this.charged >= c.chargeDistance) {
           // Ran out of charge, or crashed into something that doesn't stun it: it just stops.
           this.lane.visible = false;
@@ -314,6 +316,20 @@ export class RoboVac9000 extends BaseHazard {
     });
   }
 
+  /**
+   * Stuns it for `stunTime` as a crash does (a charge into a wall, or Sagittarius A*'s
+   * indigestion): cancels a telegraph or charge, and one chip lands on contact.
+   */
+  protected crashStun(run: Run, cause: 'wall' | 'indigestion'): void {
+    this.lane.visible = false;
+    this.hitThisStun = false;
+    this.chipBonus = null;
+    this.stunCause = cause;
+    this.enter('stunned', this.cfg.stunTime);
+    if (cause === 'wall') this.onCrashStun(run);
+    run.events.emit('bossStunned', { hazardId: this.id, cause });
+  }
+
   /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
   override stun(_seconds: number): void {
     this.hitThisStun = false;
@@ -326,7 +342,7 @@ export class RoboVac9000 extends BaseHazard {
    * charge and enters the `stunned` state for `seconds`, so one chip lands on contact. The Ability
    * System enforces the 6 s boss limit before calling this.
    */
-  abilityStun(run: Run, seconds: number, cause: Exclude<BossStunCause, 'wall' | 'spiky'>): void {
+  abilityStun(run: Run, seconds: number, cause: AbilityStunCause): void {
     this.lane.visible = false;
     this.hitThisStun = false;
     this.chipBonus = null;

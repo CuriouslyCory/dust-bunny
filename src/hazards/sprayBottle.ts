@@ -13,14 +13,15 @@
  * Anti-Satellite Laser (globe, ASAT_LASER) turns only its `head`, scans while the Bunny is out of
  * range, and fires fast, narrow red bolts that do not soak; it is placed on landmasses. The Sunspot
  * (solar system, SUNSPOT) sweeps its flux-tube `head` like a pulsar beam, then fires a pulsed burst
- * of orange flare bolts; it is placed sunward of the Kuiper belt (SUNSPOT_ZONES).
+ * of orange flare bolts; it is placed sunward of the Kuiper belt (SUNSPOT_ZONES). The Galaxy's
+ * turret, the Pulsar, sweeps real beams instead of firing droplets (pulsar.ts).
  *
  * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
  * clogged by it), and a droplet that reaches the Decoy pops it.
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { ASAT_LASER, PULSAR, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
+import { ASAT_LASER, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -241,17 +242,5 @@ export const sunspotDef = hazardRegistry.register({
   modelId: SUNSPOT.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, SUNSPOT);
-  },
-});
-
-/** Galaxy turret: a pulsar sweeping its beam (PULSAR). */
-export const pulsarDef = hazardRegistry.register({
-  id: 'pulsar',
-  name: 'Pulsar',
-  footprint: tuningFootprint(PULSAR),
-  mass: PULSAR.mass,
-  modelId: PULSAR.modelId,
-  create(_run, x, z, id, rng) {
-    return new SprayBottle(id, this, x, z, rng, PULSAR);
   },
 });
