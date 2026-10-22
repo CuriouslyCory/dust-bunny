@@ -6,9 +6,10 @@
  * - Every boss kill credits 1 Keepsake of the boss's grade (`gradeForBoss`) with a random type,
  *   seeded from the Run seed and the boss, so a seed always drops the same thing. Hardcore adds 1.
  * - The Character's first kill of a boss offers 3 types instead of the random one. The first offer
- *   is credited at once (so nothing is lost if the tab closes); the results screen's card swaps it
- *   for another offered type until the player leaves results. Leaving without choosing keeps the
- *   first offer.
+ *   is credited at once (so nothing is lost if the tab closes); the in-Run Keepsake reveal swaps it
+ *   for another offered type, and leaving the reveal locks the choice (`lock`). A drop whose reveal
+ *   never showed (the Run ended first) stays open on the results screen until the player leaves it.
+ *   Leaving without choosing keeps the first offer.
  * - Credited on `bossDefeated`, so a Run that later ends in death or a quit keeps them.
  * - Unranked Runs (`?debug`, `?area=` starts) drop nothing and don't count the boss as beaten.
  * - Chips don't matter: how a boss is beaten never changes the reward.
@@ -16,6 +17,7 @@
  *   const tracker = new KeepsakeTracker(meta, (e) => events.emit('keepsakesDropped', e));
  *   tracker.start({ seed, characterId, difficulty, ranked });   // runStarted
  *   tracker.bossDefeated(defId);                                 // bossDefeated
+ *   tracker.lock(drop)                                           // the Keepsake reveal closes
  *   tracker.forResult(runEndedPayload)                           // results "Kept" section
  */
 import type { GameEvents } from '../core/events';
@@ -31,8 +33,10 @@ export interface KeepsakeDrop {
   bossId: string;
   /** First kill: the three types offered (ref.type is one of them). */
   offer?: KeepsakeTypeId[];
-  /** True once the player picked from the offer on the results screen. */
+  /** True once the player picked from the offer. */
   chosen?: boolean;
+  /** The offer is closed: the player left the in-Run reveal with this type. */
+  locked?: boolean;
   /** The extra Hardcore Keepsake. */
   bonus?: boolean;
 }
@@ -139,17 +143,23 @@ export class KeepsakeTracker {
 
   /**
    * Picks a type from a first-kill offer (swapping the credited Keepsake). Allowed until the player
-   * leaves the results screen; false for a closed offer, a type not offered, or when the Keepsake to
-   * swap is no longer in the Hoard (felted or shed in the meantime).
+   * leaves the Keepsake reveal (or, if it never showed, the results screen); false for a closed
+   * offer, a type not offered, or when the Keepsake to swap is no longer in the Hoard (felted or
+   * shed in the meantime).
    */
   choose(run: RunKeepsakes, dropIndex: number, type: KeepsakeTypeId): boolean {
     const drop = run.drops[dropIndex];
-    if (!drop?.offer || run.settled || !drop.offer.includes(type)) return false;
+    if (!drop?.offer || drop.locked || run.settled || !drop.offer.includes(type)) return false;
     const to = { type, grade: drop.ref.grade };
     if (!this.meta.swapKeepsake(run.characterId, drop.ref, to)) return false;
     drop.ref = to;
     drop.chosen = true;
     return true;
+  }
+
+  /** Closes a drop's offer: the player left the Keepsake reveal, so its type (already in the Hoard) is final. */
+  lock(drop: KeepsakeDrop): void {
+    drop.locked = true;
   }
 
   /** Closes the Run's offers (the player left the results screen). */

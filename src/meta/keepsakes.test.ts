@@ -102,6 +102,19 @@ describe('KeepsakeTracker', () => {
     t.settle(run);
     expect(t.choose(run, 0, drop!.offer![1]!)).toBe(false);
   });
+
+  it('locks the first-kill pick when the Keepsake reveal closes', () => {
+    const meta = new MetaProgress(memStorage());
+    const t = new KeepsakeTracker(meta);
+    const run = t.start({ seed: 'seed-d', characterId: 'lint', ranked: true });
+    const [drop] = t.bossDefeated('robovac_9000');
+    const picked = drop!.offer![1]!;
+    expect(t.choose(run, 0, picked)).toBe(true);
+    t.lock(drop!);
+    expect(t.choose(run, 0, drop!.offer![2]!)).toBe(false);
+    expect(drop!.ref.type).toBe(picked);
+    expect(meta.keepsakeCount('lint', ref(picked, 1))).toBe(1);
+  });
 });
 
 describe('Felting and shedding', () => {

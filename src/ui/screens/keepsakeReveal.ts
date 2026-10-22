@@ -1,15 +1,15 @@
 /**
  * Keepsake reveal (Run paused): shows what a boss left in the Bunny's fur. Opened by the HUD's
  * reward moment (src/ui/keepsakeHud.ts) once the area-cleared banner has had its time. Each drop
- * gets a chip with its effect; a first kill gets the choose-1-of-3 card (keys 1–3), which the
- * results "Kept" section keeps open until the player leaves results. Enter / Space / Esc or the
- * button resume play (or the waiting Perk draft).
+ * gets a chip with its effect; a first kill gets the choose-1-of-3 card (keys 1–3). The highlighted
+ * type is already in the Hoard; Enter / Space / Esc or the button lock it in (tracker.lock) and
+ * resume play (or the waiting Perk draft).
  */
 import { getAudio } from '../../audio';
 import { getCharacter } from '../../data/characters';
 import { getGrade } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
-import type { KeepsakeDrop, RunKeepsakes } from '../../meta/keepsakes';
+import { getKeepsakeTracker, type KeepsakeDrop, type RunKeepsakes } from '../../meta/keepsakes';
 import { storyOn } from '../../story';
 import { button, handleMenuKeys, isKey, scrollArea } from '../components';
 import { keepsakeChip } from '../keepsakeUi';
@@ -30,7 +30,7 @@ export interface KeepsakeRevealParams {
 /** Input is ignored this long after the reveal opens (a Dash or click meant for play). */
 const ARM_DELAY = 0.6;
 
-const revealNote: ChoiceNote = (chosen) => (chosen ? 'Kept. You can still change it on the results screen.' : 'Pick one, or keep the highlighted one.');
+const revealNote: ChoiceNote = () => 'Pick one. Keep rolling keeps the highlighted one.';
 
 /** Pauses the Run and shows the drops. False, doing nothing, unless play is on screen. */
 export function openKeepsakeReveal(game: Game, params: KeepsakeRevealParams): boolean {
@@ -62,7 +62,7 @@ export function registerKeepsakeRevealScreen(): void {
         items.replaceChildren(
           ...p.drops.map((d) => {
             const index = p.run.drops.indexOf(d);
-            if (d.offer && !p.run.settled && index >= 0) return choiceCard(p.run, index, d, render, revealNote);
+            if (d.offer && !d.locked && !p.run.settled && index >= 0) return choiceCard(p.run, index, d, render, revealNote);
             const item = h('div', { className: 'kept-item' }, keepsakeChip(d.ref, { describe: true }));
             if (d.bonus) item.append(h('span', { className: 'kept-bonus', textContent: 'Hardcore' }));
             return item;
@@ -72,6 +72,9 @@ export function registerKeepsakeRevealScreen(): void {
 
       const close = (): void => {
         if (armed > 0 || !params) return;
+        // The loot is final once the player rolls on: the highlighted type stays in the Hoard.
+        const tracker = getKeepsakeTracker();
+        for (const d of params.drops) tracker?.lock(d);
         params = null;
         game.input.sample(); // drop a Dash queued by the Space that closed the reveal
         const run = game.run;

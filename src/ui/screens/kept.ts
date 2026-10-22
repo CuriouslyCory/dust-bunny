@@ -1,8 +1,8 @@
 /**
- * Results "Kept" section: the Keepsakes this Run left in the played Character's fur, the
- * first-kill choose-1-of-3 card, and a button to Under the Couch. The first offered type is already
- * in the Hoard; picking another swaps it. Leaving the results screen without choosing keeps the
- * highlighted (first) one.
+ * Results "Kept" section: the Keepsakes this Run left in the played Character's fur and a button to
+ * Under the Couch. A first kill is chosen in the in-Run Keepsake reveal; only a drop whose reveal
+ * never showed (the Run ended first) gets the choose-1-of-3 card here. The first offered type is
+ * already in the Hoard; picking another swaps it. Leaving without choosing keeps the highlighted one.
  */
 import { getCharacter } from '../../data/characters';
 import { describeKeepsake, getGrade, getKeepsakeType } from '../../data/keepsakes';
@@ -82,7 +82,7 @@ export function registerKeptSection(): void {
           return;
         }
         const items = run.drops.map((d, i) =>
-          d.offer && !run.settled ? choiceCard(run, i, d, render) : h('div', { className: 'kept-item' }, keepsakeChip(d.ref, { describe: true }), ...(d.bonus ? [h('span', { className: 'kept-bonus', textContent: 'Hardcore' })] : [])),
+          d.offer && !d.locked && !run.settled ? choiceCard(run, i, d, render) : h('div', { className: 'kept-item' }, keepsakeChip(d.ref, { describe: true }), ...(d.bonus ? [h('span', { className: 'kept-bonus', textContent: 'Hardcore' })] : [])),
         );
         el.replaceChildren(
           h('h3', { className: 'kept-head', textContent: `Kept · tangled into ${name}'s fur` }),
