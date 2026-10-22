@@ -43,7 +43,7 @@ export const magnetSystem: System = {
     const r = bunny.radius;
     const reach = r * (1 + m);
     const ratio = bunny.stats.get('absorbRatio');
-    // How far the Bunny moved this tick (movement runs first): Dash, Candy Rush, knockback included.
+    // How far the Bunny moved this tick (movement and hazards run first): Dash, Sugar Rush, knockback, Hazard pushes.
     const moved = Math.hypot(bunny.x - bunny.prevX, bunny.z - bunny.prevZ);
     scratch.length = 0;
     debris.query(bunny.x, bunny.z, reach + r * ratio + moved, scratch);

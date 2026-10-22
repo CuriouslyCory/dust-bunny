@@ -15,8 +15,9 @@ export const SYSTEM_ORDER = {
   /** The Character's Ability (src/abilities), before movement so Hunker stops the Bunny this tick. */
   ability: 90,
   movement: 100,
-  magnet: 200,
   hazards: 300,
+  /** After movement and hazards so the pull can outpace everything that moved the Bunny this tick. */
+  magnet: 350,
   absorb: 400,
   collision: 500,
   pickups: 550,

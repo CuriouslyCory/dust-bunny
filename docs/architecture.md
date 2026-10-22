@@ -75,8 +75,8 @@ Map of the code for agents and humans. Terms follow `CONTEXT.md`; gameplay numbe
 | --- | --- | --- |
 | 90 | `ability` (`AbilitySystem`) | the Character's Ability from `run.inputState` (Decoy, Hunker, Discharge), Grounded countdown |
 | 100 | `movement` | input → velocity, Dash, knockback impulse decay, rolling, timers, `stats.tick`; a hunkered Bunny doesn't move |
-| 200 | `magnet` | pulls absorbable Debris within `radius × (1 + magnetRadius)` |
 | 300 | `hazards` (`HazardManager`) | director, `hazard.update`, contact → absorb or `onContact` |
+| 350 | `magnet` | pulls absorbable Debris within `radius × (1 + magnetRadius)`, faster than the Bunny moved this tick (after movement and hazard pushes) so it can't be outrun |
 | 400 | `absorb` | touching Debris with `size ≤ radius × absorbRatio` → `run.absorbDebris` |
 | 500 | `collision` | push-out from walls/furniture AABBs (skipped if `2r < clearance`; walls use a squeezed radius inside doorways, `wallRadiusAt`, and walls and furniture a squeezed one when the Bunny is wedged between obstacles on opposite sides, `gapRadiusAt`) and Obstacle Debris circles (Debris up to `radius × TUNING.push.ratio` is shoved instead, `pushDebris`); clamp to bounds |
 | 550 | `pickups` (`PickupManager`) | collect floor Pickups, expire timed effects |
