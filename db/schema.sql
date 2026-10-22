@@ -112,13 +112,15 @@ CREATE INDEX IF NOT EXISTS area_scores_ip_idx ON area_scores (ip_hash, created_a
 CREATE UNIQUE INDEX IF NOT EXISTS area_scores_run_idx ON area_scores (run_id, area) WHERE run_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, score DESC) WHERE user_id IS NOT NULL;
 
--- The Run's Loadout: [{ "type": "thick_clog", "grade": 2 }, …] (0–2 Keepsakes); NULL for entries
+-- The Run's Loadout: [{ "type": "thick_clog", "rarity": 3 }, …] (0–2 Keepsakes, rarity 1–5); rows from
+-- before rarities hold { "type", "grade": 1–10 }, read as rarities by the API. NULL for entries
 -- from clients before Keepsakes.
 ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb;
 
 -- Cloud save for signed-in players: Fluff wallet, Upgrade levels (id → level), lifetime stats,
--- and per Character its Keepsake Hoard ("type:grade" → count) and bosses beaten.
+-- and per Character its Keepsake Hoard ("type:rarityId" → count, e.g. "thick_clog:epic"; rows from
+-- before rarities use "type:1"…"type:10", converted on read) and bosses beaten.
 CREATE TABLE IF NOT EXISTS player_progress (
   user_id    text        PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
   fluff      integer     NOT NULL CHECK (fluff >= 0),

@@ -10,7 +10,7 @@
  * server (so spending Fluff, which changes neither counter, still syncs). Felting and shedding
  * Keepsakes change neither counter either: they sync like spending.
  */
-import { KEEPSAKE_STACK_MAX, keepsakeTypesForCharacter, parseSharedHoardKey } from './keepsakes.js';
+import { KEEPSAKE_STACK_MAX, keepsakeTypesForCharacter, parseSharedHoardKey, sharedHoardKey } from './keepsakes.js';
 import { SCORE_TIER_MIN_RADII } from './score.js';
 
 export interface ProgressStats {
@@ -23,7 +23,7 @@ export interface ProgressStats {
   keepsakesEarned: number;
 }
 
-/** One Character's Keepsakes: Hoard counts by "type:grade" (1–99) and boss ids it has absorbed. */
+/** One Character's Keepsakes: Hoard counts by "type:rarity" ("thick_clog:epic", 1–99) and boss ids it has absorbed. */
 export interface ProgressCharacter {
   hoard: Record<string, number>;
   bossesBeaten: string[];
@@ -62,7 +62,8 @@ type Fail = { ok: false; field: string; message: string };
 
 /**
  * Validates the `characters` field. Missing (an older bundle) reads as `{}`; callers that must
- * tell the two apart (api/progress.ts keeps the stored Hoards) check the raw body.
+ * tell the two apart (api/progress.ts keeps the stored Hoards) check the raw body. Hoard keys
+ * from before rarities are converted (see `parseSharedHoardKey`).
  */
 export function validateCharacters(raw: unknown): { ok: true; value: Record<string, ProgressCharacter> } | Fail {
   const fail = (field: string, message: string): Fail => ({ ok: false, field, message });
@@ -77,7 +78,9 @@ export function validateCharacters(raw: unknown): { ok: true; value: Record<stri
       const ref = parseSharedHoardKey(id, key);
       if (!ref) return fail(`characters.${id}.hoard`, `Invalid Keepsake "${key.slice(0, 40)}".`);
       if (!isCount(n, KEEPSAKE_STACK_MAX)) return fail(`characters.${id}.hoard`, `Invalid count for "${key}".`);
-      if (n > 0) hoard[key] = n;
+      // Keys from before rarities ("arc:6") become "arc:epic"; two old grades can share a rarity.
+      const k = sharedHoardKey(ref);
+      if (n > 0) hoard[k] = Math.min(KEEPSAKE_STACK_MAX, (hoard[k] ?? 0) + n);
     }
     if (c.bossesBeaten.length > PROGRESS_BOUNDS.bossesBeaten) return fail(`characters.${id}.bossesBeaten`, 'Too many bosses.');
     const bosses: string[] = [];

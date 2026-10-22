@@ -7,7 +7,7 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--grade, var(--honey));
+  background: var(--rarity, var(--honey));
   color: #2a1d17;
   font: 700 11px/1 var(--font-display);
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18), 0 0 0 1.5px rgba(255, 255, 255, 0.7);
@@ -31,8 +31,8 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--grade, var(--honey)) 35%, var(--paper));
-  border: 2px solid var(--grade, var(--honey));
+  background: color-mix(in srgb, var(--rarity, var(--honey)) 35%, var(--paper));
+  border: 2px solid var(--rarity, var(--honey));
   font-size: 16px;
 }
 .ks-chip-text {
@@ -130,7 +130,7 @@
 }
 .ks-slot.filled {
   border-style: solid;
-  border-color: var(--grade, var(--honey));
+  border-color: var(--rarity, var(--honey));
 }
 .ks-slot:hover,
 .ks-slot:focus-visible {
@@ -271,15 +271,15 @@
   font-size: var(--fs-xs);
   color: var(--ink-soft);
 }
-.utc-grade-h {
+.utc-rarity-h {
   min-width: 56px;
   vertical-align: bottom;
 }
-.utc-grade-h .ks-pip {
+.utc-rarity-h .ks-pip {
   display: grid;
   margin: 0 auto 2px;
 }
-.utc-material {
+.utc-rarity-name {
   display: block;
   line-height: 1.1;
 }
@@ -306,8 +306,8 @@
 }
 .utc-cell.has {
   color: var(--ink);
-  border-color: var(--grade);
-  background: color-mix(in srgb, var(--grade) 22%, var(--paper));
+  border-color: var(--rarity);
+  background: color-mix(in srgb, var(--rarity) 22%, var(--paper));
 }
 .utc-cell.can-felt {
   box-shadow: inset 0 -4px 0 var(--mint);
@@ -408,8 +408,8 @@
 .kept-choice {
   padding: 10px;
   border-radius: var(--radius-md);
-  border: 2px solid var(--grade, var(--honey));
-  background: color-mix(in srgb, var(--grade, var(--honey)) 12%, var(--paper));
+  border: 2px solid var(--rarity, var(--honey));
+  background: color-mix(in srgb, var(--rarity, var(--honey)) 12%, var(--paper));
 }
 .kept-choice-head,
 .kept-choice-note {
@@ -543,7 +543,7 @@
 }
 .keepsake-reveal {
   width: min(560px, 100%);
-  border-top: 6px solid var(--grade, var(--honey));
+  border-top: 6px solid var(--rarity, var(--honey));
 }
 .keepsake-reveal.arming {
   pointer-events: none;

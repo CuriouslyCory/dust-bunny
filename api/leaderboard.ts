@@ -25,8 +25,9 @@
  * salts the stored IP hashes. Tables are created on first use (server/schema.ts, mirrored in
  * db/schema.sql); columns added later are applied with idempotent `ADD COLUMN IF NOT EXISTS`.
  *
- * Entries carry the Run's Loadout (`loadout`: up to two `{ type, grade }` Keepsakes, column
- * `loadout jsonb`, NULL for older clients that send none).
+ * Entries carry the Run's Loadout (`loadout`: up to two `{ type, rarity }` Keepsakes, column
+ * `loadout jsonb`, NULL for older clients that send none; rows and clients from before rarities use
+ * `{ type, grade }`, 1–10, read and accepted as rarities by `parseLoadout`).
  *
  * Every Difficulty shares one board: submitted scores already include the Difficulty
  * multiplier (see src/shared/score.ts), and each entry carries its `difficulty`.
@@ -79,7 +80,7 @@ interface Row {
   duration_ms: number;
   difficulty: string | null;
   verified: boolean;
-  /** jsonb [{ type, grade }], NULL for entries from clients before Keepsakes. */
+  /** jsonb [{ type, rarity }] (or [{ type, grade }] from before rarities), NULL for entries from clients before Keepsakes. */
   loadout: unknown;
   created_at: string | Date;
   // Run board
@@ -92,7 +93,9 @@ interface Row {
 
 function common(r: Row) {
   const character = isLeaderboardCharacter(r.character) ? r.character : ('lint' as const);
-  const loadout = r.loadout == null ? null : parseLoadout(character, r.loadout);
+  // `grade` (rarity × 2, on the old 1–10 scale) keeps tabs still running the bundle from before
+  // rarities, which read `grade`, from crashing on new entries. Drop it once those have reloaded.
+  const loadout = r.loadout == null ? null : parseLoadout(character, r.loadout)?.map((k) => ({ ...k, grade: k.rarity * 2 }));
   return {
     id: String(r.id),
     name: r.name,
