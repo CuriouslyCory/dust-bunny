@@ -45,10 +45,10 @@ export function installKeepsakeHud(game: Game): void {
     const show = (): void => {
       // The Run may have ended (the last boss wins it): the results screen lists the drop instead.
       if (game.run !== run || run.ended || !record) return;
-      // Still reading the cleared line: wait for it rather than cut it off.
-      const left = game.hud.bannerLeft;
-      if (left > 0.1) {
-        window.setTimeout(show, left * 1000 + 150);
+      // Still reading the cleared line: wait for it rather than cut it off (checking again soon, in
+      // case the player dismisses it).
+      if (game.hud.bannerLeft > 0.1) {
+        window.setTimeout(show, RETRY * 1000);
         return;
       }
       if (!openKeepsakeReveal(game, { run: record, drops: e.drops, firstKill: e.firstKill, caption })) {

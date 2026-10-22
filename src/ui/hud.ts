@@ -9,7 +9,8 @@
  *   toast(text, { key, tone, swatch, short })   small batched toast near the Bunny ("+ Sock!");
  *                                       on phones a one-line ticker under the Tier pill ("Sock ×3")
  *   banner(title, { subtitle, variant, duration, caption })   big centred banner (tier | boss | good | info),
- *                                       optionally with a narrator caption under it
+ *                                       optionally with a narrator caption under it; its ✕ button
+ *                                       (or Enter in play) dismisses it early: skipBanner()
  *   flash(widgetId)                     plays the highlight animation on a widget
  *   onCompactChange(fn)                 runs fn(compact) now and whenever the phone layout toggles
  *
@@ -155,6 +156,11 @@ export class Hud {
   private slots = new Map<string, HTMLElement>();
   private widgets: HudWidget[] = [];
   private bannerEl = h('div', { className: 'hud-banner' });
+  /**
+   * Dismisses the banner early (the only part of the banner that takes input). Pointer only: it never
+   * takes focus, since Space on a focused button would also Dash; keyboards use Enter in play.
+   */
+  private bannerSkip = h('button', { type: 'button', className: 'hud-icon-btn hud-banner-skip', title: 'Dismiss (Enter)', tabIndex: -1, disabled: true });
   private bannerTimer: number | undefined;
   /** performance.now() when the current banner is due to hide (0: none showing). */
   private bannerUntil = 0;
@@ -185,6 +191,10 @@ export class Hud {
     this.bannerEl.setAttribute('role', 'status');
     this.bannerEl.setAttribute('aria-live', 'polite');
     this.slots.get('center')!.append(this.bannerEl);
+    this.bannerSkip.setAttribute('aria-label', 'Dismiss message');
+    this.bannerSkip.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 4.3 12 9.9l5.6-5.6 2.1 2.1-5.6 5.6 5.6 5.6-2.1 2.1-5.6-5.6-5.6 5.6-2.1-2.1 5.6-5.6-5.6-5.6z"/></svg>';
+    this.bannerSkip.addEventListener('mousedown', (e) => e.preventDefault()); // keeps focus off it
+    this.bannerSkip.addEventListener('click', () => this.skipBanner());
     this.el.append(this.toastLayer);
     this.toasts = new ToastBatcher({
       show: (t) => {
@@ -311,13 +321,42 @@ export class Hud {
     this.narrating = false;
     this.bannerQueue = [];
     clearTimeout(this.bannerTimer);
-    this.bannerEl.classList.remove('show');
+    this.hideBannerEl();
   }
 
   /** Shows a banner, replacing the current one, or queues it while a narrator caption plays. */
   banner(title: string, opts: BannerOptions = {}): void {
     if (this.bannerBusy) this.bannerQueue.push({ title, opts });
     else this.showBanner(title, opts);
+  }
+
+  /**
+   * Dismisses the banner on screen, caption and all, before its time (the ✕ button, Enter in play);
+   * the next queued banner, if any, takes its place. False when no banner is up.
+   */
+  skipBanner(): boolean {
+    if (!this.bannerEl.classList.contains('show')) return false;
+    clearTimeout(this.bannerTimer);
+    this.nextBanner();
+    return true;
+  }
+
+  /** The current banner is done: shows the next queued one, or hides. */
+  private nextBanner(): void {
+    this.narrating = false;
+    const queued = this.bannerQueue.shift();
+    if (queued) {
+      this.showBanner(queued.title, queued.opts);
+      return;
+    }
+    this.bannerUntil = 0;
+    this.hideBannerEl();
+  }
+
+  /** Fades the banner out; its dismiss button is disabled until the next one shows. */
+  private hideBannerEl(): void {
+    this.bannerEl.classList.remove('show');
+    this.bannerSkip.disabled = true;
   }
 
   private showBanner(title: string, opts: BannerOptions): void {
@@ -330,23 +369,19 @@ export class Hud {
       h('div', { className: 'hud-banner-title', textContent: title }),
       ...(opts.subtitle ? [h('div', { className: 'hud-banner-sub', textContent: opts.subtitle })] : []),
       ...(parts.length ? [caption] : []),
+      this.bannerSkip,
     );
     void b.offsetWidth;
     b.classList.add('show');
+    this.bannerSkip.disabled = false;
     clearTimeout(this.bannerTimer);
     const total = bannerSeconds(opts);
     this.bannerUntil = performance.now() + total * 1000;
     this.narrating = parts.length > 0;
-    // Hidden: the next queued banner, if any, takes its place.
-    const hide = (): void => {
-      this.narrating = false;
-      const queued = this.bannerQueue.shift();
-      if (queued) this.showBanner(queued.title, queued.opts);
-      else b.classList.remove('show');
-    };
+    const hide = (): void => this.nextBanner();
     let shown = 0;
     let elapsed = 0;
-    // One timer at a time, so clearBanner cancels the rest of the caption.
+    // One timer at a time, so clearBanner / skipBanner cancel the rest of the caption.
     const next = (): void => {
       elapsed += holds[shown] ?? 0;
       shown++;

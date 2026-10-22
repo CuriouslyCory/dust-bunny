@@ -120,8 +120,13 @@ export function registerBuiltinScreens(): void {
             game.go('paused');
             return true;
           }
-          // Area cleared: skip the walk to the exit (same as the HUD's skip button).
-          if (!e.repeat && isKey(e, 'Enter', 'NumpadEnter') && game.run?.leaveArea()) return true;
+          if (!e.repeat && isKey(e, 'Enter', 'NumpadEnter')) {
+            // Area cleared: skip the walk to the exit (same as the HUD's skip button).
+            if (game.run?.leaveArea()) return true;
+            // Otherwise dismiss the banner on screen (same as its ✕ button), unless Enter is pressing
+            // a focused control (the pause button).
+            if (!focusOnControl() && game.hud.skipBanner()) return true;
+          }
           return false;
         },
       };
