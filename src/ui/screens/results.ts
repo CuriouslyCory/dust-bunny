@@ -20,6 +20,7 @@ import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { getMeta } from '../../meta/meta';
 import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { AREAS } from '../../data/areas';
 import { formatLength } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
@@ -194,7 +195,7 @@ export function registerResultsScreen(): void {
           const tier = getTier(s.tierReached);
           const rows: Array<[string, string, string]> = [
             ['⏱', 'Time', fmtTime(s.timeSec)],
-            ['📏', 'Max radius', formatLength(s.maxRadius)],
+            ['📏', 'Max radius', formatLength(s.maxRadius, AREAS[s.area]?.readout)],
             ['✦', 'Debris absorbed', s.debrisAbsorbed.toLocaleString()],
             ['⭐', 'Tier reached', `${s.tierReached} · ${tier.name}`],
           ];
