@@ -454,7 +454,7 @@ export const garbageTruckDef = hazardRegistry.register({
 
 export const incineratorDef = hazardRegistry.register({
   id: 'incinerator',
-  name: 'The Incinerator',
+  name: 'Incinerator',
   boss: true,
   // Full-size contact radius: room for the boss before it is chipped.
   footprint: { radius: INCINERATOR.contactRadius, height: INCINERATOR.height },

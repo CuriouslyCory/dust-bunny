@@ -6,11 +6,13 @@ Terms follow `CONTEXT.md`. Numbers below are starting points; tune them in the d
 
 Katamari-style growth roguelike on a house floor, rendered in three.js. You start as a 1 cm Speck under the couch, absorbing lint and staples. Every Tier you grow into pulls the camera back, reveals more of the house, and turns former Obstacles into Debris. Roombas, lint rollers, brooms, and other cleaning gear roam the floor and hurt you, until you are big enough to absorb them too. Final goal: absorb the Robo-Vac 9000 boss.
 
-Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, then a 7–10 minute city finale, playable on desktop (keyboard/mouse) and mobile (touch).
+Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, a 7–10 minute city, then a 4–6 minute region finale, playable on desktop (keyboard/mouse) and mobile (touch).
 
 **Neighborhood phase.** Absorbing the Robo-Vac 9000 no longer ends the Run: the front door at the end of the hallway swings open and a door compass points to it, with a skip button (Enter on a keyboard) that moves on from wherever the Bunny is, so a Bunny too big to reach the door is never stuck. Rolling out of it fades into a seeded suburban street (about 96 × 72 m: a main street and a cross street, seven houses with yards and driveways, a park). Outdoor Debris runs from pinecones and garden gnomes up to bikes, picnic tables and parked cars; houses and big trees stay Obstacles. Absorbing the Street Sweeper (arrives at Tier 7) lifts the road barrier at one end of the main street.
 
-**City phase.** Rolling through the barrier fades into a seeded city at golden hour (about 320 × 240 m: three avenues and four streets with sidewalks and crosswalks, office towers and plazas downtown, apartments, shop rows and brick lofts further out, two parking lots, a park square with a fountain). City Debris runs from trash bags, parking meters and phone booths up to taxis, food trucks, fountains, buses, fire trucks and shipping containers; buildings stay Obstacles and fade when they hide the Bunny. Absorbing the Garbage Truck (arrives at Tier 9) wins the Run.
+**City phase.** Rolling through the barrier fades into a seeded city at golden hour (about 320 × 240 m: three avenues and four streets with sidewalks and crosswalks, office towers and plazas downtown, apartments, shop rows and brick lofts further out, two parking lots, a park square with a fountain). City Debris runs from trash bags, parking meters and phone booths up to taxis, food trucks, fountains, buses, fire trucks and shipping containers; buildings stay Obstacles and fade when they hide the Bunny. Absorbing the Garbage Truck (arrives at Tier 9) opens the highway on-ramp at the east end of the main avenue.
+
+**Region phase (Act 4, *A State of Emergency*).** The on-ramp fades into the region seen from a few kilometres up, under an overcast noon sky (2 × 1.5 km: motorways, a river with a bridge, patchwork farmland, woods, a city in four quarters and four towns, a landfill in the south-east, wooded hills at the edge). The Run re-bases into the Region's unit (1 world unit = 10 m), so the Bunny arrives at about 0.65–0.9 units and the House's Speck→Fluff curve repeats: Tier 10 at 1 unit, Tier 11 at 3. Region Debris runs from hay bales and dairy cows up to barns, churches, villages, stadiums, small towns and cooling towers; city cores, ridges and hills stay Obstacles. Absorbing the Incinerator (arrives at Tier 11) wins the Run, until the Continent (Act 5) gives the Region an exit.
 
 ## Tech
 
@@ -42,9 +44,11 @@ Target: a 10–15 minute demo-quality house, a 5–8 minute neighborhood, then a
 | 6 | Dust Storm | 75 – 160          | mailboxes, trash cans, bikes, grills, shrubs, benches   | the block |
 | 7 | Dust Cyclone | 160 – 320       | picnic tables, golf carts, swing sets, cars, the Street Sweeper; in the city: trash bags, meters, phone booths, mopeds, hot dog carts | the neighborhood / a few city blocks |
 | 8 | Dust Hurricane | 320 – 600     | taxis, police cars, vans, food trucks, city trees, statues, fountains | downtown |
-| 9 | Dust Colossus | 600+           | buses, fire trucks, cement mixers, trams, shipping containers, the Garbage Truck | the whole city |
+| 9 | Dust Colossus | 600 – 1,000    | buses, fire trucks, cement mixers, trams, shipping containers, the Garbage Truck | the whole city |
+| 10 | Dust Sprawl | 10 – 30 m       | hay bales, cars, tractors, silos, farmhouses, lorries, barns, churches | a few farms and a town |
+| 11 | Dust Front  | 30 m +          | motels, wind turbines, strip malls, villages, stadiums, small towns, the Incinerator | the region |
 
-Camera distance and fog distance scale with radius so the visible floor area grows each Tier. Areas are gated physically: e.g. the gap under the couch skirt and closed doors are passable/absorbable only at certain sizes.
+Tier thresholds are the Bunny's real radius (cm); in the Region the world unit is 10 m, so Tiers 10 and 11 start at 1 and 3 units. Camera distance and fog distance scale with radius so the visible floor area grows each Tier. Areas are gated physically: e.g. the gap under the couch skirt and closed doors are passable/absorbable only at certain sizes.
 
 ## World
 
@@ -96,7 +100,38 @@ Camera distance and fog distance scale with radius so the visible floor area gro
 | Freight Train      | 11        | 2.45                 | ≈ 3.5           | long, fast lane patrol | 1 + knockback, sheds mass |
 | The Incinerator    | 11 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | hunts with feed-conveyor suction, telegraphed charges, chimney ash volleys, stunned by towns / the map edge, summons mini compactors | 1, sheds mass (ash too) |
 
-A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, and absorbing the Garbage Truck wins the Run.
+A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, and absorbing the Incinerator wins the Run.
+
+## Pacing and scale (Acts 4–9)
+
+Decided with the Region (issue #24; story in `docs/story.md`):
+
+1. **Two Tiers and one boss per Act** after the City, with `AREAS[area].growth` tuned so each Act takes 4 to 6 minutes. Adjust later if it plays off.
+2. **Full Runs only.** No chapter checkpoints for now; starting at a later Area is a separate, later feature (`?area=` exists for debugging and is unranked).
+3. **No Fluff radius cap and no flat per-Area bonus.** Each Act scales its own progression (Fluff, Area score and the server's per-Area bounds) from growth measured in that Act's unit, with plain floating-point maths. Readouts climb the unit ladder (cm, m, km, Earths, AU, ly; `src/data/units.ts`).
+
+**Units.** Each Area declares `AREAS[area].unit` (cm per world unit): 1 for the House, Neighborhood and City, 1,000 for the Region. Entering an Area re-bases the Bunny (`Bunny.rebase`: radius, max radius, speeds; stuck Debris rescales in the view) so its real size is unchanged; all of the Area's content is authored in its unit.
+
+| Region tuning (`AREAS.region`) | Value |
+|---|---|
+| Unit | 10 m (1,000 cm) |
+| Debris Tier band | 10–11 |
+| Growth multiplier | 0.12 |
+| Start scatter / cluster / cluster radius | 2,000 / 120 / 11 units |
+| Fluff per unit of growth | 1.5 |
+| HUD readout | from m (`14.7 / 30 m`) |
+| Area board | 10,000 points per unit grown, par 360 s, growth bound 0.05 units/s + 0.1 |
+| Run board | `progressRadius`: a cm counts 1 up to 10 m, then 0.1 (100 per Region unit) |
+
+**Region pacing check** (`pnpm sim --seeds=8 --minutes=45 --validate`, Casual, full Runs): Act time from entering the Region to absorbing the Incinerator, median per Character, next to the City's.
+
+| Character | Region | City | Wins / Runs | Median win |
+|---|---|---|---|---|
+| Lint | 4:26 | 4:24 | 3 / 8 | 30:24 |
+| Tumble | 7:43 | 9:11 | 3 / 8 | 37:30 |
+| Zap | 3:09 | 3:58 | 6 / 8 | 20:27 |
+
+Every Run that reached the Incinerator beat it, and all 74 leaderboard submissions validated (closest: 73% of the Run board allowance, 54% of the Region board's, both Zap). `pnpm sim --area=region` (starting at 0.9 units) gives Lint 5:03, Tumble 6:10, Zap 3:14.
 
 ## Characters
 
@@ -128,11 +163,11 @@ Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweep
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
-Fluff earned per Run ≈ `floor(tierReached × 4 + min(maxRadius, 300) / 30 + debrisAbsorbed / 1000)`, ×1.5 on victory (×1.35 if the neighborhood was cleared, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). Targets: a Casual Run that clears the house or wins pays about 40–80 Fluff (one base-level Upgrade), Arcade 80–160, Hardcore 300–400 for Runs that reach the city. Buying every Upgrade (about 1,545 Fluff) takes about 20 Casual wins or 4 Hardcore wins.
+Fluff earned per Run ≈ `floor(tierReached × 4 + radius term + debrisAbsorbed / 1000)`, ×1.5 on victory (×1.45 if the city was cleared, ×1.35 if the neighborhood was, ×1.25 if only the house was), then × the Difficulty's Fluff multiplier (Arcade ×2, Hardcore ×5). The radius term has no cap: each Area adds its growth measured in its own unit × `AREAS[area].fluffPerUnit` (House 1/30 per cm, Neighborhood 1/60, City 1/120, Region 1.5 per 10 m unit; about 2 + 3 + 5 + 5 for a full Run). Targets: a Casual Run that clears the house pays about 40 Fluff, a Casual win about 90 (the sim's full Runs: 90–92), Arcade about twice that and Hardcore about 450. Buying every Upgrade (about 1,545 Fluff) takes about 17 Casual wins or 4 Hardcore wins.
 
 ## Keepsakes and Felting
 
-Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Keepsakes modify that Character's Ability (5 types per Character) and have a **grade** set by the boss: 1 Brush Tangle (Robo-Vac 9000), 2 Gutter Grit (Street Sweeper), 3 Hopper Gunk (Garbage Truck), up to 10 First Dust (Felting only). Data and effect values: `src/data/keepsakes.ts`.
+Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Keepsakes modify that Character's Ability (5 types per Character) and have a **grade** set by the boss: 1 Brush Tangle (Robo-Vac 9000), 2 Gutter Grit (Street Sweeper), 3 Hopper Gunk (Garbage Truck), 4 Cinder Ash (Incinerator), up to 10 First Dust (Felting only). Data and effect values: `src/data/keepsakes.ts`.
 
 - **Drops:** every boss kill credits 1 Keepsake of the boss's grade with a random type (seeded from the Run seed); Hardcore adds 1. On a Character's first kill of a boss the player chooses 1 of 3 offered types on the results screen instead (the first offer is credited at once; leaving results without choosing keeps it). Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. Chipping doesn't change the reward.
 - **Loadout:** on Character select two slots take Keepsakes from that Character's **Hoard** (both may hold the same type; copies add up). It is fixed for the Run, remembered per Character on the device, and sent with leaderboard entries.

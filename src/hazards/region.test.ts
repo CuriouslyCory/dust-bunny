@@ -117,7 +117,7 @@ describe('region Hazards', () => {
     run.bunny.setRadius(tierRadius(run, 11) * 1.02);
     step(run, AREA_BOSSES.region.arrivalDelay + 1);
     expect(run.tier).toBe(11);
-    expect(bosses).toEqual(['The Incinerator']);
+    expect(bosses).toEqual(['Incinerator']);
     expect(run.hazards.count('incinerator')).toBe(1);
     for (const id of spawned) expect([...REGION_HAZARDS, ...BOSS_IDS]).toContain(id);
     // Hazards spawn just outside the view: in Region units, not hundreds of units away.

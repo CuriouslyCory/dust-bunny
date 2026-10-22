@@ -24,7 +24,8 @@ export function createPickupDirector(): PickupDirector {
   return (dt, run, mgr) => {
     const b = run.bunny;
     const viewR = viewRadiusFor(b.radius, run.tier);
-    const r = Math.max(0.5, b.radius * S.radiusRatio);
+    // At least 0.5 cm (in world units: 0.5 / unit), else a share of the Bunny radius.
+    const r = Math.max(0.5 / b.unit, b.radius * S.radiusRatio);
 
     for (let i = mgr.floor.length - 1; i >= 0; i--) {
       const p = mgr.floor[i]!;

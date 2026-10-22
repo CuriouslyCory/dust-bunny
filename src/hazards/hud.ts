@@ -5,6 +5,8 @@
  */
 import type { Game } from '../game/game';
 import { h } from '../ui/screens';
+import { AREAS } from '../data/areas';
+import { formatLength } from '../data/units';
 import { absorbRadiusFor } from './common';
 
 export function installHazardHud(game: Game): void {
@@ -37,7 +39,7 @@ export function installHazardHud(game: Game): void {
       if (!boss || !run) return;
       const need = absorbRadiusFor(boss.size, run.bunny.stats.get('absorbRatio'));
       const name = boss.def.name;
-      const text = run.bunny.radius >= need ? `${name} · absorb it now!` : `${name} · absorb at ${need.toFixed(1)} cm`;
+      const text = run.bunny.radius >= need ? `${name} · absorb it now!` : `${name} · absorb at ${formatLength(need * run.unit, AREAS[run.area].readout)}`;
       if (status.textContent !== text) status.textContent = text;
     },
   });

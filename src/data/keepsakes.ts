@@ -27,7 +27,7 @@ export const GRADES: readonly GradeData[] = [
   { grade: 1, material: 'Brush Tangle', bossId: 'robovac_9000', bossName: 'Robo-Vac 9000', color: '#c9a27a' },
   { grade: 2, material: 'Gutter Grit', bossId: 'street_sweeper', bossName: 'Street Sweeper', color: '#8f8a6e' },
   { grade: 3, material: 'Hopper Gunk', bossId: 'garbage_truck', bossName: 'Garbage Truck', color: '#7a9a4a' },
-  { grade: 4, material: 'Cinder Ash', bossId: 'incinerator', bossName: 'The Incinerator', color: '#9a9aa0' },
+  { grade: 4, material: 'Cinder Ash', bossId: 'incinerator', bossName: 'Incinerator', color: '#9a9aa0' },
   { grade: 5, material: 'Glacier Silt', bossId: null, bossName: 'The Ice Sheet', color: '#9fd3e8' },
   { grade: 6, material: 'Orbital Flecks', bossId: null, bossName: 'Orbital Sweeper', color: '#b7b2e8' },
   { grade: 7, material: 'Stardust', bossId: null, bossName: 'The Sun', color: '#ffd166' },

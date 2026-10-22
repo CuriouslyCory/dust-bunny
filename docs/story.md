@@ -37,7 +37,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–3 exist today, with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`). Acts 4–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+Acts 1–4 exist today, with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; the Region's tuning is in `docs/design.md`). Acts 5–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 
@@ -101,7 +101,7 @@ Lines below are the primary variant; alternates live in `src/data/story.ts`.
 | Garbage Truck arrives | *The Garbage Truck is the largest thing people built to make dropped things go away. It is about to learn where they go.* |
 | City cleared | *The city is gone. The thing that used to be a dust bunny rolls on. There is more ground.* |
 
-> Today, absorbing the Garbage Truck emits `victory`. Once Act 4 exists it opens an exit instead (the highway on-ramp), and `victory` moves to the end of Act 9. The results screen's `victory` copy ("The Garbage Truck is part of you now") becomes the Act 3 clear line.
+> Absorbing the Garbage Truck opens the highway on-ramp (the City cleared line plays on its banner). `victory` comes after the last built Area's boss (the Incinerator, until Act 5 gives the Region an exit) and moves to the end of Act 9 once it exists.
 
 ### Act 4 · The Region — *A State of Emergency*
 
