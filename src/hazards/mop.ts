@@ -206,6 +206,7 @@ export const riverSurgeDef = hazardRegistry.register({
   id: 'river_surge',
   name: 'River Surge',
   footprint: tuningFootprint(RIVER_SURGE),
+  spawnZones: ['rivers'],
   mass: RIVER_SURGE.mass,
   modelId: RIVER_SURGE.modelId,
   create(run, x, z, id, rng) {

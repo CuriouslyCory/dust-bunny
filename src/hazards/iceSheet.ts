@@ -16,10 +16,10 @@
  *   corners; ramming it while stunned scatters `chipPieces` icebergs. They are `calved_iceberg`
  *   Debris (src/data/iceSheetDebris.ts), absorbable by the Bunny that knocked them off.
  *
- * Mountain ranges, for the map: an Obstacle counts when it is furniture whose def id starts with
- * `mountain` (MOUNTAIN_RANGE_PREFIX: `mountain_range`, `mountain_massif`, ...), or, for the
- * placeholder map's massifs (`region_ridge` / `region_hill`), furniture standing in a `mountains`
- * zone (MOUNTAIN_ZONE). Walls never count.
+ * Mountain ranges, for the map: an Obstacle counts when it is furniture whose def is one of the
+ * Continent's ranges (MOUNTAIN_OBSTACLE_DEFS: `continent_range`, `continent_massif`), whose def id
+ * starts with `mountain` (MOUNTAIN_RANGE_PREFIX), or which stands in a `mountains` zone
+ * (MOUNTAIN_ZONE). Walls and the coast never count.
  */
 import { circleVsRect } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -28,6 +28,7 @@ import { CALVED_ICEBERG_ID } from '../data/iceSheetDebris';
 import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { isFloorFree } from '../systems/spawner';
+import { MOUNTAIN_OBSTACLE_DEFS } from '../world/continent';
 import { roomAt } from '../world/house';
 import type { HouseLayout, Obstacle, RoomType } from '../world/types';
 import { applyPush, bunnyCanAbsorb, bunnySheltered, hazardBlockedBy } from './common';
@@ -45,7 +46,7 @@ export function isMountainRange(house: HouseLayout, o: Obstacle): boolean {
   if (o.kind !== 'furniture' || !o.furnitureId) return false;
   const f = house.furniture.find((i) => i.id === o.furnitureId);
   if (!f) return false;
-  return f.defId.startsWith(MOUNTAIN_RANGE_PREFIX) || roomAt(house, f.x, f.z)?.type === MOUNTAIN_ZONE;
+  return f.defId.startsWith(MOUNTAIN_RANGE_PREFIX) || MOUNTAIN_OBSTACLE_DEFS.includes(f.defId) || roomAt(house, f.x, f.z)?.type === MOUNTAIN_ZONE;
 }
 
 /** True if a disc at (x, z), grown by `slack`, touches a mountain range that blocks a Hazard of `height`. */

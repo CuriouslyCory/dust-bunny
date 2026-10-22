@@ -3,6 +3,7 @@ import { EventBus } from '../core/events';
 import { rectContains, rectsOverlap, type Rect } from '../core/math';
 import { AREAS } from '../data/areas';
 import { DEBRIS_TYPES, getDebrisType, roomWeight } from '../data/debris';
+import { CALVED_ICEBERG_ID } from '../data/iceSheetDebris';
 import { TIERS } from '../data/tiers';
 import { BASE_BUNNY_STATS } from '../entities/stats';
 import { Run } from '../game/run';
@@ -190,7 +191,8 @@ describe('continent generation', () => {
 });
 
 describe('continent Debris catalogue', () => {
-  const continent = DEBRIS_TYPES.filter((t) => t.area === 'continent');
+  // calved_iceberg is only dropped by the Ice Sheet (src/data/iceSheetDebris.ts), never spawned.
+  const continent = DEBRIS_TYPES.filter((t) => t.area === 'continent' && t.id !== CALVED_ICEBERG_ID);
   const unit = AREAS.continent.unit;
 
   it('only uses continent zones and Tiers 11–13, from forests to mountain chains', () => {
