@@ -199,7 +199,8 @@ export class RoboVac9000 extends BaseHazard {
     this.lane.visible = false;
     this.hitThisStun = false;
     this.stunCause = cause;
-    this.enter('stunned', seconds);
+    // Never cut short a stun that is already running.
+    this.enter('stunned', this.state === 'stunned' ? Math.max(this.timer, seconds) : seconds);
     run.events.emit('bossStunned', { hazardId: this.id, cause });
   }
 
