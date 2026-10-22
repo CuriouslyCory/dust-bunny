@@ -18,6 +18,7 @@ import city  # noqa: E402
 import common  # noqa: E402
 import continent  # noqa: E402
 import furniture  # noqa: E402
+import galaxy  # noqa: E402
 import globe  # noqa: E402
 import hazards  # noqa: E402
 import outdoor  # noqa: E402
@@ -39,9 +40,11 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               # globe (Act 6; 1 unit = 10 km, loaded at scale 0.01)
               ("hazard", globe.HAZARDS), ("prop", globe.PROPS),
               # solar system (Act 7; 1 unit = 0.0001 AU, loaded at scale 0.01)
-              ("hazard", solar.HAZARDS), ("prop", solar.PROPS)]
+              ("hazard", solar.HAZARDS), ("prop", solar.PROPS),
+              # galaxy (Act 8; 1 unit = 1 ly, loaded at scale 0.01)
+              ("hazard", galaxy.HAZARDS), ("prop", galaxy.PROPS)]
 # ids authored in other units than cm (catalog "units" field)
-UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe, solar)
+UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe, solar, galaxy)
          for fn in mod.HAZARDS + mod.PROPS}
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
@@ -100,7 +103,9 @@ def write_doc(models):
         "(`tools/blender/globe.py`, notes starting \"Globe scale\") use "
         "1 unit = 10 km: see Globe scale below. The Solar System models "
         "(`tools/blender/solar.py`, notes starting \"Solar scale\") use "
-        "1 unit = 0.0001 AU: see Solar scale below.",
+        "1 unit = 0.0001 AU: see Solar scale below. The Galaxy models "
+        "(`tools/blender/galaxy.py`, notes starting \"Galaxy scale\") use "
+        "1 unit = 1 light year: see Galaxy scale below.",
         "- Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).",
         "- Origin: bottom centre at the floor contact point (y = 0). "
         "The broom is the exception: see its row.",
@@ -152,6 +157,28 @@ def write_doc(models):
         "giant's rings count in the footprint radius, so their spheres "
         "draw at 1 / 2.28 and 1 / 1.58 of the Debris size.",
         "",
+        "## Galaxy scale",
+        "",
+        "One Galaxy world unit is 100 light years, so the Galaxy models "
+        "(`tools/blender/galaxy.py`) are authored at 1 unit = 1 ly (100 "
+        "units per world unit) and loaded at `\"scale\": 0.01` like the "
+        "Solar System models. Their catalog entries carry `\"units\": "
+        "\"1 ly\"` and their table sizes are in light years: multiply by "
+        "0.01 for Galaxy world units (Sagittarius A*'s 320 footprint radius "
+        "is 3.2 world units). Hazards load with fit none + collapse and are "
+        "scaled by `size / modelSize`; Debris props are normalised to their "
+        "Debris size (stars are drawn with a ball radius of about 60, "
+        "planets radius 100), so only their proportions matter. Space is "
+        "dark, so the look is carried by emissive materials; the black "
+        "holes' and the supernova's eyes face +Z and upwards, towards the "
+        "camera. Debris props are baked into one vertex-coloured mesh per "
+        "type, which keeps base colours but drops per-part emission, so "
+        "their base colours are bright and each Galaxy Debris type should "
+        "set a `material.emissive` in the prop's main hue. The accretion "
+        "discs (`disk`) are flat sheets in XZ with trailing spiral streaks, "
+        "so spinning them about Y shows. The contact sheet uses a dark "
+        "floor.",
+        "",
         "## Rebuild",
         "",
         "```sh",
@@ -160,8 +187,8 @@ def write_doc(models):
         "blender -b --factory-startup --python tools/blender/build_all.py -- "
         "roomba broom",
         "# contact sheets -> docs/models-preview.png (cm models), "
-        "docs/models-preview-continent.png, docs/models-preview-globe.png "
-        "and docs/models-preview-solar.png",
+        "docs/models-preview-continent.png, docs/models-preview-globe.png, "
+        "docs/models-preview-solar.png and docs/models-preview-galaxy.png",
         "blender -b --factory-startup --python tools/blender/render_preview.py",
         "# only the Continent sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
@@ -172,6 +199,9 @@ def write_doc(models):
         "# only the Solar System sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
         " -- --solar",
+        "# only the Galaxy sheet:",
+        "blender -b --factory-startup --python tools/blender/render_preview.py"
+        " -- --galaxy",
         "```",
         "",
         "## Catalogue",
@@ -195,7 +225,8 @@ def write_doc(models):
         "",
         "\\* Continent models: units of 100 m (see Conventions). Globe "
         "models: units of 10 km (see Globe scale). Solar System models: "
-        "units of 0.0001 AU (see Solar scale).",
+        "units of 0.0001 AU (see Solar scale). Galaxy models: light years "
+        "(see Galaxy scale).",
         "",
         f"Total: {len(models)} models, "
         f"{sum(m['triangles'] for m in models)} triangles, "
@@ -214,6 +245,10 @@ def write_doc(models):
         "Solar System models (Act 7):",
         "",
         "![Solar System contact sheet](models-preview-solar.png)",
+        "",
+        "Galaxy models (Act 8):",
+        "",
+        "![Galaxy contact sheet](models-preview-galaxy.png)",
         "",
     ]
     with open(DOC, "w") as f:

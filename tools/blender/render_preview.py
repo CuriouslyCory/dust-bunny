@@ -1,8 +1,9 @@
 """Render contact sheets of the exported models: docs/models-preview.png
 (the cm-scale models), docs/models-preview-continent.png (the Continent
 models, authored at 1 unit = 100 m), docs/models-preview-globe.png (the
-Globe models, 1 unit = 10 km) and docs/models-preview-solar.png (the Solar
-System models, 1 unit = 0.0001 AU).
+Globe models, 1 unit = 10 km), docs/models-preview-solar.png (the Solar
+System models, 1 unit = 0.0001 AU) and docs/models-preview-galaxy.png (the
+Galaxy models, 1 unit = 1 ly, on a dark floor).
 
 Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py
@@ -12,6 +13,8 @@ Usage (from the repo root, after build_all.py):
     blender -b --factory-startup --python tools/blender/render_preview.py -- --globe
     # only the Solar System sheet:
     blender -b --factory-startup --python tools/blender/render_preview.py -- --solar
+    # only the Galaxy sheet:
+    blender -b --factory-startup --python tools/blender/render_preview.py -- --galaxy
     # debug: bigger tiles of some models to /tmp (add --top for a steep,
     # game-camera-like view)
     blender -b --factory-startup --python tools/blender/render_preview.py -- roomba --top
@@ -65,7 +68,8 @@ def flat_mat(name, hex_color):
     return m
 
 
-def render_tile(scene, path, label, out, out_label, view_dir=VIEW_DIR):
+def render_tile(scene, path, label, out, out_label, view_dir=VIEW_DIR,
+                floor_hex="#d9c4a3", label_hex="#222222"):
     common.reset_scene()
     bpy.ops.import_scene.gltf(filepath=path)
     meshes = [o for o in scene.objects if o.type == "MESH"]
@@ -81,7 +85,7 @@ def render_tile(scene, path, label, out, out_label, view_dir=VIEW_DIR):
     bpy.ops.mesh.primitive_plane_add(size=size * 6, location=(center.x,
                                                                center.y, lo.z))
     floor = bpy.context.active_object
-    floor.data.materials.append(flat_mat("floor", "#d9c4a3"))
+    floor.data.materials.append(flat_mat("floor", floor_hex))
 
     cam_data = bpy.data.cameras.new("cam")
     cam_data.type = "ORTHO"
@@ -118,7 +122,7 @@ def render_tile(scene, path, label, out, out_label, view_dir=VIEW_DIR):
     txt_data.body = label
     txt_data.size = s * 0.055
     txt = bpy.data.objects.new("label", txt_data)
-    txt.data.materials.append(flat_mat("label", "#222222"))
+    txt.data.materials.append(flat_mat("label", label_hex))
     scene.collection.objects.link(txt)
     txt.parent = cam
     txt.location = (-s / 2 + s * 0.02, -s / aspect / 2 + s * 0.02, -0.5)
@@ -142,7 +146,8 @@ def load_px(path, w, h):
     return px.reshape(h, w, 4)
 
 
-def render_sheet(scene, models, out_path, tmp, view_dir=VIEW_DIR):
+def render_sheet(scene, models, out_path, tmp, view_dir=VIEW_DIR,
+                 floor_hex="#d9c4a3", label_hex="#222222"):
     tiles = []
     for m in models:
         out = os.path.join(tmp, f"{m['id']}.png")
@@ -155,12 +160,14 @@ def render_sheet(scene, models, out_path, tmp, view_dir=VIEW_DIR):
                      f"h{m['height']:.0f} ({m['units']})  "
                      f"{m['triangles']} tris")
         render_tile(scene, os.path.join(common.REPO, "public", m["file"]),
-                    label, out, out_label, view_dir)
+                    label, out, out_label, view_dir, floor_hex, label_hex)
         tiles.append((out, out_label))
 
     cols = min(COLS, len(tiles))
     rows = math.ceil(len(tiles) / cols)
     sheet = np.ones((rows * TILE_H, cols * TILE_W, 4), dtype=np.float32)
+    # empty cells take the floor colour (a tile's top-left corner)
+    sheet[:, :] = load_px(tiles[0][0], TILE_W, TILE_H)[TILE_H - 1, 0]
     for i, (path, lpath) in enumerate(tiles):
         px = load_px(path, TILE_W, TILE_H)
         lb = load_px(lpath, TILE_W, TILE_H)
@@ -197,18 +204,25 @@ def main():
                      os.path.join(tmp, "debug.png"), tmp, view)
         return
     setup_render(scene)
-    sheets = [("cm", "models-preview.png", None),
-              ("100 m", "models-preview-continent.png", "--continent"),
-              ("10 km", "models-preview-globe.png", "--globe"),
-              ("0.0001 AU", "models-preview-solar.png", "--solar")]
-    picked = {flag for _, _, flag in sheets} & flags
-    for units, name, flag in sheets:
+    # (units, file, flag, floor colour, label colour); the Galaxy sheet sits
+    # on a dark, space-like floor so its glowing models read as in game
+    sheets = [("cm", "models-preview.png", None, None, None),
+              ("100 m", "models-preview-continent.png", "--continent", None,
+               None),
+              ("10 km", "models-preview-globe.png", "--globe", None, None),
+              ("0.0001 AU", "models-preview-solar.png", "--solar", None,
+               None),
+              ("1 ly", "models-preview-galaxy.png", "--galaxy", "#1b1d33",
+               "#d8dcf0")]
+    picked = {s[2] for s in sheets} & flags
+    for units, name, flag, floor_hex, label_hex in sheets:
         if picked and flag not in picked:
             continue
         group = [m for m in models if m.get("units", "cm") == units]
         if group:
             render_sheet(scene, group, os.path.join(common.DOCS_DIR, name),
-                         tmp)
+                         tmp, floor_hex=floor_hex or "#d9c4a3",
+                         label_hex=label_hex or "#222222")
 
 
 main()
