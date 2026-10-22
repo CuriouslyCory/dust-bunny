@@ -20,6 +20,8 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   // Orbit: a hard white sun from the east, a little ahead (so the oceans glint on the right of the
   // view), a dark sky fill and blue Earth-shine from below (the hemisphere's ground colour).
   globe: { sky: '#26304a', ground: '#4a8fd8', sun: '#fffaf2', intensity: 3.4, dir: [0.9, 0.62, -0.55] },
+  // The ecliptic: a warm, hard light from the Sun (up the screen from the spawn) and a dim violet fill.
+  solar_system: { sky: '#2a2140', ground: '#3a2a1e', sun: '#fff0c8', intensity: 3.6, dir: [0, 0.8, -1] },
 };
 
 export class Lighting {

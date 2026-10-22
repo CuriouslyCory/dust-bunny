@@ -18,7 +18,7 @@
  */
 import type { Object3D } from 'three';
 import type { Rng } from '../core/rng';
-import { ASAT_LASER, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
+import { ASAT_LASER, SUNSPOT, CROP_DUSTER, PRESSURE_WASHER, SPRAY_BOTTLE, SPRINKLER, tierValue, VOLCANO, type TurretTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -222,5 +222,17 @@ export const asatLaserDef = hazardRegistry.register({
   modelId: ASAT_LASER.modelId,
   create(_run, x, z, id, rng) {
     return new SprayBottle(id, this, x, z, rng, ASAT_LASER);
+  },
+});
+
+/** Solar System turret: a sunspot firing pulsar-like flares (SUNSPOT). */
+export const sunspotDef = hazardRegistry.register({
+  id: 'sunspot',
+  name: 'Sunspot',
+  footprint: tuningFootprint(SUNSPOT),
+  mass: SUNSPOT.mass,
+  modelId: SUNSPOT.modelId,
+  create(_run, x, z, id, rng) {
+    return new SprayBottle(id, this, x, z, rng, SUNSPOT);
   },
 });

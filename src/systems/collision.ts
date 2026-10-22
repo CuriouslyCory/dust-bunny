@@ -6,7 +6,7 @@ import { TUNING } from '../data/tuning';
 import type { Run } from '../game/run';
 import type { HouseLayout, Obstacle } from '../world/types';
 import { SYSTEM_ORDER, type System } from '../game/system';
-import { canAbsorb } from './absorb';
+import { canAbsorb, debrisLocked } from './absorb';
 import { canonicalX } from '../world/wrap';
 
 /** True if the Bunny can pass under this obstacle (diameter below its clearance). */
@@ -122,7 +122,7 @@ function debrisPenetration(house: HouseLayout, x: number, z: number, size: numbe
 export function pushDebris(run: Run, d: Debris, p: PushOut): boolean {
   const b = run.bunny;
   const c = TUNING.push;
-  if (d.size > b.radius * c.ratio) return false;
+  if (d.size > b.radius * c.ratio || debrisLocked(b, d)) return false;
   const nx = d.x - p.x * c.share;
   const nz = d.z - p.z * c.share;
   // Template Debris (chairs at a table) may start touching furniture: allow any shove that
@@ -165,7 +165,7 @@ export const collisionSystem: System = {
       scratch.length = 0;
       run.debris.queryOverlapping(b.x, b.z, b.radius, scratch);
       for (const d of scratch) {
-        if (canAbsorb(b.radius, ratio, d.size)) continue;
+        if (canAbsorb(b.radius, ratio, d.size) && !debrisLocked(b, d)) continue;
         // Debris collides with a slightly smaller disc so things feel less sticky.
         const p = circleVsCircle(b.x, b.z, b.radius, d.x, d.z, d.size * 0.85);
         if (!p) continue;

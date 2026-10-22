@@ -71,6 +71,22 @@ export const AREAS: Record<AreaId, AreaTuning> = {
     fluffPerUnit: 1.5,
     arrivalRadius: 0.85,
   },
+  // 1 world unit = 0.01 AU (1.496 million km). The Globe ends at ≈4,000–6,000 km (≈0.004 units),
+  // so the Bunny leaps a third time, to 0.85 units (0.0085 AU, already wider than the Sun's real
+  // radius of 0.47 units: the planets and the Sun are drawn at play size, not to scale): Tier 16
+  // starts at 1 and Tier 17 at 3. The readout is in AU. The ecliptic is a flat disc round the Sun.
+  solar_system: {
+    name: 'The Solar System',
+    tiers: [16, 17],
+    initialScatter: 2400,
+    startCluster: 120,
+    startClusterRadius: 11,
+    growth: 0.2,
+    unit: 1.496e11,
+    readout: 'AU',
+    fluffPerUnit: 1.5,
+    arrivalRadius: 0.85,
+  },
 };
 
 /** Centimetres per world unit in `area`. */

@@ -46,6 +46,12 @@ import {
   VOLCANO,
   WATER_BOMBER,
   type BossTuning,
+  COMET,
+  ROGUE_ASTEROID,
+  SOLAR_FLARE,
+  SUNGRAZER,
+  SUNSPOT,
+  THE_SUN,
 } from '../data/hazards';
 import { areaUnit } from '../data/areas';
 import { getTier } from '../data/tiers';
@@ -57,7 +63,7 @@ import type { HazardDirector } from './director';
 import { HazardManager, hazardRegistry, type HazardFootprint } from './index';
 import './content';
 
-const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ORBITAL_SWEEPER };
+const BOSSES: Record<string, BossTuning> = { robovac_9000: ROBOVAC_9000, street_sweeper: STREET_SWEEPER, garbage_truck: GARBAGE_TRUCK, incinerator: INCINERATOR, ice_sheet: ICE_SHEET, orbital_sweeper: ORBITAL_SWEEPER, the_sun: THE_SUN };
 
 /**
  * The tuning each registered Hazard is built from. A new Hazard must be listed here, so its
@@ -98,6 +104,11 @@ const TUNING: Record<string, { size: number; height: number }> = {
   reentry_burn: REENTRY_BURN,
   globe_hurricane: GLOBE_HURRICANE,
   mini_sweeper: MINI_SWEEPER,
+  rogue_asteroid: ROGUE_ASTEROID,
+  comet: COMET,
+  sunspot: SUNSPOT,
+  sungrazer: SUNGRAZER,
+  solar_flare: SOLAR_FLARE,
   ...BOSSES,
 };
 
@@ -112,7 +123,7 @@ const ENVELOPES: Record<string, HazardFootprint> = {
   ...Object.fromEntries(Object.entries(BOSSES).map(([id, c]) => [id, { radius: c.contactRadius, height: c.height }])),
 };
 
-const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe'];
+const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent', 'globe', 'solar_system'];
 /** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis (if it summons any). */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();

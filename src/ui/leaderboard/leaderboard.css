@@ -261,18 +261,16 @@
   width: min(520px, 100%);
 }
 
-/* Seven boards (Full run and six Areas): Full run on its own row, then the Areas in two rows of
-   three, so no name is cut short (the results screen's leaderboard column is narrow on desktop too). */
+/* Eight boards (Full run and seven Areas): two rows of four, Full run first (the results screen's
+   leaderboard column is narrow on desktop too, so the labels shrink a little). */
 .lb-boards {
   flex-wrap: wrap;
 }
 
 .lb-board {
-  flex: 1 1 30%;
-}
-
-.lb-board:first-child {
-  flex-basis: 100%;
+  flex: 1 1 22%;
+  padding: 4px 3px;
+  font-size: 12.5px;
 }
 
 @media (max-width: 420px) {

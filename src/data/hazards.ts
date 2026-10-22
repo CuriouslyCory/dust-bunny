@@ -76,6 +76,15 @@ export function globeTiers(t14: number, t15: number): PerTier {
   return [t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t15];
 }
 
+/**
+ * Per-Tier values for solar system Hazards (Tiers 16, 17), in Solar System units (1 = 0.01 AU).
+ * Tiers 1–15 repeat the Tier 16 value: the Bunny arrives in the Solar System at Tier 15 (0.85
+ * units, the arrival leap) and solar system Hazards live only there.
+ */
+export function solarTiers(t16: number, t17: number): PerTier {
+  return [t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t17];
+}
+
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
 export interface RoombaTuning {
   size: number;
@@ -1533,6 +1542,47 @@ export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
   moon: { typeId: 'moon', interval: 8, range: 26, margin: 1.25, gap: 3 },
 };
 
+// ── Solar System Hazards (Act 7), Solar System units (1 = 0.01 AU) ──────────────
+// Placeholder tunings (Act 7 groundwork): each reskins a Globe Hazard's behaviour at the same
+// scale (both Acts arrive at 0.85 units and end past ≈4) and borrows its model until the Solar
+// System models land.
+
+/** Rogue Asteroid: Roomba behaviour, a tumbling rock whose gravity pulls. */
+export const ROGUE_ASTEROID: RoombaTuning = { ...DEBRIS_SATELLITE, speed: solarTiers(2.4, 4.2) };
+
+/** Comet: a lane patrol along an orbit ring (its ice tail trails behind it). */
+export const COMET: LaneTuning = { ...SPACE_STATION, speed: solarTiers(2.4, 3.8), orbitReach: undefined };
+
+/** Sunspot: a turret that fires pulsar-like flares. */
+export const SUNSPOT: TurretTuning = {
+  ...ASAT_LASER,
+  range: solarTiers(10, 14),
+  telegraph: solarTiers(1.25, 1.05),
+  cooldown: solarTiers(3.4, 2.8),
+  dropletSpeed: solarTiers(15, 20),
+  dropletColor: '#ffb347',
+};
+
+/** Sungrazer: Mop behaviour, a comet diving past the Sun, leaving an ice tail that slows. */
+export const SUNGRAZER: MopTuning = { ...REENTRY_BURN, speed: solarTiers(2.6, 3.8), burn: undefined, slowMultiplier: 0.6, trailColor: '#bfe8ff' };
+
+/** Solar Flare: Leaf Blower behaviour, a flare that blasts the Bunny away. */
+export const SOLAR_FLARE: AirConeTuning = { ...GLOBE_HURRICANE, speed: solarTiers(2, 2.8), wetSeconds: 0, wetMultiplier: 1 };
+
+/**
+ * The Sun (solar system boss, Tier 17): placeholder on the Orbital Sweeper's numbers without its
+ * net, lasers or swarm. Needs Bunny radius ≈ 4 units at absorbRatio 0.7. Absorbing it clears the
+ * Solar System (the last built Area, so the Run is won).
+ */
+export const THE_SUN: BossTuning = {
+  ...ORBITAL_SWEEPER,
+  miniId: undefined,
+  summonCount: 0,
+  maxMinis: 0,
+  ash: undefined,
+  onDefeat: 'openExit',
+};
+
 export interface TierSpawnTable {
   /** Alive Hazard budget at the start / end of the Tier (ramps with Tier progress). */
   budget: readonly [number, number];
@@ -1746,6 +1796,37 @@ export const GLOBE_DIRECTOR = {
   ] as readonly TierSpawnTable[],
 };
 
+/**
+ * Solar System director (after the globe): spawn tables for Bunny Tiers 16–17, indexed from
+ * `firstTier` (the Bunny arrives late in Tier 15 at 0.85 units, the arrival leap, and uses the
+ * Tier 16 table). Solar System Hazards are sized for a 0.85–4.5 unit Bunny.
+ */
+export const SOLAR_DIRECTOR = {
+  firstTier: 16,
+  /** No Hazards for this long after arriving. */
+  graceSeconds: 10,
+  tiers: [
+    // Tier 16 (arrival, r ≈ 0.85–3): rogue asteroids, sunspots, comets and sungrazers.
+    {
+      budget: [2, 4],
+      interval: [8, 6],
+      types: { rogue_asteroid: { weight: 1, max: 2 }, sunspot: { weight: 1, max: 2 }, comet: { weight: 0.8, max: 1 }, sungrazer: { weight: 0.7, max: 1 } },
+    },
+    // Tier 17 (r ≥ 3): solar flares join, and the Sun arrives.
+    {
+      budget: [4, 5],
+      interval: [6, 5],
+      types: {
+        rogue_asteroid: { weight: 1.2, max: 3 },
+        solar_flare: { weight: 0.9, max: 2 },
+        comet: { weight: 0.8, max: 2 },
+        sungrazer: { weight: 0.5, max: 1 },
+        sunspot: { weight: 0.4, max: 1 },
+      },
+    },
+  ] as readonly TierSpawnTable[],
+};
+
 export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   house: { firstTier: 1, graceSeconds: DIRECTOR.graceSeconds, tiers: DIRECTOR.tiers },
   neighborhood: NEIGHBORHOOD_DIRECTOR,
@@ -1753,6 +1834,7 @@ export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   region: REGION_DIRECTOR,
   continent: CONTINENT_DIRECTOR,
   globe: GLOBE_DIRECTOR,
+  solar_system: SOLAR_DIRECTOR,
 };
 
 /** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
@@ -1763,10 +1845,11 @@ export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonl
   region: { id: 'incinerator', tier: 11, arrivalDelay: 4 },
   continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
   globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
+  solar_system: { id: 'the_sun', tier: 17, arrivalDelay: 4 },
 };
 
 /** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper'];
+export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun'];
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

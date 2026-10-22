@@ -15,7 +15,7 @@
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
  */
 import type { Rng } from '../core/rng';
-import { DEBRIS_SATELLITE, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
+import { DEBRIS_SATELLITE, ROGUE_ASTEROID, FLOOR_SCRUBBER, HAZARD_RECOIL, LANDFILL_COMPACTOR, MINI_COMPACTOR, MINI_MOWER, MINI_ROOMBA, MINI_SCRUBBER, MINI_SWEEPER, ROBO_MOWER, ROOMBA, TORNADO, type RoombaTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { BaseHazard } from './base';
 import { maxSpeedFor } from '../systems/movement';
@@ -227,5 +227,17 @@ export const miniSweeperDef = hazardRegistry.register({
   modelId: MINI_SWEEPER.modelId,
   create(_run, x, z, id, rng) {
     return new Roomba(id, this, x, z, rng, MINI_SWEEPER);
+  },
+});
+
+/** Solar System wanderer: a rogue asteroid whose gravity pulls (ROGUE_ASTEROID). */
+export const rogueAsteroidDef = hazardRegistry.register({
+  id: 'rogue_asteroid',
+  name: 'Rogue Asteroid',
+  footprint: tuningFootprint(ROGUE_ASTEROID),
+  mass: ROGUE_ASTEROID.mass,
+  modelId: ROGUE_ASTEROID.modelId,
+  create(_run, x, z, id, rng) {
+    return new Roomba(id, this, x, z, rng, ROGUE_ASTEROID);
   },
 });

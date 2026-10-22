@@ -532,7 +532,7 @@ describe('the Orbital Sweeper', () => {
     expect(shed).toBeGreaterThan(0);
   });
 
-  it('absorbing the Orbital Sweeper clears the Globe and wins the Run (bossDefeated → victory → runEnded)', () => {
+  it('absorbing the Orbital Sweeper clears the Globe and opens the escape trajectory (bossDefeated → exitOpened)', () => {
     const { run, events } = makeRun('sweeper-win');
     const p = moveToOpen(run);
     const b = run.bunny;
@@ -546,9 +546,9 @@ describe('the Orbital Sweeper', () => {
     boss.x = b.x + b.radius;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(order).toEqual(['bossDefeated:orbital_sweeper', 'victory', 'runEnded:victory']);
-    expect(run.ended).toBe(true);
-    expect(run.endReason).toBe('victory');
+    expect(order).toEqual(['bossDefeated:orbital_sweeper', 'exitOpened:globe']);
+    expect(run.ended).toBe(false);
+    expect(run.house.exit?.open).toBe(true);
     expect(run.globeCleared).toBe(true);
   });
 });

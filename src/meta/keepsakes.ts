@@ -182,6 +182,8 @@ export function dropCaption(bossId: string, bossName: string, material: string):
       return 'The Ice Sheet carries the silt of a continent it scraped clean. It keeps some.';
     case 'orbital_sweeper':
       return "The Orbital Sweeper's net is full of flecks of everything humanity ever launched. It keeps some.";
+    case 'the_sun':
+      return 'The Sun is made of the same stuff as everything else, only hotter. It keeps some.';
     default:
       return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
   }

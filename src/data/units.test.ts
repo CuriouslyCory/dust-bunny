@@ -11,5 +11,9 @@ describe('length unit ladder', () => {
     expect(lengthUnitFor(1000).id).toBe('m');
     expect(lengthUnitFor(999).id).toBe('cm');
     expect(lengthUnitFor(1.5e13, 'm').id).toBe('AU');
+    // The Solar System's readout starts in AU: two significant digits below 0.1.
+    expect(formatLength(0.85 * 1.496e11, 'AU')).toBe('0.0085 AU');
+    expect(formatLength(3 * 1.496e11, 'AU')).toBe('0.030 AU');
+    expect(formatLength(0.13 * 6.371e8, 'Earths')).toBe('0.13 Earths');
   });
 });

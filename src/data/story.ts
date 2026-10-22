@@ -88,6 +88,14 @@ export const STORY: Story = {
     // Act 6 · The Globe
     dust_moon: ['It has absorbed the Moon. The tides have questions.'],
     dust_planet: ['From orbit, Earth is a pale blue marble. It is the marble now.', 'The Great Barrier Reef is absorbed. It was going anyway.'],
+    // Act 7 · The Solar System
+    dust_giant: ['It eats Mars. Mars was supposed to be the backup plan.', "Saturn's rings are, strictly speaking, also dust that never got picked up. It feels seen."],
+    dust_star: [
+      [
+        "Jupiter has spent four billion years vacuuming up comets so Earth wouldn't have to.",
+        'Jupiter is absorbed by a dust bunny. Irony is not a force of nature. It should be.',
+      ],
+    ],
   },
 
   areas: {
@@ -140,6 +148,17 @@ export const STORY: Story = {
         ],
       ],
     },
+    solar_system: {
+      title: 'A Very Large Leaf Blower',
+      entered: ['The solar system is a disc of leftover dust that never got picked up. It feels at home.'],
+      cleared: ['The light goes out. It does not need the light.'],
+      boss: [
+        [
+          'The Sun has been blowing dust out of the solar system for 4.6 billion years. It is a very large leaf blower.',
+          'It is also, technically, Debris.',
+        ],
+      ],
+    },
   },
 
   debris: {
@@ -148,6 +167,7 @@ export const STORY: Story = {
     small_country: ['It has absorbed a small country. The neighbouring countries issue a joint statement. The statement is absorbed.'],
     great_reef: ['The Great Barrier Reef is absorbed. It was going anyway.'],
     moon: ['The Moon is gone. Somewhere, a werewolf has an unexpectedly quiet evening.'],
+    voyager_1: ["Voyager 1 carried a golden record of humanity's greatest achievements. It is now, technically, inside a dust bunny."],
     continent_whole: ['A whole continent. Its tectonic plate is still moving, slightly, out of habit.'],
   },
 };

@@ -40,7 +40,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, THE_SUN, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -503,5 +503,19 @@ export const incineratorDef = hazardRegistry.register({
   modelId: INCINERATOR.modelId,
   create(_run, x, z, id, rng: Rng) {
     return new RoboVac9000(id, this, x, z, rng, INCINERATOR);
+  },
+});
+
+/** The Sun (solar system boss, THE_SUN): placeholder on the bosses' state machine. */
+export const theSunDef = hazardRegistry.register({
+  id: 'the_sun',
+  name: 'The Sun',
+  boss: true,
+  // Full-size contact radius: room for the boss before it is chipped.
+  footprint: { radius: THE_SUN.contactRadius, height: THE_SUN.height },
+  mass: THE_SUN.mass,
+  modelId: THE_SUN.modelId,
+  create(_run, x, z, id, rng: Rng) {
+    return new RoboVac9000(id, this, x, z, rng, THE_SUN);
   },
 });

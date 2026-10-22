@@ -18,8 +18,10 @@
  * the islands and the shallows round them: the Caribbean, the Malay Archipelago, the Pacific
  * chains), `shelves` (shallow sea within `shelfWidth` of land, and the inland seas), `icecaps` and
  * `oceans` (the rest). The International Date Line runs down the seam: everything within
- * `seamMargin` of it is open ocean (or polar ice), and the map has no obstacles (the poles are the
- * bounds), so collision never needs to look across the seam.
+ * `seamMargin` of it is open ocean (or polar ice), and the only obstacle is the exit's gate (the
+ * poles are the bounds), so collision never needs to look across the seam. The exit
+ * (`layout.exit`) is the escape trajectory to the Solar System: a strip of the north bound north of
+ * Europe or Africa, barred by `escape_gate` until the Orbital Sweeper falls.
  *
  * Size: half a lap (240 units) stays beyond the widest view of a 6-unit Tier 15 Bunny (camera
  * distance 29 × 6 = 174; a 16:9 view reaches ≈1.25 × that sideways at the top of the screen), so
@@ -30,7 +32,7 @@
  */
 import { rect, rectContains } from '../core/math';
 import { Rng } from '../core/rng';
-import type { DebrisPlacement, FloorMaterialId, GlobeZoneType, HouseLayout, MapRoute } from './types';
+import type { DebrisPlacement, ExitDoor, FloorMaterialId, GlobeZoneType, HouseLayout, MapRoute, Obstacle } from './types';
 import { ZoneGrid } from './zoneGrid';
 
 export const GLOBE = {
@@ -54,6 +56,10 @@ export const GLOBE = {
   laneWidth: 3,
   /** Moons placed in the open oceans (more spawn later, see globeDebris.ts). */
   moons: 5,
+  /** Width of the escape trajectory over the North Pole (the exit to the Solar System, units). */
+  exitWidth: 10,
+  /** The exit's longitude range (degrees): north of Europe and Africa, far from the seam. */
+  exitLon: [-20, 30] as const,
   /** Debris spatial hash cell (units). */
   debrisCellSize: 1.5,
   /**
@@ -628,6 +634,16 @@ export function generateGlobe(seed: string | number): HouseLayout {
     return { id: `orbit${i}`, kind: 'orbit', points: [{ x: 0, z }, { x: W, z }], width: G.laneWidth };
   });
 
+  // ── The exit: the escape trajectory, a strip of the North Pole's edge (the map's north bound) ──
+  const exit: ExitDoor = (() => {
+    const erng = root.fork('globe:exit');
+    const cx = Math.round(lonToX(erng.range(G.exitLon[0], G.exitLon[1])));
+    const hw = G.exitWidth / 2;
+    return { rect: rect(cx - hw, 0, cx + hw, 1.5), dir: { x: 0, z: -1 }, obstacleId: 'escape_gate', open: false };
+  })();
+  // Bars the trajectory until the Orbital Sweeper falls (an obstacle, not a wall: the poles are the bounds).
+  const gate: Obstacle = { id: exit.obstacleId, kind: 'wall', rect: exit.rect, height: 0.3, clearance: 0 };
+
   return {
     area: 'globe',
     seed: root.seed,
@@ -636,10 +652,11 @@ export function generateGlobe(seed: string | number): HouseLayout {
     doorways: [],
     walls: [],
     furniture: [],
-    obstacles: [],
+    obstacles: [gate],
     rugs: [],
     debrisPlacements,
     spawn,
+    exit,
     routes,
     wrapX: true,
   };

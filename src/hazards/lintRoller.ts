@@ -17,7 +17,7 @@
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
-import { FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
+import { COMET, FREIGHT_TRAIN, GLACIER_TONGUE, LAWN_MOWER, LINT_ROLLER, SNOWPLOW, SPACE_STATION, type LaneTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import type { HouseLayout, RoomType } from '../world/types';
@@ -349,5 +349,17 @@ export const spaceStationDef = hazardRegistry.register({
   modelId: SPACE_STATION.modelId,
   create(run, x, z, id, rng) {
     return new LintRoller(id, this, run, x, z, rng, SPACE_STATION);
+  },
+});
+
+/** Solar System lane patrol: a comet on its orbit (COMET). */
+export const cometDef = hazardRegistry.register({
+  id: 'comet',
+  name: 'Comet',
+  footprint: tuningFootprint(COMET),
+  mass: COMET.mass,
+  modelId: COMET.modelId,
+  create(run, x, z, id, rng) {
+    return new LintRoller(id, this, run, x, z, rng, COMET);
   },
 });

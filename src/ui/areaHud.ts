@@ -10,6 +10,7 @@ import { AREAS } from '../data/areas';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { formatLength } from '../data/units';
+import { wrapDeltaX } from '../world/wrap';
 import type { Game } from '../game/game';
 import { hazardRegistry } from '../hazards';
 import { captionDuration, narrate, storyCaption } from '../story';
@@ -26,10 +27,11 @@ const EXITS: Partial<Record<AreaId, { icon: string; label: string; go: string; s
   city: { icon: '🛣️', label: 'Highway on-ramp', go: 'roll on!', skip: 'Take the highway', cleared: 'City cleared!', sub: 'The on-ramp is open · take the highway out' },
   region: { icon: '🌍', label: 'West to the continent', go: 'roll on!', skip: 'Head west', cleared: 'Region cleared!', sub: 'The motorway west is open · roll out to the continent' },
   continent: { icon: '🚀', label: 'Up to orbit', go: 'lift off!', skip: 'Leave the atmosphere', cleared: 'Continent cleared!', sub: 'The launch corridor is open · head north and up' },
-  // The Globe is the last built Area: the Orbital Sweeper wins the Run (an exit to the Solar System comes with Act 7).
+  globe: { icon: '☀️', label: 'Escape orbit', go: 'break free!', skip: 'Leave Earth behind', cleared: 'Globe cleared!', sub: 'The escape trajectory is open · head over the North Pole' },
+  // The Solar System is the last built Area: the Sun wins the Run (an exit to the Galaxy comes with Act 8).
 };
 
-/** "37 m", "1.2 km", "240 km", "0.31 Earths": a compass distance (real cm) without the readout's decimals. */
+/** "37 m", "1.2 km", "240 km", "0.31 Earths", "0.012 AU": a compass distance (real cm) without the readout's decimals. */
 function formatDistance(cm: number): string {
   if (cm < 1e5) return `${(cm / 100).toFixed(0)} m`;
   return formatLength(cm, 'km');
@@ -70,7 +72,8 @@ export function installAreaHud(game: Game): void {
       if (!run || !exit?.open || !info) return;
       if (icon.textContent !== info.icon) icon.textContent = info.icon;
       if (skipLabel.textContent !== info.skip) skipLabel.textContent = info.skip;
-      const dx = (exit.rect.minX + exit.rect.maxX) / 2 - run.bunny.x;
+      // On a map that wraps east–west, the way to the exit's nearest copy.
+      const dx = wrapDeltaX(run.house, run.bunny.x, (exit.rect.minX + exit.rect.maxX) / 2);
       const dz = (exit.rect.minZ + exit.rect.maxZ) / 2 - run.bunny.z;
       // Fixed camera yaw: world +X is screen right, −Z is screen up. The glyph points right.
       const deg = (Math.atan2(dz, dx) * 180) / Math.PI;

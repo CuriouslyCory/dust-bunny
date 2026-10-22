@@ -47,7 +47,7 @@ const BACKGROUND = '#3b2f2a';
  * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space.
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#05040a' };
 
 export class Game {
   readonly events = new EventBus();

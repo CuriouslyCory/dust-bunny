@@ -36,6 +36,9 @@ export const TIERS: readonly TierDef[] = [
   // Globe (after the Ice Sheet; 1 world unit = 1,000 km, so these are 1 and 3 units).
   { index: 14, id: 'dust_moon', name: 'Dust Moon', minRadius: 1e8, cameraScale: 28, growth: 1 },
   { index: 15, id: 'dust_planet', name: 'Dust Planet', minRadius: 3e8, cameraScale: 29, growth: 1 },
+  // Solar System (after the Orbital Sweeper; 1 world unit = 0.01 AU, so these are 1 and 3 units).
+  { index: 16, id: 'dust_giant', name: 'Dust Giant', minRadius: 1.496e11, cameraScale: 30, growth: 1 },
+  { index: 17, id: 'dust_star', name: 'Dust Star', minRadius: 4.488e11, cameraScale: 31, growth: 1 },
 ];
 
 export const MAX_TIER = TIERS.length;

@@ -19,7 +19,7 @@
  * Blower is ranged, so it is never clogged).
  */
 import type { Rng } from '../core/rng';
-import { GLOBE_HURRICANE, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
+import { GLOBE_HURRICANE, SOLAR_FLARE, HAZARD_RECOIL, HURRICANE, LEAF_BLOWER, LITTER_VACUUM, UPRIGHT_VACUUM, WATER_BOMBER, type AirConeTuning } from '../data/hazards';
 import { TIMED_PRIORITY } from '../entities/stats';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
@@ -243,5 +243,17 @@ export const globeHurricaneDef = hazardRegistry.register({
   modelId: GLOBE_HURRICANE.modelId,
   create(_run, x, z, id, rng) {
     return new UprightVacuum(id, this, x, z, rng, GLOBE_HURRICANE);
+  },
+});
+
+/** Solar System cone blaster: a solar flare that blasts the Bunny away (SOLAR_FLARE). */
+export const solarFlareDef = hazardRegistry.register({
+  id: 'solar_flare',
+  name: 'Solar Flare',
+  footprint: tuningFootprint(SOLAR_FLARE),
+  mass: SOLAR_FLARE.mass,
+  modelId: SOLAR_FLARE.modelId,
+  create(_run, x, z, id, rng) {
+    return new UprightVacuum(id, this, x, z, rng, SOLAR_FLARE);
   },
 });

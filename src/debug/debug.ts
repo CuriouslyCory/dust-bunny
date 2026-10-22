@@ -30,6 +30,8 @@ export interface DebugTools {
   enterContinent(): void;
   /** Moves the Run to the globe, growing the Bunny to Ice-Sheet-beaten size (then the arrival leap). */
   enterGlobe(): void;
+  /** Moves the Run to the solar system, growing the Bunny to Orbital-Sweeper-beaten size (then the arrival leap). */
+  enterSolarSystem(): void;
   /** Clears the current area and rolls on to the next one. */
   nextArea(): void;
 }
@@ -82,6 +84,9 @@ export function installDebug(game: Game): DebugTools {
     },
     enterGlobe() {
       goTo('globe');
+    },
+    enterSolarSystem() {
+      goTo('solar_system');
     },
     nextArea() {
       const next = game.run && nextArea(game.run.area);

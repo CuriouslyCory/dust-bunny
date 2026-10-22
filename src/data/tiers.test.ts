@@ -3,7 +3,7 @@ import { getTier, MAX_TIER, TIERS, tierForRadius, tierProgress } from './tiers';
 
 describe('tiers', () => {
   it('has the five house thresholds and two per later Area (real cm)', () => {
-    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8]);
+    expect(TIERS.map((t) => t.minRadius)).toEqual([1, 3, 8, 20, 45, 75, 160, 320, 600, 1000, 3000, 1e6, 3e6, 1e8, 3e8, 1.496e11, 4.488e11]);
     expect(TIERS.map((t) => t.name)).toEqual([
       'Speck',
       'Fluff',
@@ -20,8 +20,10 @@ describe('tiers', () => {
       'Dust Pangaea',
       'Dust Moon',
       'Dust Planet',
+      'Dust Giant',
+      'Dust Star',
     ]);
-    expect(MAX_TIER).toBe(15);
+    expect(MAX_TIER).toBe(17);
   });
 
   it('looks up the Tier for a radius (thresholds inclusive)', () => {
@@ -55,12 +57,13 @@ describe('tiers', () => {
     expect(tierProgress(2000)).toBeCloseTo(0.5);
     expect(tierProgress(2e6)).toBeCloseTo(0.5);
     expect(tierProgress(2e8)).toBeCloseTo(0.5);
-    expect(tierProgress(5e8)).toBe(1);
+    expect(tierProgress(2.992e11)).toBeCloseTo(0.5);
+    expect(tierProgress(5e11)).toBe(1);
   });
 
   it('camera scale rises each Tier so Tier-up pulls the camera back', () => {
     for (let i = 1; i < TIERS.length; i++) expect(TIERS[i]!.cameraScale).toBeGreaterThan(TIERS[i - 1]!.cameraScale);
-    expect(getTier(99).index).toBe(15);
+    expect(getTier(99).index).toBe(17);
     expect(getTier(0).index).toBe(1);
   });
 });
