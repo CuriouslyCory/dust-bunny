@@ -5,7 +5,8 @@
  * light comes from the Sun (`setSolar`: the centre Sun, or the boss while it is alive), so whatever
  * the Bunny rolls past is lit on its sunward side and shadows fall away from the Sun; `lit` fades
  * every light out (the Sun absorbed: the light goes out). In the Galaxy the light comes from the
- * galactic core the same way (src/fx/galaxy.ts).
+ * galactic core the same way (src/fx/galaxy.ts), in the Universe from the heaviest node near the
+ * camera (src/fx/universe.ts).
  */
 import { AmbientLight, DirectionalLight, HemisphereLight, Vector3, type Scene, type WebGLRenderer } from 'three';
 import type { AreaId } from '../world/types';
@@ -29,9 +30,9 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   // The galactic disc: a dim, cool blue-magenta fill (the nebulae) and a warm light from the core
   // (its direction follows the core, or Sagittarius A* while it is alive: `setSolar`, src/fx/galaxy.ts).
   galaxy: { sky: '#34337a', ground: '#4a1c52', sun: '#ffd6a8', intensity: 2.6, dir: [0, 0.8, -1] },
-  // The cosmic web (placeholder, Act 9 groundwork): near black, a faint cool fill and a dim warm
-  // key from overhead (CMB-orange); the look pass adds the filaments' light.
-  universe: { sky: '#1a1830', ground: '#2a1810', sun: '#ffd0a0', intensity: 1.8, dir: [-0.3, 1.2, 0.4] },
+  // The cosmic web: near black, a dim cool blue fill (the filaments' light) and a dim warm key from
+  // the heaviest node near the camera target (its direction follows it: `setSolar`, src/fx/universe.ts).
+  universe: { sky: '#202a5a', ground: '#140c20', sun: '#ffc890', intensity: 2.2, dir: [-0.3, 1.2, 0.4] },
 };
 
 export class Lighting {

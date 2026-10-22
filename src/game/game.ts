@@ -23,6 +23,7 @@ import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
 import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
 import { GalaxySky } from '../fx/galaxy';
+import { installCmb, showCmb, UniverseSky } from '../fx/universe';
 import { SolarSky, VICTORY_HOLD_SECONDS } from '../fx/solar';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
@@ -58,7 +59,8 @@ const BACKGROUND = '#3b2f2a';
  * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space,
  * and the Solar System's black (its painted floor carries the stars and the Milky Way, solarTextures.ts),
  * and the Galaxy's violet-black (its painted floor carries the nebula backdrop and the disc, galaxyTextures.ts; the stars are fx/galaxy.ts),
- * and the Universe's near black (placeholder).
+ * and the Universe's near black (its painted floor carries the cosmic web, universeTextures.ts; the galaxies are fx/universe.ts,
+ * and the CMB overlay tints the screen's edges orange).
  */
 const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e', solar_system: '#020205', galaxy: '#05030c', universe: '#020204' };
 
@@ -78,12 +80,16 @@ export class Game {
   readonly solarSky: SolarSky;
   /** The Galaxy's Sagittarius A*, core glow, light and starfield (fx/galaxy.ts). */
   readonly galaxySky: GalaxySky;
+  /** The Universe's galaxies, node glows and light (fx/universe.ts). */
+  readonly universeSky: UniverseSky;
   /** Pending results screen after a Solar System victory (held so the light can go out). */
   private resultsTimer: number | null = null;
   /** Continent horizon overlay (null without a canvas container). */
   private horizon: HTMLElement | null = null;
   /** The Globe's limb, starfield and sun overlay (null without a canvas container). */
   private limb: HTMLElement | null = null;
+  /** The Universe's CMB tint at the screen's edges (null without a canvas container). */
+  private cmb: HTMLElement | null = null;
   readonly sun: DirectionalLight;
   readonly debug: boolean;
 
@@ -128,6 +134,10 @@ export class Game {
       installVignette(canvas.parentElement);
       this.horizon = installHorizon(canvas.parentElement, AREA_SKY.continent);
       this.limb = installLimb(canvas.parentElement, AREA_SKY.globe);
+      this.cmb = installCmb(canvas.parentElement);
+      settings.subscribe((v) => {
+        if (this.cmb) showCmb(this.cmb, this.run?.area === 'universe', v.reducedMotion);
+      });
     }
 
     this.input.add(new KeyboardInput(window, () => TUNING.camera.yaw));
@@ -138,6 +148,7 @@ export class Game {
     this.hud = new Hud(this);
     this.solarSky = new SolarSky(this.scene, this.lighting, this.hud);
     this.galaxySky = new GalaxySky(this.scene, this.lighting);
+    this.universeSky = new UniverseSky(this.scene, this.lighting);
     addDefaultHudWidgets(this.hud, this);
     this.hud.visible = false;
     this.uiLayer.append(this.hud.el);
@@ -255,6 +266,7 @@ export class Game {
     this.resultsTimer = null;
     this.solarSky.attach(null);
     this.galaxySky.attach(null);
+    this.universeSky.attach(null);
     this.view?.dispose();
     this.run?.dispose();
     this.view = null;
@@ -270,8 +282,10 @@ export class Game {
     this.lighting.setArea(area);
     this.solarSky.attach(this.run);
     this.galaxySky.attach(this.run);
+    this.universeSky.attach(this.run);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
     if (this.limb) showHorizon(this.limb, area === 'globe');
+    if (this.cmb) showCmb(this.cmb, area === 'universe', settings.value.reducedMotion);
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
     for (const a of AREA_ORDER) if (a !== 'house') this.canvas.parentElement?.classList.toggle(a, area === a);
   }
@@ -301,6 +315,7 @@ export class Game {
       this.view.render(this.simulating ? alpha : 1, frameDt, this.rig, this.renderer.domElement.height);
       this.solarSky.update(frameDt, this.view, this.rig.distance);
       this.galaxySky.update(frameDt, this.view, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
+      this.universeSky.update(frameDt, this.rig.distance, this.rig.target, this.renderer.getPixelRatio());
       this.lighting.update(this.rig.target, this.rig.distance);
     }
     this.hud.update(frameDt);

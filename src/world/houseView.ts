@@ -48,6 +48,7 @@ import './continentModels';
 import { buildContinentWater } from './continentCoast';
 import { buildGlobeSurface, type GlobeSurfaceView } from './globeTextures';
 import { buildGalaxySurface, type GalaxySurfaceView } from './galaxyTextures';
+import { buildUniverseSurface, type UniverseSurfaceView } from './universeTextures';
 import { buildSolarSurface, type SolarSurfaceView } from './solarTextures';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
@@ -138,6 +139,8 @@ export class HouseView {
   solar: SolarSurfaceView | null = null;
   /** The Galaxy's painted disc (galaxyTextures.ts). */
   private galaxy: GalaxySurfaceView | null = null;
+  /** The Universe's painted cosmic web (universeTextures.ts). */
+  private universe: UniverseSurfaceView | null = null;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
@@ -220,6 +223,12 @@ export class HouseView {
       // The galactic disc is one painted plane too (the nebula backdrop, the arms, dust lanes, bulge and bar).
       this.galaxy = buildGalaxySurface(this.layout);
       this.root.add(this.galaxy.object);
+      return;
+    }
+    if (this.layout.area === 'universe') {
+      // The cosmic web is one painted plane too (the voids, the sheets' mist, the filaments and the nodes).
+      this.universe = buildUniverseSurface(this.layout);
+      this.root.add(this.universe.object);
       return;
     }
     // One mesh per floor material; UVs are world-space so a single shared texture tiles seamlessly.
@@ -926,6 +935,7 @@ export class HouseView {
     this.globe?.dispose();
     this.solar?.dispose();
     this.galaxy?.dispose();
+    this.universe?.dispose();
     this.root.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;

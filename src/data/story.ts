@@ -236,5 +236,7 @@ export const STORY: Story = {
     continent_whole: ['A whole continent. Its tectonic plate is still moving, slightly, out of habit.'],
     // The Galaxy: the map places a rogue planet beside the spawn (src/world/galaxy.ts).
     free_floating_planet: ['A rogue planet, drifting between stars for a billion years. Finally, something happens to it.'],
+    // The Universe: the map places the Great Attractor on the node by the spawn (src/world/universe.ts).
+    great_attractor: ['The Great Attractor. For a billion years it has pulled whole galaxies towards it. Now it knows how that feels.'],
   },
 };
