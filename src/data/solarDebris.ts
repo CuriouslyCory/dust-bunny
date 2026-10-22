@@ -6,8 +6,11 @@
  * asteroids, comets, moonlets, asteroid clusters, Kuiper belt objects, rubble piles, Phobos; Tier
  * 16 types (0.45–1.35) the Dust Giant: Vesta, Mercury, Io, Europa, Mars, great comets, Ceres, icy
  * moons, Ganymede, Titan, Pluto, Venus, dwarf planets; Tier 17 types (1.8–3.1) the Dust Star:
- * comet swarms, Uranus, asteroid swarms, Neptune, Saturn, Jupiter, rogue planets, a slice of
- * Saturn's rings and the leftover dust. Planets and moons are drawn at play size, not to scale.
+ * comet swarms, asteroid swarms, Jupiter, Uranus, rogue planets, a slice of Saturn's rings,
+ * Neptune, Saturn and the leftover dust. Planets and moons are drawn at play size, not to scale.
+ * The giants (`jupiter`, `saturn`, `uranus`, `neptune`) stop the Sun's charges while the Bunny
+ * can't absorb them (src/hazards/theSun.ts): Neptune (2.9) and Saturn (3.0) stay too big until
+ * r ≈ 4.2, about when the Sun becomes edible, so they block for most of the fight.
  * Room weights use the solar zone types (corona, inner_orbits, asteroid_belt, outer_orbits,
  * kuiper_belt); the belt leans hard on rocks (and the generator scatters more there,
  * `SOLAR.beltRocks`), the Kuiper belt on ice.
@@ -233,7 +236,7 @@ export const SOLAR_DEBRIS: DebrisType[] = [
     rooms: { kuiper_belt: 1.4, outer_orbits: 0.6, inner_orbits: 0.4, corona: 0.3 },
   },
   {
-    id: 'uranus', name: 'Uranus', size: 1.9, mass: 4.0, tiers: [17, 17], area: 'solar_system', model: 'ice_giant',
+    id: 'uranus', name: 'Uranus', size: 2.6, mass: 4.2, tiers: [17, 17], area: 'solar_system', model: 'ice_giant',
     colors: ['#c8f0f2', '#bfe9ee'],
     recipe: [{ shape: 'sphere', radius: 0.63, pos: [0, 0.63, 0], color: LIGHT }, { shape: 'torus', radius: 0.95, tube: 0.02, pos: [0, 0.63, 0], rot: [0.15, 0, Math.PI / 2 - 0.1], color: '#9ab8c0' }],
     material: { roughness: 0.6 },
@@ -247,14 +250,14 @@ export const SOLAR_DEBRIS: DebrisType[] = [
     rooms: { asteroid_belt: 2.0, inner_orbits: 0.5, outer_orbits: 0.4 },
   },
   {
-    id: 'neptune', name: 'Neptune', size: 2.05, mass: 4.1, tiers: [17, 17], area: 'solar_system', model: 'ice_giant',
+    id: 'neptune', name: 'Neptune', size: 2.9, mass: 4.4, tiers: [17, 17], area: 'solar_system', model: 'ice_giant',
     colors: ['#7aa6f0', '#6f9aea'],
     recipe: [{ shape: 'sphere', radius: 0.63, pos: [0, 0.63, 0], color: LIGHT }, band(0.8, 0.56, '#e8f0ff', 0.03), { shape: 'torus', radius: 0.95, tube: 0.015, pos: [0, 0.63, 0], rot: [Math.PI / 2, 0, 0], color: '#8aa0c8' }],
     material: { roughness: 0.6 },
     rooms: {},
   },
   {
-    id: 'saturn', name: 'Saturn', size: 2.3, mass: 4.4, tiers: [17, 17], area: 'solar_system',
+    id: 'saturn', name: 'Saturn', size: 3.0, mass: 4.6, tiers: [17, 17], area: 'solar_system',
     colors: WHITE,
     recipe: [
       { shape: 'sphere', radius: 0.62, pos: [0, 0.62, 0], color: '#e3c78f' },

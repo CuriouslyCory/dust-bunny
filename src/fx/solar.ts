@@ -6,7 +6,7 @@
  * - The Sun: the `the_sun` model (its Blender mesh when loaded, else a procedural ball) sits at
  *   `sunCentre(layout)` with its `corona` spinning, until the boss arrives; while the boss (a
  *   Hazard with `def.id === 'the_sun'`) is alive the centre Sun is gone and the glare and the light
- *   follow the boss.
+ *   follow the boss; its eclipse (stunned against a giant planet: `glow` dims) dims the light too.
  * - Glare ("lens bloom"): two additive sprites over the Sun, a hot core and a wide soft bloom that
  *   grows with the camera distance so it reads at every zoom. No post-processing.
  * - Light: `Lighting.setSolar` aims the shadow-casting light from the Sun at the camera target.
@@ -207,18 +207,20 @@ export class SolarSky {
     const c = sunCentre(run.house);
     const at = boss ? { x: boss.x, z: boss.z } : c;
     const size = boss ? Math.max(1, boss.size) : SUN.radius;
+    // The boss dims its own glow while stunned (an eclipse, src/hazards/theSun.ts); the scene dims with it.
+    const eclipse = boss && 'glow' in boss && typeof boss.glow === 'number' ? boss.glow : 1;
     this.sun.visible = !boss && !run.solarSystemCleared;
     if (this.sunCorona) this.sunCorona.rotation.y += dt * 0.25;
     this.lighting.setSolar(at);
-    this.lighting.setLit(lit);
+    this.lighting.setLit(lit * (0.3 + 0.7 * eclipse));
     const flicker = 1 + Math.sin(this.time * 3.1) * 0.04 + Math.sin(this.time * 7.7) * 0.02;
     const y = size * SUN.squash;
     this.core.position.set(at.x, y, at.z);
     this.core.scale.setScalar(size * 5.2 * flicker);
     this.bloom.position.set(at.x, y, at.z);
     this.bloom.scale.setScalar(Math.max(size * 16, camDistance * 1.3));
-    (this.core.material as SpriteMaterial).opacity = 0.9 * lit;
-    (this.bloom.material as SpriteMaterial).opacity = 0.8 * lit;
+    (this.core.material as SpriteMaterial).opacity = 0.9 * lit * eclipse;
+    (this.bloom.material as SpriteMaterial).opacity = 0.8 * lit * eclipse;
     view?.house.solar?.setDim(lit);
     if (view) view.bunny.plasmaBoost = out;
 
