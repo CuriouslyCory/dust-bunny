@@ -100,13 +100,14 @@ const ENVELOPES: Record<string, HazardFootprint> = {
 };
 
 const AREAS: AreaId[] = ['house', 'neighborhood', 'city', 'region', 'continent'];
-/** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis. */
+/** Every Hazard that can show up in an area: its spawn tables, its boss and the boss's minis (if it summons any). */
 function areaHazards(area: AreaId): string[] {
   const ids = new Set<string>();
   for (const t of AREA_DIRECTORS[area].tiers) for (const id of Object.keys(t.types)) ids.add(id);
   const boss = AREA_BOSSES[area].id;
   ids.add(boss);
-  ids.add(BOSSES[boss]!.miniId);
+  const mini = BOSSES[boss]!.miniId;
+  if (mini) ids.add(mini);
   return [...ids];
 }
 
@@ -248,7 +249,9 @@ describe('Hazard placement knowledge', () => {
       expect(placements.filter((p) => !p.clear)).toEqual([]);
       const ids = new Set(placements.map((p) => p.id));
       expect(ids.has(AREA_BOSSES[area].id), `${area} boss`).toBe(true);
-      expect(ids.has(BOSSES[AREA_BOSSES[area].id]!.miniId), `${area} minis`).toBe(true);
+      // Bosses with a summon (the Ice Sheet calves icebergs instead).
+      const mini = BOSSES[AREA_BOSSES[area].id]!.miniId;
+      if (mini) expect(ids.has(mini), `${area} minis`).toBe(true);
       expect(ids.size).toBeGreaterThan(3);
     });
   }

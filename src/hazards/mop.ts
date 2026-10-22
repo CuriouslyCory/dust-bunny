@@ -5,7 +5,8 @@
  * The Street Flusher (city water truck) reuses it with STREET_FLUSHER tuning: a bigger, faster
  * patrol kept near its spawn point (`patrolRange`) and a wide trail. The River Barge (region,
  * RIVER_BARGE) is placed in `river` zones when the map has one (its def's `spawnZones`), so it
- * patrols the river and leaves a slowing wake.
+ * patrols the river and leaves a slowing wake. The River Surge (continent, RIVER_SURGE) is a fast
+ * flood surge across the plains with a wide muddy trail.
  */
 import { CircleGeometry, InstancedMesh, MeshBasicMaterial, Object3D } from 'three';
 import type { Rng } from '../core/rng';
@@ -200,7 +201,7 @@ export const riverBargeDef = hazardRegistry.register({
   },
 });
 
-/** Continent trail-layer (placeholder tuning and model, see RIVER_SURGE). */
+/** Continent trail-layer: a flood surge leaving a muddy trail (RIVER_SURGE). */
 export const riverSurgeDef = hazardRegistry.register({
   id: 'river_surge',
   name: 'River Surge',

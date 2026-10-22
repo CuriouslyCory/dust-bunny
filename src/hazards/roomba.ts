@@ -6,7 +6,8 @@
  * the city the Floor Scrubber (FLOOR_SCRUBBER, weak scrub-brush pull, spins `brush`) and the
  * Garbage Truck's mini scrubbers (MINI_SCRUBBER); in the region the Landfill Compactor
  * (LANDFILL_COMPACTOR, packer-wheel pull, spins its roof `beacon`) and the Incinerator's mini
- * compactors (MINI_COMPACTOR).
+ * compactors (MINI_COMPACTOR); in the continent the Tornado (TORNADO: erratic turns, a wide vortex
+ * pull, spins its `funnel`).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
@@ -191,7 +192,7 @@ export const miniCompactorDef = hazardRegistry.register({
   },
 });
 
-/** Continent wanderer (placeholder tuning and model, see TORNADO). */
+/** Continent wanderer: a vortex that pulls (TORNADO). */
 export const tornadoDef = hazardRegistry.register({
   id: 'tornado',
   name: 'Tornado',

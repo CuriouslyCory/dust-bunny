@@ -1,11 +1,12 @@
 /**
  * Procedural fallbacks for the Hazard models (used when no .glb override is loaded).
- * They follow docs/models.md: cm units, +Z forward, origin at the floor contact point
+ * They follow docs/models.md: cm units (Continent ones: Continent units), +Z forward, origin at the floor contact point
  * (the broom's origin is the top of the handle), and the same named animatable nodes
  * (roomba `side_brush`, lint_roller `drum`, robovac_9000 / street_sweeper / garbage_truck
  * `brush_l` / `brush_r`, robo_mower `blade`, floor_scrubber `brush`, sprinkler and
- * pressure_washer `head`, landfill_compactor `beacon`, incinerator `brush_l` / `brush_r`; all spin
- * about Y; crop_duster `propeller` spins about Z).
+ * pressure_washer `head`, landfill_compactor `beacon`, incinerator `brush_l` / `brush_r`, tornado
+ * `funnel`, hurricane `bands`; all spin about Y; crop_duster `propeller` spins about Z; volcano
+ * `crater` at the vent; ice_sheet `calving_l` / `calving_r` hide when they calve).
  * If another module already registered a factory for an id, it is kept.
  */
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Object3D } from 'three';
@@ -42,6 +43,13 @@ export const HAZARD_MODEL_SIZES = {
   river_barge: { w: 480, d: 1400, h: 300 },
   water_bomber: { w: 2800, d: 2200, h: 700 },
   incinerator: { w: 2400, d: 3600, h: 2600 },
+  // Continent (public/models/catalog.json in 100 m units ÷ 100: Continent units, as loaded at scale 0.01).
+  tornado: { w: 2.87, d: 2.84, h: 4.49 },
+  glacier_tongue: { w: 1, d: 2.46, h: 0.15 },
+  volcano: { w: 4, d: 4, h: 1.1 },
+  river_surge: { w: 2.2, d: 1.9, h: 0.2 },
+  hurricane: { w: 5.75, d: 5.75, h: 0.4 },
+  ice_sheet: { w: 6, d: 4.02, h: 0.63 },
 } as const;
 
 export type HazardModelId = keyof typeof HAZARD_MODEL_SIZES;
@@ -707,6 +715,141 @@ function incinerator(): Object3D {
   return g;
 }
 
+// ── Continent Hazards (Continent units: the GLBs are authored at 1 = 100 m and loaded at scale
+// 0.01, so these fallbacks are built directly at the loaded size: 1 unit = 10 km) ──
+
+function tornado(): Object3D {
+  // Dust skirt on the ground; the `funnel` (twisting column under a wall-cloud cap) spins about Y.
+  const g = new Group();
+  const dust = mat('#9b8a72', 0.95);
+  addCylinder(g, 1.5, 1.5, 0.04, 0, 0, 0, dust, 20);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    addCylinder(g, 0.28, 0.36, 0.22, Math.cos(a) * 1.05, 0.02, Math.sin(a) * 1.05, dust, 8);
+  }
+  const funnel = new Group();
+  funnel.name = 'funnel';
+  const grey = [mat('#7b8188', 0.9), mat('#5f656c', 0.9)];
+  for (let i = 0; i < 8; i++) {
+    const r0 = 0.12 + i * 0.1;
+    const seg = addCylinder(funnel, r0 + 0.1, r0, 0.46, Math.sin(i * 0.9) * 0.08, 0.05 + i * 0.46, Math.cos(i * 0.9) * 0.08, grey[i % 2]!, 10);
+    seg.rotation.y = i * 0.6;
+  }
+  addCylinder(funnel, 1.3, 0.95, 0.55, 0, 3.75, 0, mat('#4a5058', 0.9), 18);
+  addCylinder(funnel, 0.9, 1.3, 0.2, 0, 4.29, 0, mat('#626970', 0.9), 18);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    addBox(funnel, 0.12, 0.08, 0.12, Math.cos(a) * 0.7, 1 + i * 0.5, Math.sin(a) * 0.7, mat('#5b4a36', 0.9));
+  }
+  rod(funnel, new Vector3(0.4, 3.7, 0.3), new Vector3(0.6, 2.6, 0.5), 0.035, glow('#e8f4ff', 2.4));
+  g.add(funnel);
+  return g;
+}
+
+function glacierTongue(): Object3D {
+  // Tongue of ice moving along +Z: crevassed body, moraine stripes, terminal moraine at the snout.
+  const g = new Group();
+  const ice = mat('#dcecf3', 0.35, 0.05);
+  const moraine = mat('#6b6158', 0.95);
+  addBox(g, 0.8, 0.12, 2.3, 0, 0, -0.05, ice);
+  addBox(g, 0.66, 0.03, 2.2, 0, 0.12, -0.05, mat('#eef6fa', 0.3));
+  for (const x of [-0.38, 0, 0.38]) addBox(g, 0.06, 0.02, 2.2, x, 0.14, -0.05, moraine);
+  for (let i = 0; i < 6; i++) addBox(g, 0.6, 0.01, 0.025, 0, 0.15, -0.9 + i * 0.32, mat('#7fb8d6', 0.3));
+  for (const x of [-0.36, -0.12, 0.12, 0.36]) addBox(g, 0.22, 0.1, 0.16, x, 0, 1.15, moraine);
+  return g;
+}
+
+function volcano(): Object3D {
+  // Ash cone with glowing lava streaks; the `crater` node (lava pool) sits at the vent, (0, 0.96, 0).
+  const g = new Group();
+  addCylinder(g, 2, 2, 0.03, 0, 0, 0, mat('#4f6b3a', 0.95), 24);
+  addCylinder(g, 0.42, 1.85, 0.96, 0, 0, 0, mat('#4a3f3a', 0.95), 18);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    rod(g, new Vector3(Math.cos(a) * 0.4, 0.95, Math.sin(a) * 0.4), new Vector3(Math.cos(a) * 1.7, 0.1, Math.sin(a) * 1.7), 0.05, glow('#ff5a1f', 1.8));
+  }
+  const crater = new Group();
+  crater.name = 'crater';
+  crater.position.set(0, 0.96, 0);
+  addCylinder(crater, 0.34, 0.34, 0.04, 0, -0.03, 0, glow('#ff7a1a', 2.4), 16);
+  addBox(crater, 0.12, 0.05, 0.3, 0, 0, 0.18, glow('#ffb347', 2.2));
+  g.add(crater);
+  return g;
+}
+
+function riverSurge(): Object3D {
+  // Flood surge moving +Z: muddy water, a curling wave front with a foam crest, floating logs.
+  const g = new Group();
+  const mud = mat('#6e5638', 0.6, 0.05);
+  addBox(g, 2.1, 0.06, 1.5, 0, 0, -0.15, mud);
+  for (const x of [-0.6, 0.1, 0.7]) addBox(g, 0.14, 0.02, 1.3, x, 0.06, -0.2, mat('#3f7fa0', 0.3));
+  tiltedBox(g, 2.2, 0.12, 0.35, 0, 0.02, 0.62, -0.5, mat('#7a6142', 0.5, 0.05));
+  addBox(g, 2.2, 0.06, 0.12, 0, 0.14, 0.78, mat('#f2f4f0', 0.6));
+  for (const [x, z] of [[-0.5, -0.4], [0.4, 0.1], [0.8, -0.6]] as const) {
+    const log = addBox(g, 0.3, 0.05, 0.06, x, 0.06, z, mat('#4a3423', 0.9));
+    log.rotation.y = x * 2;
+  }
+  return g;
+}
+
+function hurricane(): Object3D {
+  // Eyewall ring (body) around a clear eye; the `bands` node (four spiral arms) spins about Y.
+  const g = new Group();
+  const ring = shadow(new Mesh(new TorusGeometry(0.55, 0.18, 8, 28), mat('#e9eef2', 0.9)));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.25;
+  g.add(ring);
+  const bands = new Group();
+  bands.name = 'bands';
+  const cloud = [mat('#f4f7f9', 0.95), mat('#d4dbe1', 0.95)];
+  for (let arm = 0; arm < 4; arm++) {
+    for (let i = 0; i < 7; i++) {
+      const a = (arm / 4) * Math.PI * 2 + i * 0.32;
+      const r = 0.85 + i * 0.32;
+      const puff = addBox(bands, 0.55 - i * 0.03, 0.16, 0.3, Math.cos(a) * r, 0.12 + (i % 2) * 0.04, Math.sin(a) * r, cloud[(arm + i) % 2]!);
+      puff.rotation.y = -a;
+    }
+  }
+  rod(bands, new Vector3(1.4, 0.3, 0.2), new Vector3(1.55, 0.05, 0.45), 0.02, glow('#e8f4ff', 2.4));
+  g.add(bands);
+  return g;
+}
+
+function iceSheet(): Object3D {
+  // A slab of continental ice (6 wide × 4 deep) pushing a rubble ridge at its front (+Z) cliff.
+  // The face is on the cliff: two glowing crevasse eyes under pressure-ridge brows and a glowing
+  // crack for a mouth. `calving_l` / `calving_r` are the chunks at the front corners (base centre
+  // on the ground at (∓2.32, 0, 1.22)), hidden when they calve.
+  const g = new Group();
+  const ice = mat('#e4f1f7', 0.35, 0.05);
+  const blue = mat('#a9d3e6', 0.3, 0.05);
+  const rubble = mat('#6f665d', 0.95);
+  const eye = glow('#7fe8ff', 2.6);
+  addBox(g, 5.4, 0.5, 3.4, 0, 0, -0.2, ice);
+  addBox(g, 4.6, 0.12, 2.8, 0, 0.5, -0.35, mat('#f3f9fc', 0.3));
+  addBox(g, 6, 0.32, 2.6, 0, 0, -0.3, blue);
+  for (let i = 0; i < 5; i++) addBox(g, 0.05, 0.02, 1.6 + (i % 2) * 0.6, -1.8 + i * 0.9, 0.62, -0.5, glow('#9fdcf0', 0.8));
+  // Rubble ridge bulldozed ahead of the cliff.
+  for (let i = 0; i < 9; i++) addBox(g, 0.5, 0.16 + (i % 3) * 0.04, 0.28, -2.4 + i * 0.6, 0, 1.78, rubble);
+  // Face: brows, eyes, mouth on the cliff (z ≈ 1.5).
+  for (const s of [-1, 1]) {
+    addBox(g, 0.62, 0.1, 0.16, s * 0.85, 0.34, 1.42, eye);
+    const brow = addBox(g, 0.85, 0.12, 0.24, s * 0.85, 0.47, 1.36, mat('#cfe6f0', 0.4));
+    brow.rotation.z = s * 0.22;
+  }
+  addBox(g, 1.9, 0.05, 0.08, 0, 0.12, 1.52, glow('#5fd2f5', 1.8));
+  for (const [name, x] of [['calving_l', -2.32], ['calving_r', 2.32]] as const) {
+    const chunk = new Group();
+    chunk.name = name;
+    chunk.position.set(x, 0, 1.22);
+    const c = addBox(chunk, 0.62, 0.44, 0.56, 0, 0, 0, ice);
+    c.rotation.y = x * 0.2;
+    addBox(chunk, 0.3, 0.2, 0.3, x > 0 ? -0.25 : 0.25, 0.4, -0.05, blue);
+    g.add(chunk);
+  }
+  return g;
+}
+
 const FACTORIES: Record<HazardModelId, () => Object3D> = {
   roomba,
   lint_roller: lintRoller,
@@ -732,6 +875,12 @@ const FACTORIES: Record<HazardModelId, () => Object3D> = {
   river_barge: riverBarge,
   water_bomber: waterBomber,
   incinerator,
+  tornado,
+  glacier_tongue: glacierTongue,
+  volcano,
+  river_surge: riverSurge,
+  hurricane,
+  ice_sheet: iceSheet,
 };
 
 for (const [id, factory] of Object.entries(FACTORIES)) {

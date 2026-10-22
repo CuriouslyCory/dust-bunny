@@ -41,11 +41,15 @@ export function planShed(radius: number, fraction: number, absorbRatio: number, 
   return { volume, newRadius, pieces: n, pieceSize: size };
 }
 
-/** Debris type whose catalogue size is closest to `size`, preferring types valid at this Tier. */
+/**
+ * Debris type whose catalogue size is closest to `size`, preferring types valid at this Tier. Types
+ * the spawner never makes (no room weights: the Ice Sheet's calved icebergs) are left out.
+ */
 export function pickShedType(types: readonly DebrisType[], size: number, tier: number): DebrisType | undefined {
   let best: DebrisType | undefined;
   let bestScore = Infinity;
   for (const t of types) {
+    if (!Object.values(t.rooms).some((w) => (w ?? 0) > 0)) continue;
     const tierPenalty = tier >= t.tiers[0] - 1 && tier <= t.tiers[1] + 1 ? 0 : 2;
     const score = Math.abs(Math.log(t.size / size)) + tierPenalty;
     if (score < bestScore) {

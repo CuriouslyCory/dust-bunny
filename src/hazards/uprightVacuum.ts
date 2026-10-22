@@ -9,7 +9,9 @@
  *
  * The Litter Vacuum (city, LITTER_VACUUM) is a street-scale Upright Vacuum in suction mode. The
  * Water Bomber (region, WATER_BOMBER) is a Leaf Blower whose blast also soaks the Bunny
- * (`wetSeconds`: the `hazard:wet` slow, like the Mop's trail).
+ * (`wetSeconds`: the `hazard:wet` slow, like the Mop's trail). The Hurricane (continent, HURRICANE)
+ * is a Water Bomber that spins its cloud `bands` (`spinNode`): its wind cone blasts the Bunny away
+ * from the eyewall and the rain soaks it.
  *
  * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
  * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
@@ -87,6 +89,7 @@ export class UprightVacuum extends BaseHazard {
     const c = this.cfg;
     const b = run.bunny;
     this.timer -= dt;
+    if (c.spinNode) this.spin(c.spinNode, dt * (c.spinRate ?? 0));
     const range = suctionReachFor(c.coneRange, b.stats.get('suctionMultiplier'));
     const t = aimTarget(run, this.x, this.z, range + this.size);
     if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
@@ -217,7 +220,7 @@ export const waterBomberDef = hazardRegistry.register({
   },
 });
 
-/** Continent cone blaster (placeholder tuning and model, see HURRICANE). */
+/** Continent cone blaster: wind and rain from the eyewall (HURRICANE). */
 export const hurricaneDef = hazardRegistry.register({
   id: 'hurricane',
   name: 'Hurricane',

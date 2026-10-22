@@ -104,7 +104,30 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | Freight Train      | 11        | 2.45                 | ≈ 3.5           | long, fast lane patrol | 1 + knockback, sheds mass |
 | The Incinerator    | 11 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | hunts with feed-conveyor suction, telegraphed charges, chimney ash volleys, stunned by towns / the map edge, summons mini compactors | 1, sheds mass (ash too) |
 
-**The Continent (after the Incinerator; 1 world unit = 10 km, Bunny r = 0.85 units on arrival).** Placeholders from the Act 5 groundwork until the Continent Hazards land: each is the Region Hazard with the same behaviour, its per-Tier numbers moved up two Tiers and its Region model. Tornado (wanderer, Landfill Compactor numbers), Volcano (turret, Crop Duster), Glacier Tongue (lane patrol, Snowplow), River Surge (trail-layer, River Barge) from Tier 12; Hurricane (cone blaster, Water Bomber) from Tier 13; the Ice Sheet (boss, Tier 13) is the Incinerator without its ash volley (absorbable at ≈ 4 units, ≈ 2.9 after two chips).
+**The Continent (after the Incinerator; 1 world unit = 10 km, Bunny r = 0.85 units on arrival).** Hazards are weather. Sizes keep the Region ladder's ratios to the Bunny (the Continent repeats the Region's shape: Tiers at 1 and 3 units, boss absorbable at ≈ 4).
+
+| Hazard          | From Tier | Size (units, radius) | Absorbable at r | Behaviour | Damage |
+|-----------------|-----------|----------------------|-----------------|-----------|--------|
+| Tornado         | 12        | 1.1                  | ≈ 1.57          | Roomba behaviour: erratic wander (2.2 / 4.4 units/s), wide vortex pull (reach 1.4, 0.3 × max speed), spinning funnel | 1 + knockback |
+| Volcano         | 12        | 1.3                  | ≈ 1.86          | static turret: the crater aims (range 9 / 13), lane telegraph (1.1 / 0.9 s), then 3 lobbed lava bombs; ash slows (1.2 s, × 0.7) | 1 per bomb, brief slow |
+| River Surge     | 12        | 1.5                  | ≈ 2.14          | fast flood surge (2.2 / 3.4 units/s) patrolling waypoints, wide muddy trail that slows (× 0.5) | 1 + knockback; trail slows |
+| Glacier Tongue  | 12        | 1.9                  | ≈ 2.71          | slow, heavy lane patrol (1.4 / 2.4 units/s, lanes 8–30), placed in tundra and mountain zones | 1 + big shove, sheds 8 % |
+| Hurricane       | 13        | 2.4                  | ≈ 3.43          | spinning bands; amber warm-up (1.1 s), then a wind cone (range 14) that blasts the Bunny away and soaks it | 1 on contact; blast slows |
+| The Ice Sheet   | 13 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | slow, enormous, bulldozes the Bunny and Debris ahead, telegraphed surges, stunned only by mountain ranges, calves icebergs | 1, sheds 5 % |
+
+(Per-Tier pairs are Tier 12 / Tier 13.)
+
+| The Ice Sheet (`ICE_SHEET`) | Value | Incinerator, for scale |
+|---|---|---|
+| Size / contact radius | 2.8 / 3 units (model 5.8 × 3.9 units) | 2.8 / 2.95 |
+| Hunt speed / turn rate | 3.2 units/s / 0.7 rad/s | 6 / 1.4 |
+| Charge: trigger / telegraph / speed / distance | 30 / 1.8 s / 13 units/s / 36 | 35 / 1.4 / 24 / 45 |
+| Stun / recover | 3.5 s / 1.4 s, only from a charge into a mountain range (Abilities and Spiky Dash still stun it) | 3 / 1, towns and the map edge |
+| Bulldoze | Bunny within 2.4 units of the front cliff pushed at 0.6 × its max speed; Debris ≤ 1.6 units shoved ahead | suction 0.35 |
+| Calving | an iceberg every 9 s of hunting (alternate front corners, 5 s to regrow), both corners on a mountain crash; iceberg = 0.55 × Bunny radius (0.6–2 units, mass 2.4) | summons mini compactors |
+| Chips | × 0.85, 8 iceberg pieces | × 0.85, 8 parts |
+
+Mountain ranges for the map: a furniture Obstacle whose def id starts with `mountain`, or furniture standing in a `mountains` zone (the placeholder massifs).
 
 A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, and absorbing the Ice Sheet wins the Run.
 
@@ -157,6 +180,8 @@ Every Run that reached the Incinerator beat it, and all 74 leaderboard submissio
 | Run board | zero band from 50 m to 8.5 km, then 1e-4 per cm (100 per Continent unit) |
 
 **Continent pacing check** (placeholder map, Debris and Hazards; `pnpm sim --area=continent --seeds=8`, Casual, starting at the Incinerator-beaten size and leaping to 0.85 units): Act time from arrival to absorbing the Ice Sheet, median per Character: Lint 5:04 (7/8 wins), Tumble 8:08 (8/8), Zap 4:15 (8/8). In full Runs (`pnpm sim --seeds=8 --minutes=55 --validate`), where the Bunny arrives with a whole Run's Perks: Lint 4:20, Tumble 6:18, Zap 2:37; wins 2, 3 and 6 of 8 (median win 38:42, 44:18, 23:24), and all 86 leaderboard submissions validated (closest: 73% of the Run board allowance, 41% of the Continent board's). Tumble starves more on the thinner placeholder Debris ladder; the final tune follows the Continent content. Starting one Area earlier (`--area=region --seeds=4`, so the Continent is entered through the leap with the Region's Perks): Region / Continent Lint 3:44 / 4:16, Tumble 5:49 / 7:01, Zap 2:44 / 4:17. With `--loadout=max` (grade 6) over 10 full Runs, Zap wins 9 and clears the Continent in a median 2:34, Lint 4 and 3:03; all 88 leaderboard submissions validated (closest: 83% of the Run board allowance, 68% of the Continent board's).
+
+**With the Continent Hazards and the Ice Sheet** (#25; still the placeholder map and Debris, growth 0.14): `pnpm sim --area=continent --seeds=8` gives Act medians Lint 5:32, Tumble 7:37, Zap 3:37, 24 / 24 wins and no deaths (the Volcano is the only Hazard that landed hits: 13 over 24 Runs); every Ice Sheet fight was won, most by outgrowing it within 10–30 s of its arrival, a few after one chip. Full Runs (`pnpm sim --seeds=8 --minutes=55 --validate`): every Run that reached the Continent beat the Ice Sheet (Lint 3 / 3, Tumble 3 / 3, Zap 6 / 6), Continent medians Lint 4:04, Tumble 5:31, Zap 2:38, and all 87 leaderboard submissions validated (closest: 70% of the Run board allowance, 37% of the Continent board's).
 
 ## Characters
 

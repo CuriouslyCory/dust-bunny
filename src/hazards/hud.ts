@@ -21,7 +21,11 @@ export function installHazardHud(game: Game): void {
     bossId = e.hazardId;
   });
   game.events.on('bossStunned', () => announce('Stunned!', 'Ram it!', 1.6));
-  game.events.on('bossHit', (e) => announce('Chipped!', `Absorb at ${e.absorbRadius.toFixed(0)} cm`, 2));
+  game.events.on('bossHit', (e) => {
+    // absorbRadius is in the Area's unit (10 km in the Continent): show it in real units.
+    const run = game.run;
+    announce('Chipped!', `Absorb at ${run ? formatLength(e.absorbRadius * run.unit, AREAS[run.area].readout) : `${e.absorbRadius.toFixed(0)} cm`}`, 2);
+  });
   game.events.on('hazardRemoved', (e) => {
     if (e.hazardId === bossId) bossId = null;
   });

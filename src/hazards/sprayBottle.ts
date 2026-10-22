@@ -7,7 +7,9 @@
  * sweeps idly while the Bunny is out of range, and a water hit also soaks the Bunny (a brief
  * `hazard:wet` slow, like the Mop's trail). The Pressure Washer (city, PRESSURE_WASHER) works the
  * same way with fast, wide water jets, and the Crop Duster (region, CROP_DUSTER) turns its whole
- * body, spins its `propeller` and dusts a burst of pesticide that soaks the same way.
+ * body, spins its `propeller` and dusts a burst of pesticide that soaks the same way. The Volcano
+ * (continent, VOLCANO) never moves: only its `crater` node turns to aim, the lane is the floor
+ * telegraph, and it lobs a burst of lava bombs (`dropletArc`) whose ash slows like the soak.
  *
  * Turrets are ranged Hazards: they aim at Lint's Decoy while it is in range (and are never
  * clogged by it), and a droplet that reaches the Decoy pops it.
@@ -125,7 +127,7 @@ export class SprayBottle extends BaseHazard {
   private updateDroplets(dt: number, run: Run): void {
     const c = this.cfg;
     const b = run.bunny;
-    this.volley.update(dt, run, this, { radius: c.dropletRadius, height: c.nozzleHeight, blockHeight: c.nozzleHeight }, (d) => {
+    this.volley.update(dt, run, this, { radius: c.dropletRadius, height: c.nozzleHeight, blockHeight: c.nozzleHeight, arc: c.dropletArc }, (d) => {
       const hit = hitBunny(run, d.x, d.z, { damage: c.damage, source: this.def.id, knockbackCm: c.knockbackCm, knockbackRadii: c.knockbackRadii, dirX: d.vx, dirZ: d.vz });
       if (hit && c.wetSeconds > 0 && b.alive) {
         b.stats.removeSource(WET_SOURCE);
@@ -196,7 +198,7 @@ export const cropDusterDef = hazardRegistry.register({
   },
 });
 
-/** Continent turret (placeholder tuning and model, see VOLCANO). */
+/** Continent turret: lava bombs from the crater vent (VOLCANO). */
 export const volcanoDef = hazardRegistry.register({
   id: 'volcano',
   name: 'Volcano',

@@ -88,7 +88,7 @@ export function buildRecipeGeometry(recipe: RecipePart[]): BufferGeometry {
 }
 
 /**
- * GLB-backed Debris: types whose id matches a loaded model (public/models/manifest.json) use the
+ * GLB-backed Debris: types whose id (or `model`) matches a loaded model (public/models/manifest.json) use the
  * Blender mesh instead of the recipe. The model is scaled so its footprint radius is 1 (= `size`)
  * and rests on y = 0; very tall, thin props (street lamps) use a fifth of their height instead, so
  * they don't tower over everything. For ids listed here the largest material is replaced by the per-instance
@@ -153,8 +153,9 @@ const glbTypes = new Set<string>();
 export function debrisGeometry(type: DebrisType): BufferGeometry {
   let g = geoCache.get(type.id);
   if (!g) {
-    const template = getModelTemplate(type.id);
-    const fromModel = template ? modelDebrisGeometry(type.id, template) : null;
+    const modelId = type.model ?? type.id;
+    const template = getModelTemplate(modelId);
+    const fromModel = template ? modelDebrisGeometry(modelId, template) : null;
     if (fromModel) glbTypes.add(type.id);
     g = fromModel ?? buildRecipeGeometry(type.recipe);
     geoCache.set(type.id, g);
