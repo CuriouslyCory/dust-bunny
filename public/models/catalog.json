@@ -1,5 +1,5 @@
 {
-  "units": "cm",
+  "units": "cm (models with a \"units\" field: that unit)",
   "up": "+Y",
   "forward": "+Z",
   "origin": "bottom centre at floor contact (broom: top of handle)",
@@ -1467,6 +1467,329 @@
         }
       },
       "category": "prop"
+    },
+    {
+      "triangles": 2326,
+      "footprintRadius": 148.0,
+      "height": 449.0,
+      "minY": -0.0,
+      "maxY": 449.0,
+      "sizeX": 287.1,
+      "sizeZ": 284.4,
+      "id": "tornado",
+      "file": "models/tornado.glb",
+      "bytes": 73884,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Wanderer that pulls. Twisting funnel under a wall-cloud cap (r 130); the funnel node (funnel, cap, flying debris and a lightning bolt) spins about its local Y axis through the origin (positive = counter-clockwise from above). Static debris skirt and dust puffs (r 150) in body.",
+      "nodes": {
+        "funnel": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1466,
+      "footprintRadius": 128.0,
+      "height": 14.9,
+      "minY": 0.0,
+      "maxY": 14.9,
+      "sizeX": 100.4,
+      "sizeZ": 246.0,
+      "id": "glacier_tongue",
+      "file": "models/glacier_tongue.glb",
+      "bytes": 58316,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Lane patrol: moves along its long axis (+Z). Tongue of ice about 230 long x 80 wide (246 x 100 with the terminal moraine) with curved transverse crevasses, lateral and medial moraine stripes, and a terminal moraine of rubble at the snout (+Z end).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1410,
+      "footprintRadius": 200.0,
+      "height": 110.0,
+      "minY": 0.0,
+      "maxY": 110.0,
+      "sizeX": 400.0,
+      "sizeZ": 400.0,
+      "id": "volcano",
+      "file": "models/volcano.glb",
+      "bytes": 41752,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Turret that fires. Cone with a breached rim, glowing lava streaks down the flanks and a lava pool in the crater: the crater node (emissive) sits at the vent, so projectiles launch from about (0, 96, 0) in model space (upwards out of the crater).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "crater": {
+          "pivot": [
+            0.0,
+            96.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1160,
+      "footprintRadius": 128.8,
+      "height": 19.9,
+      "minY": 0.0,
+      "maxY": 19.9,
+      "sizeX": 220.0,
+      "sizeZ": 190.0,
+      "id": "river_surge",
+      "file": "models/river_surge.glb",
+      "bytes": 37320,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Trail-layer that leaves a wet trail. Flood-surge head moving +Z: a curling brown wave front with a foam crest along the leading edge, churning muddy water with blue streaks and floating logs behind (the trail continues from the -Z end).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 2132,
+      "footprintRadius": 292.0,
+      "height": 39.0,
+      "minY": 1.0,
+      "maxY": 39.9,
+      "sizeX": 575.1,
+      "sizeZ": 575.1,
+      "id": "hurricane",
+      "file": "models/hurricane.glb",
+      "bytes": 71164,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Cone blaster. Flat spiral cloud bands (r 300) around a clear eye (r 38, open to the ground). bands node (dense overcast, four spiral arms, lightning) spins about its local Y axis through the origin (positive = counter-clockwise from above, the way the arms trail). body is the eyewall. The wind cone blows +Z from the front of the eyewall at about (0, 20, 60) in model space.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "bands": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 3028,
+      "footprintRadius": 309.9,
+      "height": 62.7,
+      "minY": 0.0,
+      "maxY": 62.7,
+      "sizeX": 599.8,
+      "sizeZ": 402.0,
+      "id": "ice_sheet",
+      "file": "models/ice_sheet.glb",
+      "bytes": 120896,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Boss. A slab of continental ice 600 wide pushing a bulldozed ridge of rubble at its front (+Z) cliff. Cracked blue-white surface; crevasses glow faintly (emissive); two glowing crevasse eyes with pressure-ridge brows near the front edge and a glowing crack mouth along the cliff. calving_l / calving_r are ice chunks at the front corners; their origin is their base centre on the ground, so they can tip or slide off when they calve.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "calving_l": {
+          "pivot": [
+            -232.0,
+            0.0,
+            122.0
+          ]
+        },
+        "calving_r": {
+          "pivot": [
+            232.0,
+            0.0,
+            122.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "100 m"
+    },
+    {
+      "triangles": 156,
+      "footprintRadius": 40.9,
+      "height": 33.6,
+      "minY": 0.0,
+      "maxY": 33.6,
+      "sizeX": 73.3,
+      "sizeZ": 59.5,
+      "id": "iceberg",
+      "file": "models/iceberg.glb",
+      "bytes": 10784,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Chip that calves off the Ice Sheet: jagged ice block with a dirty blue base and a smaller chunk beside it.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1568,
+      "footprintRadius": 92.9,
+      "height": 46.2,
+      "minY": 0.0,
+      "maxY": 46.2,
+      "sizeX": 184.0,
+      "sizeZ": 66.3,
+      "id": "mountain_range",
+      "file": "models/mountain_range.glb",
+      "bytes": 44088,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Elongated ridge of peaks, long axis along X: green foothills, brown and grey rock, snow caps above about 22 units.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
+    },
+    {
+      "triangles": 760,
+      "footprintRadius": 128.5,
+      "height": 6.2,
+      "minY": 0.0,
+      "maxY": 6.2,
+      "sizeX": 221.7,
+      "sizeZ": 229.1,
+      "id": "lake",
+      "file": "models/lake.glb",
+      "bytes": 25612,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Nearly flat lake: deep and shallow water set just below a sandy shore ring and a grass ring, with a small wooded island.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1058,
+      "footprintRadius": 67.0,
+      "height": 23.6,
+      "minY": 0.0,
+      "maxY": 23.6,
+      "sizeX": 122.2,
+      "sizeZ": 124.3,
+      "id": "city_ruins",
+      "file": "models/city_ruins.glb",
+      "bytes": 55956,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. What is left of a city: a cracked grey pad with a cluster of tiny broken grey towers, scorched blocks and rubble piles.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1196,
+      "footprintRadius": 77.7,
+      "height": 35.6,
+      "minY": 0.0,
+      "maxY": 35.6,
+      "sizeX": 130.5,
+      "sizeZ": 137.7,
+      "id": "mesa",
+      "file": "models/mesa.glb",
+      "bytes": 42776,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Red flat-topped plateau: banded cliff strata over a tan talus apron, scrubby flat top, a small butte beside it and fallen boulders.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
+    },
+    {
+      "triangles": 1490,
+      "footprintRadius": 75.7,
+      "height": 15.1,
+      "minY": 0.0,
+      "maxY": 15.1,
+      "sizeX": 131.2,
+      "sizeZ": 135.8,
+      "id": "forest_patch",
+      "file": "models/forest_patch.glb",
+      "bytes": 82584,
+      "notes": "Continent scale: 1 unit = 100 m, load at scale 0.01. Dense clump of tiny dark-green conifer cones on a forest-floor patch.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "100 m"
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts).",
+  "$comment": "Loader overrides for createModel() (src/world/models.ts). Furniture: fit xz (scale 1 height). Hazards: fit none. Props: Debris visuals (src/entities/debrisGeometry.ts). Continent models are authored at 1 unit = 100 m: scale 0.01.",
   "couch": { "file": "couch.glb", "fit": "xz" },
   "armchair": { "file": "armchair.glb", "fit": "xz" },
   "coffee_table": { "file": "coffee_table.glb", "fit": "xz" },
@@ -58,5 +58,17 @@
   "hot_dog_cart": { "file": "hot_dog_cart.glb", "fit": "none" },
   "street_lamp": { "file": "street_lamp.glb", "fit": "none" },
   "phone_booth": { "file": "phone_booth.glb", "fit": "none" },
-  "fire_truck": { "file": "fire_truck.glb", "fit": "none" }
+  "fire_truck": { "file": "fire_truck.glb", "fit": "none" },
+  "tornado": { "file": "tornado.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "glacier_tongue": { "file": "glacier_tongue.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "volcano": { "file": "volcano.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "river_surge": { "file": "river_surge.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "hurricane": { "file": "hurricane.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "ice_sheet": { "file": "ice_sheet.glb", "fit": "none", "collapse": true, "scale": 0.01 },
+  "iceberg": { "file": "iceberg.glb", "fit": "none", "scale": 0.01 },
+  "mountain_range": { "file": "mountain_range.glb", "fit": "none", "scale": 0.01 },
+  "lake": { "file": "lake.glb", "fit": "none", "scale": 0.01 },
+  "city_ruins": { "file": "city_ruins.glb", "fit": "none", "scale": 0.01 },
+  "mesa": { "file": "mesa.glb", "fit": "none", "scale": 0.01 },
+  "forest_patch": { "file": "forest_patch.glb", "fit": "none", "scale": 0.01 }
 }
