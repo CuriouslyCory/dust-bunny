@@ -78,7 +78,7 @@ describe('RunPosts', () => {
 
   it('sends the Run’s Loadout with every entry, and the local board keeps it', async () => {
     const { client } = offlineClient();
-    const loadout = [{ type: 'reclaim', grade: 2 } as const, { type: 'reclaim', grade: 2 } as const];
+    const loadout = [{ type: 'reclaim', rarity: 2 } as const, { type: 'reclaim', rarity: 2 } as const];
     const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
     posts.finish({ reason: 'died', stats: { ...stats([house, neighborhood]), loadout } });
     await posts.post('Bea');

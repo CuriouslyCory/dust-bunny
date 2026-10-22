@@ -13,7 +13,7 @@
  * scrolling body, so the details keep their height on short (landscape) screens.
  */
 import { CHARACTERS, DEFAULT_CHARACTER_ID, type CharacterDef } from '../../data/characters';
-import { getGrade, keepsakeLabel, LOADOUT_SLOTS, type KeepsakeRef } from '../../data/keepsakes';
+import { getRarity, keepsakeLabel, LOADOUT_SLOTS, type KeepsakeRef } from '../../data/keepsakes';
 import { DIFFICULTIES, DIFFICULTY_IDS, difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../../data/difficulty';
 import { BASE_BUNNY_STATS, computeStats, type BunnyStatValues, type StatKey } from '../../entities/stats';
 import type { Game } from '../../game/game';
@@ -116,13 +116,13 @@ export function registerCharacterSelectScreen(): void {
         const empty = h('button', { className: 'ks-pick ks-pick-empty', type: 'button', textContent: 'Empty slot' });
         empty.onclick = () => pick(null);
         const options = entries.map((e) => {
-          const used = other.filter((k) => k && k.type === e.type && k.grade === e.grade).length;
+          const used = other.filter((k) => k && k.type === e.type && k.rarity === e.rarity).length;
           const left = e.count - used;
           const b = h('button', { className: 'ks-pick', type: 'button' }, keepsakeChip(e, { count: left, describe: true }));
           b.disabled = left < 1;
           const cur = current[slot];
-          if (cur && cur.type === e.type && cur.grade === e.grade) b.classList.add('selected');
-          b.onclick = () => pick({ type: e.type, grade: e.grade });
+          if (cur && cur.type === e.type && cur.rarity === e.rarity) b.classList.add('selected');
+          b.onclick = () => pick({ type: e.type, rarity: e.rarity });
           return b;
         });
         const cancel = h('button', { className: 'btn', type: 'button', textContent: 'Cancel' });
@@ -153,7 +153,7 @@ export function registerCharacterSelectScreen(): void {
           const b = h('button', { className: `ks-slot${k ? ' filled' : ''}`, type: 'button' });
           if (k) {
             b.append(keepsakeChip(k, { describe: true }));
-            b.style.setProperty('--grade', getGrade(k.grade).color);
+            b.style.setProperty('--rarity', getRarity(k.rarity).color);
             b.setAttribute('aria-label', `Slot ${i + 1}: ${keepsakeLabel(k)}. Change`);
           } else {
             b.append(h('span', { className: 'ks-slot-empty', textContent: '＋ Tuck in a Keepsake' }));

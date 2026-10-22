@@ -1,13 +1,13 @@
 /**
- * The Keepsake reward moment (browser only): on `keepsakesDropped`, fibre particles in the grade's
- * colour stream into the Bunny, then the Run pauses on the Keepsake reveal
+ * The Keepsake reward moment (browser only): on `keepsakesDropped`, fibre particles in the best
+ * drop's rarity colour stream into the Bunny, then the Run pauses on the Keepsake reveal
  * (src/ui/screens/keepsakeReveal.ts: what was won, the narrator caption, a first kill's choice).
  * The reveal waits for the area-cleared banner that `exitOpened` shows at the same moment (longer
  * when it carries the narrator's cleared line) and for play to be on screen (a Perk draft, chapter
  * card or pause menu goes first).
  */
 import { Color } from 'three';
-import { getGrade } from '../data/keepsakes';
+import { bossNameFor, getRarity } from '../data/keepsakes';
 import type { Game } from '../game/game';
 import { dropCaption, getKeepsakeTracker } from '../meta/keepsakes';
 import { narrate } from './keepsakeUi';
@@ -24,10 +24,10 @@ export function installKeepsakeHud(game: Game): void {
   game.events.on('keepsakesDropped', (e) => {
     const run = game.run;
     if (!run) return;
-    const grade = getGrade(e.grade);
+    const rarity = getRarity(e.rarity);
 
     // Fibres tangle into the Bunny over about a second.
-    color.set(grade.color).lerp(WHITE, 0.35); // lighter, so the fibres read on dark floors
+    color.set(rarity.color).lerp(WHITE, 0.35); // lighter, so the fibres read on dark floors
     for (let i = 0; i < 6; i++) {
       window.setTimeout(() => {
         if (game.run !== run || !game.view) return;
@@ -37,7 +37,7 @@ export function installKeepsakeHud(game: Game): void {
     }
 
     const record = getKeepsakeTracker()?.current;
-    const caption = dropCaption(e.bossId, grade.bossName, grade.material);
+    const caption = dropCaption(e.bossId, bossNameFor(e.bossId));
     // A Run-winning boss ends the Run in the same event chain: no reveal then, caption at once.
     queueMicrotask(() => {
       if (run.ended) narrate(game, caption);
