@@ -34,7 +34,7 @@ export const AREAS: Record<AreaId, AreaTuning> = {
   neighborhood: { name: 'The Neighborhood', tiers: [5, 7], initialScatter: 1500, startCluster: 120, startClusterRadius: 700, growth: 0.24, unit: 1, readout: 'cm', fluffPerUnit: 1 / 60 },
   city: { name: 'The City', tiers: [7, 9], initialScatter: 1800, startCluster: 110, startClusterRadius: 2600, growth: 0.11, unit: 1, readout: 'cm', fluffPerUnit: 1 / 120 },
   // 1 world unit = 10 m: the Bunny arrives at ~0.85 units, Tier 10 starts at 1 and Tier 11 at 3.
-  region: { name: 'The Region', tiers: [10, 11], initialScatter: 2200, startCluster: 160, startClusterRadius: 10, growth: 0.5, unit: 1000, readout: 'm', fluffPerUnit: 1.5 },
+  region: { name: 'The Region', tiers: [10, 11], initialScatter: 2000, startCluster: 120, startClusterRadius: 11, growth: 0.5, unit: 1000, readout: 'm', fluffPerUnit: 1.5 },
 };
 
 /** Centimetres per world unit in `area`. */

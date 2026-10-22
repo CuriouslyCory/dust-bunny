@@ -65,7 +65,7 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#6b7652' };
+const GROUND: Record<HouseLayout['area'], string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993' };
 
 export class HouseView {
   readonly root = new Group();

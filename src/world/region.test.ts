@@ -164,7 +164,7 @@ describe('region Debris catalogue', () => {
   // From the arrival size (after the Garbage Truck) through Tier 10 and Tier 11 up to past the Incinerator.
   const unit = AREAS.region.unit;
   const bands: Array<[number, number[]]> = [
-    [10, [0.65, REGION.debugStartRadius, TIERS[9]!.minRadius / unit, 1.5, 2.2, TIERS[10]!.minRadius / unit - 0.01]],
+    [10, [0.6, REGION.debugStartRadius, TIERS[9]!.minRadius / unit, 1.5, 2.2, TIERS[10]!.minRadius / unit - 0.01]],
     [11, [TIERS[10]!.minRadius / unit, 3.5, 4, 4.5]],
   ];
   for (const [tier, radii] of bands) {

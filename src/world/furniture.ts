@@ -64,7 +64,7 @@ export const FURNITURE: Record<string, FurnitureDef> = {
   // jitters w / d / h per instance; these are the nominal sizes.
   region_city_core: { id: 'region_city_core', name: 'City Centre', w: 8, d: 7, h: 9, clearance: 0 },
   region_hill: { id: 'region_hill', name: 'Hill', w: 12, d: 9, h: 4, clearance: 0 },
-  region_ridge: { id: 'region_ridge', name: 'Ridge', w: 20, d: 4.5, h: 5, clearance: 0 },
+  region_ridge: { id: 'region_ridge', name: 'Ridge', w: 20, d: 7, h: 3.5, clearance: 0 },
 };
 
 /** Footprint after rotation by quarter turns. */

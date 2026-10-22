@@ -296,7 +296,7 @@ export const REGION_DEBRIS: DebrisType[] = [
   },
   {
     id: 'tyre_mountain', name: 'Tyre Mountain', size: 0.72, mass: 3.0, tiers: [10, 11], area: 'region',
-    colors: ['#2b2b2b', '#333333'],
+    colors: ['#6a6358', '#5e584e', '#4f4a42'],
     recipe: [
       { shape: 'blob', radius: 0.9, noise: 0.25, detail: 1, scale: [1, 0.55, 0.95], pos: [0, 0.05, 0] },
       ...([[0.5, 0.25, 0.4, 0.3], [-0.4, 0.3, 0.3, 1.1], [0.1, 0.5, -0.3, 0.6], [-0.2, 0.25, -0.65, 1.8], [0.65, 0.18, -0.35, 2.4]] as const).map(
@@ -373,7 +373,7 @@ export const REGION_DEBRIS: DebrisType[] = [
     rooms: { town: 2, farmland: 0.3 },
   },
   {
-    id: 'river_ferry', name: 'River Ferry', size: 1.15, mass: 3.0, tiers: [10, 11], area: 'region',
+    id: 'river_ferry', name: 'River Ferry', size: 1.15, mass: 3.0, tiers: [11, 11], area: 'region',
     colors: ['#f4f4f4', '#ffd166', '#e63946'],
     recipe: [
       { shape: 'box', size: [0.7, 0.18, 1.9], pos: [0, 0.09, 0], color: '#2b2d42' },
@@ -389,7 +389,7 @@ export const REGION_DEBRIS: DebrisType[] = [
     rooms: { river: 1.5 },
   },
   {
-    id: 'motel', name: 'Motel', size: 1.25, mass: 3.0, tiers: [10, 11], area: 'region',
+    id: 'motel', name: 'Motel', size: 1.25, mass: 3.0, tiers: [11, 11], area: 'region',
     colors: ['#f4a261', '#e9c46a', '#90e0ef', '#e5e5e5'],
     recipe: [
       { shape: 'box', size: [1.9, 0.02, 1.6], pos: [0, 0.01, 0.1], color: '#55575b' },
@@ -407,7 +407,7 @@ export const REGION_DEBRIS: DebrisType[] = [
     rooms: { highway: 1, town: 1 },
   },
   {
-    id: 'wind_turbine', name: 'Wind Turbine', size: 1.4, mass: 2.0, tiers: [10, 11], area: 'region',
+    id: 'wind_turbine', name: 'Wind Turbine', size: 1.4, mass: 2.0, tiers: [11, 11], area: 'region',
     colors: ['#f4f4f4', '#e8ecef'],
     recipe: [
       { shape: 'cylinder', radiusTop: 0.15, height: 0.06, pos: [0, 0.03, 0], color: '#b8b2a7' },
@@ -422,7 +422,7 @@ export const REGION_DEBRIS: DebrisType[] = [
     rooms: { farmland: 1.5, woods: 0.2 },
   },
   {
-    id: 'sawmill', name: 'Sawmill', size: 1.55, mass: 3.2, tiers: [10, 11], area: 'region',
+    id: 'sawmill', name: 'Sawmill', size: 1.55, mass: 3.2, tiers: [11, 11], area: 'region',
     colors: ['#8a5a3b', '#6b4f3a'],
     recipe: [
       pad(1, '#8a7a5c', [1, 1, 0.8]),
@@ -438,7 +438,7 @@ export const REGION_DEBRIS: DebrisType[] = [
     material: { roughness: 0.9 },
     rooms: { woods: 2 },
   },
-  // ── Tier 11: Dust Front (r 3+) and the biggest Tier 10 things ──
+  // ── Tier 11: Dust Front (r 3+). Like the four above, the spawner brings these in during Tier 10 once absorbable ──
   {
     id: 'grain_elevator', name: 'Grain Elevator', size: 1.7, mass: 3.5, tiers: [11, 11], area: 'region',
     colors: ['#d9d4c8', '#c9ccd1'],

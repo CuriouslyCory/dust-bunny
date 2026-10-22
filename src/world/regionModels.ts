@@ -161,7 +161,7 @@ function hill(o: ModelOptions): Group {
 
 /** Ridge: a long rocky crest with scrub on its lower slopes. */
 function ridge(o: ModelOptions): Group {
-  return forestedMound(o.w, o.d, o.h, o.seed ?? 43, { low: '#6f7a4a', high: '#8a8273', square: 3.5, noise: 0.35, plateau: 0.15 }, 5, 0.7);
+  return forestedMound(o.w, o.d, o.h, o.seed ?? 43, { low: '#6f7a4a', high: '#857f6c', square: 3, noise: 0.25, plateau: 0.2 }, 6, 0.75);
 }
 
 /**

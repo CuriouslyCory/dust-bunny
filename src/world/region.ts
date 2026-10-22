@@ -319,7 +319,7 @@ export function generateRegion(seed: string | number): HouseLayout {
       if (placeObstacle(defId, Math.round(orng.range(G, W - G)), Math.round(orng.range(G, D - G)), qt, w, d, h, zones, 1.5)) return;
     }
   };
-  for (let i = orng.int(1, 2); i > 0; i--) scatterObstacle('region_ridge', () => [orng.int(16, 22), orng.int(4, 5), Math.round(orng.range(4, 5.5) * 10) / 10], ['woods', 'farmland']);
+  for (let i = orng.int(1, 2); i > 0; i--) scatterObstacle('region_ridge', () => [orng.int(16, 22), orng.int(6, 8), Math.round(orng.range(3, 4) * 10) / 10], ['woods', 'farmland']);
   for (let i = orng.int(2, 3); i > 0; i--) scatterObstacle('region_hill', () => [orng.int(9, 13), orng.int(7, 10), Math.round(orng.range(3, 4.5) * 10) / 10], ['farmland', 'woods']);
 
   // ── Fixed Debris: traffic, farms, town buildings, the landfill, boats and cabins ──

@@ -14,7 +14,7 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   neighborhood: { sky: '#e4f0ff', ground: '#5e7a45', sun: '#fff1d6', intensity: 2.9, dir: [-0.45, 1.5, 0.5] },
   city: { sky: '#ffe2c4', ground: '#5d5a5f', sun: '#ffc98a', intensity: 3.0, dir: [-0.7, 1.05, 0.35] },
   // Overcast noon from altitude: a high, soft sun and a bright grey sky fill.
-  region: { sky: '#eef1f3', ground: '#6b7458', sun: '#f4f2ec', intensity: 2.2, dir: [-0.25, 1.9, 0.3] },
+  region: { sky: '#f2f4f6', ground: '#6b7458', sun: '#eef0f2', intensity: 1.7, dir: [-0.25, 1.9, 0.3] },
 };
 
 export class Lighting {
