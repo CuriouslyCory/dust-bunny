@@ -10,6 +10,7 @@
  *   - otherwise, while the Bunny is planted (Hunker) and `manager.plantedContact` is set →
  *     plantedContact(run, hazard) (src/abilities: bosses crash as into a wall, others recoil)
  *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call)
+ *   An `intangible` Hazard (the Expansion) never touches, so none of these apply to it.
  * Spawning policy is pluggable via `manager.director`.
  */
 import type { Object3D } from 'three';
@@ -43,6 +44,11 @@ export interface Hazard {
   update(dt: number, run: Run): void;
   /** Ranged Hazards (turrets, Leaf Blower) aim at Lint's Decoy but are never clogged by touching it. */
   readonly ranged?: boolean;
+  /**
+   * Not a body (the Expansion): never touches the Bunny or the Decoy (`HazardManager.touches` is
+   * false), so it is never absorbed or contacted, and Abilities and Spiky Dash ignore it.
+   */
+  readonly intangible?: boolean;
   /** Bunny touches the Hazard and is too small to absorb it. */
   onContact?(run: Run): void;
   /**
@@ -134,8 +140,9 @@ export class HazardManager implements System {
     return defId ? this.hazards.filter((h) => h.def.id === defId && !h.dead).length : this.hazards.length;
   }
 
-  /** Overlap between the Bunny and a Hazard shape. */
+  /** Overlap between the Bunny and a Hazard shape (never for an intangible Hazard). */
   static touches(run: Run, h: Hazard): boolean {
+    if (h.intangible) return false;
     const b = run.bunny;
     return h.shape.kind === 'circle'
       ? circleVsCircle(b.x, b.z, b.radius, h.x, h.z, h.shape.radius) !== null

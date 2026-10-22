@@ -16,6 +16,8 @@
  * Solar Flare (solar system, SOLAR_FLARE) is a dry blast from a plasma arch whose `loop` spins and
  * swells through the warm-up (`pulseNode`). The Supernova (galaxy, SUPERNOVA) swells its star
  * `core` through the warm-up, then a short, hard shock blast pushes the Bunny and loose Debris away.
+ * The Dark-energy gust (universe, DARK_ENERGY_GUST) does the same with a violet warm-up and a
+ * pale violet blast (`warmColor`, `airColor`).
  *
  * Lint's Decoy: within reach of the cone it turns to the Decoy instead of the Bunny. The suction
  * cone drags the Decoy into the intake (touching it clogs the vacuum); a blast pops it (the Leaf
@@ -70,7 +72,7 @@ export class UprightVacuum extends BaseHazard {
     this.recoilHeight = cfg.height;
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.timer = rng.range(0.5, cfg.off);
-    this.cone = this.addDecal(sectorDecal(0, cfg.coneRange, cfg.coneHalfAngle * 2, DECAL_COLORS.warn, 0.35));
+    this.cone = this.addDecal(sectorDecal(0, cfg.coneRange, cfg.coneHalfAngle * 2, cfg.warmColor ?? DECAL_COLORS.warn, cfg.coneOpacity ?? 0.35));
     this.cone.visible = false;
   }
 
@@ -110,13 +112,13 @@ export class UprightVacuum extends BaseHazard {
         } else {
           this.state = 'warmup';
           this.timer = this.attackTime(run, c.warmup);
-          this.cone.setColor(DECAL_COLORS.warn);
+          this.cone.setColor(this.cfg.warmColor ?? DECAL_COLORS.warn);
           this.emitTelegraph(run, this.blows ? 'blow' : 'suction', this.timer);
         }
       } else if (this.state === 'warmup') {
         this.state = 'on';
         this.timer = c.on;
-        this.cone.setColor(this.blows ? DECAL_COLORS.air : DECAL_COLORS.suction);
+        this.cone.setColor(this.cfg.airColor ?? (this.blows ? DECAL_COLORS.air : DECAL_COLORS.suction));
       } else {
         this.state = 'off';
         this.timer = this.attackTime(run, c.off) * this.rng.range(0.8, 1.2);
@@ -128,7 +130,7 @@ export class UprightVacuum extends BaseHazard {
     this.cone.place(it.x, it.z, this.yaw);
     this.cone.root.scale.setScalar(range / c.coneRange);
     if (this.state === 'warmup') this.cone.pulse(this.time, 1 - this.timer / this.attackTime(run, c.warmup));
-    else if (this.state === 'on') this.cone.setOpacity(0.28 + 0.1 * Math.sin(this.time * 14));
+    else if (this.state === 'on') this.cone.setOpacity((0.28 + 0.1 * Math.sin(this.time * 14)) * ((c.coneOpacity ?? 0.35) / 0.35));
     if (c.pulseNode) this.pulse(run, c.pulseNode, c.pulseAmount ?? 0.2);
 
     if (this.state !== 'on') return;

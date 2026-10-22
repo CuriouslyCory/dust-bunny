@@ -12,7 +12,9 @@
  * sweepers (MINI_SWEEPER); in the Solar System the Rogue Asteroid (ROGUE_ASTEROID: tumbling turns,
  * a gravity pull, spins its `rock`); in the Galaxy the Black Hole (BLACK_HOLE: slow drifting turns,
  * a strong long pull, spins its accretion `disk`), whose pull also drags loose Debris into a spiral
- * and swallows it (`debrisPull`), rings flowing inward across the pull on the floor.
+ * and swallows it (`debrisPull`), rings flowing inward across the pull on the floor; in the
+ * Universe the Quasar (QUASAR: the strongest pull, a cyan ring, drags Debris round without eating
+ * it, spins its `disk` and pulses its `jets`, `pulseNode`).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
@@ -51,7 +53,7 @@ export class Roomba extends BaseHazard {
     this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.yaw = rng.range(-Math.PI, Math.PI);
     this.turnTimer = randomIn(rng, cfg.turnInterval);
-    this.suctionRing = this.addDecal(ringDecal(0.97, 1, DECAL_COLORS.suction, 0.35, 64));
+    this.suctionRing = this.addDecal(ringDecal(0.97, 1, cfg.ringColor ?? DECAL_COLORS.suction, 0.35, 64));
     if (cfg.debrisPull) for (let i = 0; i < 2; i++) this.flowRings.push(this.addDecal(ringDecal(0.94, 1, '#d9c8ff', 0.3, 64)));
   }
 
@@ -90,6 +92,7 @@ export class Roomba extends BaseHazard {
       this.turnTimer = randomIn(this.rng, this.cfg.turnInterval);
     }
     this.spin(this.cfg.spinNode, dt * this.cfg.spinRate);
+    if (this.cfg.pulseNode) this.pulse(this.cfg.pulseNode);
 
     // Suction towards the Roomba centre.
     const b = run.bunny;
@@ -106,6 +109,16 @@ export class Roomba extends BaseHazard {
     this.suctionRing.root.scale.set(reach, 1, reach);
     this.suctionRing.setOpacity(0.18 + 0.12 * Math.sin(this.time * 6));
     if (this.cfg.debrisPull) this.pullDebris(dt, run, this.cfg.debrisPull, reach);
+  }
+
+  /** Pulses a model node (the Quasar's `jets`): along Y, or every axis. */
+  private pulse(name: string): void {
+    const node = this.model.getObjectByName(name);
+    if (!node) return;
+    const c = this.cfg;
+    const k = 1 + (c.pulseAmount ?? 0.15) * Math.sin(this.time * (c.pulseRate ?? 6));
+    if (c.pulseAxis === 'y') node.scale.set(1, k, 1);
+    else node.scale.setScalar(k);
   }
 
   /**
@@ -302,7 +315,7 @@ export const blackHoleDef = hazardRegistry.register({
   },
 });
 
-/** Universe wanderer: a quasar, a feeding black hole with a strong pull that drags loose Debris in (QUASAR). */
+/** Universe wanderer: a quasar, a feeding black hole with a strong pull that drags loose Debris round it, jets pulsing (QUASAR). */
 export const quasarDef = hazardRegistry.register({
   id: 'quasar',
   name: 'Quasar',

@@ -6,7 +6,8 @@
  *     aims at the Bunny aims at it instead while it is inside that Hazard's aggro / trigger range
  *     (× lureRangeMul). Suction still pulls the Bunny by distance; vacuums also drag the Decoy in.
  *   Clog: a non-ranged Hazard whose body touches it pops it and is stunned for clogStun (bosses:
- *     bossClogStun via the boss limit, so a chip lands while the boss is clogged).
+ *     bossClogStun via the boss limit, so a chip lands while the boss is clogged). An intangible
+ *     Hazard (the Expansion) never touches it.
  *   Ranged Hazards (turrets, Leaf Blower) are never clogged; their spray or blast pops it (shot).
  */
 import { circleVsCircle, circleVsRect } from '../core/math';
@@ -103,7 +104,7 @@ export class DecoyAbility implements AbilityController {
   private clogCheck(d: Decoy): boolean {
     const run = this.system.run;
     for (const h of run.hazards.hazards) {
-      if (h.dead || h.ranged || !touchesDecoy(h, d)) continue;
+      if (h.dead || h.ranged || h.intangible || !touchesDecoy(h, d)) continue;
       let seconds = 0;
       if (isBoss(h)) {
         seconds = this.p.bossClogStun;

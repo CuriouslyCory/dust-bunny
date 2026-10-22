@@ -1,0 +1,142 @@
+/* The Expansion's tug-of-war bar (src/hazards/hud.ts): top centre, under the Tier card. */
+.boss-tug {
+  width: min(420px, calc(100vw - 32px));
+  padding: 7px 12px 9px;
+  background: rgba(14, 10, 26, 0.66);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 200, 150, 0.22);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 16px rgba(5, 3, 12, 0.35);
+  color: #fff4e6;
+  font-family: var(--font-body);
+  pointer-events: none;
+}
+
+.boss-tug[hidden] {
+  display: none;
+}
+
+.boss-tug-title {
+  margin-bottom: 5px;
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #ffc89a;
+}
+
+.boss-tug-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.boss-tug-end {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.boss-tug-gravity {
+  color: #bfe2ff;
+}
+
+.boss-tug-expansion {
+  color: #ffab70;
+}
+
+.boss-tug-bar {
+  position: relative;
+  flex: 1 1 auto;
+  height: 14px;
+  border-radius: 999px;
+  /* The expansion's side: CMB orange. */
+  background: linear-gradient(90deg, #a8401c, #ff8a4a);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+
+/* Gravity still flowing in: a pale fill ahead of the marker. */
+.boss-tug-pending {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  border-radius: 999px 0 0 999px;
+  background: rgba(220, 238, 255, 0.55);
+  transition: width 0.2s linear;
+}
+
+/* Gravity's side, from the left up to the marker. */
+.boss-tug-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  border-radius: 999px 0 0 999px;
+  background: linear-gradient(90deg, #4f7dff, #cfe9ff);
+  transition: width 0.2s linear;
+}
+
+.boss-tug-marker {
+  position: absolute;
+  top: 50%;
+  left: 30%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: #fff4e6;
+  border: 3px solid #1a1030;
+  box-shadow: 0 0 10px rgba(255, 244, 230, 0.9);
+  transition: left 0.2s linear;
+}
+
+.boss-tug.losing .boss-tug-expansion {
+  animation: boss-tug-pulse 0.8s ease-in-out infinite;
+}
+
+.boss-tug.danger {
+  border-color: rgba(255, 90, 58, 0.85);
+  animation: boss-tug-warn 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes boss-tug-pulse {
+  50% {
+    color: #fff1e0;
+    text-shadow: 0 0 8px #ff8a4a;
+  }
+}
+
+@keyframes boss-tug-warn {
+  to {
+    box-shadow: 0 0 18px rgba(255, 90, 58, 0.75);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-tug.losing .boss-tug-expansion,
+  .boss-tug.danger {
+    animation: none;
+  }
+}
+
+.hud-compact .boss-tug {
+  width: 100%;
+  padding: 5px 10px 7px;
+}
+
+.hud-compact .boss-tug-title {
+  margin-bottom: 3px;
+  font-size: var(--fs-xs);
+}
+
+/* Portrait phones: the corner clusters start below the pill (src/ui/hud.css); while the bar shows they move down past it too. */
+@media (orientation: portrait) {
+  .hud-compact:has(.boss-tug:not([hidden])) .hud-top-left,
+  .hud-compact:has(.boss-tug:not([hidden])) .hud-top-right {
+    top: calc(var(--safe-top) + 74px + 84px);
+  }
+}

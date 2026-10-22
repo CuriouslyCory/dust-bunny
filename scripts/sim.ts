@@ -4,10 +4,13 @@
  * absorbable Debris it can see, sidesteps Hazard telegraphs, drafts a random Perk at each
  * Tier-up, grabs Pickups it passes and fights the boss by dodging charges and ramming it
  * while stunned (against Sagittarius A* it leaves star clusters for the boss to choke on, and
- * against a Pulsar it backs out of reach of the lit beams). Prints when each Tier is reached, plus
- * how the Run ended, and boss stuns by cause.
+ * against a Pulsar it backs out of reach of the lit beams; it steps off a Gamma-ray burst's locked
+ * lane). Against the Expansion (no body: nothing to dodge or ram) it keeps eating the best Debris
+ * in view, chasing absorbable Hazards and Pickups only close by, and the log shows its bar every
+ * 15 s, Big Rips and, per Character, the fight's length (spawn → collapse). Prints when each Tier
+ * is reached, plus how the Run ended, and boss stuns by cause.
  *
- * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet, Orbital Sweeper, the Sun) the bot does not walk to
+ * When an area boss falls (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet, Orbital Sweeper, the Sun, Sagittarius A*) the bot does not walk to
  * the exit: the Run moves straight to the next area (logged), so outdoor, city, region, continent, globe, solar system, galaxy and universe pacing
  * are measured too. The summary prints each Area's median time from entry to its clear (the Act).
  * With --no-hazards a Run stops at each Area's boss Tier (no boss to clear), but keeps rolling in
@@ -54,7 +57,9 @@ import type { Debris } from '../src/entities/debris';
 import { createRun } from '../src/game/assembly';
 import type { Run } from '../src/game/run';
 import type { Hazard } from '../src/hazards';
-import type { RoboVac9000 } from '../src/hazards/robovac';
+import { RoboVac9000 } from '../src/hazards/robovac';
+import { GammaRayBurst, inBurst } from '../src/hazards/gammaRayBurst';
+import { TheExpansion } from '../src/hazards/theExpansion';
 import { SprayBottle as SprayBottleClass, type SprayBottle } from '../src/hazards/sprayBottle';
 import { inCone, UprightVacuum as UprightVacuumClass, type UprightVacuum } from '../src/hazards/uprightVacuum';
 import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
@@ -364,15 +369,18 @@ class Bot implements InputSource {
     let chase: Hazard | null = null;
     let chaseD = Infinity;
     this.nearDanger.length = 0;
+    // Against the Expansion every second counts: only chase absorbable Hazards close by, else eat Debris.
+    const chaseRange = viewRadiusFor(r, this.run.tier) * (hazards.hazards.some((h) => h instanceof TheExpansion && !h.dead) ? 0.3 : 1);
     for (const h of hazards.hazards) {
-      if (h.dead) continue;
+      // The Expansion is no body: nothing to dodge or ram (the bot just keeps absorbing).
+      if (h.dead || h.intangible) continue;
       const dx = bunny.x - h.x;
       const dz = bunny.z - h.z;
       const d = Math.hypot(dx, dz) || 1;
-      const boss = h.def.boss ? (h as RoboVac9000) : null;
+      const boss = h instanceof RoboVac9000 ? h : null;
       const reach = (h.shape.kind === 'circle' ? h.shape.radius : Math.max(h.shape.halfW, h.shape.halfD)) + r;
       if (canAbsorb(r, ratio, h.size) || boss?.state === 'stunned') {
-        if (d < chaseD && d < viewRadiusFor(r, this.run.tier)) {
+        if (d < chaseD && d < chaseRange) {
           chase = h;
           chaseD = d;
         }
@@ -395,6 +403,18 @@ class Bot implements InputSource {
           x += (dx / d) * 4;
           z += (dz / d) * 4;
           if (inBeam(dx, dz, r * 2, h.beamYaw, range, h.cfg.beamWidth) || h.state === 'firing') urgent = true;
+        }
+      }
+      if (h instanceof GammaRayBurst && (h.state === 'telegraph' || h.state === 'firing')) {
+        // Step off the locked lane (a player sees the violet lane blinking).
+        const range = h.cfg.muzzle + tierValue(h.cfg.range, this.run.tier);
+        if (inBurst(dx, dz, r * 1.6, h.aimYaw, h.cfg.muzzle, range, h.cfg.beamWidth)) {
+          const fx = Math.sin(h.aimYaw);
+          const fz = Math.cos(h.aimYaw);
+          const side = fx * dz - fz * dx >= 0 ? 1 : -1;
+          x += -fz * side * 4;
+          z += fx * side * 4;
+          urgent = true;
         }
       }
       const vac = h.def.id === 'upright_vacuum' || h.def.id === 'litter_vacuum' ? (h as UprightVacuum) : null;
@@ -482,10 +502,11 @@ class Bot implements InputSource {
         best = d;
       }
     }
-    // Pickups are worth a detour.
+    // Pickups are worth a detour (a short one while the Expansion drains the bar).
+    const detour = this.run.hazards.hazards.some((h) => h instanceof TheExpansion && !h.dead) ? 0.2 : 0.6;
     for (const p of this.run.pickups.floor) {
       const path = this.planner.pathTo(p.x, p.z, r + p.radius);
-      if (path >= 0 && path < viewRadiusFor(r, this.run.tier) * 0.6) {
+      if (path >= 0 && path < viewRadiusFor(r, this.run.tier) * detour) {
         this.steer = this.planner.steerTo(p.x, p.z, r + p.radius);
         this.target = null;
         return;
@@ -538,7 +559,7 @@ class Bot implements InputSource {
     const { bunny, hazards } = this.run;
     const r = bunny.radius;
     for (const h of hazards.hazards) {
-      if (h.dead || canAbsorb(r, bunny.stats.get('absorbRatio'), h.size) || h.stunnedFor) continue;
+      if (h.dead || h.intangible || canAbsorb(r, bunny.stats.get('absorbRatio'), h.size) || h.stunnedFor) continue;
       if (h instanceof UprightVacuumClass && h.state !== 'off' && kinds.has('vacuum')) {
         const c = h.cfg;
         const it = { x: h.x + Math.sin(h.yaw) * h.size * c.nozzleOffset, z: h.z + Math.cos(h.yaw) * h.size * c.nozzleOffset };
@@ -550,7 +571,7 @@ class Bot implements InputSource {
         const along = dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw);
         const side = Math.abs(dx * Math.cos(h.yaw) - dz * Math.sin(h.yaw));
         if (along > 0 && along < range + r && side < r + h.cfg.dropletRadius * 3) return true;
-      } else if (h.def.boss && kinds.has('spray') && (h as RoboVac9000).ashState !== 'idle' && this.inAshLane(h as RoboVac9000)) {
+      } else if (h instanceof RoboVac9000 && kinds.has('spray') && h.ashState !== 'idle' && this.inAshLane(h)) {
         return true;
       } else if (h instanceof BroomClass && h.state !== 'idle' && kinds.has('broom')) {
         if (Math.hypot(bunny.x - h.pivotX, bunny.z - h.pivotZ) < BROOM.sweepRadius + BROOM.headRadius + r) return true;
@@ -564,7 +585,7 @@ class Bot implements InputSource {
     const sys = getAbilitySystem(this.run);
     if (!sys) return { ability: false, abilityHeld: false };
     const { bunny, hazards } = this.run;
-    const bosses = hazards.hazards.filter((h) => !h.dead && h.def.boss) as RoboVac9000[];
+    const bosses = hazards.hazards.filter((h): h is RoboVac9000 => !h.dead && h instanceof RoboVac9000);
     if (sys.data.id === 'decoy') {
       const ctl = sys.controller as DecoyAbility;
       if (!ctl.ready) return { ability: false, abilityHeld: false };
@@ -692,7 +713,7 @@ interface Validation {
 }
 const summary: Record<
   string,
-  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; stuns: Record<string, number>; loadout: Loadout; v: Validation; acts: Record<string, number[]> }
+  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; stuns: Record<string, number>; loadout: Loadout; v: Validation; acts: Record<string, number[]>; expansion: number[]; rips: number; expansionDeaths: number }
 > = {};
 const BOSS_IDS = AREA_ORDER.map((a) => AREA_BOSSES[a].id);
 const modifiers = upgradeModifiers(upgrades);
@@ -733,6 +754,10 @@ for (const characterId of chars) {
     loadout,
     v: { checked: 0, rejected: [], runHeadroom: 0, areaHeadroom: {} },
     acts: {} as Record<string, number[]>,
+    /** The Expansion: fight lengths (spawn → collapse), Big Rips, deaths while it was alive. */
+    expansion: [] as number[],
+    rips: 0,
+    expansionDeaths: 0,
   });
   for (const seed of seeds) {
     const events = new EventBus();
@@ -752,7 +777,29 @@ for (const characterId of chars) {
       leaveArea = e.area;
     });
     events.on('areaEntered', (e) => log.push(`${fmt(run.time)} entered ${e.area} r=${run.bunny.radius.toFixed(1)}`));
-    events.on('bossDefeated', (e) => log.push(`${fmt(run.time)} ${e.defId} absorbed r=${run.bunny.radius.toFixed(1)}`));
+    events.on('bossDefeated', (e) => log.push(`${fmt(run.time)} ${e.defId} ${e.defId === 'the_expansion' ? 'collapsed' : 'absorbed'} r=${run.bunny.radius.toFixed(1)}`));
+    let expansionAt = -1;
+    events.on('bossSpawned', (e) => {
+      if (run.hazards.hazards.some((h) => h.id === e.hazardId && h instanceof TheExpansion)) expansionAt = run.time;
+    });
+    events.on('bossDefeated', (e) => {
+      if (e.defId === 'the_expansion' && expansionAt >= 0) sum.expansion.push(run.time - expansionAt);
+      expansionAt = -1;
+    });
+    let tugLogged = -1;
+    events.on('bossTug', (e) => {
+      if (run.time - tugLogged < 15) return;
+      tugLogged = run.time;
+      const boss = run.hazards.hazards.find((h): h is TheExpansion => h instanceof TheExpansion);
+      log.push(`${fmt(run.time)} tug gravity=${e.gravity.toFixed(2)} drain=${e.drain.toFixed(3)} H=${e.hubble.toFixed(3)} r=${run.bunny.radius.toFixed(1)} strands=${boss?.strandsSent ?? 0} starved=${bot.starved.toFixed(0)}s at (${run.bunny.x.toFixed(0)},${run.bunny.z.toFixed(0)})`);
+    });
+    events.on('bossRip', (e) => {
+      sum.rips++;
+      log.push(`${fmt(run.time)} Big Rip (${e.damaged ? 'hit' : 'blocked'}) r=${run.bunny.radius.toFixed(1)}`);
+    });
+    events.on('bunnyDied', () => {
+      if (expansionAt >= 0) sum.expansionDeaths++;
+    });
     const bot = new Bot(run);
     run.input = bot;
     let bossWon = false;
@@ -780,7 +827,7 @@ for (const characterId of chars) {
         hits++;
         log.push(`${fmt(run.time)} T${run.tier} r=${run.bunny.radius.toFixed(1)} hit by ${e.source} hp=${e.health}/${e.maxHealth}`);
       });
-      events.on('bossSpawned', (e) => log.push(`${fmt(run.time)} boss spawned, absorb at r=${e.absorbRadius.toFixed(1)} (r=${run.bunny.radius.toFixed(1)})`));
+      events.on('bossSpawned', (e) => log.push(`${fmt(run.time)} boss spawned, ${Number.isFinite(e.absorbRadius) ? `absorb at r=${e.absorbRadius.toFixed(1)}` : 'not absorbable by size'} (r=${run.bunny.radius.toFixed(1)})`));
       events.on('bossHit', (e) => log.push(`${fmt(run.time)} boss chipped → absorb at r=${e.absorbRadius.toFixed(1)} (r=${run.bunny.radius.toFixed(1)})`));
       events.on('bossStunned', (e) => log.push(`${fmt(run.time)} boss stunned (${e.cause ?? 'spiky'})`));
       events.on('bossSwallowed', (e) => log.push(`${fmt(run.time)} boss swallowed ${e.typeId} (${e.fullness}/${e.threshold})`));
@@ -847,6 +894,10 @@ for (const [id, s] of Object.entries(summary)) {
   if (acts.length) console.log(`          Act time, entry → boss absorbed (median, clears): ${acts.join('  ')}`);
   const stuns = Object.entries(s.stuns).map(([c, n]) => `${c} ${n}`).join(', ');
   console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}${stuns ? `  boss stuns: ${stuns}` : ''}`);
+  if (s.fights.the_expansion) {
+    const xs = [...s.expansion].sort((a, b) => a - b);
+    console.log(`          the Expansion (spawn → collapse): median ${fmt(med(xs))}, range ${fmt(xs[0])}–${fmt(xs[xs.length - 1])} (${xs.length} collapses / ${s.fights.the_expansion} fights), Big Rips ${s.rips}, deaths during the fight ${s.expansionDeaths}`);
+  }
   if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.grade}`).join(', ')}`);
   if (validate) {
     const pct = (x: number) => `${Math.round(x * 100)}%`;

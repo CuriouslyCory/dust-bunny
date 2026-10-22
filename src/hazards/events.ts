@@ -22,6 +22,16 @@ declare module '../core/events' {
      * few seconds) out of the `threshold` that stuns it.
      */
     bossSwallowed: { hazardId: number; typeId: string; fullness: number; threshold: number };
+    /**
+     * The Expansion's tug-of-war, about 4 times a second while it is alive: `gravity` in [0, 1]
+     * (1: it collapses; 0: the Big Rip), `pending` gravity still flowing in, the expansion's
+     * `drain` on it (per s) and the Hubble rate `hubble` (outward speed per unit of distance, 1/s).
+     */
+    bossTug: { hazardId: number; gravity: number; pending: number; drain: number; hubble: number };
+    /** The Big Rip: the bar reached the expansion end. `damaged`: the hit landed (not blocked); `volume` shed. */
+    bossRip: { hazardId: number; damaged: boolean; volume: number };
+    /** The bar reached the gravity end: the Expansion collapses, `debris` pieces rush into the Bunny; `bossDefeated` follows after `duration` s. */
+    bossCollapse: { hazardId: number; debris: number; duration: number };
     /** The Bunny rammed the stunned boss and chipped it smaller. */
     bossHit: { hazardId: number; size: number; absorbRadius: number };
     /** An area boss was absorbed (`defId` says which; the house boss opens the front door). */
