@@ -17,8 +17,9 @@ const AREA_LIGHT: Record<AreaId, { sky: string; ground: string; sun: string; int
   region: { sky: '#f2f4f6', ground: '#6b7458', sun: '#eef0f2', intensity: 1.7, dir: [-0.25, 1.9, 0.3] },
   // Dusk from the stratosphere: a warm sun low in the west (long shadows) and a cool blue-violet fill.
   continent: { sky: '#c6c2f2', ground: '#6a5a68', sun: '#ffb877', intensity: 3.3, dir: [-0.9, 0.42, 0.18] },
-  // Orbit: a hard white sun from one side and blue Earth-shine from below (the hemisphere's ground colour).
-  globe: { sky: '#1a2138', ground: '#3d7fc4', sun: '#ffffff', intensity: 3.6, dir: [1, 0.55, -0.2] },
+  // Orbit: a hard white sun from the east, a little ahead (so the oceans glint on the right of the
+  // view), a dark sky fill and blue Earth-shine from below (the hemisphere's ground colour).
+  globe: { sky: '#26304a', ground: '#4a8fd8', sun: '#fffaf2', intensity: 3.4, dir: [0.9, 0.62, -0.55] },
 };
 
 export class Lighting {
@@ -42,6 +43,7 @@ export class Lighting {
    * City: golden-hour light, a lower amber sun and a cooler fill bouncing off concrete.
    * Region: overcast noon seen from a few kilometres up (soft, high light).
    * Continent: dusk from the stratosphere (a warm, low sun and a blue-violet sky fill).
+   * Globe: orbit (a hard white sun from one side, blue Earth-shine from below).
    */
   setArea(area: AreaId): void {
     const L = AREA_LIGHT[area];

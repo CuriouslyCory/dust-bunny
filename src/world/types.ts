@@ -79,7 +79,12 @@ export type FloorMaterialId =
   | 'desertSand'
   | 'tundraSnow'
   | 'ruinsAsh'
-  | 'ocean';
+  | 'ocean'
+  // Globe (from orbit, 1 unit = 1,000 km): open ocean, shelf seas, land and polar ice (globeTextures.ts).
+  | 'globeOcean'
+  | 'globeShelf'
+  | 'globeLand'
+  | 'globeIce';
 
 export interface Room {
   id: string;

@@ -1,6 +1,7 @@
 /** Procedural canvas textures (floors, rugs, fur). Browser only. */
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type MeshStandardMaterial, type Texture } from 'three';
 import { Rng } from '../core/rng';
+import { globeIceTexture, globeLandTexture, globeOceanTexture, globeShelfTexture } from './globeTextures';
 import { desertTexture, highlandsTexture, lakeWaterTexture, oceanTexture, ruinsTexture, steppeTexture, tundraTexture } from './continentTextures';
 import type { FloorMaterialId } from './types';
 
@@ -686,6 +687,20 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
         break;
       case 'ocean':
         info = { texture: toTexture(oceanTexture()), worldSize: 40, roughness: 0.35 };
+        break;
+      // Globe floors (1 unit = 1,000 km), seen from orbit: globeTextures.ts. HouseView paints the map
+      // itself (buildGlobeSurface); these tile the ground past the poles. Sizes divide the 480-unit lap.
+      case 'globeOcean':
+        info = { texture: toTexture(globeOceanTexture()), worldSize: 40, roughness: 0.2 };
+        break;
+      case 'globeShelf':
+        info = { texture: toTexture(globeShelfTexture()), worldSize: 30, roughness: 0.3 };
+        break;
+      case 'globeLand':
+        info = { texture: toTexture(globeLandTexture()), worldSize: 40, roughness: 1 };
+        break;
+      case 'globeIce':
+        info = { texture: toTexture(globeIceTexture()), worldSize: 40, roughness: 0.5 };
         break;
     }
     floorCache.set(id, info);

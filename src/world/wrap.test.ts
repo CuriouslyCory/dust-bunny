@@ -57,7 +57,7 @@ describe('globe layout', () => {
       expect(g.exit).toBeUndefined();
       expect(g.obstacles).toEqual([]);
       for (let x = 0.5; x < GLOBE.width; x += 4) for (let z = 0.5; z < GLOBE.depth; z += 4) expect(roomAt(g, x, z), `${x},${z}`).toBeDefined();
-      for (let z = GLOBE.capMax + 1; z < GLOBE.depth - GLOBE.capMax - 1; z += 2) {
+      for (let z = GLOBE.northCap[1] + 1; z < GLOBE.depth - GLOBE.southCap[1] - 1; z += 2) {
         expect(roomAt(g, 0.5, z)?.type).toBe('oceans');
         expect(roomAt(g, GLOBE.width - 0.5, z)?.type).toBe('oceans');
       }

@@ -20,7 +20,7 @@ import {
 import { Lighting } from '../fx/lighting';
 import { getQuality, onQualityChange, type Quality } from '../fx/quality';
 import { installVignette } from '../fx/vignette';
-import { installHorizon, showHorizon } from '../fx/horizon';
+import { installHorizon, installLimb, showHorizon } from '../fx/horizon';
 import { EventBus } from '../core/events';
 import { CompositeInput, KeyboardInput, PointerSteerInput } from '../core/input';
 import { FixedLoop } from '../core/loop';
@@ -44,9 +44,10 @@ const BACKGROUND = '#3b2f2a';
 /**
  * Background / fog colour per area: indoor gloom, blue sky haze, golden-hour city haze, overcast
  * altitude haze, blue-violet dusk from the stratosphere (where the horizon overlay curves the
- * fog into the planet's limb, fx/horizon.ts), black space above the Globe.
+ * fog into the planet's limb, fx/horizon.ts), and the Globe's blue atmospheric haze, which the
+ * limb overlay (fx/horizon.ts, installLimb) turns into the glowing edge of the planet against black space.
  */
-const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#03040a' };
+const AREA_SKY: Record<AreaId, string> = { house: BACKGROUND, neighborhood: '#b9d4e6', city: '#e9c9a6', region: '#c8cfd4', continent: '#8d8ac0', globe: '#16467e' };
 
 export class Game {
   readonly events = new EventBus();
@@ -62,6 +63,8 @@ export class Game {
   readonly lighting: Lighting;
   /** Continent horizon overlay (null without a canvas container). */
   private horizon: HTMLElement | null = null;
+  /** The Globe's limb, starfield and sun overlay (null without a canvas container). */
+  private limb: HTMLElement | null = null;
   readonly sun: DirectionalLight;
   readonly debug: boolean;
 
@@ -102,6 +105,7 @@ export class Game {
     if (canvas.parentElement) {
       installVignette(canvas.parentElement);
       this.horizon = installHorizon(canvas.parentElement, AREA_SKY.continent);
+      this.limb = installLimb(canvas.parentElement, AREA_SKY.globe);
     }
 
     this.input.add(new KeyboardInput(window, () => TUNING.camera.yaw));
@@ -211,6 +215,7 @@ export class Game {
     this.fog.color.set(c);
     this.lighting.setArea(area);
     if (this.horizon) showHorizon(this.horizon, area === 'continent');
+    if (this.limb) showHorizon(this.limb, area === 'globe');
     this.canvas.parentElement?.classList.toggle('outdoor', area !== 'house');
     for (const a of AREA_ORDER) if (a !== 'house') this.canvas.parentElement?.classList.toggle(a, area === a);
   }

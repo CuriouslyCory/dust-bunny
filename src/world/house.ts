@@ -268,8 +268,48 @@ export function openExit(layout: HouseLayout): boolean {
   return true;
 }
 
+/** Bucket grid over a layout's rooms (maps with many zone rects, like the Globe's coastlines). */
+interface RoomIndex {
+  rooms: Room[];
+  count: number;
+  minX: number;
+  minZ: number;
+  cell: number;
+  cols: number;
+  rows: number;
+  /** Room indices per cell, ascending (so the first hit matches a linear scan). */
+  buckets: number[][];
+}
+const roomIndexes = new WeakMap<HouseLayout, RoomIndex>();
+const INDEX_FROM = 48;
+
+function roomIndex(layout: HouseLayout): RoomIndex {
+  const rooms = layout.rooms;
+  let idx = roomIndexes.get(layout);
+  if (idx && idx.rooms === rooms && idx.count === rooms.length) return idx;
+  const b = layout.bounds;
+  const cell = Math.max(1, Math.sqrt(((b.maxX - b.minX) * (b.maxZ - b.minZ)) / 4096));
+  const cols = Math.max(1, Math.ceil((b.maxX - b.minX) / cell));
+  const rows = Math.max(1, Math.ceil((b.maxZ - b.minZ) / cell));
+  const buckets: number[][] = Array.from({ length: cols * rows }, () => []);
+  const ci = (x: number) => Math.min(cols - 1, Math.max(0, Math.floor((x - b.minX) / cell)));
+  const cj = (z: number) => Math.min(rows - 1, Math.max(0, Math.floor((z - b.minZ) / cell)));
+  rooms.forEach((r, n) => {
+    for (let j = cj(r.rect.minZ); j <= cj(r.rect.maxZ); j++) for (let i = ci(r.rect.minX); i <= ci(r.rect.maxX); i++) buckets[j * cols + i]!.push(n);
+  });
+  idx = { rooms, count: rooms.length, minX: b.minX, minZ: b.minZ, cell, cols, rows, buckets };
+  roomIndexes.set(layout, idx);
+  return idx;
+}
+
 /** Room containing a point (interior test against the wall centre-line rect; any lap of a wrapping map). */
 export function roomAt(layout: HouseLayout, x: number, z: number): Room | undefined {
   const cx = canonicalX(layout, x);
-  return layout.rooms.find((r) => rectContains(r.rect, cx, z));
+  const rooms = layout.rooms;
+  if (rooms.length < INDEX_FROM) return rooms.find((r) => rectContains(r.rect, cx, z));
+  const idx = roomIndex(layout);
+  const i = Math.min(idx.cols - 1, Math.max(0, Math.floor((cx - idx.minX) / idx.cell)));
+  const j = Math.min(idx.rows - 1, Math.max(0, Math.floor((z - idx.minZ) / idx.cell)));
+  for (const n of idx.buckets[j * idx.cols + i]!) if (rectContains(rooms[n]!.rect, cx, z)) return rooms[n];
+  return undefined;
 }

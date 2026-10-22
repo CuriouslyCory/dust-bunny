@@ -44,6 +44,7 @@ import './cityModels';
 import { forestedMound, regionRoadblock } from './regionModels';
 import './continentModels';
 import { buildContinentWater } from './continentCoast';
+import { buildGlobeSurface, type GlobeSurfaceView } from './globeTextures';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
 import type { AreaId, FloorMaterialId, HouseLayout } from './types';
@@ -83,7 +84,7 @@ const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' 
   globe: 'wrap',
 };
 /** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'tundraSnow' };
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across).
@@ -111,6 +112,8 @@ export class HouseView {
   private time = 0;
   /** On a map that wraps east–west: the map drawn three times (laps −1, 0, +1), moved to the camera's lap each frame. */
   private lap: Group | null = null;
+  /** The Globe's painted Earth and drifting clouds (globeTextures.ts). */
+  private globe: GlobeSurfaceView | null = null;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
@@ -175,6 +178,12 @@ export class HouseView {
     ground.name = 'ground';
     this.root.add(ground);
 
+    if (this.layout.area === 'globe') {
+      // The Globe paints its whole map as one plane (coasts, biomes, ice, clouds) instead of zone floors.
+      this.globe = buildGlobeSurface(this.layout);
+      this.root.add(this.globe.object);
+      return;
+    }
     // One mesh per floor material; UVs are world-space so a single shared texture tiles seamlessly.
     const byFloor = new Map<FloorMaterialId, BufferGeometry[]>();
     for (const room of this.layout.rooms) {
@@ -580,6 +589,7 @@ export class HouseView {
   /** Fade anything blocking the line from the camera to the Bunny. */
   update(frameDt: number, camera: Vector3, bunnyX: number, bunnyY: number, bunnyZ: number, radius: number): void {
     if (this.lap) this.lap.position.x = wrapCopies(this.layout, camera.x)[1]!;
+    this.globe?.update(frameDt);
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
@@ -623,6 +633,7 @@ export class HouseView {
 
   dispose(): void {
     this.batch.dispose();
+    this.globe?.dispose();
     this.root.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;
