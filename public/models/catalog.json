@@ -1979,6 +1979,456 @@
       },
       "category": "prop",
       "units": "100 m"
+    },
+    {
+      "triangles": 828,
+      "footprintRadius": 139.8,
+      "height": 79.7,
+      "minY": 0.9,
+      "maxY": 80.6,
+      "sizeX": 276.8,
+      "sizeZ": 175.7,
+      "id": "debris_satellite",
+      "file": "models/debris_satellite.glb",
+      "bytes": 47944,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Wanderer that pulls. Dead, tumbling satellite: gold-foil bus with a dish, a scorched flank and a red beacon; loose fragments (r 60 to 105, low) in body. panels node (both solar wings, tilted 25 deg about X, the right one snapped near the tip) spins about its local Y axis; pivot at the bus centre (0, 34, 0).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "panels": {
+          "pivot": [
+            0.0,
+            34.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 2386,
+      "footprintRadius": 129.4,
+      "height": 32.7,
+      "minY": 13.5,
+      "maxY": 46.2,
+      "sizeX": 256.0,
+      "sizeZ": 137.5,
+      "id": "space_station",
+      "file": "models/space_station.glb",
+      "bytes": 106148,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Lane patrol: long axis along X (the truss, 250 long), moves along Z. Pressurised white modules run along Z through the middle (a capsule docked at the +Z end), white radiators off the truss, red/green nav lights at the truss ends. arrays node: eight blue solar wings at the truss ends (52 out from the truss); pivot on the truss axis (0, 24, 0); rotate it about local X to sun-track (keep within about +/-25 deg or the wings dip into the floor). It hovers: the lowest point is the modules' underside at y = 13.5.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "arrays": {
+          "pivot": [
+            0.0,
+            24.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 2028,
+      "footprintRadius": 152.7,
+      "height": 67.9,
+      "minY": 0.0,
+      "maxY": 67.9,
+      "sizeX": 236.2,
+      "sizeZ": 265.1,
+      "id": "asat_laser",
+      "file": "models/asat_laser.glb",
+      "bytes": 86700,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Turret that fires. Anti-satellite laser emplacement: an octagonal armoured pad with a yellow and black hazard ring, four solar petals, radar domes and red warning lights. head node (turret drum, tracking dish at the back, long finned barrel with a red emissive lens) turns about the vertical axis through the origin; pivot (0, 20, 0). The barrel points +Z; the muzzle tip is at (0, 50, 147) in model space (head at rest).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "head": {
+          "pivot": [
+            0.0,
+            20.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 1962,
+      "footprintRadius": 137.3,
+      "height": 46.7,
+      "minY": 0.8,
+      "maxY": 47.5,
+      "sizeX": 91.5,
+      "sizeZ": 243.2,
+      "id": "reentry_burn",
+      "file": "models/reentry_burn.glb",
+      "bytes": 64940,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Trail-layer that lays a fire trail. Re-entry capsule moving +Z: a white-hot heat shield at the front, the burnt back shell visible from above, a bow-shock collar of orange plasma round the front and sides, and a plasma trail (white core, orange, red, then smoke) streaming back to -Z with embers (the trail continues from the -Z end).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 2544,
+      "footprintRadius": 324.0,
+      "height": 42.1,
+      "minY": 0.9,
+      "maxY": 43.0,
+      "sizeX": 621.5,
+      "sizeZ": 615.8,
+      "id": "globe_hurricane",
+      "file": "models/globe_hurricane.glb",
+      "bytes": 88832,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Cone blaster. A hurricane seen from orbit: flat white spiral cloud bands (r 330) with blue-grey shadows round a clear eye (r 40, open to the ocean). spiral node (dense overcast, five spiral arms, outer feeder bands, lightning) spins about its local Y axis through the origin (positive = counter-clockwise from above, the way the arms trail). body is the eyewall. The wind cone blows +Z from the front of the eyewall at about (0, 22, 68) in model space.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "spiral": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 4184,
+      "footprintRadius": 255.0,
+      "height": 134.8,
+      "minY": 4.1,
+      "maxY": 138.9,
+      "sizeX": 503.6,
+      "sizeZ": 389.6,
+      "id": "orbital_sweeper",
+      "file": "models/orbital_sweeper.glb",
+      "bytes": 193924,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Boss. The Orbital Sweeper, a net-and-laser cleanup satellite (a vacuum cleaner for space), front +Z: a long white octagonal bus with red bands, a dust-bin canister on its back, a red emissive visor eye, an amber beacon and a cyan engine glow at the back (-Z). net node: the intake funnel (flattened, 235 wide, yellow lip, glowing cyan throat) and the orange capture net domed in front of it; pivot at its attachment to the bus, (0, 58, 50). wings node: two solar wings (6 panels, 490 tip to tip) on booms; pivot on the bus axis (0, 58, -40); rotate about local X to feather (any angle) or about local Z to flap (keep within +/-10 deg or the tips reach the floor). Two laser emitters on pylons beside the bus; lens tips at (+/-80, 62, 84) in model space, firing +Z.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "net": {
+          "pivot": [
+            0.0,
+            58.0,
+            50.0
+          ]
+        },
+        "wings": {
+          "pivot": [
+            0.0,
+            58.0,
+            -40.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 200,
+      "footprintRadius": 51.9,
+      "height": 28.6,
+      "minY": 0.7,
+      "maxY": 29.3,
+      "sizeX": 100.0,
+      "sizeZ": 54.0,
+      "id": "mini_sweeper",
+      "file": "models/mini_sweeper.glb",
+      "bytes": 17392,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Kessler-swarm minion of the Orbital Sweeper, front +Z: a small white hexagonal bus with a red band, a red emissive eye, an intake funnel with a cyan throat at the front and two solar wings. Static (no animated nodes).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "hazard",
+      "units": "10 km"
+    },
+    {
+      "triangles": 684,
+      "footprintRadius": 52.2,
+      "height": 9.0,
+      "minY": 0.0,
+      "maxY": 9.0,
+      "sizeX": 88.6,
+      "sizeZ": 97.0,
+      "id": "island",
+      "file": "models/island.glb",
+      "bytes": 23068,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Tropical island: a jungle-green hill on a sand beach inside a turquoise lagoon, ringed by a reef with a white surf line.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 816,
+      "footprintRadius": 46.5,
+      "height": 3.2,
+      "minY": 0.0,
+      "maxY": 3.2,
+      "sizeX": 79.9,
+      "sizeZ": 84.9,
+      "id": "atoll",
+      "file": "models/atoll.glb",
+      "bytes": 26800,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Ring-shaped coral atoll: a reef ring with a white surf line and a broken chain of sandy, palm-green islets round a pale turquoise lagoon with a deeper centre.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 1100,
+      "footprintRadius": 88.9,
+      "height": 9.0,
+      "minY": 0.0,
+      "maxY": 9.0,
+      "sizeX": 173.3,
+      "sizeZ": 65.2,
+      "id": "archipelago",
+      "file": "models/archipelago.glb",
+      "bytes": 32484,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. A curved chain of seven small green islands on sand rims, each in its own turquoise shallows, long axis along X.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 1230,
+      "footprintRadius": 102.6,
+      "height": 7.0,
+      "minY": 0.0,
+      "maxY": 7.0,
+      "sizeX": 200.0,
+      "sizeZ": 144.8,
+      "id": "ocean_patch",
+      "file": "models/ocean_patch.glb",
+      "bytes": 39760,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. A lifted lozenge of deep ocean (200 x 144): dark blue sides, a gently waved deep-blue surface with paler swells, a white surf rim and wind-streaked whitecaps.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 1600,
+      "footprintRadius": 223.8,
+      "height": 41.2,
+      "minY": 0.0,
+      "maxY": 41.2,
+      "sizeX": 358.8,
+      "sizeZ": 377.6,
+      "id": "landmass",
+      "file": "models/landmass.glb",
+      "bytes": 52640,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. A continent-sized chunk of land: a pale continental shelf and sandy coast round green lowlands, savanna and a tan desert, a lake, and a mountain chain with snow caps along a diagonal spine.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 5120,
+      "footprintRadius": 176.5,
+      "height": 353.5,
+      "minY": 0.0,
+      "maxY": 353.5,
+      "sizeX": 348.0,
+      "sizeZ": 349.4,
+      "id": "moon",
+      "file": "models/moon.glb",
+      "bytes": 108524,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. The Moon at true size (radius 1,737 km = 174 units): a grey cratered sphere resting ON the floor (origin at the bottom of the sphere), dark maria on the top face, crater bowls with pale rims.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 316,
+      "footprintRadius": 30.4,
+      "height": 23.1,
+      "minY": 0.0,
+      "maxY": 23.1,
+      "sizeX": 60.0,
+      "sizeZ": 15.8,
+      "id": "satellite",
+      "file": "models/satellite.glb",
+      "bytes": 18628,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Small intact satellite: gold-foil bus with a white dish and an antenna, two blue solar wings along X.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 624,
+      "footprintRadius": 36.9,
+      "height": 19.2,
+      "minY": 0.0,
+      "maxY": 19.2,
+      "sizeX": 18.7,
+      "sizeZ": 69.0,
+      "id": "rocket_stage",
+      "file": "models/rocket_stage.glb",
+      "bytes": 23136,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. Spent upper stage lying on its side, long axis along Z: white tank with an orange insulation band and a black ring, interstage collar at the front (+Z), engine bell at the back (-Z).",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 616,
+      "footprintRadius": 34.2,
+      "height": 16.0,
+      "minY": 0.0,
+      "maxY": 16.0,
+      "sizeX": 60.8,
+      "sizeZ": 55.7,
+      "id": "space_junk",
+      "file": "models/space_junk.glb",
+      "bytes": 31572,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. A loose cluster of orbital junk: a torn solar panel, a bent truss, a spherical tank, a broken dish and scraps of foil and hull.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
+    },
+    {
+      "triangles": 510,
+      "footprintRadius": 59.0,
+      "height": 9.5,
+      "minY": 0.0,
+      "maxY": 9.5,
+      "sizeX": 105.9,
+      "sizeZ": 99.4,
+      "id": "cloud_swirl",
+      "file": "models/cloud_swirl.glb",
+      "bytes": 16300,
+      "notes": "Globe scale: 1 unit = 10 km, load at scale 0.01. A small weather system seen from orbit: a white cloud spiral (three trailing arms round a puffy core) with blue-grey shading.",
+      "nodes": {
+        "body": {
+          "pivot": [
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "category": "prop",
+      "units": "10 km"
     }
   ]
 }

@@ -4,7 +4,7 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 
 ## Conventions
 
-- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. Exception: the Continent models (`tools/blender/continent.py`, rows whose notes start with "Continent scale") use 1 unit = 100 m, because one Continent world unit is 10 km = 100 units; load them at scale 0.01 (`"scale": 0.01` in `manifest.json`). Their sizes in the table are in those 100 m units, and their catalog entries carry `"units": "100 m"`.
+- Units: 1 unit = 1 cm, so load at scale 1 in the cm-based world. Exception: the Continent models (`tools/blender/continent.py`, rows whose notes start with "Continent scale") use 1 unit = 100 m, because one Continent world unit is 10 km = 100 units; load them at scale 0.01 (`"scale": 0.01` in `manifest.json`). Their sizes in the table are in those 100 m units, and their catalog entries carry `"units": "100 m"`. The Globe models (`tools/blender/globe.py`, notes starting "Globe scale") use 1 unit = 10 km: see Globe scale below.
 - Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).
 - Origin: bottom centre at the floor contact point (y = 0). The broom is the exception: see its row.
 - No Draco, no textures: Principled BSDF base colour, roughness, metallic, and emissive (roomba button, Robo-Vac eye, vacuum lamp and power light, street sweeper beacon and headlights, city vehicle beacons, headlights and signs, street lamp and tower crown lights, region vehicle beacons and light bars, the Incinerator's furnace glow, volcano lava, Ice Sheet crevasses and eyes, storm lightning).
@@ -12,16 +12,22 @@ Procedural low-poly models for Dust Bunny, built with Blender (`tools/blender/`)
 - Footprint radius is the largest horizontal distance from the origin to any vertex; height is the vertical extent.
 - `public/models/catalog.json` holds the same numbers in machine-readable form (plus X/Z extents and node pivots).
 
+## Globe scale
+
+One Globe world unit is 1,000 km, so the Globe models (`tools/blender/globe.py`) are authored at 1 unit = 10 km (100 units per world unit) and loaded at `"scale": 0.01` in `manifest.json`, the same factor as the Continent. Their catalog entries carry `"units": "10 km"` and their table sizes are in those 10 km units: multiply by 0.01 for Globe world units (the Orbital Sweeper's 255 footprint radius is 2.55 world units). Hazards load with fit none + collapse, so the hazard code scales them by `size / modelSize`; Debris props are normalised to their Debris size by `src/entities/debrisGeometry.ts`, so only their shape and proportions matter (the Moon is drawn at its true 1,737 km radius).
+
 ## Rebuild
 
 ```sh
 blender -b --factory-startup --python tools/blender/build_all.py
 # only some models:
 blender -b --factory-startup --python tools/blender/build_all.py -- roomba broom
-# contact sheets -> docs/models-preview.png (cm models) and docs/models-preview-continent.png
+# contact sheets -> docs/models-preview.png (cm models), docs/models-preview-continent.png and docs/models-preview-globe.png
 blender -b --factory-startup --python tools/blender/render_preview.py
 # only the Continent sheet:
 blender -b --factory-startup --python tools/blender/render_preview.py -- --continent
+# only the Globe sheet:
+blender -b --factory-startup --python tools/blender/render_preview.py -- --globe
 ```
 
 ## Catalogue
@@ -107,13 +113,34 @@ blender -b --factory-startup --python tools/blender/render_preview.py -- --conti
 | `city_ruins` | prop | `public/models/city_ruins.glb` | 67 | 23.6 | 122.2 × 124.3 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. What is left of a city: a cracked grey pad with a cluster of tiny broken grey towers, scorched blocks and rubble piles. | 1058 | 54.6 |
 | `mesa` | prop | `public/models/mesa.glb` | 77.7 | 35.6 | 130.5 × 137.7 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Red flat-topped plateau: banded cliff strata over a tan talus apron, scrubby flat top, a small butte beside it and fallen boulders. | 1196 | 41.8 |
 | `forest_patch` | prop | `public/models/forest_patch.glb` | 75.7 | 15.1 | 131.2 × 135.8 | +Z | Continent scale: 1 unit = 100 m, load at scale 0.01. Dense clump of tiny dark-green conifer cones on a forest-floor patch. | 1490 | 80.6 |
+| `debris_satellite` | hazard | `public/models/debris_satellite.glb` | 139.8 | 79.7 | 276.8 × 175.7 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Wanderer that pulls. Dead, tumbling satellite: gold-foil bus with a dish, a scorched flank and a red beacon; loose fragments (r 60 to 105, low) in body. panels node (both solar wings, tilted 25 deg about X, the right one snapped near the tip) spins about its local Y axis; pivot at the bus centre (0, 34, 0). Animated nodes: `panels` at (0.0, 34.0, 0.0). | 828 | 46.8 |
+| `space_station` | hazard | `public/models/space_station.glb` | 129.4 | 32.7 | 256 × 137.5 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Lane patrol: long axis along X (the truss, 250 long), moves along Z. Pressurised white modules run along Z through the middle (a capsule docked at the +Z end), white radiators off the truss, red/green nav lights at the truss ends. arrays node: eight blue solar wings at the truss ends (52 out from the truss); pivot on the truss axis (0, 24, 0); rotate it about local X to sun-track (keep within about +/-25 deg or the wings dip into the floor). It hovers: the lowest point is the modules' underside at y = 13.5. Animated nodes: `arrays` at (0.0, 24.0, 0.0). | 2386 | 103.7 |
+| `asat_laser` | hazard | `public/models/asat_laser.glb` | 152.7 | 67.9 | 236.2 × 265.1 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Turret that fires. Anti-satellite laser emplacement: an octagonal armoured pad with a yellow and black hazard ring, four solar petals, radar domes and red warning lights. head node (turret drum, tracking dish at the back, long finned barrel with a red emissive lens) turns about the vertical axis through the origin; pivot (0, 20, 0). The barrel points +Z; the muzzle tip is at (0, 50, 147) in model space (head at rest). Animated nodes: `head` at (0.0, 20.0, 0.0). | 2028 | 84.7 |
+| `reentry_burn` | hazard | `public/models/reentry_burn.glb` | 137.3 | 46.7 | 91.5 × 243.2 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Trail-layer that lays a fire trail. Re-entry capsule moving +Z: a white-hot heat shield at the front, the burnt back shell visible from above, a bow-shock collar of orange plasma round the front and sides, and a plasma trail (white core, orange, red, then smoke) streaming back to -Z with embers (the trail continues from the -Z end). | 1962 | 63.4 |
+| `globe_hurricane` | hazard | `public/models/globe_hurricane.glb` | 324 | 42.1 | 621.5 × 615.8 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Cone blaster. A hurricane seen from orbit: flat white spiral cloud bands (r 330) with blue-grey shadows round a clear eye (r 40, open to the ocean). spiral node (dense overcast, five spiral arms, outer feeder bands, lightning) spins about its local Y axis through the origin (positive = counter-clockwise from above, the way the arms trail). body is the eyewall. The wind cone blows +Z from the front of the eyewall at about (0, 22, 68) in model space. Animated nodes: `spiral` at (0.0, 0.0, 0.0). | 2544 | 86.8 |
+| `orbital_sweeper` | hazard | `public/models/orbital_sweeper.glb` | 255 | 134.8 | 503.6 × 389.6 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Boss. The Orbital Sweeper, a net-and-laser cleanup satellite (a vacuum cleaner for space), front +Z: a long white octagonal bus with red bands, a dust-bin canister on its back, a red emissive visor eye, an amber beacon and a cyan engine glow at the back (-Z). net node: the intake funnel (flattened, 235 wide, yellow lip, glowing cyan throat) and the orange capture net domed in front of it; pivot at its attachment to the bus, (0, 58, 50). wings node: two solar wings (6 panels, 490 tip to tip) on booms; pivot on the bus axis (0, 58, -40); rotate about local X to feather (any angle) or about local Z to flap (keep within +/-10 deg or the tips reach the floor). Two laser emitters on pylons beside the bus; lens tips at (+/-80, 62, 84) in model space, firing +Z. Animated nodes: `net` at (0.0, 58.0, 50.0), `wings` at (0.0, 58.0, -40.0). | 4184 | 189.4 |
+| `mini_sweeper` | hazard | `public/models/mini_sweeper.glb` | 51.9 | 28.6 | 100 × 54 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Kessler-swarm minion of the Orbital Sweeper, front +Z: a small white hexagonal bus with a red band, a red emissive eye, an intake funnel with a cyan throat at the front and two solar wings. Static (no animated nodes). | 200 | 17.0 |
+| `island` | prop | `public/models/island.glb` | 52.2 | 9 | 88.6 × 97 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Tropical island: a jungle-green hill on a sand beach inside a turquoise lagoon, ringed by a reef with a white surf line. | 684 | 22.5 |
+| `atoll` | prop | `public/models/atoll.glb` | 46.5 | 3.2 | 79.9 × 84.9 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Ring-shaped coral atoll: a reef ring with a white surf line and a broken chain of sandy, palm-green islets round a pale turquoise lagoon with a deeper centre. | 816 | 26.2 |
+| `archipelago` | prop | `public/models/archipelago.glb` | 88.9 | 9 | 173.3 × 65.2 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A curved chain of seven small green islands on sand rims, each in its own turquoise shallows, long axis along X. | 1100 | 31.7 |
+| `ocean_patch` | prop | `public/models/ocean_patch.glb` | 102.6 | 7 | 200 × 144.8 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A lifted lozenge of deep ocean (200 x 144): dark blue sides, a gently waved deep-blue surface with paler swells, a white surf rim and wind-streaked whitecaps. | 1230 | 38.8 |
+| `landmass` | prop | `public/models/landmass.glb` | 223.8 | 41.2 | 358.8 × 377.6 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A continent-sized chunk of land: a pale continental shelf and sandy coast round green lowlands, savanna and a tan desert, a lake, and a mountain chain with snow caps along a diagonal spine. | 1600 | 51.4 |
+| `moon` | prop | `public/models/moon.glb` | 176.5 | 353.5 | 348 × 349.4 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. The Moon at true size (radius 1,737 km = 174 units): a grey cratered sphere resting ON the floor (origin at the bottom of the sphere), dark maria on the top face, crater bowls with pale rims. | 5120 | 106.0 |
+| `satellite` | prop | `public/models/satellite.glb` | 30.4 | 23.1 | 60 × 15.8 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Small intact satellite: gold-foil bus with a white dish and an antenna, two blue solar wings along X. | 316 | 18.2 |
+| `rocket_stage` | prop | `public/models/rocket_stage.glb` | 36.9 | 19.2 | 18.7 × 69 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. Spent upper stage lying on its side, long axis along Z: white tank with an orange insulation band and a black ring, interstage collar at the front (+Z), engine bell at the back (-Z). | 624 | 22.6 |
+| `space_junk` | prop | `public/models/space_junk.glb` | 34.2 | 16 | 60.8 × 55.7 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A loose cluster of orbital junk: a torn solar panel, a bent truss, a spherical tank, a broken dish and scraps of foil and hull. | 616 | 30.8 |
+| `cloud_swirl` | prop | `public/models/cloud_swirl.glb` | 59 | 9.5 | 105.9 × 99.4 | +Z | Globe scale: 1 unit = 10 km, load at scale 0.01. A small weather system seen from orbit: a white cloud spiral (three trailing arms round a puffy core) with blue-grey shading. | 510 | 15.9 |
 
-\* Continent models: units of 100 m (see Conventions).
+\* Continent models: units of 100 m (see Conventions). Globe models: units of 10 km (see Globe scale).
 
-Total: 79 models, 109342 triangles, 4554 KB.
+Total: 96 models, 136090 triangles, 5510 KB.
 
 ![Contact sheet](models-preview.png)
 
 Continent models (Act 5):
 
 ![Continent contact sheet](models-preview-continent.png)
+
+Globe models (Act 6):
+
+![Globe contact sheet](models-preview-globe.png)

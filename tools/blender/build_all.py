@@ -18,6 +18,7 @@ import city  # noqa: E402
 import common  # noqa: E402
 import continent  # noqa: E402
 import furniture  # noqa: E402
+import globe  # noqa: E402
 import hazards  # noqa: E402
 import outdoor  # noqa: E402
 import region  # noqa: E402
@@ -33,10 +34,12 @@ CATEGORIES = [("hazard", hazards.BUILDERS), ("furniture", furniture.BUILDERS),
               # region (Act 4, after the city)
               ("hazard", region.HAZARDS),
               # continent (Act 5; 1 unit = 100 m, loaded at scale 0.01)
-              ("hazard", continent.HAZARDS), ("prop", continent.PROPS)]
+              ("hazard", continent.HAZARDS), ("prop", continent.PROPS),
+              # globe (Act 6; 1 unit = 10 km, loaded at scale 0.01)
+              ("hazard", globe.HAZARDS), ("prop", globe.PROPS)]
 # ids authored in other units than cm (catalog "units" field)
-UNITS = {fn.__name__: continent.UNITS
-         for fn in continent.HAZARDS + continent.PROPS}
+UNITS = {fn.__name__: mod.UNITS for mod in (continent, globe)
+         for fn in mod.HAZARDS + mod.PROPS}
 MANIFEST = os.path.join(common.OUT_DIR, "catalog.json")
 DOC = os.path.join(common.DOCS_DIR, "models.md")
 
@@ -90,7 +93,9 @@ def write_doc(models):
         "Continent world unit is 10 km = 100 units; load them at scale 0.01 "
         "(`\"scale\": 0.01` in `manifest.json`). Their sizes in the table "
         "are in those 100 m units, and their catalog entries carry "
-        "`\"units\": \"100 m\"`.",
+        "`\"units\": \"100 m\"`. The Globe models "
+        "(`tools/blender/globe.py`, notes starting \"Globe scale\") use "
+        "1 unit = 10 km: see Globe scale below.",
         "- Axes: +Y up, forward is +Z (Blender -Y is exported as +Z).",
         "- Origin: bottom centre at the floor contact point (y = 0). "
         "The broom is the exception: see its row.",
@@ -109,6 +114,21 @@ def write_doc(models):
         "- `public/models/catalog.json` holds the same numbers in "
         "machine-readable form (plus X/Z extents and node pivots).",
         "",
+        "## Globe scale",
+        "",
+        "One Globe world unit is 1,000 km, so the Globe models "
+        "(`tools/blender/globe.py`) are authored at 1 unit = 10 km (100 "
+        "units per world unit) and loaded at `\"scale\": 0.01` in "
+        "`manifest.json`, the same factor as the Continent. Their catalog "
+        "entries carry `\"units\": \"10 km\"` and their table sizes are in "
+        "those 10 km units: multiply by 0.01 for Globe world units (the "
+        "Orbital Sweeper's 255 footprint radius is 2.55 world units). Hazards "
+        "load with fit none + collapse, so the hazard code scales them by "
+        "`size / modelSize`; Debris props are normalised to their Debris "
+        "size by `src/entities/debrisGeometry.ts`, so only their shape and "
+        "proportions matter (the Moon is drawn at its true 1,737 km "
+        "radius).",
+        "",
         "## Rebuild",
         "",
         "```sh",
@@ -116,12 +136,15 @@ def write_doc(models):
         "# only some models:",
         "blender -b --factory-startup --python tools/blender/build_all.py -- "
         "roomba broom",
-        "# contact sheets -> docs/models-preview.png (cm models) and "
-        "docs/models-preview-continent.png",
+        "# contact sheets -> docs/models-preview.png (cm models), "
+        "docs/models-preview-continent.png and docs/models-preview-globe.png",
         "blender -b --factory-startup --python tools/blender/render_preview.py",
         "# only the Continent sheet:",
         "blender -b --factory-startup --python tools/blender/render_preview.py"
         " -- --continent",
+        "# only the Globe sheet:",
+        "blender -b --factory-startup --python tools/blender/render_preview.py"
+        " -- --globe",
         "```",
         "",
         "## Catalogue",
@@ -143,7 +166,8 @@ def write_doc(models):
             f"{m['triangles']} | {m['bytes'] / 1024:.1f} |")
     lines += [
         "",
-        "\\* Continent models: units of 100 m (see Conventions).",
+        "\\* Continent models: units of 100 m (see Conventions). Globe "
+        "models: units of 10 km (see Globe scale).",
         "",
         f"Total: {len(models)} models, "
         f"{sum(m['triangles'] for m in models)} triangles, "
@@ -154,6 +178,10 @@ def write_doc(models):
         "Continent models (Act 5):",
         "",
         "![Continent contact sheet](models-preview-continent.png)",
+        "",
+        "Globe models (Act 6):",
+        "",
+        "![Globe contact sheet](models-preview-globe.png)",
         "",
     ]
     with open(DOC, "w") as f:
