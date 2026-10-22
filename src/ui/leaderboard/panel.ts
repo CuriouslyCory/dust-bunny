@@ -293,7 +293,7 @@ export function createLeaderboardPanel(opts: LeaderboardPanelOptions = {}): Lead
     showRun(e) {
       unsubscribe?.();
       posts = posting ? posting.forResult(e) : (() => {
-        const p = new RunPosts(client, e.stats.characterId, e.stats.difficulty);
+        const p = new RunPosts(client, e.stats.characterId, e.stats.difficulty, true, e.stats.loadout ?? []);
         p.finish(e);
         return p;
       })();

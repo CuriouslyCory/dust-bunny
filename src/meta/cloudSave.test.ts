@@ -13,7 +13,8 @@ const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map:
 const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}): Progress => ({
   fluff,
   upgrades,
-  stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned },
+  characters: {},
+  stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
 });
 
 /** In-memory /api/progress with the same accept rule as the real one (per signed-in user). */
@@ -130,7 +131,7 @@ describe('cloud save', () => {
   it("loads the account's own progress when the device last synced another account", async () => {
     const s = setup(prog(900, 900, 30, { extra_heart: 2 }), { [CLOUD_USER_KEY]: 'other' });
     await s.signIn('u2');
-    expect(progressOf(s.meta.data)).toEqual(progressOf({ ...s.meta.data, fluff: 0, upgrades: {}, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0 } }));
+    expect(progressOf(s.meta.data)).toEqual(progressOf({ ...s.meta.data, fluff: 0, upgrades: {}, stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0, feltings: 0 }, characters: {} }));
     expect(s.server.puts).toEqual([]);
     expect(s.storage.map.get(CLOUD_USER_KEY)).toBe('u2');
   });
@@ -145,6 +146,26 @@ describe('cloud save', () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(s.server.puts).toHaveLength(1);
     expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1, magnetism: 1 });
+  });
+
+  it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {
+    const s = setup(prog(500, 500, 5));
+    await s.signIn('u1');
+    s.server.puts.length = 0;
+    const k = { type: 'reclaim', grade: 1 } as const;
+    s.meta.creditKeepsakes('lint', [k, k, k, k], 'robovac_9000');
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.server.rows.get('u1')?.characters).toEqual({ lint: { hoard: { 'reclaim:1': 4 }, bossesBeaten: ['robovac_9000'] } });
+    s.server.setDown(true);
+    expect(s.meta.felt('lint', k).ok).toBe(true);
+    expect(s.meta.shed('lint', k).ok).toBe(true);
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('u1');
+    s.server.setDown(false);
+    await vi.advanceTimersByTimeAsync(31_000);
+    const row = s.server.rows.get('u1')!;
+    expect(row.characters.lint!.hoard).toEqual({ 'reclaim:2': 1 });
+    expect(row.fluff).toBe(500 - 160 + 10);
+    expect(row.stats.totalFluffEarned).toBe(500);
   });
 
   it('adopts the server copy when another device got further', async () => {

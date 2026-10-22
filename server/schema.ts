@@ -14,7 +14,12 @@
 export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
-  AND to_regclass('public.area_scores_user_idx') IS NOT NULL AS ready`;
+  AND to_regclass('public.area_scores_user_idx') IS NOT NULL
+  AND (SELECT count(*) = 3 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND ((table_name = 'player_progress' AND column_name = 'characters')
+            OR (table_name = 'leaderboard_scores' AND column_name = 'loadout')
+            OR (table_name = 'area_scores' AND column_name = 'loadout'))) AS ready`;
 
 export const SCHEMA: readonly string[] = [
   // --- Better Auth (accounts and sessions) ---
@@ -116,13 +121,19 @@ export const SCHEMA: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS area_scores_ip_idx ON area_scores (ip_hash, created_at)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS area_scores_run_idx ON area_scores (run_id, area) WHERE run_id IS NOT NULL`,
   `CREATE INDEX IF NOT EXISTS area_scores_user_idx ON area_scores (user_id, area, score DESC) WHERE user_id IS NOT NULL`,
+  // The Run's Loadout: [{ type, grade }] (0–2 Keepsakes); NULL for entries from clients before Keepsakes.
+  `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
+  `ALTER TABLE area_scores ADD COLUMN IF NOT EXISTS loadout jsonb`,
 
-  // --- Cloud save (Fluff, Upgrades, stats) for signed-in players ---
+  // --- Cloud save (Fluff, Upgrades, Keepsake Hoards, stats) for signed-in players ---
   `CREATE TABLE IF NOT EXISTS player_progress (
     user_id text PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
     fluff integer NOT NULL CHECK (fluff >= 0),
     upgrades jsonb NOT NULL,
     stats jsonb NOT NULL,
+    characters jsonb NOT NULL DEFAULT '{}',
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
+  // Tables created before Keepsakes: each Character's Hoard and bosses beaten.
+  `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}'`,
 ];

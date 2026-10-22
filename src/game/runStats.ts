@@ -1,4 +1,5 @@
 /** Results of a Run, passed with runEnded and shown on the results screen. */
+import type { KeepsakeRef } from '../data/keepsakes';
 import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 export type RunEndReason = 'died' | 'victory' | 'quit';
@@ -43,4 +44,6 @@ export interface RunStats {
   neighborhoodCleared?: boolean;
   /** Every Area played, in order; the last is the one the Run ended in. Missing on older payloads. */
   areas?: AreaStats[];
+  /** Keepsakes tucked in for the Run (0–2). Missing on older payloads. */
+  loadout?: KeepsakeRef[];
 }

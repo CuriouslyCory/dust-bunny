@@ -200,3 +200,32 @@ describe('validateAreaSubmission', () => {
     expect(areaErr({ ...s, difficulty: 'hardcore' })).toBe('score');
   });
 });
+
+describe('loadout', () => {
+  it('is optional (older clients) and returned clean when sent', () => {
+    const old = validateSubmission(submission());
+    expect(old.ok && 'loadout' in old.value).toBe(false);
+    const r = validateSubmission(submission({ loadout: [{ type: 'thick_clog', grade: 2 }, { type: 'thick_clog', grade: 2 }] }));
+    expect(r.ok && r.value.loadout).toEqual([{ type: 'thick_clog', grade: 2 }, { type: 'thick_clog', grade: 2 }]);
+    const empty = validateSubmission(submission({ loadout: [] }));
+    expect(empty.ok && empty.value.loadout).toEqual([]);
+  });
+
+  it("accepts only the character's own types, grades 1-10 and two slots", () => {
+    expect(err(submission({ loadout: [{ type: 'arc', grade: 1 }] }))).toBe('loadout');
+    expect(err(submission({ character: 'zap', loadout: [{ type: 'arc', grade: 10 }] }))).toBeNull();
+    expect(err(submission({ loadout: [{ type: 'reclaim', grade: 11 }] }))).toBe('loadout');
+    expect(err(submission({ loadout: [{ type: 'reclaim', grade: 0 }] }))).toBe('loadout');
+    expect(err(submission({ loadout: [{ type: 'reclaim', grade: 1 }, { type: 'reclaim', grade: 1 }, { type: 'reclaim', grade: 1 }] }))).toBe('loadout');
+    expect(err({ ...submission(), loadout: { type: 'reclaim', grade: 1 } })).toBe('loadout');
+  });
+
+  it('is checked on Area boards too', () => {
+    const f = { area: 'house', radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, durationMs: 400_000, difficulty: 'casual' } as const;
+    const body = { name: 'Lint', character: 'tumble', ...f, score: computeAreaScore(f) };
+    const ok = validateAreaSubmission({ ...body, loadout: [{ type: 'snowball', grade: 1 }] });
+    expect(ok.ok && ok.value.loadout).toEqual([{ type: 'snowball', grade: 1 }]);
+    const bad = validateAreaSubmission({ ...body, loadout: [{ type: 'reclaim', grade: 1 }] });
+    expect(bad.ok ? null : bad.field).toBe('loadout');
+  });
+});

@@ -1,0 +1,176 @@
+/**
+ * Keepsake drops (pure, no DOM): what a boss leaves in the fur of the Character that absorbed it,
+ * and the per-Run record the results screen reads.
+ *
+ * Rules (DROP_RULES in src/data/keepsakes.ts):
+ * - Every boss kill credits 1 Keepsake of the boss's grade (`gradeForBoss`) with a random type,
+ *   seeded from the Run seed and the boss, so a seed always drops the same thing. Hardcore adds 1.
+ * - The Character's first kill of a boss offers 3 types instead of the random one. The first offer
+ *   is credited at once (so nothing is lost if the tab closes); the results screen's card swaps it
+ *   for another offered type until the player leaves results. Leaving without choosing keeps the
+ *   first offer.
+ * - Credited on `bossDefeated`, so a Run that later ends in death or a quit keeps them.
+ * - Unranked Runs (`?debug`, `?area=` starts) drop nothing and don't count the boss as beaten.
+ * - Chips don't matter: how a boss is beaten never changes the reward.
+ *
+ *   const tracker = new KeepsakeTracker(meta, (e) => events.emit('keepsakesDropped', e));
+ *   tracker.start({ seed, characterId, difficulty, ranked });   // runStarted
+ *   tracker.bossDefeated(defId);                                 // bossDefeated
+ *   tracker.forResult(runEndedPayload)                           // results "Kept" section
+ */
+import type { GameEvents } from '../core/events';
+import { Rng } from '../core/rng';
+import { DROP_RULES, gradeForBoss, keepsakeTypesFor, type KeepsakeRef, type KeepsakeTypeId } from '../data/keepsakes';
+import type { DifficultyId } from '../shared/difficulty';
+import type { MetaProgress } from './meta';
+
+/** One Keepsake a boss left. */
+export interface KeepsakeDrop {
+  /** What is in the Hoard now (for a first kill: the current pick among `offer`). */
+  ref: KeepsakeRef;
+  bossId: string;
+  /** First kill: the three types offered (ref.type is one of them). */
+  offer?: KeepsakeTypeId[];
+  /** True once the player picked from the offer on the results screen. */
+  chosen?: boolean;
+  /** The extra Hardcore Keepsake. */
+  bonus?: boolean;
+}
+
+declare module '../core/events' {
+  interface GameEvents {
+    /** Keepsakes credited to the played Character for a boss (after the save is written). */
+    keepsakesDropped: { characterId: string; bossId: string; grade: number; drops: KeepsakeDrop[]; firstKill: boolean };
+  }
+}
+
+export interface DropRoll {
+  seed: string;
+  characterId: string;
+  bossId: string;
+  difficulty?: DifficultyId;
+  /** The Character has not beaten this boss before. */
+  firstKill: boolean;
+}
+
+/** The Keepsakes a boss kill drops (empty for a boss with no grade or a Character without types). */
+export function rollBossDrops(o: DropRoll): KeepsakeDrop[] {
+  const grade = gradeForBoss(o.bossId);
+  const types = keepsakeTypesFor(o.characterId).map((t) => t.id);
+  if (grade === null || types.length === 0) return [];
+  const rng = new Rng(o.seed).fork(`keepsake:${o.characterId}:${o.bossId}`);
+  const drops: KeepsakeDrop[] = [];
+  for (let i = 0; i < DROP_RULES.perKill; i++) {
+    if (o.firstKill && i === 0) {
+      const offer = rng.shuffle([...types]).slice(0, DROP_RULES.firstKillChoices);
+      drops.push({ ref: { type: offer[0]!, grade }, bossId: o.bossId, offer });
+    } else {
+      drops.push({ ref: { type: rng.pick(types), grade }, bossId: o.bossId });
+    }
+  }
+  if (o.difficulty === 'hardcore') {
+    for (let i = 0; i < DROP_RULES.hardcoreBonus; i++) drops.push({ ref: { type: rng.pick(types), grade }, bossId: o.bossId, bonus: true });
+  }
+  return drops;
+}
+
+/** One Run's Keepsakes. */
+export interface RunKeepsakes {
+  seed: string;
+  characterId: string;
+  difficulty?: DifficultyId;
+  /** False for debug / later-Area starts: nothing drops. */
+  ranked: boolean;
+  drops: KeepsakeDrop[];
+  /** The runEnded payload once the Run is over. */
+  result: GameEvents['runEnded'] | null;
+  /** The player left the results screen: first-kill offers are closed. */
+  settled: boolean;
+}
+
+export type RunStartInfo = Pick<RunKeepsakes, 'seed' | 'characterId' | 'difficulty' | 'ranked'>;
+
+export class KeepsakeTracker {
+  current: RunKeepsakes | null = null;
+
+  constructor(
+    private readonly meta: MetaProgress,
+    private readonly emit: (e: GameEvents['keepsakesDropped']) => void = () => undefined,
+  ) {}
+
+  start(info: RunStartInfo): RunKeepsakes {
+    // A Run left on the results screen without choosing keeps its first offers.
+    if (this.current) this.current.settled = true;
+    this.current = { ...info, drops: [], result: null, settled: false };
+    return this.current;
+  }
+
+  /** Credits the current Run's Character for a boss. Returns the drops (empty when unranked or ended). */
+  bossDefeated(bossId: string): KeepsakeDrop[] {
+    const run = this.current;
+    if (!run || !run.ranked || run.result) return [];
+    const firstKill = !this.meta.hasBeaten(run.characterId, bossId);
+    const drops = rollBossDrops({ seed: run.seed, characterId: run.characterId, bossId, difficulty: run.difficulty, firstKill });
+    if (!drops.length) return [];
+    this.meta.creditKeepsakes(run.characterId, drops.map((d) => d.ref), bossId);
+    run.drops.push(...drops);
+    this.emit({ characterId: run.characterId, bossId, grade: drops[0]!.ref.grade, drops, firstKill });
+    return drops;
+  }
+
+  /** The Run ended. */
+  finish(e: GameEvents['runEnded']): RunKeepsakes | null {
+    if (this.current && !this.current.result) this.current.result = e;
+    return this.current;
+  }
+
+  /** This Run's Keepsakes for a results payload (null for a payload from a Run it never tracked). */
+  forResult(e: GameEvents['runEnded']): RunKeepsakes | null {
+    const run = this.current;
+    if (!run) return null;
+    if (run.result === e) return run;
+    // The results screen can see runEnded before this tracker's own handler does.
+    if (!run.result && run.seed === e.stats.seed && run.characterId === e.stats.characterId) {
+      run.result = e;
+      return run;
+    }
+    return null;
+  }
+
+  /**
+   * Picks a type from a first-kill offer (swapping the credited Keepsake). Allowed until the player
+   * leaves the results screen; false for a closed offer, a type not offered, or when the Keepsake to
+   * swap is no longer in the Hoard (felted or shed in the meantime).
+   */
+  choose(run: RunKeepsakes, dropIndex: number, type: KeepsakeTypeId): boolean {
+    const drop = run.drops[dropIndex];
+    if (!drop?.offer || run.settled || !drop.offer.includes(type)) return false;
+    const to = { type, grade: drop.ref.grade };
+    if (!this.meta.swapKeepsake(run.characterId, drop.ref, to)) return false;
+    drop.ref = to;
+    drop.chosen = true;
+    return true;
+  }
+
+  /** Closes the Run's offers (the player left the results screen). */
+  settle(run: RunKeepsakes): void {
+    run.settled = true;
+  }
+}
+
+/** Narrator line for a boss's Keepsake drop (docs/design.md, deadpan). */
+export function dropCaption(bossId: string, bossName: string, material: string): string {
+  switch (bossId) {
+    case 'robovac_9000':
+      return 'Inside the Robo-Vac 9000 is a tangle of hair from several previous owners. It keeps some.';
+    case 'street_sweeper':
+      return "The Street Sweeper's bristles hold grit from every gutter in the neighbourhood. It keeps some.";
+    case 'garbage_truck':
+      return 'The hopper contains things nobody should keep. It keeps some.';
+    default:
+      return `Inside ${bossName} is ${material.toLowerCase()}. It keeps some.`;
+  }
+}
+
+/** Narrator line for the first Felting. */
+export const FIRST_FELT_CAPTION = 'Three become one. This is also how felt is made.';

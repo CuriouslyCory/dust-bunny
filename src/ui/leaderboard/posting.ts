@@ -14,7 +14,9 @@
  *   await posts.post(name);                             // anonymous "Submit scores"
  */
 import type { GameEvents } from '../../core/events';
+import type { Loadout } from '../../data/keepsakes';
 import type { Game } from '../../game/game';
+import type { RunConfig } from '../../game/run';
 import type { AreaStats } from '../../game/runStats';
 import { account as defaultAccount, type AccountClient } from '../../net/account';
 import {
@@ -69,6 +71,8 @@ export class RunPosts {
     readonly difficulty: DifficultyId | undefined,
     /** False for debug / later-Area starts: entries are shown but never posted. */
     readonly ranked = true,
+    /** Keepsakes tucked in for the Run (sent with every entry). */
+    readonly loadout: Loadout = [],
   ) {}
 
   /** Initial state of a new entry. */
@@ -109,7 +113,7 @@ export class RunPosts {
     this.posts.set(stats.area, {
       board: stats.area,
       ...this.fresh(),
-      build: (name) => areaSubmission(stats, this.characterId, this.difficulty, name, this.runId),
+      build: (name) => areaSubmission(stats, this.characterId, this.difficulty, name, this.runId, this.loadout),
     });
     this.changed();
   }
@@ -166,6 +170,14 @@ export interface LeaderboardPosting {
   readonly auto: boolean;
 }
 
+/**
+ * Whether a Run counts for the leaderboards (and drops Keepsakes): not with debug tools (`?debug`)
+ * and not started past the house (`?area=`, checkpoint starts).
+ */
+export function isRankedRun(debug: boolean, config: Pick<RunConfig, 'area'> | undefined): boolean {
+  return !debug && (!config?.area || config.area === 'house');
+}
+
 let installed: LeaderboardPosting | null = null;
 
 /** The installed tracker, if `installLeaderboardPosting` ran (browser builds). */
@@ -203,8 +215,8 @@ export function installLeaderboardPosting(
 
   game.events.on('runStarted', () => {
     const run = game.run;
-    ranked = !game.debug && (!run?.config.area || run.config.area === 'house');
-    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked);
+    ranked = isRankedRun(game.debug, run?.config);
+    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked, run?.loadout ?? []);
   });
   game.events.on('areaCompleted', (e) => {
     if (!current) return;
@@ -232,7 +244,7 @@ export function installLeaderboardPosting(
         current.finish(e);
         return current;
       }
-      const posts = new RunPosts(client, e.stats.characterId, e.stats.difficulty);
+      const posts = new RunPosts(client, e.stats.characterId, e.stats.difficulty, true, e.stats.loadout ?? []);
       posts.finish(e);
       return posts;
     },

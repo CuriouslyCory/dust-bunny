@@ -24,6 +24,7 @@ import {
   type AreaScoreSubmission,
   type LeaderboardCharacter,
   type LeaderboardEntry,
+  type LeaderboardLoadout,
   type ScoreSubmission,
 } from '../shared/leaderboard';
 import { computeAreaScore, computeScore } from '../shared/score';
@@ -316,11 +317,19 @@ export function submissionFromRun(stats: RunStats, reason: RunEndReason, name: s
     victory: reason === 'victory',
     difficulty: stats.difficulty ?? DEFAULT_DIFFICULTY,
   };
-  return { name, character: stats.characterId, ...fields, score: computeScore(fields), ...(runId ? { runId } : {}) };
+  const loadout = (stats.loadout ?? []).map(({ type, grade }) => ({ type, grade }));
+  return { name, character: stats.characterId, ...fields, score: computeScore(fields), ...(runId ? { runId } : {}), loadout };
 }
 
 /** Builds an Area board submission for a cleared Area. */
-export function areaSubmission(a: AreaStats, characterId: string, difficulty: DifficultyId | undefined, name: string, runId?: string): AreaScoreSubmission {
+export function areaSubmission(
+  a: AreaStats,
+  characterId: string,
+  difficulty: DifficultyId | undefined,
+  name: string,
+  runId?: string,
+  loadout: readonly LeaderboardLoadout[number][] = [],
+): AreaScoreSubmission {
   const fields = {
     area: a.area,
     radiusIn: Math.round(a.radiusIn * 100) / 100,
@@ -329,7 +338,14 @@ export function areaSubmission(a: AreaStats, characterId: string, difficulty: Di
     durationMs: Math.round(a.timeSec * 1000),
     difficulty: difficulty ?? DEFAULT_DIFFICULTY,
   };
-  return { name, character: characterId, ...fields, score: computeAreaScore(fields), ...(runId ? { runId } : {}) };
+  return {
+    name,
+    character: characterId,
+    ...fields,
+    score: computeAreaScore(fields),
+    ...(runId ? { runId } : {}),
+    loadout: loadout.map(({ type, grade }) => ({ type, grade })),
+  };
 }
 
 /** Default client for the game (uses fetch + localStorage). */

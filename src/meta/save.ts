@@ -6,9 +6,11 @@
  * is corrupt, SaveStore copies it to `<key>:corrupt` before overwriting it on the next save.
  *
  * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
- * fields with a sanitised default (like `lastDifficulty`) don't need a bump.
+ * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`) don't need a bump.
  */
+import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
+import { hasKeepsakes, repairLoadout, sanitizeCharacterHoard, type CharacterHoard } from './hoard';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
 export const SAVE_VERSION = 1;
@@ -29,6 +31,10 @@ export interface SaveStats {
   bestRadius: number;
   bestTier: number;
   totalFluffEarned: number;
+  /** Keepsakes credited from boss kills (Felting results not counted). */
+  keepsakesEarned: number;
+  /** Feltings done on this device (not synced; the first one gets a story caption). */
+  feltings: number;
 }
 
 export interface SaveData {
@@ -42,6 +48,10 @@ export interface SaveData {
   lastDifficulty: DifficultyId;
   settings: SaveSettings;
   stats: SaveStats;
+  /** Character id → Keepsake Hoard and bosses beaten (synced by the cloud save). */
+  characters: Record<string, CharacterHoard>;
+  /** Character id → the Loadout last tucked in on this device (repaired against the Hoard). */
+  lastLoadout: Record<string, KeepsakeRef[]>;
 }
 
 export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'corrupt';
@@ -54,7 +64,9 @@ export function defaultSave(): SaveData {
     lastCharacterId: null,
     lastDifficulty: DEFAULT_DIFFICULTY,
     settings: {},
-    stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0 },
+    stats: { runs: 0, wins: 0, bestRadius: 0, bestTier: 0, totalFluffEarned: 0, keepsakesEarned: 0, feltings: 0 },
+    characters: {},
+    lastLoadout: {},
   };
 }
 
@@ -85,7 +97,23 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
     bestRadius: num(s.bestRadius),
     bestTier: int(s.bestTier),
     totalFluffEarned: int(s.totalFluffEarned),
+    keepsakesEarned: int(s.keepsakesEarned),
+    feltings: int(s.feltings),
   };
+  if (isObj(o.characters)) {
+    for (const [id, c] of Object.entries(o.characters)) {
+      if (!hasKeepsakes(id)) continue;
+      const hoard = sanitizeCharacterHoard(id, c);
+      if (Object.keys(hoard.hoard).length || hoard.bossesBeaten.length) d.characters[id] = hoard;
+    }
+  }
+  if (isObj(o.lastLoadout)) {
+    for (const [id, l] of Object.entries(o.lastLoadout)) {
+      if (!hasKeepsakes(id) || !Array.isArray(l)) continue;
+      const repaired = repairLoadout(id, l, d.characters[id]);
+      if (repaired.length) d.lastLoadout[id] = repaired;
+    }
+  }
   return d;
 }
 

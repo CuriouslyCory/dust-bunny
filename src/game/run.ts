@@ -326,6 +326,7 @@ export class Run {
       houseCleared: this.houseCleared,
       neighborhoodCleared: this.neighborhoodCleared,
       areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
+      loadout: this.loadout.map((k) => ({ ...k })),
     };
   }
 

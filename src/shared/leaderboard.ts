@@ -7,6 +7,7 @@
  * 'neighborhood', 'city'), which takes an entry each time a Run clears that Area.
  */
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
+import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
 import {
   AREA_BOSS_TIER,
   computeAreaScore,
@@ -52,6 +53,9 @@ export const BOUNDS = {
   areaEntryGrowth: 1.6,
 } as const;
 
+/** The Keepsakes tucked in for a Run (0–2 of the Character's own types, grades 1–10). */
+export type LeaderboardLoadout = SharedKeepsakeRef[];
+
 /** What the client POSTs to `/api/leaderboard`. */
 export interface ScoreSubmission {
   name: string;
@@ -66,6 +70,8 @@ export interface ScoreSubmission {
   score: number;
   /** Client-generated id of the Run; a second post with the same id returns the first entry. */
   runId?: string;
+  /** Keepsakes tucked in; optional for older clients (missing: unknown, stored as NULL). */
+  loadout?: LeaderboardLoadout;
 }
 
 /** What the client POSTs to `/api/leaderboard?board=<area>` when a Run clears an Area. */
@@ -80,6 +86,7 @@ export interface AreaScoreSubmission {
   difficulty?: string;
   score: number;
   runId?: string;
+  loadout?: LeaderboardLoadout;
 }
 
 /** A row as returned by `GET /api/leaderboard` (and stored by the local fallback). */
@@ -96,6 +103,8 @@ export interface LeaderboardEntry {
   difficulty: DifficultyId;
   /** Submitted by a signed-in player. False for anonymous entries and the local fallback board. */
   verified: boolean;
+  /** Keepsakes tucked in for the Run (missing on entries from older clients). */
+  loadout?: LeaderboardLoadout;
   /** ISO timestamp. */
   createdAt: string;
 }
@@ -113,6 +122,7 @@ export interface AreaLeaderboardEntry {
   durationMs: number;
   difficulty: DifficultyId;
   verified: boolean;
+  loadout?: LeaderboardLoadout;
   createdAt: string;
 }
 
@@ -223,7 +233,14 @@ function validateCommon(body: unknown) {
   if (b.runId !== undefined && (typeof b.runId !== 'string' || !RUN_ID.test(b.runId))) return fail('runId', 'runId must be 8–64 letters, digits, - or _.');
   const runId = b.runId as string | undefined;
 
-  return { ok: true as const, b, name, censored, character: b.character, difficulty, ...(runId ? { runId } : {}) };
+  let loadout: LeaderboardLoadout | undefined;
+  if (b.loadout !== undefined) {
+    const parsed = parseLoadout(b.character, b.loadout);
+    if (!parsed) return fail('loadout', "loadout must hold up to 2 of the character's own Keepsakes, grades 1–10.");
+    loadout = parsed;
+  }
+
+  return { ok: true as const, b, name, censored, character: b.character, difficulty, ...(runId ? { runId } : {}), ...(loadout ? { loadout } : {}) };
 }
 
 /** Validates an untrusted Run board submission. Checks types, bounds, cross-field plausibility and the score. */
@@ -262,7 +279,7 @@ export function validateSubmission(body: unknown): ValidationResult {
 
   return {
     ok: true,
-    value: { name, nameCensored: censored, character: c.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}) },
+    value: { name, nameCensored: censored, character: c.character, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}), ...(c.loadout ? { loadout: c.loadout } : {}) },
   };
 }
 
@@ -299,7 +316,7 @@ export function validateAreaSubmission(body: unknown): AreaValidationResult {
 
   return {
     ok: true,
-    value: { name, nameCensored: censored, character: c.character, area, radiusIn, maxRadius, debrisAbsorbed, durationMs, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}) },
+    value: { name, nameCensored: censored, character: c.character, area, radiusIn, maxRadius, debrisAbsorbed, durationMs, difficulty, score: expected, ...(c.runId ? { runId: c.runId } : {}), ...(c.loadout ? { loadout: c.loadout } : {}) },
   };
 }
 

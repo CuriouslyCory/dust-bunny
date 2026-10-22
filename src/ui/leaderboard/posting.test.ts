@@ -4,7 +4,7 @@ import type { Game } from '../../game/game';
 import type { AreaStats, RunStats } from '../../game/runStats';
 import type { AccountClient, AccountState } from '../../net/account';
 import { createLeaderboardClient, LeaderboardError, type LeaderboardClient } from '../../net/leaderboard';
-import { installLeaderboardPosting, RunPosts } from './posting';
+import { installLeaderboardPosting, isRankedRun, RunPosts } from './posting';
 
 const house: AreaStats = { area: 'house', startSec: 0, timeSec: 400, radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, cleared: true };
 const stats = (areas: AreaStats[]): RunStats => ({
@@ -74,6 +74,24 @@ describe('RunPosts', () => {
     expect(posts.list().map((p) => p.state)).toEqual(['posted', 'posted']);
     expect(posted).toEqual([`house:Bea:${posts.runId}`, `run:Bea:${posts.runId}`]); // in the order they were added
     expect(posts.pending).toBe(false);
+  });
+
+  it('sends the Run’s Loadout with every entry, and the local board keeps it', async () => {
+    const { client } = offlineClient();
+    const loadout = [{ type: 'reclaim', grade: 2 } as const, { type: 'reclaim', grade: 2 } as const];
+    const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
+    posts.finish({ reason: 'died', stats: { ...stats([house, neighborhood]), loadout } });
+    await posts.post('Bea');
+    expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
+    expect(posts.get('house')?.result?.entry.loadout).toEqual(loadout);
+    expect((await client.getTop()).entries[0]?.loadout).toEqual(loadout);
+  });
+
+  it('ranks only Runs without debug tools that start in the house', () => {
+    expect(isRankedRun(false, { area: undefined })).toBe(true);
+    expect(isRankedRun(false, { area: 'house' })).toBe(true);
+    expect(isRankedRun(true, { area: undefined })).toBe(false);
+    expect(isRankedRun(false, { area: 'city' })).toBe(false);
   });
 
   it('marks entries the server refuses as invalid and network trouble as failed', async () => {

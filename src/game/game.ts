@@ -167,6 +167,7 @@ export class Game {
       modifiers: [...(this.nextRunConfig.modifiers ?? []), ...(config.modifiers ?? [])],
       perks: config.perks ?? this.nextRunConfig.perks,
       area: config.area ?? this.nextRunConfig.area,
+      loadout: config.loadout ?? this.nextRunConfig.loadout,
     };
     this.nextRunConfig.seed = undefined;
     const run = createRun(this.events, full);

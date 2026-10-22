@@ -25,6 +25,9 @@
  * salts the stored IP hashes. Tables are created on first use (server/schema.ts, mirrored in
  * db/schema.sql); columns added later are applied with idempotent `ADD COLUMN IF NOT EXISTS`.
  *
+ * Entries carry the Run's Loadout (`loadout`: up to two `{ type, grade }` Keepsakes, column
+ * `loadout jsonb`, NULL for older clients that send none).
+ *
  * Every Difficulty shares one board: submitted scores already include the Difficulty
  * multiplier (see src/shared/score.ts), and each entry carries its `difficulty`.
  *
@@ -32,6 +35,7 @@
  */
 import { createHash } from 'node:crypto';
 import { DEFAULT_DIFFICULTY, isDifficultyId } from '../src/shared/difficulty.js';
+import { parseLoadout } from '../src/shared/keepsakes.js';
 import {
   BOARD_IDS,
   isAreaBoardId,
@@ -75,6 +79,8 @@ interface Row {
   duration_ms: number;
   difficulty: string | null;
   verified: boolean;
+  /** jsonb [{ type, grade }], NULL for entries from clients before Keepsakes. */
+  loadout: unknown;
   created_at: string | Date;
   // Run board
   tier_reached?: number;
@@ -85,16 +91,19 @@ interface Row {
 }
 
 function common(r: Row) {
+  const character = isLeaderboardCharacter(r.character) ? r.character : ('lint' as const);
+  const loadout = r.loadout == null ? null : parseLoadout(character, r.loadout);
   return {
     id: String(r.id),
     name: r.name,
-    character: isLeaderboardCharacter(r.character) ? r.character : ('lint' as const),
+    character,
     score: Number(r.score),
     maxRadius: Number(r.max_radius),
     debrisAbsorbed: Number(r.debris_absorbed),
     durationMs: Number(r.duration_ms),
     difficulty: isDifficultyId(r.difficulty) ? r.difficulty : DEFAULT_DIFFICULTY,
     verified: Boolean(r.verified),
+    ...(loadout ? { loadout } : {}),
     createdAt: new Date(r.created_at).toISOString(),
   };
 }
@@ -106,8 +115,8 @@ const toAreaEntry = (r: Row): AreaLeaderboardEntry => ({
   radiusIn: Number(r.radius_in),
 });
 
-const RUN_COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, user_id IS NOT NULL AS verified, created_at';
-const AREA_COLUMNS = 'id, area, name, character, score, radius_in, max_radius, debris_absorbed, duration_ms, difficulty, user_id IS NOT NULL AS verified, created_at';
+const RUN_COLUMNS = 'id, name, character, score, max_radius, debris_absorbed, tier_reached, duration_ms, victory, difficulty, loadout, user_id IS NOT NULL AS verified, created_at';
+const AREA_COLUMNS = 'id, area, name, character, score, radius_in, max_radius, debris_absorbed, duration_ms, difficulty, loadout, user_id IS NOT NULL AS verified, created_at';
 
 interface BoardSql {
   table: 'leaderboard_scores' | 'area_scores';
@@ -203,6 +212,9 @@ async function rankOf(b: BoardSql, entry: AnyLeaderboardEntry): Promise<number |
   return row?.rank ?? null;
 }
 
+/** The jsonb value for a validated Loadout (NULL when an older client sent none). */
+const loadoutJson = (l: unknown[] | undefined): string | null => (l ? JSON.stringify(l) : null);
+
 /** A submission validated for its board, as the INSERT's column list and values. */
 function prepareInsert(board: BoardId, body: unknown): { columns: string[]; values: unknown[]; runId?: string; nameCensored: boolean } {
   if (board === 'run') {
@@ -210,8 +222,8 @@ function prepareInsert(board: BoardId, body: unknown): { columns: string[]; valu
     if (!r.ok) throw new HttpError(400, 'invalid', r.message, { field: r.field });
     const s = r.value;
     return {
-      columns: ['name', 'character', 'score', 'max_radius', 'debris_absorbed', 'tier_reached', 'duration_ms', 'victory', 'difficulty', 'run_id'],
-      values: [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, s.difficulty, s.runId ?? null],
+      columns: ['name', 'character', 'score', 'max_radius', 'debris_absorbed', 'tier_reached', 'duration_ms', 'victory', 'difficulty', 'run_id', 'loadout'],
+      values: [s.name, s.character, s.score, s.maxRadius, s.debrisAbsorbed, s.tierReached, s.durationMs, s.victory, s.difficulty, s.runId ?? null, loadoutJson(s.loadout)],
       runId: s.runId,
       nameCensored: s.nameCensored,
     };
@@ -221,8 +233,8 @@ function prepareInsert(board: BoardId, body: unknown): { columns: string[]; valu
   const s = r.value;
   if (s.area !== board) throw new HttpError(400, 'invalid', `This entry is for the ${s.area} board.`, { field: 'area' });
   return {
-    columns: ['area', 'name', 'character', 'score', 'radius_in', 'max_radius', 'debris_absorbed', 'duration_ms', 'difficulty', 'run_id'],
-    values: [s.area, s.name, s.character, s.score, s.radiusIn, s.maxRadius, s.debrisAbsorbed, s.durationMs, s.difficulty, s.runId ?? null],
+    columns: ['area', 'name', 'character', 'score', 'radius_in', 'max_radius', 'debris_absorbed', 'duration_ms', 'difficulty', 'run_id', 'loadout'],
+    values: [s.area, s.name, s.character, s.score, s.radiusIn, s.maxRadius, s.debrisAbsorbed, s.durationMs, s.difficulty, s.runId ?? null, loadoutJson(s.loadout)],
     runId: s.runId,
     nameCensored: s.nameCensored,
   };

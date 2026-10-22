@@ -67,10 +67,11 @@ function areaSub(name: string, extra: { maxRadius?: number; runId?: string; area
 const post = (path: string, body: unknown, cookie?: string) =>
   call(leaderboardApi, path, { method: 'POST', cookie, body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-boards` } });
 
-const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}): Progress => ({
+const progress = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, characters: Progress['characters'] = {}): Progress => ({
   fluff,
   upgrades,
-  stats: { runs, wins: 0, bestRadius: 2.5, bestTier: 2, totalFluffEarned },
+  characters,
+  stats: { runs, wins: 0, bestRadius: 2.5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
 });
 
 describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
@@ -156,6 +157,26 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect(top.entries.every((e) => typeof e.verified === 'boolean')).toBe(true);
   });
 
+  it('stores and returns the Loadout; older clients without one are still accepted', async () => {
+    // Its own fake IP, clear of the per-IP limits the other tests use.
+    const post = (path: string, body: unknown) =>
+      call(leaderboardApi, path, { method: 'POST', body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-loadout` } });
+    const loadout = [{ type: 'thick_clog', grade: 2 }, { type: 'thick_clog', grade: 2 }];
+    const withLoadout = await post('/api/leaderboard', { ...submission(`T${RUN}k`), loadout });
+    expect(withLoadout.status).toBe(201);
+    expect(((await withLoadout.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual(loadout);
+    const older = await post('/api/leaderboard', submission(`T${RUN}o`));
+    expect(older.status).toBe(201);
+    expect('loadout' in ((await older.json()) as { entry: object }).entry).toBe(false);
+    const bad = await post('/api/leaderboard', { ...submission(`T${RUN}b`), loadout: [{ type: 'arc', grade: 1 }] });
+    expect(bad.status).toBe(400);
+    const area = await post('/api/leaderboard?board=house', { ...areaSub(`T${RUN}ka`), loadout: [{ type: 'grounding', grade: 1 }] });
+    expect(area.status).toBe(201);
+    expect(((await area.json()) as { entry: { loadout?: unknown } }).entry.loadout).toEqual([{ type: 'grounding', grade: 1 }]);
+    const top = (await (await call(leaderboardApi, '/api/leaderboard?character=lint')).json()) as { entries: Array<{ name: string; loadout?: unknown }> };
+    expect(top.entries.find((e) => e.name === `T${RUN}k`)?.loadout ?? loadout).toEqual(loadout);
+  });
+
   it('keeps Area boards separate from the Run board and from each other', async () => {
     const res = await post('/api/leaderboard?board=house', areaSub(`T${RUN}h`, { maxRadius: 159 }));
     expect(res.status).toBe(201);
@@ -234,6 +255,27 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect((await get()).progress).toEqual(spent);
 
     const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...spent, fluff: -5 }) });
+    expect(bad.status).toBe(400);
+  });
+
+  it('syncs Keepsake Hoards and keeps them when an older bundle omits the field', async () => {
+    const cookie = await signUp(`Ks${RUN}`);
+    const put = async (p: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };
+    const hoards = { lint: { hoard: { 'reclaim:1': 3 }, bossesBeaten: ['robovac_9000'] } };
+    const first = { ...progress(100, 100, 2, {}, hoards), stats: { ...progress(100, 100, 2).stats, keepsakesEarned: 3 } };
+    expect(await put(first)).toMatchObject({ accepted: true, progress: first });
+    // An older bundle: no characters, no keepsakesEarned.
+    const { characters: _c, ...older } = progress(120, 130, 3);
+    const { keepsakesEarned: _k, ...olderStats } = older.stats;
+    const res = await put({ ...older, stats: olderStats });
+    expect(res.accepted).toBe(true);
+    expect(res.progress.characters).toEqual(hoards);
+    expect(res.progress.stats.keepsakesEarned).toBe(3);
+    expect(res.progress.fluff).toBe(120);
+    // Felting (fewer Keepsakes, less Fluff, same counters) still syncs.
+    const felted = progress(0, 130, 3, {}, { lint: { hoard: { 'reclaim:2': 1 }, bossesBeaten: ['robovac_9000'] } });
+    expect((await put(felted)).progress.characters).toEqual(felted.characters);
+    const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...felted, characters: { lint: { hoard: { 'arc:1': 1 }, bossesBeaten: [] } } }) });
     expect(bad.status).toBe(400);
   });
 

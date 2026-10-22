@@ -1,7 +1,7 @@
 /**
- * Cloud save: keeps a signed-in player's Fluff, Upgrades and lifetime stats on the server
- * (api/progress.ts), so they follow the account between devices. Settings, last Character and
- * Difficulty stay on the device.
+ * Cloud save: keeps a signed-in player's Fluff, Upgrades, Keepsake Hoards (per Character, with the
+ * bosses it has beaten) and lifetime stats on the server (api/progress.ts), so they follow the
+ * account between devices. Settings, last Character, Difficulty and Loadout stay on the device.
  *
  * - On sign-in: download, then keep whichever copy has more progress (rule in
  *   src/shared/progress.ts). Progress made before signing in is uploaded to the account.
@@ -10,7 +10,7 @@
  * - The device remembers which account it last synced. Signing in to a different account loads that
  *   account's progress (or a fresh save) instead of handing it the previous player's.
  * - It also remembers when it has changes the server hasn't confirmed (say, an Upgrade bought
- *   offline). Spending changes neither lifetime counter, so on such a tie the device's copy wins;
+ *   offline). Spending, Felting and shedding change neither lifetime counter, so on such a tie the device's copy wins;
  *   without unsynced changes a tie goes to the server, so a stale device can't undo another
  *   device's purchases.
  */
@@ -37,7 +37,10 @@ export interface CloudSaveOptions {
 }
 
 export function progressOf(d: SaveData): Progress {
-  return { fluff: d.fluff, upgrades: { ...d.upgrades }, stats: { ...d.stats } };
+  const { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } = d.stats;
+  const characters: Progress['characters'] = {};
+  for (const [id, c] of Object.entries(d.characters)) characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
+  return { fluff: d.fluff, upgrades: { ...d.upgrades }, characters, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } };
 }
 
 const freshProgress = (): Progress => progressOf(defaultSave());
@@ -118,7 +121,10 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     meta.store.update((d) => {
       d.fluff = p.fluff;
       d.upgrades = { ...p.upgrades };
-      d.stats = { ...p.stats };
+      // Device-only stats (feltings) survive; the synced ones come from the server.
+      d.stats = { ...d.stats, ...p.stats };
+      d.characters = {};
+      for (const [id, c] of Object.entries(p.characters)) d.characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
     });
   }
 
