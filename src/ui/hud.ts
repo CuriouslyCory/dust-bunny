@@ -339,8 +339,10 @@ export class Hud {
     const next = (): void => {
       elapsed += holds[shown] ?? 0;
       shown++;
+      const left = total - elapsed;
+      // A timer that fired late (throttled tab) pushes the deadline out, so bannerLeft still covers the rest.
+      this.bannerUntil = Math.max(this.bannerUntil, performance.now() + left * 1000);
       if (shown >= parts.length) {
-        const left = total - elapsed;
         if (left > 0.05) this.bannerTimer = window.setTimeout(hide, left * 1000);
         else hide();
         return;
