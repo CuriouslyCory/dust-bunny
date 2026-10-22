@@ -21,6 +21,8 @@ export const TUNING = {
 
   /** Magnet: absorbable Debris within radius × (1 + magnetRadius) is pulled in at this many radii/s. */
   magnetPullSpeed: 5,
+  /** Plus this multiple of the Bunny's own speed (> 1), so a Dash or speed boost can't outrun the pull. */
+  magnetChase: 1.5,
 
   /** Shoving Obstacle Debris that is almost absorbable (see pushDebris in systems/collision.ts). */
   push: {
