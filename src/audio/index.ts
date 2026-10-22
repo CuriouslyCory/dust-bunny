@@ -98,14 +98,15 @@ export function installAudio(game: Game): GameAudio {
     else if (e.reason === 'expired' || e.reason === 'shot') sfx.decoyPop();
   });
   ev.on('hazardClogged', (e) => sfx.clog(e.boss));
-  // Weather (the Continent, and the Globe's Hurricane): the gust, the Volcano's and the Ice Sheet's rumble.
+  // Weather (the Continent, the Globe's Hurricane, the Solar Flare): the gust, the Volcano's, the Ice Sheet's and the Sun's CME rumble.
   ev.on('hazardTelegraph', (e) => {
-    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane') sfx.windRoar();
-    else if (e.defId === 'volcano' || (e.defId === 'ice_sheet' && e.attack === 'charge')) sfx.rumble();
+    if (e.defId === 'hurricane' || e.defId === 'globe_hurricane' || e.defId === 'solar_flare') sfx.windRoar();
+    else if (e.defId === 'volcano' || ((e.defId === 'ice_sheet' || e.defId === 'the_sun') && e.attack === 'charge')) sfx.rumble();
   });
-  // A crash into a mountain range (the Ice Sheet) or the Moon (the Orbital Sweeper).
+  // A crash into a mountain range (the Ice Sheet), the Moon (the Orbital Sweeper) or a giant planet (the Sun's eclipse).
   ev.on('bossStunned', (e) => {
-    if (e.cause === 'wall' && (game.run?.area === 'continent' || game.run?.area === 'globe')) sfx.rumble(true);
+    const area = game.run?.area;
+    if (e.cause === 'wall' && (area === 'continent' || area === 'globe' || area === 'solar_system')) sfx.rumble(true);
   });
   ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
   ev.on('staticFull', () => sfx.staticFull());

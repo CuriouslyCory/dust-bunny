@@ -30,6 +30,10 @@
  * instead of radial suction, its twin lasers are the `ash` volley in red, and it summons a Kessler
  * swarm of mini sweepers.
  *
+ * The Sun (solar system, Tier 17, THE_SUN) is a subclass in theSun.ts: only a charge into a giant
+ * planet the Bunny can't absorb yet stuns it (an eclipse), its solar wind pushes instead of
+ * sucking, its flare volleys are the `ash` volley in orange, and its chips are prominences.
+ *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
  * built Area the Run is won (bossDefeated → victory → runEnded 'victory').
  *
@@ -40,7 +44,7 @@
  * allowed (the 6 s Ability-stun limit).
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, THE_SUN, type AshTuning, type BossTuning } from '../data/hazards';
+import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -506,16 +510,3 @@ export const incineratorDef = hazardRegistry.register({
   },
 });
 
-/** The Sun (solar system boss, THE_SUN): placeholder on the bosses' state machine. */
-export const theSunDef = hazardRegistry.register({
-  id: 'the_sun',
-  name: 'The Sun',
-  boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
-  footprint: { radius: THE_SUN.contactRadius, height: THE_SUN.height },
-  mass: THE_SUN.mass,
-  modelId: THE_SUN.modelId,
-  create(_run, x, z, id, rng: Rng) {
-    return new RoboVac9000(id, this, x, z, rng, THE_SUN);
-  },
-});

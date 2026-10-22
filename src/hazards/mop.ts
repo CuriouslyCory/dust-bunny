@@ -8,7 +8,8 @@
  * patrols the river and leaves a slowing wake. The River Surge (continent, RIVER_SURGE) is a fast
  * flood surge across the plains with a wide muddy trail. The Re-entry Burn (globe, REENTRY_BURN)
  * roams across zones (`roam`) and its fire trail burns instead of slowing (`burn`: the Bunny sheds
- * mass every `interval` s on it).
+ * mass every `interval` s on it). The Sungrazer (solar system, SUNGRAZER) roams the same way and its
+ * icy tail trail slows.
  *
  * On a map that wraps east–west the spawn zone's rect is moved to the Mop's lap (rooms are stored
  * once, in the canonical strip), so the waypoints stay around it.

@@ -9,7 +9,8 @@
  * compactors (MINI_COMPACTOR); in the continent the Tornado (TORNADO: erratic turns, a wide vortex
  * pull, spins its `funnel`); on the Globe the Debris-Field Satellite (DEBRIS_SATELLITE: tumbling
  * turns, a debris-field pull, spins its `panels`) and the Orbital Sweeper's Kessler swarm of mini
- * sweepers (MINI_SWEEPER).
+ * sweepers (MINI_SWEEPER); in the Solar System the Rogue Asteroid (ROGUE_ASTEROID: tumbling turns,
+ * a gravity pull, spins its `rock`).
  *
  * Its suction also drags Lint's Decoy in (touching the Decoy clogs it), and a Lure with a
  * `wanderRange` (Keepsake effect) makes it home in on the Decoy.
