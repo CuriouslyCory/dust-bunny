@@ -1,6 +1,7 @@
 /** Procedural canvas textures (floors, rugs, fur). Browser only. */
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, type MeshStandardMaterial, type Texture } from 'three';
 import { Rng } from '../core/rng';
+import { solarBeltTexture, solarCoronaTexture, solarKuiperTexture, solarSpaceTexture } from './solarTextures';
 import { globeIceTexture, globeLandTexture, globeOceanTexture, globeShelfTexture } from './globeTextures';
 import { desertTexture, highlandsTexture, lakeWaterTexture, oceanTexture, ruinsTexture, steppeTexture, tundraTexture } from './continentTextures';
 import type { FloorMaterialId } from './types';
@@ -616,23 +617,6 @@ function landfillTexture(): HTMLCanvasElement {
 
 const floorCache = new Map<FloorMaterialId, FloorTextureInfo>();
 
-/** Dark space with `n` specks of dust or starlight (the Solar System's placeholder floors). */
-function spaceTexture(base: string, speck: string, n: number): HTMLCanvasElement {
-  const S = 256;
-  const [c, ctx] = canvas(S, S);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, S, S);
-  const rng = new Rng(n);
-  ctx.fillStyle = speck;
-  for (let i = 0; i < n; i++) {
-    ctx.globalAlpha = rng.range(0.15, 0.8);
-    const r = rng.range(0.4, 1.4);
-    ctx.fillRect(rng.range(0, S), rng.range(0, S), r, r);
-  }
-  ctx.globalAlpha = 1;
-  return c;
-}
-
 export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
   let info = floorCache.get(id);
   if (!info) {
@@ -719,18 +703,18 @@ export function floorTexture(id: FloorMaterialId): FloorTextureInfo {
       case 'globeIce':
         info = { texture: toTexture(globeIceTexture()), worldSize: 40, roughness: 0.5 };
         break;
-      // Solar System floors (1 unit = 0.01 AU): the ecliptic, mostly empty space.
+      // Solar System floors (1 unit = 0.01 AU, solarTextures.ts): past the painted ecliptic.
       case 'solarSpace':
-        info = { texture: toTexture(spaceTexture('#06070d', '#c9d4ff', 220)), worldSize: 40, roughness: 1 };
+        info = { texture: toTexture(solarSpaceTexture()), worldSize: 40, roughness: 1 };
         break;
       case 'solarCorona':
-        info = { texture: toTexture(spaceTexture('#3a1606', '#ffd27a', 260)), worldSize: 30, roughness: 1 };
+        info = { texture: toTexture(solarCoronaTexture()), worldSize: 30, roughness: 1 };
         break;
       case 'solarBelt':
-        info = { texture: toTexture(spaceTexture('#100d0b', '#9a8a78', 900)), worldSize: 30, roughness: 1 };
+        info = { texture: toTexture(solarBeltTexture()), worldSize: 30, roughness: 1 };
         break;
       case 'solarKuiper':
-        info = { texture: toTexture(spaceTexture('#070a12', '#bfe3ff', 500)), worldSize: 40, roughness: 1 };
+        info = { texture: toTexture(solarKuiperTexture()), worldSize: 40, roughness: 1 };
         break;
     }
     floorCache.set(id, info);

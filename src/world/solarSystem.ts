@@ -56,7 +56,7 @@ export const SOLAR = {
   /** Pluto's distance from the Sun (in the Kuiper belt). */
   plutoOrbit: 174,
   /** Asteroids scattered in the belt by the generator (the spawner adds more), and per Trojan camp. */
-  beltRocks: 420,
+  beltRocks: 600,
   trojans: 26,
   /** Voyager 1: this far from the spawn, north-east (on screen at arrival). */
   voyagerDistance: 7,

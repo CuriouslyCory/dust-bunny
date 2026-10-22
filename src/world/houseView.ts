@@ -27,6 +27,7 @@ import {
   MeshStandardMaterial,
   PlaneGeometry,
   MeshBasicMaterial,
+  RepeatWrapping,
   Ray,
   Vector3,
   type Material,
@@ -46,6 +47,7 @@ import { forestedMound, regionRoadblock } from './regionModels';
 import './continentModels';
 import { buildContinentWater } from './continentCoast';
 import { buildGlobeSurface, type GlobeSurfaceView } from './globeTextures';
+import { buildSolarSurface, type SolarSurfaceView } from './solarTextures';
 import { StaticBatch } from './staticBatch';
 import { areaUnit } from '../data/areas';
 import type { AreaId, FloorMaterialId, HouseLayout } from './types';
@@ -73,20 +75,22 @@ const HEDGE_TOP = '#4f7f3f';
 const DOOR_WOOD = '#8a5a3b';
 const BARRIER = '#b9b4aa';
 const BARRIER_STRIPE = '#e0a526';
-const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#06070d' };
-/** How each Area's edge (`layout.walls`) is drawn. */
-/** How the map's edge is drawn; `wrap`: none east–west (the map repeats) and nothing past the poles but the outer floor. */
-const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' | 'wrap'> = {
+const GROUND: Record<AreaId, string> = { house: '#2d2520', neighborhood: '#4d7434', city: '#4f5257', region: '#a3a993', continent: '#d4dbe3', globe: '#16365a', solar_system: '#030308' };
+/**
+ * How the map's edge is drawn; `wrap`: none east–west (the map repeats) and nothing past the poles
+ * but the outer floor; `space`: painted into the floor (the Solar System's heliopause, solarTextures.ts).
+ */
+const EDGE: Record<AreaId, 'walls' | 'hedges' | 'barriers' | 'ridges' | 'coast' | 'wrap' | 'space'> = {
   house: 'walls',
   neighborhood: 'hedges',
   city: 'barriers',
   region: 'ridges',
   continent: 'coast',
   globe: 'wrap',
-  solar_system: 'wrap',
+  solar_system: 'space',
 };
 /** Areas seen from altitude: the floor that carries on past the map edge into the haze (the Continent's ocean). */
-const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarKuiper' };
+const OUTER_FLOOR: Partial<Record<AreaId, FloorMaterialId>> = { region: 'fields', continent: 'ocean', globe: 'globeIce', solar_system: 'solarSpace' };
 /**
  * Road-gate size (exit booms and sign, cm-sized parts × this) per Area: a neighborhood street, a
  * city avenue (3.5×) and a Region motorway (6 units of 10 m across). The Continent's exit is a
@@ -119,8 +123,15 @@ export class HouseView {
   private launchLights: MeshStandardMaterial | null = null;
   private readonly launchRings: Mesh[] = [];
   private launchHeight = 0;
+  /**
+   * The Globe's exit, the escape trajectory over the North Pole: shared materials and textures only
+   * (animated by colour, opacity and texture offset), so every lap's copy animates with them.
+   */
+  private escape: { ribbon: MeshBasicMaterial; chevrons: CanvasTexture; gate: MeshBasicMaterial; beam: MeshBasicMaterial; rings: MeshBasicMaterial; ringTex: CanvasTexture } | null = null;
   /** The Globe's painted Earth and drifting clouds (globeTextures.ts). */
   private globe: GlobeSurfaceView | null = null;
+  /** The Solar System's painted ecliptic and orbit lanes (solarTextures.ts); `setDim` fades it when the light goes out. */
+  solar: SolarSurfaceView | null = null;
 
   constructor(readonly layout: HouseLayout) {
     this.root.name = layout.area;
@@ -137,7 +148,8 @@ export class HouseView {
     this.root.add(this.batch.build());
     this.buildContactShadows();
     if (layout.area === 'house') this.buildFrontDoor();
-    else if (layout.area === 'continent' || layout.area === 'globe') this.buildLaunchCorridor();
+    else if (layout.area === 'continent') this.buildLaunchCorridor();
+    else if (layout.area === 'globe') this.buildEscapeTrajectory();
     else this.buildRoadGate();
     if (layout.wrapX) this.buildLaps();
   }
@@ -190,6 +202,12 @@ export class HouseView {
       // The Globe paints its whole map as one plane (coasts, biomes, ice, clouds) instead of zone floors.
       this.globe = buildGlobeSurface(this.layout);
       this.root.add(this.globe.object);
+      return;
+    }
+    if (this.layout.area === 'solar_system') {
+      // The ecliptic is one painted plane too (space, the Milky Way, the belt, the Kuiper belt) plus the orbit lanes.
+      this.solar = buildSolarSurface(this.layout);
+      this.root.add(this.solar.object);
       return;
     }
     // One mesh per floor material; UVs are world-space so a single shared texture tiles seamlessly.
@@ -568,6 +586,119 @@ export class HouseView {
     this.launchHeight = beamH;
   }
 
+  /**
+   * The Globe's exit (in Globe units, on a map that wraps: HouseView.buildLaps clones it into the
+   * neighbouring laps, so nothing here moves or toggles per object; it animates through shared
+   * materials and texture offsets). The escape trajectory over the North Pole: a ribbon of chevrons
+   * on the Arctic ice leading north to the gate, a bar of light across the gate strip on the north
+   * bound, and a beam that leans north over the pole with rings streaming up it. Closed: amber
+   * chevrons pulse, the bar glows, no beam. Open: the chevrons turn cyan and stream north, the bar
+   * fades and the beam and its rings light up.
+   */
+  private buildEscapeTrajectory(): void {
+    const exit = this.layout.exit;
+    if (!exit) return;
+    const r = exit.rect;
+    const width = r.maxX - r.minX;
+    const cx = (r.minX + r.maxX) / 2;
+    const north = r.minZ;
+    const stripe = (w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      if (ctx) draw(ctx);
+      const t = new CanvasTexture(c);
+      t.wrapS = t.wrapT = RepeatWrapping;
+      return t;
+    };
+    // Chevrons pointing up the texture (north once laid on the floor), soft-edged.
+    const chevrons = stripe(64, 64, (ctx) => {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 9;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.moveTo(10, 46);
+      ctx.lineTo(32, 22);
+      ctx.lineTo(54, 46);
+      ctx.stroke();
+    });
+    const len = width * 3.2;
+    chevrons.repeat.set(1, len / (width * 0.5));
+    const ribbon = new MeshBasicMaterial({ color: '#ffae1a', alphaMap: chevrons, transparent: true, opacity: 0.7, blending: AdditiveBlending, depthWrite: false, fog: false });
+    const path = new Mesh(new PlaneGeometry(width * 0.5, len), ribbon);
+    path.rotation.x = -Math.PI / 2;
+    path.position.set(cx, 0.06, north + len / 2);
+    path.renderOrder = 3;
+    path.name = 'escapePath';
+    // The gate: a bar of light across the strip on the north bound.
+    const gate = new MeshBasicMaterial({ color: '#ffae1a', transparent: true, opacity: 0.85, blending: AdditiveBlending, depthWrite: false, fog: false });
+    const bar = new Mesh(new BoxGeometry(width, 0.35, r.maxZ - r.minZ), gate);
+    bar.position.set(cx, 0.2, (r.minZ + r.maxZ) / 2);
+    bar.renderOrder = 3;
+    bar.name = 'escapeGate';
+    // The beam: leaning north over the pole, bright at the bottom (alpha gradient), rings streaming up.
+    const fade = stripe(4, 128, (ctx) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, 128);
+      grad.addColorStop(0, '#000');
+      grad.addColorStop(0.6, '#666');
+      grad.addColorStop(1, '#fff');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 4, 128);
+    });
+    const beamH = width * 7;
+    const beam = new MeshBasicMaterial({ color: '#7cc8ff', alphaMap: fade, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false });
+    const tilt = new Group();
+    tilt.position.set(cx, 0, (r.minZ + r.maxZ) / 2);
+    tilt.rotation.x = -0.5;
+    tilt.name = 'exitBeacon';
+    const shaft = new Mesh(new CylinderGeometry(width * 0.3, width * 0.42, beamH, 32, 1, true), beam);
+    shaft.position.y = beamH / 2;
+    shaft.renderOrder = 3;
+    const ringTex = stripe(4, 64, (ctx) => {
+      const grad = ctx.createLinearGradient(0, 0, 0, 64);
+      grad.addColorStop(0, '#000');
+      grad.addColorStop(0.42, '#000');
+      grad.addColorStop(0.5, '#fff');
+      grad.addColorStop(0.58, '#000');
+      grad.addColorStop(1, '#000');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 4, 64);
+    });
+    ringTex.repeat.set(1, 6);
+    const rings = new MeshBasicMaterial({ color: '#bfe8ff', alphaMap: ringTex, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, fog: false });
+    const hoops = new Mesh(new CylinderGeometry(width * 0.36, width * 0.48, beamH * 0.7, 32, 1, true), rings);
+    hoops.position.y = beamH * 0.35;
+    hoops.renderOrder = 3;
+    tilt.add(shaft, hoops);
+    this.root.add(path, bar, tilt);
+    this.escape = { ribbon, chevrons, gate, beam, rings, ringTex };
+  }
+
+  private updateEscape(frameDt: number): void {
+    const e = this.escape;
+    const exit = this.layout.exit;
+    if (!e || !exit) return;
+    this.time += frameDt;
+    if (!exit.open) {
+      e.ribbon.opacity = 0.45 + 0.25 * Math.sin(this.time * 3);
+      e.gate.opacity = 0.6 + 0.25 * Math.sin(this.time * 3);
+      return;
+    }
+    this.doorOpen = Math.min(1, this.doorOpen + frameDt / 1.4);
+    const ease = 1 - (1 - this.doorOpen) ** 3;
+    e.ribbon.color.set('#5fe0ff');
+    e.ribbon.opacity = 0.85;
+    e.chevrons.offset.y = (e.chevrons.offset.y - frameDt * 1.6) % 1;
+    e.gate.opacity = 0.85 * (1 - ease);
+    e.beam.opacity = ease * (0.7 + 0.1 * Math.sin(this.time * 3));
+    e.rings.opacity = ease * 0.55;
+    e.ringTex.offset.y = (e.ringTex.offset.y - frameDt * 0.5) % 1;
+  }
+
   private updateLaunch(frameDt: number): void {
     const exit = this.layout.exit;
     if (!exit || !this.launchLights) return;
@@ -733,6 +864,7 @@ export class HouseView {
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
     this.updateLaunch(frameDt);
+    this.updateEscape(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
     // the bottom half still fades); in the city and from altitude also to its left and right edges, since a tower
     // can hide half of a giant Bunny without covering its centre.
@@ -775,6 +907,7 @@ export class HouseView {
   dispose(): void {
     this.batch.dispose();
     this.globe?.dispose();
+    this.solar?.dispose();
     this.root.traverse((o) => {
       const mesh = o as Mesh;
       if (!mesh.isMesh) return;

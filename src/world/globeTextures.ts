@@ -34,14 +34,14 @@ import { Rng } from '../core/rng';
 import { GLOBE, RANGES, SHAPES, SURFACE, distanceTo, globeSurface, latToZ, lonToX, periodicNoise, zToLat } from './globe';
 import type { HouseLayout } from './types';
 
-type RGB = readonly [number, number, number];
-const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-const smooth = (a: number, b: number, v: number) => {
+export type RGB = readonly [number, number, number];
+export const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+export const smooth = (a: number, b: number, v: number) => {
   const t = clamp01((v - a) / (b - a));
   return t * t * (3 - 2 * t);
 };
-const mixInto = (o: number[], a: RGB, b: RGB, t: number) => {
+export const mixInto = (o: number[], a: RGB, b: RGB, t: number) => {
   o[0] = a[0] + (b[0] - a[0]) * t;
   o[1] = a[1] + (b[1] - a[1]) * t;
   o[2] = a[2] + (b[2] - a[2]) * t;
@@ -61,7 +61,7 @@ function ramp(stops: ReadonlyArray<readonly [number, RGB]>, t: number, out: numb
   mixInto(out, a, b, clamp01((t - t0) / (t1 - t0 || 1)));
 }
 
-function canvas(w: number, h = w): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function canvas(w: number, h = w): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -69,7 +69,7 @@ function canvas(w: number, h = w): [HTMLCanvasElement, CanvasRenderingContext2D]
 }
 
 /** Tileable value noise with `cells` lattice cells per side; (u, v) in [0, 1). */
-function tileNoise(rng: Rng, cells: number): (u: number, v: number) => number {
+export function tileNoise(rng: Rng, cells: number): (u: number, v: number) => number {
   const g = new Float32Array(cells * cells);
   for (let i = 0; i < g.length; i++) g[i] = rng.next();
   return (u, v) => {
@@ -92,7 +92,7 @@ function tileNoise(rng: Rng, cells: number): (u: number, v: number) => number {
 }
 
 /** Tileable fBm (0..1) from octaves of [cells, amplitude]. */
-function fbm(rng: Rng, octaves: ReadonlyArray<readonly [number, number]>): (u: number, v: number) => number {
+export function fbm(rng: Rng, octaves: ReadonlyArray<readonly [number, number]>): (u: number, v: number) => number {
   const fns = octaves.map(([c]) => tileNoise(rng, c));
   const total = octaves.reduce((s, [, a]) => s + a, 0);
   return (u, v) => {
@@ -102,7 +102,7 @@ function fbm(rng: Rng, octaves: ReadonlyArray<readonly [number, number]>): (u: n
   };
 }
 
-function paint(ctx: CanvasRenderingContext2D, w: number, h: number, color: (x: number, y: number, out: number[]) => void): void {
+export function paint(ctx: CanvasRenderingContext2D, w: number, h: number, color: (x: number, y: number, out: number[]) => void): void {
   const img = ctx.createImageData(w, h);
   const out = [0, 0, 0, 255];
   for (let y = 0; y < h; y++) {
@@ -119,7 +119,7 @@ function paint(ctx: CanvasRenderingContext2D, w: number, h: number, color: (x: n
   ctx.putImageData(img, 0, 0);
 }
 
-function repeatTexture(c: HTMLCanvasElement, srgb = true): CanvasTexture {
+export function repeatTexture(c: HTMLCanvasElement, srgb = true): CanvasTexture {
   const t = new CanvasTexture(c);
   t.wrapS = t.wrapT = RepeatWrapping;
   t.colorSpace = srgb ? SRGBColorSpace : LinearSRGBColorSpace;
