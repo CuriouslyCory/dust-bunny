@@ -44,7 +44,7 @@ Acts 1–7 exist today (Act 7, the Solar System, with the ecliptic round the Sun
 
 ## Intro sequence
 
-Plays once per save on the first `Play` (stored as `introSeen` in settings), after character select, and from `Settings → Replay intro` on the title (which starts a new Run with it). Skipped by `?autostart`, and by Runs that start outside the House. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~38 s unskipped (the ~s column below is the authored minimum; panels hold longer when their captions need it to be read at 100 WPM).
+Plays once per save on the first `Play` (stored as `introSeen` in settings) while Story captions are on, after character select, and from `Settings → Replay intro` on the title (which starts a new Run with it, captions on or off; with them off the shots play without the words). Skipped by `?autostart` (which also hides Replay intro), and by Runs that start outside the House. Space / Enter / tap advances a panel; holding skips the whole thing. Total length ~38 s unskipped (the ~s column below is the authored minimum; panels hold longer when their captions need it to be read at 100 WPM).
 
 **It is diegetic.** The intro is a scripted camera move inside the real Run, not a separate cutscene: the Run is created, the camera starts at human eye height, and it dives under the couch to the actual spawn point where the Bunny's eyes open and the player gets control. The transition from story to gameplay is a single continuous shot.
 
