@@ -16,7 +16,7 @@ import {
 } from '../data/keepsakes';
 import type { Game } from '../game/game';
 import { h } from './screens';
-import { settings } from './settings';
+import { storyOn } from '../story';
 import './keepsakes.css';
 
 const n1 = (x: number): string => (Math.round(x * 10) / 10).toString();
@@ -108,10 +108,10 @@ let captionTimer = 0;
 
 /**
  * Shows a narrator caption line at the bottom of the screen (over any screen) for a few seconds,
- * unless "Story captions" is off in Settings.
+ * unless the story is off ("Story captions" in Settings, or `?autostart`).
  */
 export function narrate(game: Pick<Game, 'uiLayer'>, text: string, seconds = 6): void {
-  if (!settings.value.storyCaptions) return;
+  if (!storyOn()) return;
   if (!captionEl) {
     captionEl = h('p', { className: 'story-caption' });
     captionEl.setAttribute('role', 'status');

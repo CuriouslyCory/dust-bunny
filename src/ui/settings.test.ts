@@ -34,4 +34,18 @@ describe('settings', () => {
     expect(saved!.musicVolume).toBe(0.1);
     expect(saved!.sfxVolume).toBe(0.25);
   });
+
+  it('keeps story settings and a seen intro through a reset', () => {
+    const d = defaultSettings();
+    expect(d.storyCaptions).toBe(true);
+    expect(d.introSeen).toBe(false);
+    expect(sanitizeSettings({ storyCaptions: 'no', introSeen: 1 }, d)).toMatchObject({ storyCaptions: true, introSeen: false });
+    const store = new SettingsStore(
+      () => ({ storyCaptions: false, introSeen: true }),
+      () => {},
+    );
+    expect(store.value).toMatchObject({ storyCaptions: false, introSeen: true });
+    store.reset();
+    expect(store.value).toMatchObject({ storyCaptions: true, introSeen: true });
+  });
 });

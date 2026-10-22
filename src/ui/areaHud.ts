@@ -2,13 +2,16 @@
  * Area HUD: the "area cleared" banner and an exit compass while the area's exit is open (the
  * house's front door, the neighborhood's road to the city), with a skip button that moves on
  * without rolling to the exit (Enter on a keyboard), then a fade-in and an arrival banner when
- * the Bunny arrives in the next area.
+ * the Bunny arrives in the next area. With the narrator on (src/story/), the cleared banner carries
+ * the Area's cleared line and arriving plays the chapter card before the arrival banner.
  */
 import { AREAS } from '../data/areas';
 import { AREA_BOSSES } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import type { Game } from '../game/game';
 import { hazardRegistry } from '../hazards';
+import { captionDuration, narrate, storyCaption } from '../story';
+import { showChapterCard } from '../story/install';
 import type { AreaId } from '../world/types';
 import { button } from './components';
 import { h } from './screens';
@@ -69,19 +72,37 @@ export function installAreaHud(game: Game): void {
   game.events.on('exitOpened', (e) => {
     const info = EXITS[e.area];
     if (!info) return;
-    game.hud.banner(info.cleared, { subtitle: info.sub, variant: 'good', duration: 3.6 });
+    const line = narrate(game.run, { kind: 'cleared', area: e.area });
+    if (line) {
+      // The narrator's line replaces the directions; the compass still shows the way.
+      const caption = storyCaption(line);
+      game.hud.banner(info.cleared, { variant: 'good', duration: Math.max(3.6, captionDuration(caption)), caption });
+    } else {
+      game.hud.banner(info.cleared, { subtitle: info.sub, variant: 'good', duration: 3.6 });
+    }
     game.hud.flash('door-compass');
   });
 
   const fade = h('div', { className: 'area-fade' });
   game.uiLayer.append(fade);
-  game.events.on('areaEntered', (e) => {
-    fade.classList.remove('play');
+  const playFade = (dark: boolean) => {
+    fade.classList.remove('play', 'dark');
     void fade.offsetWidth;
     fade.classList.add('play');
+    fade.classList.toggle('dark', dark);
+  };
+  game.events.on('areaEntered', (e) => {
     const boss = AREA_BOSSES[e.area];
     const bossName = hazardRegistry.get(boss.id)?.name;
     const sub = bossName ? `Keep growing · the ${bossName} comes at ${getTier(boss.tier).name}` : 'Keep growing';
-    setTimeout(() => game.hud.banner(AREAS[e.area].name, { subtitle: sub, variant: 'tier', duration: 3.4 }), 450);
+    const arrive = (delay: number) => setTimeout(() => game.hud.banner(AREAS[e.area].name, { subtitle: sub, variant: 'tier', duration: 3.4 }), delay);
+    // Chapter card first (the Run waits behind it), then the dark card lifts off the new Area.
+    const card = showChapterCard(game, e.area, () => {
+      playFade(true);
+      arrive(250);
+    });
+    if (card) return;
+    playFade(false);
+    arrive(450);
   });
 }

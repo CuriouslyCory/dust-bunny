@@ -4,7 +4,7 @@
  *   ?seed=abc       fixed Run seed (same seed => same house layout)
  *   ?character=zap  starting Character (lint | tumble | zap)
  *   ?difficulty=arcade  Difficulty (casual | arcade | hardcore; otherwise the last one picked)
- *   ?autostart      skip the title screen
+ *   ?autostart      skip the title screen (and the story: no intro, no narrator)
  *   ?area=neighborhood|city  start Runs in a later area (skips the earlier ones; debug / testing)
  */
 import './styles.css';
@@ -19,6 +19,7 @@ import { installCloudSave } from './meta/cloudSave';
 import { installRoguelike } from './meta/install';
 import { getMeta } from './meta/meta';
 import { account } from './net/account';
+import { installStory } from './story/install';
 import { registerAccountScreen } from './ui/account/screen';
 import { installAreaHud } from './ui/areaHud';
 import { installUi } from './ui/install';
@@ -58,6 +59,7 @@ async function boot(): Promise<void> {
   if (game.debug) installDebug(game);
   installHazards(game);
   installAreaHud(game);
+  installStory(game, { available: !params.has('autostart') });
 
   game.start('title');
   if (params.has('autostart')) game.startRun();

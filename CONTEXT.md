@@ -27,3 +27,4 @@
 - **Tuck in** — the UI verb for putting a Keepsake into a Loadout slot.
 - **Felting** — turning 3 Keepsakes of the same type and grade into 1 of the next grade, for Fluff, up to one grade above the best boss that Character has beaten. **Shedding** discards one for a little Fluff.
 - **Under the Couch** — the Bunny's den and hub screen where each Character's Hoard is shown and felted.
+- **Story** — the deadpan narrator's storyline (`docs/story.md`), told in short captions on Tier-ups, boss arrivals, Area changes and results. Each **Area** is a **Chapter** with a title (the Neighborhood is Chapter 2, *The Front Door Was Built for People*). Silenced by the **Story captions** setting.

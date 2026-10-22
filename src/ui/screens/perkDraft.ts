@@ -4,7 +4,9 @@
  * `perkChoices` with keys 1–4, mouse or touch; R or the Reroll button rerolls if the Reroll
  * Upgrade is owned. Several Tier-ups queue several drafts; the modal closes once none are left.
  */
+import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
+import { captions, narrate } from '../../story';
 import { scrollArea } from '../components';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
@@ -26,6 +28,10 @@ export function registerPerkDraftScreen(): void {
     create(game) {
       const title = h('h2', { textContent: 'Tier up! Choose a Perk' });
       const sub = h('p', { className: 'sub' });
+      /** The narrator's Tier beat (docs/story.md): "Tier 4 · Dust Devil — line". */
+      const tierName = h('span', { className: 'story-line-tier' });
+      const tierText = h('span', { className: 'story-line-text' });
+      const story = h('p', { className: 'story-line' }, tierName, tierText);
       const cards = h('div', { className: 'perk-cards' });
       const reroll = h('button', { className: 'btn', type: 'button' });
       const footer = h('div', { className: 'rl-row' }, reroll);
@@ -44,6 +50,12 @@ export function registerPerkDraftScreen(): void {
         const { serial, perks } = draft.offer;
         if (serial === shown) return;
         shown = serial;
+        const line = narrate(run, { kind: 'tier', tier: run.tier });
+        story.hidden = !line;
+        if (line) {
+          tierName.textContent = `Tier ${run.tier} · ${getTier(run.tier).name} — `;
+          tierText.textContent = captions(line).join(' ');
+        }
         cards.replaceChildren(
           ...perks.map((p, i) => {
             const stacks = run.perkStacks(p.id);
@@ -85,7 +97,7 @@ export function registerPerkDraftScreen(): void {
       };
 
       return {
-        el: h('div', { className: 'panel rl-panel perk-draft' }, title, sub, scrollArea('perk-body', cards), footer),
+        el: h('div', { className: 'panel rl-panel perk-draft' }, title, story, sub, scrollArea('perk-body', cards), footer),
         enter() {
           armed = ARM_DELAY;
           shown = 0;
