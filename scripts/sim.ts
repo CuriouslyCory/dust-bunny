@@ -10,18 +10,32 @@
  * With --no-hazards a Run stops at the top Tier of the house / neighborhood (no boss to clear),
  * but keeps rolling in the city until --minutes so growth towards the boss size is measured.
  *
- * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, Tumble
- * hunkers while a telegraphed boss lane crosses it (with --hunker=defend also while a Broom sweep,
- * vacuum cone or spray lane is about to hit it), Zap discharges at the nearest Hazard
+ * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, or a vacuum
+ * cone or spray lane is about to hit it (--decoy=boss: only the first two, the issue's policy).
+ * Tumble hunkers while a telegraphed boss lane crosses it, and for up to 2 s when a Broom sweep or
+ * spray lane is about to hit it (--hunker=lane: boss lanes only). Both defaults beat the issue's
+ * policies over 60 seeds (Lint 20 → 27 wins, Tumble 5 → 7). Zap discharges at the nearest Hazard
  * in range once the Static meter is full. --no-ability plays without Abilities (for comparison).
  * The summary also counts boss fights and boss kills per Character. --boss plays only the house
  * boss fight: the Run starts at Tier 5 (fresh Bunny, four random Perks) and stops when the
  * Robo-Vac 9000 is absorbed, so `wins` there is the boss win rate.
  *
- * Usage: pnpm sim [seed ...] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
- *                 [--hunker=lane|defend] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
+ * Keepsakes: --loadout=<type>:<grade>,<type>:<grade> tucks those Keepsakes in for the Character
+ * they belong to (the other Characters play without); --loadout=max gives every Character its
+ * MAX_LOADOUTS pair at grade 4 (the strongest legal pair today, see MAX_LOADOUTS).
+ *
+ * Leaderboards: --validate builds the Run board and Area board submissions every Run would post
+ * (submissionFromRun / areaSubmission) and checks them with validateSubmission /
+ * validateAreaSubmission, printing each rejection and, per Character, the closest a Run came to
+ * the growth limits (radius reached ÷ radius allowed for the time; 100% = rejected). Runs that
+ * start at Tier 5 (--boss) or in a later area (--area) are unranked and not checked.
+ *
+ * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
+ *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city]   start in a later area (as after its previous boss)
  *                 [--difficulty=casual|arcade|hardcore]
+ *                 [--loadout=type:grade,type:grade | --loadout=max] [--validate]
+ *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
  */
 import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from '../src/abilities';
 import { EventBus } from '../src/core/events';
@@ -39,6 +53,9 @@ import { inCone, UprightVacuum as UprightVacuumClass, type UprightVacuum } from 
 import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
 import { getDifficulty } from '../src/data/difficulty';
 import { BROOM, tierValue } from '../src/data/hazards';
+import { getKeepsakeType, isLoadoutFor, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
+import { areaSubmission, submissionFromRun } from '../src/net/leaderboard';
+import { areaRadiusAllowed, BOUNDS, validateAreaSubmission, validateSubmission } from '../src/shared/leaderboard';
 import { fluffForRun } from '../src/meta/fluff';
 import { upgradeModifiers } from '../src/meta/upgrades';
 import { canAbsorb } from '../src/systems/absorb';
@@ -52,8 +69,12 @@ const minutes = Number(opt('minutes') ?? 15);
 const chars = (opt('chars') ?? 'lint,tumble,zap').split(',');
 const withHazards = !args.includes('--no-hazards');
 const withAbility = !args.includes('--no-ability');
-/** Tumble's Hunker policy: 'lane' (boss lanes only, the issue's policy) or 'defend' (also Broom / vacuum / spray hits). */
-const hunkerPolicy = opt('hunker') === 'defend' ? 'defend' : 'lane';
+/** Tumble's Hunker policy: 'defend' (default: boss lanes, plus plants of at most 2 s against Broom sweeps and spray lanes) or 'lane' (boss lanes only, the issue's policy). */
+const hunkerPolicy = opt('hunker') === 'lane' ? 'lane' : 'defend';
+/** Lint's Decoy policy: 'defend' (default: boss telegraphs, Broom aggro, and vacuum cones or spray lanes about to hit) or 'boss' (the first two only, the issue's policy). */
+const decoyPolicy = opt('decoy') === 'boss' ? 'boss' : 'defend';
+const ALL_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['vacuum', 'spray', 'broom']);
+const SHORT_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['spray', 'broom']);
 /** Boss fight only: start the house at Tier 5 (the Robo-Vac 9000 arrives 3 s later) and stop when it falls. */
 const bossOnly = args.includes('--boss');
 const quiet = args.includes('--quiet');
@@ -66,7 +87,40 @@ const upgrades = Object.fromEntries((opt('upgrades') ?? '').split(',').filter(Bo
 const startArea = opt('area') === 'neighborhood' || opt('area') === 'city' ? (opt('area') as 'neighborhood' | 'city') : undefined;
 const difficulty = getDifficulty(opt('difficulty')).id;
 const seeds = args.filter((a) => !a.startsWith('--'));
+const seedCount = Number(opt('seeds') ?? 0);
+if (seeds.length === 0 && seedCount > 0) for (let i = 1; i <= seedCount; i++) seeds.push(`s${i}`);
 if (seeds.length === 0) seeds.push('alpha', 'bravo', 'charlie', 'delta', 'echo');
+const validate = args.includes('--validate') && !bossOnly && !startArea;
+
+/**
+ * --loadout=max: the strongest legal pair at grade 4 per Character. Chosen by playing every pair
+ * of that Character's types (duplicates included, 15 per Character) at grade 4 over seeds s1–s30
+ * (--minutes=25, default bot policies) and taking the most wins, then the fastest median win:
+ * Lint Quick Shed + Reclaim (18/30 wins, base 12/30), Tumble Snowball ×2 (7/30, base 2/30), Zap
+ * Static Cling + Grounding (26/30 in 14:02, base 21/30 in 14:57). Re-run that search when
+ * Keepsake values or the bot change (docs/design.md "Keepsake effects").
+ */
+const MAX_LOADOUTS: Record<string, readonly [KeepsakeTypeId, KeepsakeTypeId]> = {
+  lint: ['quick_shed', 'reclaim'],
+  tumble: ['snowball', 'snowball'],
+  zap: ['static_cling', 'grounding'],
+};
+const MAX_GRADE_TODAY = 4;
+
+/** The Loadout --loadout gives a Character ([] without the flag or when no listed type is its own). */
+function loadoutFor(characterId: string): Loadout {
+  const spec = opt('loadout');
+  if (!spec) return [];
+  if (spec === 'max') return (MAX_LOADOUTS[characterId] ?? []).map((type) => ({ type, grade: MAX_GRADE_TODAY }));
+  const refs: KeepsakeRef[] = spec.split(',').filter(Boolean).map((s) => {
+    const [type, g] = s.split(':');
+    if (!type || !getKeepsakeType(type)) throw new Error(`--loadout: unknown Keepsake type "${type}"`);
+    return { type: type as KeepsakeTypeId, grade: Number(g ?? MAX_GRADE_TODAY) };
+  });
+  const own = refs.filter((k) => getKeepsakeType(k.type)!.characterId === characterId);
+  if (!isLoadoutFor(characterId, own)) throw new Error(`--loadout: not a legal Loadout for ${characterId}: ${spec}`);
+  return own;
+}
 
 /** Occupancy grid for a Bunny of a given radius, with BFS path distances from the Bunny. */
 class Planner {
@@ -395,24 +449,24 @@ class Bot implements InputSource {
     return along > -b.radius && along < boss.cfg.chargeDistance + b.radius && side < (boss.cfg.contactRadius * boss.scale + b.radius) * pad;
   }
 
-  /** A Broom sweep, vacuum / blower cone or spray lane is about to hit the Bunny. */
-  private imminentHit(): boolean {
+  /** A Broom sweep, vacuum / blower cone or spray lane (of the given kinds) is about to hit the Bunny. */
+  private imminentHit(kinds: ReadonlySet<'vacuum' | 'spray' | 'broom'> = ALL_HITS): boolean {
     const { bunny, hazards } = this.run;
     const r = bunny.radius;
     for (const h of hazards.hazards) {
       if (h.dead || canAbsorb(r, bunny.stats.get('absorbRatio'), h.size) || h.stunnedFor) continue;
-      if (h instanceof UprightVacuumClass && h.state !== 'off') {
+      if (h instanceof UprightVacuumClass && h.state !== 'off' && kinds.has('vacuum')) {
         const c = h.cfg;
         const it = { x: h.x + Math.sin(h.yaw) * h.size * c.nozzleOffset, z: h.z + Math.cos(h.yaw) * h.size * c.nozzleOffset };
         if (inCone(it.x, it.z, h.yaw, c.coneHalfAngle, c.coneRange * 1.1, bunny.x, bunny.z, r)) return true;
-      } else if (h instanceof SprayBottleClass && (h.state === 'telegraph' || h.state === 'firing')) {
+      } else if (h instanceof SprayBottleClass && (h.state === 'telegraph' || h.state === 'firing') && kinds.has('spray')) {
         const range = tierValue(h.cfg.range, this.run.tier);
         const dx = bunny.x - h.x;
         const dz = bunny.z - h.z;
         const along = dx * Math.sin(h.yaw) + dz * Math.cos(h.yaw);
         const side = Math.abs(dx * Math.cos(h.yaw) - dz * Math.sin(h.yaw));
         if (along > 0 && along < range + r && side < r + h.cfg.dropletRadius * 3) return true;
-      } else if (h instanceof BroomClass && h.state !== 'idle') {
+      } else if (h instanceof BroomClass && h.state !== 'idle' && kinds.has('broom')) {
         if (Math.hypot(bunny.x - h.pivotX, bunny.z - h.pivotZ) < BROOM.sweepRadius + BROOM.headRadius + r) return true;
       }
     }
@@ -434,17 +488,19 @@ class Bot implements InputSource {
         const br = h as Broom;
         return br.state === 'telegraph' && Math.hypot(bunny.x - br.pivotX, bunny.z - br.pivotZ) < BROOM.aggroRange + bunny.radius;
       });
-      return { ability: bossAim || broomAim, abilityHeld: false };
+      return { ability: bossAim || broomAim || (decoyPolicy === 'defend' && this.imminentHit()), abilityHeld: false };
     }
     if (sys.data.id === 'hunker') {
       const ctl = sys.controller as HunkerAbility;
-      const threat = bosses.some((b) => (b.state === 'telegraph' || b.state === 'charge') && this.laneCrosses(b)) || (hunkerPolicy === 'defend' && this.imminentHit());
+      const lane = bosses.some((b) => (b.state === 'telegraph' || b.state === 'charge') && this.laneCrosses(b));
+      // defend: also short plants against sprays and Broom sweeps (not vacuums: their suction lasts, so walking out is better).
+      const hit = hunkerPolicy === 'defend' && this.imminentHit(SHORT_HITS);
       if (ctl.active) {
-        // Hold until the charge is over (the boss crashed into us, or stopped).
-        const keep = threat || bosses.some((b) => b.state === 'stunned' && Math.hypot(b.x - bunny.x, b.z - bunny.z) < b.cfg.contactRadius * b.scale + bunny.radius * 1.5);
+        // Hold until the charge is over (the boss crashed into us, or stopped); against a spray or sweep, at most 2 s.
+        const keep = lane || (hit && ctl.held < 2) || bosses.some((b) => b.state === 'stunned' && Math.hypot(b.x - bunny.x, b.z - bunny.z) < b.cfg.contactRadius * b.scale + bunny.radius * 1.5);
         return { ability: false, abilityHeld: keep };
       }
-      const go = threat && ctl.canPlant;
+      const go = (lane || hit) && ctl.canPlant;
       return { ability: go, abilityHeld: go };
     }
     const ctl = sys.controller as DischargeAbility;
@@ -540,25 +596,68 @@ class Bot implements InputSource {
 }
 
 const fmt = (s: number | undefined) => (s === undefined ? '  -  ' : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`);
-const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number }> = {};
+interface Validation {
+  /** Submissions checked / rejected. */
+  checked: number;
+  rejected: string[];
+  /** Highest radius reached ÷ radius allowed for the time: Run board, and per Area board. */
+  runHeadroom: number;
+  areaHeadroom: Record<string, number>;
+}
+const summary: Record<string, { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; loadout: Loadout; v: Validation }> = {};
 const modifiers = upgradeModifiers(upgrades);
 
+/** Validates the submissions a finished Run would post (--validate). */
+function validateRun(run: Run, v: Validation, label: string): void {
+  const stats = run.getStats();
+  const reason = run.endReason ?? 'quit';
+  const sub = submissionFromRun(stats, reason, 'Sim Bot', 'sim-bot-run');
+  const res = validateSubmission(sub);
+  v.checked++;
+  if (!res.ok) v.rejected.push(`${label} run board: ${res.field}: ${res.message} (r=${sub.maxRadius} t=${(sub.durationMs / 1000).toFixed(0)}s)`);
+  v.runHeadroom = Math.max(v.runHeadroom, sub.maxRadius / (BOUNDS.maxStartRadius + (BOUNDS.maxGrowthPerSec * sub.durationMs) / 1000));
+  for (const a of stats.areas ?? []) {
+    if (!a.cleared) continue;
+    const as = areaSubmission(a, stats.characterId, stats.difficulty, 'Sim Bot', 'sim-bot-run', stats.loadout);
+    const ar = validateAreaSubmission(as);
+    v.checked++;
+    if (!ar.ok) v.rejected.push(`${label} ${a.area} board: ${ar.field}: ${ar.message} (in=${as.radiusIn} max=${as.maxRadius} t=${(as.durationMs / 1000).toFixed(0)}s)`);
+    v.areaHeadroom[a.area] = Math.max(v.areaHeadroom[a.area] ?? 0, as.maxRadius / areaRadiusAllowed(a.area, as.radiusIn, as.durationMs / 1000));
+  }
+}
+
 for (const characterId of chars) {
-  const sum = (summary[characterId] = { tiers: TIERS.map((): number[] => []), ends: [] as number[], fluff: [] as number[], wins: 0, deaths: 0, n: 0, fights: {} as Record<string, number>, kills: {} as Record<string, number>, abilityUses: 0 });
+  const loadout = loadoutFor(characterId);
+  const sum = (summary[characterId] = {
+    tiers: TIERS.map((): number[] => []),
+    ends: [] as number[],
+    fluff: [] as number[],
+    wins: 0,
+    deaths: 0,
+    n: 0,
+    fights: {} as Record<string, number>,
+    kills: {} as Record<string, number>,
+    abilityUses: 0,
+    loadout,
+    v: { checked: 0, rejected: [], runHeadroom: 0, areaHeadroom: {} },
+  });
   for (const seed of seeds) {
     const events = new EventBus();
     // --no-hazards: pure growth, so neither Hazards nor Pickups spawn.
-    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
+    const run = createRun(events, { seed, characterId, difficulty, modifiers, perks: fixedPerks, area: startArea, loadout }, { hazards: withHazards, pickups: withHazards, abilities: withAbility });
     events.on('hazardSpawned', (e) => {
       if (['robovac_9000', 'street_sweeper', 'garbage_truck'].includes(e.defId)) sum.fights[e.defId] = (sum.fights[e.defId] ?? 0) + 1;
     });
     events.on('bossDefeated', (e) => (sum.kills[e.defId] = (sum.kills[e.defId] ?? 0) + 1));
     events.on('abilityUsed', () => sum.abilityUses++);
-    let leaveArea = false;
+    /** Area whose exit just opened (the bot skips the walk to it), or null. */
+    let leaveArea: string | null = null;
     events.on('exitOpened', (e) => {
       log.push(`${fmt(run.time)} ${e.area} cleared r=${run.bunny.radius.toFixed(1)} → next area`);
-      leaveArea = true;
+      leaveArea = e.area;
     });
+    events.on('areaEntered', (e) => log.push(`${fmt(run.time)} entered ${e.area} r=${run.bunny.radius.toFixed(1)}`));
+    events.on('bossDefeated', (e) => log.push(`${fmt(run.time)} ${e.defId} absorbed r=${run.bunny.radius.toFixed(1)}`));
     const bot = new Bot(run);
     run.input = bot;
     let bossWon = false;
@@ -598,9 +697,10 @@ for (const characterId of chars) {
     const t0 = performance.now();
     for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || run.area === 'city' || run.tier < (run.area === 'house' ? 5 : 7)); i++) {
       run.update(dt);
+      // Skip the walk, unless the Bunny already rolled through the exit this tick.
       if (leaveArea) {
-        leaveArea = false;
-        run.enterNextArea();
+        if (run.area === leaveArea) run.enterNextArea();
+        leaveArea = null;
       }
       if (traceAt !== undefined && run.time > traceAt && run.time < traceAt + 6 && i % 15 === 0) {
         const b = run.bunny;
@@ -628,6 +728,7 @@ for (const characterId of chars) {
       sum.ends.push(run.time);
     }
     if (run.endReason === 'died') sum.deaths++;
+    if (validate) validateRun(run, sum.v, `${characterId} seed=${seed}`);
     if (quiet) continue;
     const tiers = TIERS.map((t) => `${t.name} ${fmt(run.tierTimes[t.index])}`).join(' | ');
     console.log(
@@ -638,11 +739,19 @@ for (const characterId of chars) {
 }
 
 const med = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : undefined);
-console.log(`\nMedian Tier times (runs reaching it), ${difficulty}${withAbility ? '' : ', no Abilities'}:`);
+console.log(`\nMedian Tier times (runs reaching it), ${difficulty}${withAbility ? '' : ', no Abilities'}${opt('loadout') ? `, loadout ${opt('loadout')}` : ''}:`);
 for (const [id, s] of Object.entries(summary)) {
   console.log(
     `  ${id.padEnd(7)} ${TIERS.map((t) => `T${t.index} ${fmt(med(s.tiers[t.index - 1]!))}(${s.tiers[t.index - 1]!.length})`).join('  ')}  win ${fmt(med(s.ends))}  fluff ${Math.min(...s.fluff)}–${med(s.fluff)}–${Math.max(...s.fluff)}  wins ${s.wins}/${s.n} deaths ${s.deaths}`,
   );
   const bosses = ['robovac_9000', 'street_sweeper', 'garbage_truck'].filter((b) => s.fights[b]);
   console.log(`          bosses beaten (kills/fights): ${bosses.map((b) => `${b} ${s.kills[b] ?? 0}/${s.fights[b]}`).join('  ') || 'none fought'}  ability uses ${s.abilityUses}`);
+  if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.grade}`).join(', ')}`);
+  if (validate) {
+    const pct = (x: number) => `${Math.round(x * 100)}%`;
+    const areas = Object.entries(s.v.areaHeadroom).map(([a, x]) => `${a} ${pct(x)}`).join(', ');
+    console.log(`          leaderboard: ${s.v.checked - s.v.rejected.length}/${s.v.checked} submissions valid, closest to the growth limit: run board ${pct(s.v.runHeadroom)}${areas ? `, ${areas}` : ''}`);
+    for (const r of s.v.rejected) console.log(`            REJECTED ${r}`);
+  }
 }
+if (validate && Object.values(summary).some((s) => s.v.rejected.length)) process.exitCode = 1;
