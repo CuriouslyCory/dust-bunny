@@ -194,6 +194,12 @@ describe('validateAreaSubmission', () => {
     expect(areaErr(area({ debrisAbsorbed: 100_000 }))).toBe('debrisAbsorbed');
   });
 
+  it('allows the City its faster growth (a fast bot clear: 177 → 680 cm in 146 s), but not the House', () => {
+    expect(areaErr(area({ area: 'city', radiusIn: 177, maxRadius: 680, debrisAbsorbed: 3000, durationMs: 146_000 }))).toBeNull();
+    expect(areaErr(area({ area: 'city', radiusIn: 177, maxRadius: 1100, debrisAbsorbed: 3000, durationMs: 146_000 }))).toBe('maxRadius');
+    expect(areaErr(area({ maxRadius: 52, durationMs: 20_000 }))).toBe('maxRadius');
+  });
+
   it('checks the score', () => {
     const s = area();
     expect(areaErr({ ...s, score: s.score + 50 })).toBe('score');
