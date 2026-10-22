@@ -98,6 +98,73 @@ export class Sfx {
     this.a.tone({ type: 'triangle', freq: 1040, decay: 0.05, gain: 0.03 });
   }
 
+  /** Decoy shed: a soft fluffy "fwump" with a little rising pip. */
+  decoyShed(): void {
+    if (!this.gate('ability', 0.4, 2, 0.05)) return;
+    const a = this.a;
+    a.noise({ filter: 'lowpass', freq: 1400, freqEnd: 500, attack: 0.01, decay: 0.22, gain: 0.22 });
+    a.tone({ type: 'sine', freq: 330, freqEnd: 520, attack: 0.01, decay: 0.18, gain: 0.08 });
+  }
+
+  /** Decoy popped (expired or shot): a dry puff. */
+  decoyPop(): void {
+    if (!this.gate('ability', 0.3, 2, 0.05)) return;
+    const a = this.a;
+    a.noise({ filter: 'bandpass', freq: 2200, freqEnd: 900, q: 1.4, decay: 0.12, gain: 0.2 });
+    a.tone({ type: 'triangle', freq: 880, freqEnd: 440, decay: 0.08, gain: 0.05 });
+  }
+
+  /** A Hazard clogged on the Decoy: a choked motor sputtering out. */
+  clog(boss = false): void {
+    if (!this.gate('clog', 0.7, 2, 0.1)) return;
+    const a = this.a;
+    const f = boss ? 110 : 180;
+    a.tone({ type: 'sawtooth', freq: f, freqEnd: f * 0.45, decay: 0.5, gain: 0.09, lowpass: 900 });
+    for (let i = 0; i < 4; i++) a.noise({ filter: 'lowpass', freq: 700, delay: i * 0.08, decay: 0.05, gain: 0.12 * (1 - i * 0.2) });
+    a.tone({ type: 'sine', freq: N(76), delay: 0.12, decay: 0.2, gain: 0.05 });
+  }
+
+  /** Hunker plant: a heavy low thud as Tumble digs in. */
+  hunkerPlant(): void {
+    if (!this.gate('ability', 0.4, 2, 0.05)) return;
+    const a = this.a;
+    a.tone({ type: 'sine', freq: 120, freqEnd: 55, attack: 0.005, decay: 0.3, gain: 0.22 });
+    a.noise({ filter: 'lowpass', freq: 600, freqEnd: 150, decay: 0.18, gain: 0.16 });
+  }
+
+  /** Hunker release: a light upward shake-off. */
+  hunkerRelease(): void {
+    if (!this.gate('ability', 0.3, 2, 0.05)) return;
+    const a = this.a;
+    a.noise({ filter: 'bandpass', freq: 600, freqEnd: 1800, q: 1, attack: 0.02, decay: 0.16, gain: 0.12 });
+    a.tone({ type: 'triangle', freq: 220, freqEnd: 330, decay: 0.12, gain: 0.05 });
+  }
+
+  /** Something crashed into a planted Tumble. */
+  hunkerBlock(boss = false): void {
+    if (!this.gate('block', 0.3, 2, 0.08)) return;
+    const a = this.a;
+    a.tone({ type: 'square', freq: boss ? 90 : 160, freqEnd: boss ? 50 : 90, decay: boss ? 0.35 : 0.15, gain: boss ? 0.12 : 0.07, lowpass: 700 });
+    a.noise({ filter: 'lowpass', freq: 900, decay: 0.1, gain: boss ? 0.18 : 0.1 });
+  }
+
+  /** Static meter full: a quick bright crackle. */
+  staticFull(): void {
+    if (!this.gate('static', 0.4, 1, 0.3)) return;
+    const a = this.a;
+    a.noise({ filter: 'highpass', freq: 5000, decay: 0.15, gain: 0.07 });
+    [84, 91].forEach((m, i) => a.tone({ type: 'sine', freq: N(m), delay: i * 0.05, decay: 0.15, gain: 0.05 }));
+  }
+
+  /** Discharge: an electric zap and crackle. */
+  discharge(): void {
+    if (!this.gate('zap', 0.5, 2, 0.05)) return;
+    const a = this.a;
+    a.tone({ type: 'sawtooth', freq: 1800, freqEnd: 120, decay: 0.28, gain: 0.1, lowpass: 5000 });
+    a.tone({ type: 'square', freq: 60, freqEnd: 40, decay: 0.3, gain: 0.07, lowpass: 400 });
+    for (let i = 0; i < 5; i++) a.noise({ filter: 'highpass', freq: 3000 + i * 600, delay: i * 0.035, decay: 0.04, gain: 0.12 });
+  }
+
   bossWarning(): void {
     if (!this.gate('boss', 2.5, 1)) return;
     const a = this.a;

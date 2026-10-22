@@ -16,25 +16,31 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Rng } from '../core/rng';
 import { ringDecal, type Decal } from '../hazards/decals';
 
 export const ABILITY_COLORS = {
   decoy: '#c9ccd1',
   lure: '#ffd166',
-  planted: '#b08a5e',
+  planted: '#f3c27a',
   spark: '#9ad8ff',
   bolt: '#e6f4ff',
 } as const;
 
-/** A lumpy lint ball: an icosphere with jittered vertices (seeded). */
+/**
+ * A lumpy lint ball: an icosphere displaced by a smooth function of position (seeded phases), so
+ * the duplicated vertices of the non-indexed geometry move together and the surface stays closed.
+ */
 function lintGeometry(rng: Rng): BufferGeometry {
-  const g = new IcosahedronGeometry(1, 2);
+  const g = mergeVertices(new IcosahedronGeometry(1, 3));
   const pos = g.getAttribute('position');
   const v = new Vector3();
+  const [a, b, c] = [rng.range(0, 6.28), rng.range(0, 6.28), rng.range(0, 6.28)];
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    v.multiplyScalar(0.86 + rng.range(0, 0.22));
+    const lump = 0.07 * Math.sin(v.x * 4.1 + a) * Math.cos(v.y * 3.7 + b) + 0.05 * Math.sin(v.z * 5.3 + c + v.x * 2);
+    v.multiplyScalar(0.95 + lump);
     pos.setXYZ(i, v.x, v.y, v.z);
   }
   g.computeVertexNormals();
@@ -47,9 +53,10 @@ export class DecoyView {
   private readonly ball: Mesh;
   private readonly ring: Decal;
   private popT = -1;
+  private popScale = 1;
 
   constructor(rng: Rng) {
-    const mat = new MeshStandardMaterial({ color: ABILITY_COLORS.decoy, roughness: 1, flatShading: true, emissive: '#3a3328', emissiveIntensity: 0.25 });
+    const mat = new MeshStandardMaterial({ color: ABILITY_COLORS.decoy, roughness: 1, emissive: '#3a3328', emissiveIntensity: 0.25 });
     this.ball = new Mesh(lintGeometry(rng), mat);
     this.ball.castShadow = true;
     this.root.add(this.ball);
@@ -80,11 +87,14 @@ export class DecoyView {
 
   /** Starts the pop puff; returns true while it is still playing. */
   pop(dt: number): boolean {
-    if (this.popT < 0) this.popT = 0;
+    if (this.popT < 0) {
+      this.popT = 0;
+      this.popScale = this.ball.scale.x;
+    }
     this.popT += dt;
     const k = Math.min(1, this.popT / 0.25);
     this.ball.visible = true;
-    this.ball.scale.multiplyScalar(1 + dt * 6);
+    this.ball.scale.setScalar(this.popScale * (1 + k * 0.5));
     (this.ball.material as MeshStandardMaterial).transparent = true;
     (this.ball.material as MeshStandardMaterial).opacity = 1 - k;
     this.ring.setOpacity(0.5 * (1 - k));
@@ -108,8 +118,8 @@ export class PlantedView {
   private readonly inner: Decal;
 
   constructor() {
-    this.ring = ringDecal(1.05, 1.3, ABILITY_COLORS.planted, 0.75);
-    this.inner = ringDecal(1.32, 1.42, '#fff3e0', 0.45);
+    this.ring = ringDecal(1.18, 1.42, ABILITY_COLORS.planted, 0.85);
+    this.inner = ringDecal(1.48, 1.58, '#fff3e0', 0.6);
     this.root.add(this.ring.root, this.inner.root);
     this.root.visible = false;
   }
@@ -121,7 +131,7 @@ export class PlantedView {
     this.root.position.set(x, 0, z);
     this.ring.root.scale.set(radius, 1, radius);
     this.inner.root.scale.set(radius, 1, radius);
-    this.ring.setOpacity(0.55 + 0.2 * Math.sin(time * 3));
+    this.ring.setOpacity(0.7 + 0.15 * Math.sin(time * 3));
     this.inner.pulse(time, hold);
   }
 
@@ -195,7 +205,7 @@ export class BoltView {
   /** Returns false once faded out (then dispose). */
   update(dt: number): boolean {
     this.t += dt;
-    const k = this.t / 0.3;
+    const k = this.t / 0.4;
     this.material.opacity = Math.max(0, 1 - k) * (0.6 + 0.4 * Math.abs(Math.sin(this.t * 60)));
     return k < 1;
   }

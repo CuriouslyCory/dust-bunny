@@ -99,3 +99,54 @@
     height: 78px;
   }
 }
+
+/* Ability button: 72 px, up and to the left of Dash, with its own ring (src/ui/abilityHud.ts). */
+.touch-ability {
+  display: none;
+  pointer-events: auto;
+  position: relative;
+  width: 72px;
+  height: 72px;
+  margin: 0 116px -46px 0;
+  border: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #fff7ec, #e9d6f5);
+  color: var(--cocoa-800);
+  box-shadow: 0 5px 0 rgba(42, 29, 23, 0.55), 0 8px 16px rgba(20, 10, 5, 0.35);
+  touch-action: none;
+  transition: transform 0.08s var(--ease-out);
+}
+
+.touch .touch-ability:not([hidden]) {
+  display: grid;
+  place-items: center;
+}
+
+.touch .touch-ability svg {
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+}
+
+.touch-ability-icon {
+  font-size: 28px;
+  opacity: 0.55;
+}
+
+.touch-ability.ready .touch-ability-icon,
+.touch-ability.active .touch-ability-icon {
+  opacity: 1;
+}
+
+.touch-ability.pressed {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 rgba(42, 29, 23, 0.55), 0 4px 10px rgba(20, 10, 5, 0.3);
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .touch-ability {
+    width: 62px;
+    height: 62px;
+    margin: 0 100px -40px 0;
+  }
+}

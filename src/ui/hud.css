@@ -503,6 +503,129 @@
   display: none;
 }
 
+/* ── Ability ring (src/ui/abilityHud.ts): up and to the left of Dash ── */
+.hud-ability {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  margin: 0 84px -40px 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(42, 29, 23, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 6px 16px rgba(20, 10, 5, 0.3);
+  transition: transform var(--dur-med) var(--ease-bounce);
+}
+
+.hud-ability[hidden] {
+  display: none;
+}
+
+.hud-ability svg,
+.touch-ability svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.hud-ability circle,
+.touch-ability circle {
+  fill: none;
+  stroke-width: 5;
+}
+
+.hud-ability .track,
+.touch-ability .track {
+  stroke: rgba(255, 240, 220, 0.18);
+}
+
+.hud-ability .fill,
+.touch-ability .fill {
+  stroke: var(--sky);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transition: stroke var(--dur-med);
+}
+
+.hud-ability.ready .fill,
+.touch-ability.ready .fill {
+  stroke: var(--mint);
+}
+
+/* Decoy out / planted: the ring counts down the time left. */
+.hud-ability.active .fill,
+.touch-ability.active .fill {
+  stroke: #ffd166;
+}
+
+/* Discharge: the ring is the Static meter. */
+.hud-ability[data-ability='discharge'] .fill,
+.touch-ability[data-ability='discharge'] .fill {
+  stroke: var(--lavender);
+}
+
+.hud-ability[data-ability='discharge'].ready .fill,
+.touch-ability[data-ability='discharge'].ready .fill {
+  stroke: #9ad8ff;
+  filter: drop-shadow(0 0 4px #9ad8ff);
+}
+
+.hud-ability[data-ability='discharge'].ready,
+.touch-ability[data-ability='discharge'].ready {
+  animation: ability-charged 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes ability-charged {
+  to {
+    box-shadow: 0 0 18px rgba(154, 216, 255, 0.75), 0 6px 16px rgba(20, 10, 5, 0.3);
+  }
+}
+
+.hud-ability-icon {
+  font-size: 24px;
+  opacity: 0.55;
+  transition: opacity var(--dur-med);
+}
+
+.hud-ability.ready .hud-ability-icon,
+.hud-ability.active .hud-ability-icon {
+  opacity: 1;
+}
+
+.hud-ability-label,
+.touch-ability-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font: 800 15px var(--font-body);
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(20, 10, 5, 0.9);
+  pointer-events: none;
+}
+
+.hud-ability-key {
+  position: absolute;
+  bottom: -10px;
+  padding: 2px 7px;
+  border-radius: 7px;
+  background: rgba(255, 247, 236, 0.92);
+  color: var(--cocoa-800);
+  font: 800 10px var(--font-body);
+  letter-spacing: 0.5px;
+  text-shadow: none;
+}
+
+.hud-ability.pop {
+  animation: chip-in 0.4s var(--ease-bounce);
+}
+
+.touch .hud-widget-ability {
+  display: none;
+}
+
 /* ── Toasts ───────────────────────────────────────────────── */
 .hud-toasts {
   position: absolute;

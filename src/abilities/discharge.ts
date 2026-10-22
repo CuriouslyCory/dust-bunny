@@ -161,7 +161,7 @@ export class DischargeAbility implements AbilityController {
     const b = run.bunny;
     const p = this.p;
     const hr = hazardRadius(h);
-    const bolt = new BoltView(this.system.rng, fromX, fromZ, b.radius, h.x, h.z, Math.min(hr, b.radius * 2), Math.max(0.6, b.radius * 0.08));
+    const bolt = new BoltView(this.system.rng, fromX, fromZ, b.radius, h.x, h.z, Math.min(hr, b.radius * 2), Math.max(0.8, b.radius * 0.14));
     run.entityRoot.add(bolt.root);
     this.bolts.push(bolt);
     if (isBoss(h)) {
