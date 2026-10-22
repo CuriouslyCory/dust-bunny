@@ -50,10 +50,12 @@ export function registerPerkDraftScreen(): void {
         const { serial, perks } = draft.offer;
         if (serial === shown) return;
         shown = serial;
-        const line = narrate(run, { kind: 'tier', tier: run.tier });
+        // One draft per Tier crossed: with several waiting, this one is for the earliest of them.
+        const tier = Math.max(2, run.tier - draft.pending + 1);
+        const line = narrate(run, { kind: 'tier', tier });
         story.hidden = !line;
         if (line) {
-          tierName.textContent = `Tier ${run.tier} · ${getTier(run.tier).name} — `;
+          tierName.textContent = `Tier ${tier} · ${getTier(tier).name} — `;
           tierText.textContent = captions(line).join(' ');
         }
         cards.replaceChildren(

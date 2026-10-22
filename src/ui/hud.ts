@@ -146,6 +146,8 @@ export class Hud {
   private widgets: HudWidget[] = [];
   private bannerEl = h('div', { className: 'hud-banner' });
   private bannerTimer: number | undefined;
+  /** performance.now() when the current banner is due to hide (0: none showing). */
+  private bannerUntil = 0;
   private toastLayer = h('div', { className: 'hud-toasts' });
   private toastEls = new Map<number, HTMLElement>();
   private clock = 0;
@@ -265,7 +267,13 @@ export class Hud {
     this.toasts.clear();
   }
 
+  /** Seconds until the current banner hides (0 when none is up), so a later banner can wait its turn. */
+  get bannerLeft(): number {
+    return Math.max(0, (this.bannerUntil - performance.now()) / 1000);
+  }
+
   clearBanner(): void {
+    this.bannerUntil = 0;
     clearTimeout(this.bannerTimer);
     this.bannerEl.classList.remove('show');
   }
@@ -285,6 +293,7 @@ export class Hud {
     clearTimeout(this.bannerTimer);
     const duration = opts.duration ?? 2.4;
     const hold = opts.caption?.hold ?? 0;
+    this.bannerUntil = performance.now() + Math.max(duration, hold * parts.length) * 1000;
     let shown = 0;
     // One timer at a time, so a newer banner (or clearBanner) cancels the rest of the caption.
     const next = (): void => {
@@ -651,7 +660,7 @@ function bossBanner(hud: Hud, game: Game): void {
       hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Area boss', variant: 'boss', duration: 3.2 });
     }
     hud.el.classList.add('boss-alert');
-    setTimeout(() => hud.el.classList.remove('boss-alert'), 3200);
+    setTimeout(() => hud.el.classList.remove('boss-alert'), Math.max(3.2, hud.bannerLeft) * 1000);
   };
   onLoose(game.events, 'bossSpawned', (p) => {
     shownFor = typeof p.hazardId === 'number' ? p.hazardId : -2;

@@ -16,6 +16,8 @@ import type { AreaId } from '../world/types';
 const FADE_OUT = 0.3;
 /** Pointer or key held this long skips the whole sequence. */
 const HOLD_TO_SKIP = 0.6;
+/** The chapter card ignores input this long after it opens (a tap or Space meant for play). */
+const CHAPTER_ARM = 0.4;
 
 export interface StoryCards {
   el: HTMLElement;
@@ -104,8 +106,11 @@ export interface ChapterParams {
   done: () => void;
 }
 
-/** Tap / click: a quick press calls `tap`, a long one `hold`. Returns the per-frame tick. */
-function pressHandler(el: HTMLElement, tap: () => void, hold: () => void): (dt: number) => void {
+/**
+ * Tap / click: a quick press calls `tap`, a long one `hold`. `tick` runs per frame; `reset`
+ * forgets a press still down (call it on enter / exit: its release may land on another screen).
+ */
+function pressHandler(el: HTMLElement, tap: () => void, hold: () => void): { tick(dt: number): void; reset(): void } {
   let held: number | null = null;
   el.addEventListener('pointerdown', (e) => {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -118,13 +123,16 @@ function pressHandler(el: HTMLElement, tap: () => void, hold: () => void): (dt: 
   };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', () => (held = null));
-  return (dt) => {
-    if (held === null) return;
-    held += dt;
-    if (held >= HOLD_TO_SKIP) {
-      held = null;
-      hold();
-    }
+  return {
+    tick(dt) {
+      if (held === null) return;
+      held += dt;
+      if (held >= HOLD_TO_SKIP) {
+        held = null;
+        hold();
+      }
+    },
+    reset: () => (held = null),
   };
 }
 
@@ -140,28 +148,34 @@ export function registerStoryScreens(): void {
         settings.update({ introSeen: true });
         if (!active) return;
         active = false;
+        game.input.sample(); // drop a Dash queued by the Space presses that advanced the cards
         (done ?? (() => game.go('title')))();
       };
       const skip = button('Skip', () => cards.skip(), { variant: 'ghost', size: 'sm', icon: '⏭', className: 'story-skip' });
       const hint = h('p', { className: 'story-hint', textContent: 'Space / tap: next · hold to skip' });
       const el = h('div', { className: 'story-stage story-intro' }, dustMotes(36), cards.el, h('div', { className: 'story-foot' }, hint, skip));
-      const tick = pressHandler(el, () => cards.advance(), () => cards.skip());
+      const press = pressHandler(el, () => cards.advance(), () => cards.skip());
       let keyHeld = 0;
+      /** A key went down on this screen (a key still held from the title's Play must not skip). */
+      let keyPressedHere = false;
       return {
         el,
         enter(params) {
           done = (params as IntroParams | undefined)?.done;
           active = true;
           keyHeld = 0;
+          keyPressedHere = false;
+          press.reset();
           cards.play(STORY.intro, finish);
         },
         exit() {
           // Left some other way: still counts as seen, but doesn't navigate.
           active = false;
+          press.reset();
           cards.skip();
         },
         update(dt) {
-          tick(dt);
+          press.tick(dt);
           cards.update(dt);
         },
         onKey(e) {
@@ -171,12 +185,12 @@ export function registerStoryScreens(): void {
           }
           if (!isKey(e, 'Space', 'Enter', 'NumpadEnter')) return false;
           // Key repeat means it is being held: skip the lot.
-          if (e.repeat) {
-            keyHeld += 1;
-            if (keyHeld >= 3) cards.skip();
-          } else {
+          if (!e.repeat) {
+            keyPressedHere = true;
             keyHeld = 0;
             cards.advance();
+          } else if (keyPressedHere && ++keyHeld >= 3) {
+            cards.skip();
           }
           return true;
         },
@@ -193,7 +207,11 @@ export function registerStoryScreens(): void {
       const title = h('h2', { className: 'chapter-title' });
       const card = h('div', { className: 'chapter-card' }, label, h('div', { className: 'chapter-rule' }), title, cards.el);
       const el = h('div', { className: 'story-stage story-chapter' }, card);
-      const tick = pressHandler(el, () => cards.skip(), () => cards.skip());
+      let armed = 0;
+      const cut = (): void => {
+        if (armed <= 0) cards.skip();
+      };
+      const press = pressHandler(el, cut, cut);
       let done: (() => void) | undefined;
       return {
         el,
@@ -203,6 +221,8 @@ export function registerStoryScreens(): void {
           label.textContent = `Chapter ${chapter.number}`;
           title.textContent = chapter.title;
           done = p.done;
+          armed = CHAPTER_ARM;
+          press.reset();
           cards.play(linePanels(p.line), () => {
             const d = done;
             done = undefined;
@@ -211,15 +231,17 @@ export function registerStoryScreens(): void {
         },
         exit() {
           done = undefined;
+          press.reset();
           cards.skip();
         },
         update(dt) {
-          tick(dt);
+          armed = Math.max(0, armed - dt);
+          press.tick(dt);
           cards.update(dt);
         },
         onKey(e) {
-          if (e.repeat || !isKey(e, 'Space', 'Enter', 'NumpadEnter', 'Escape')) return false;
-          cards.skip();
+          if (!isKey(e, 'Space', 'Enter', 'NumpadEnter', 'Escape')) return false;
+          if (!e.repeat) cut();
           return true;
         },
       };

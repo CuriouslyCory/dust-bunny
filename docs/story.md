@@ -17,7 +17,7 @@ The narrator is **deadpan**: a nature documentary that has stopped being surpris
 Rules for every story element:
 
 - **Two lines maximum, ~140 characters per caption.** A longer beat is split into captions shown in sequence (boss intros below are usually two).
-- **Never block input that isn't already blocked.** Story rides on moments the game already pauses (Perk draft, Area fade, results) or on passive banners. The only new stops are the intro and the ending, both skippable with Space / Enter / tap.
+- **Never block input that isn't already blocked.** Story rides on moments the game already pauses (Perk draft, Area fade, results) or on passive banners. The only new stops are the intro, the chapter card on an Area change and the ending, all skippable with Space / Enter / tap.
 - **Skippable and silenceable.** A `Story captions` toggle in Settings (default on). Speedrunners and `?autostart` see none of it.
 - **Variations, not repeats.** Each beat has 2–4 alternate lines; the Run's seeded RNG picks one, so a tenth run still reads fresh.
 - **Captions appear whole.** No typewriter effect (deadpan arrives all at once). Fade in 200 ms, hold, fade out 300 ms. Respect `reduced motion`.
