@@ -9,6 +9,7 @@
 import { zoneArea, type AreaId, type RoomType } from '../world/types';
 import { CITY_DEBRIS } from './cityDebris';
 import { OUTDOOR_DEBRIS } from './outdoorDebris';
+import { REGION_DEBRIS } from './regionDebris';
 
 export type V3 = [number, number, number];
 
@@ -401,6 +402,7 @@ export const DEBRIS_TYPES: DebrisType[] = [
   },
   ...OUTDOOR_DEBRIS,
   ...CITY_DEBRIS,
+  ...REGION_DEBRIS,
 ];
 
 /** Adds (or replaces by id) a Debris type. Call before a Run starts. */

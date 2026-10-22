@@ -31,6 +31,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { damp } from '../core/math';
+import { Rng } from '../core/rng';
 import { ContactShadows } from '../fx/contactShadows';
 import { FURNITURE } from './furniture';
 import { HOUSE } from './house';
@@ -38,6 +39,7 @@ import { addFloorDetail, floorTexture, rugTexture } from './materials';
 import { createModel } from './models';
 import './outdoorModels';
 import './cityModels';
+import { forestedMound, regionRoadblock } from './regionModels';
 import { StaticBatch } from './staticBatch';
 import type { FloorMaterialId, HouseLayout } from './types';
 
@@ -98,10 +100,21 @@ export class HouseView {
 
   private buildFloors(): void {
     const b = this.layout.bounds;
-    const groundSize = Math.max(8000, (b.maxX - b.minX) * 4);
-    const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: 1 }));
+    const region = this.layout.area === 'region';
+    const groundSize = region ? (b.maxX - b.minX) * 4 : Math.max(8000, (b.maxX - b.minX) * 4);
+    const groundMat = new MeshStandardMaterial({ color: GROUND[this.layout.area], roughness: 1 });
+    if (region) {
+      // Farmland carries on past the edge into the haze (slightly darker, so the map reads as the lit part).
+      const info = floorTexture('fields');
+      const map = info.texture.clone();
+      map.repeat.set(groundSize / info.worldSize, groundSize / info.worldSize);
+      map.needsUpdate = true;
+      groundMat.map = map;
+    }
+    const ground = new Mesh(new PlaneGeometry(groundSize, groundSize), groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set((b.minX + b.maxX) / 2, -0.5, (b.minZ + b.maxZ) / 2);
+    ground.position.set((b.minX + b.maxX) / 2, region ? -0.05 : -0.5, (b.minZ + b.maxZ) / 2);
+    ground.receiveShadow = region;
     ground.name = 'ground';
     this.root.add(ground);
 
@@ -124,7 +137,9 @@ export class HouseView {
     for (const [id, geos] of byFloor) {
       const info = floorTexture(id);
       const mat = new MeshStandardMaterial({ map: info.texture, roughness: info.roughness, metalness: 0 });
-      addFloorDetail(mat, info.worldSize / (id === 'carpet' ? 3 : 7), id.startsWith('tile') ? 0.12 : 0.3);
+      // Fine grain over the map: a ~7-unit tile up close in cm; in the Region a 2.5-unit (25 m) tile, fainter.
+      if (region) addFloorDetail(mat, info.worldSize / 2.5, 0.16);
+      else addFloorDetail(mat, info.worldSize / (id === 'carpet' ? 3 : 7), id.startsWith('tile') ? 0.12 : 0.3);
       const mesh = new Mesh(mergeGeometries(geos, false)!, mat);
       for (const g of geos) g.dispose();
       mesh.receiveShadow = true;
@@ -179,9 +194,12 @@ export class HouseView {
     const col: number[] = [];
     const idx: number[] = [];
     const c = new Color();
+    // Height above the floor (and per layer): cm indoors and outdoors, Region units (10 m) in the region,
+    // where 3 cm keeps the lane lines under the cars (≈0.15 units tall).
+    const [y0, step] = this.layout.area === 'city' ? [2, 1] : this.layout.area === 'region' ? [0.03, 0.03] : [0.25, 0.1];
     for (const m of marks) {
       const r = m.rect;
-      const y = this.layout.area === 'city' ? 2 : 0.25;
+      const y = y0 + (m.layer ?? 0) * step;
       const i = pos.length / 3;
       pos.push(r.minX, y, r.minZ, r.minX, y, r.maxZ, r.maxX, y, r.maxZ, r.maxX, y, r.minZ);
       c.set(m.color);
@@ -241,16 +259,57 @@ export class HouseView {
     }
   }
 
-  /** Region edge (1 unit = 10 m): a low wooded ridge along each wall obstacle. */
+  /**
+   * Region edge (1 unit = 10 m): a dark tree line along each ridge obstacle with rolling wooded
+   * hills rising just outside it, a second, higher row behind (none on the south side, where the
+   * camera looks over it), in ~18-unit pieces so only the piece between the camera and the Bunny
+   * fades. Where a motorway leaves the map: a closed roadblock across the carriageways.
+   */
   private buildRidges(): void {
-    const body = new MeshStandardMaterial({ color: '#56653f', roughness: 1 });
+    const b = this.layout.bounds;
+    const rng = new Rng((this.layout.seed ^ 0x2e6) >>> 0);
+    const treeLine = new MeshStandardMaterial({ color: '#3f5230', roughness: 1 });
+    const near = { low: '#6f7f45', high: '#4f6236', square: 2.6, noise: 0.25 };
+    const far = { low: '#66764a', high: '#56664a', square: 2.4, noise: 0.3 };
     for (const wall of this.layout.walls) {
-      const w = wall.rect.maxX - wall.rect.minX;
-      const d = wall.rect.maxZ - wall.rect.minZ;
-      const m = new Mesh(new BoxGeometry(w, wall.height, d), body);
-      m.position.set(wall.rect.minX + w / 2, wall.height / 2, wall.rect.minZ + d / 2);
-      m.name = `ridge:${wall.id}`;
-      this.addStatic(m);
+      const r = wall.rect;
+      if (wall.id.startsWith('roadblock')) {
+        this.addStatic(regionRoadblock(r));
+        continue;
+      }
+      const alongX = r.maxX - r.minX > r.maxZ - r.minZ;
+      const len = alongX ? r.maxX - r.minX : r.maxZ - r.minZ;
+      const thick = alongX ? r.maxZ - r.minZ : r.maxX - r.minX;
+      const out = alongX ? (r.minZ + r.maxZ < b.minZ + b.maxZ ? -1 : 1) : r.minX + r.maxX < b.minX + b.maxX ? -1 : 1;
+      const inner = alongX ? (out < 0 ? r.maxZ : r.minZ) : out < 0 ? r.maxX : r.minX;
+      const south = alongX && out > 0;
+      const pieces = Math.max(1, Math.round(len / 18));
+      const pl = len / pieces;
+      const a0 = alongX ? r.minX : r.minZ;
+      for (let p = 0; p < pieces; p++) {
+        const g = new Group();
+        const s0 = a0 + p * pl;
+        const strip = new Mesh(new BoxGeometry(alongX ? pl : thick, 0.7, alongX ? thick : pl), treeLine);
+        strip.position.set(alongX ? s0 + pl / 2 : (r.minX + r.maxX) / 2, 0.35, alongX ? (r.minZ + r.maxZ) / 2 : s0 + pl / 2);
+        g.add(strip);
+        const rows: Array<{ n: number; depth: [number, number]; h: [number, number]; gap: [number, number]; look: typeof near; trees: number }> = [
+          { n: rng.int(2, 3), depth: south ? [8, 13] : [10, 20], h: south ? [1.2, 2.6] : [2.5, 6], gap: [0, 0], look: near, trees: 12 },
+        ];
+        if (!south) rows.push({ n: rng.int(1, 2), depth: [16, 28], h: [5, 10], gap: [6, 14], look: far, trees: 8 });
+        for (const row of rows) {
+          for (let k = 0; k < row.n; k++) {
+            const wA = pl * rng.range(0.6, 1);
+            const c = s0 + rng.range(wA / 2, pl - wA / 2);
+            const dO = rng.range(...row.depth);
+            const off = inner + out * (rng.range(...row.gap) + dO / 2);
+            const mound = forestedMound(alongX ? wA : dO, alongX ? dO : wA, rng.range(...row.h), rng.int(1, 1e9), row.look, row.trees, 0.9);
+            mound.position.set(alongX ? c : off, 0, alongX ? off : c);
+            g.add(mound);
+          }
+        }
+        g.name = `ridge:${wall.id}:${p}`;
+        this.addStatic(g);
+      }
     }
   }
 
@@ -414,6 +473,15 @@ export class HouseView {
 
   private buildContactShadows(): void {
     const cs = new ContactShadows();
+    if (this.layout.area === 'region') {
+      // Region units (10 m): a few metres of soft shade at the foot of the edge and of each landmark.
+      for (const wall of this.layout.walls) cs.addRect(wall.rect, 0.8, 0.3, 0, 0.3, 0.015);
+      for (const f of this.layout.furniture) cs.addRect(f.rect, 1.2, 0.45, -0.2, 0.6, 0.015);
+      const mesh = cs.build();
+      mesh.name = 'contactShadows';
+      this.root.add(mesh);
+      return;
+    }
     // Soft darkening along the foot of every wall (fake ambient occlusion).
     for (const wall of this.layout.walls) cs.addRect(wall.rect, 7, 0.32);
     for (const f of this.layout.furniture) {
@@ -455,9 +523,9 @@ export class HouseView {
     this.updateFrontDoor(frameDt);
     this.updateRoadGate(frameDt);
     // Sight lines: to the centre and to the lower part of the ball (so a table top that hides
-    // the bottom half still fades); in the city also to its left and right edges, since a tower
+    // the bottom half still fades); in the city and the region also to its left and right edges, since a tower
     // can hide half of a giant Bunny without covering its centre.
-    const sides = this.layout.area === 'city' ? [0, -0.75, 0.75] : [0];
+    const sides = this.layout.area === 'city' || this.layout.area === 'region' ? [0, -0.75, 0.75] : [0];
     let n = 0;
     for (const sx of sides) {
       for (const yk of sx === 0 ? [1, 0.35] : [0.6]) {

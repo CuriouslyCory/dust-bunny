@@ -140,6 +140,8 @@ export interface ExitDoor {
 export interface GroundMarking {
   rect: Rect;
   color: string;
+  /** Drawn this many steps above layer 0, for marks painted over other marks (default 0). */
+  layer?: number;
 }
 
 export interface HouseLayout {
