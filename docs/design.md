@@ -127,6 +127,47 @@ Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Ke
 - **Felting** (Under the Couch): 3 of the same type and grade make 1 of the next grade for 40 × g² Fluff (g = the new grade), and only up to one grade above the best boss that Character has beaten. **Shedding** discards one for 10 × g² Fluff. Neither counts as Fluff earned.
 - A narrator caption plays when a Keepsake drops and on the first Felting (Settings → Story captions).
 
+### Keepsake effects
+
+Values run from grade 1 to grade 10 along `v1 + (v10 − v1) × ((g − 1) / 9)^0.7`; grade 4 (the best felt-able today) sits at 46% of the range. Two copies of a type add together. Ranges are in Bunny radii (r).
+
+| Character | Type | g1 → g10 | g4 | How it plays |
+|---|---|---|---|---|
+| Lint | Long Strand | Decoy +1 → +5 s | +2.9 s | Decoy stays out longer (base 4 s). |
+| Lint | Quick Shed | cooldown −10% → −45% | −26% | Of the base 16 s. |
+| Lint | Thick Clog | clog stun +0.4 → +2.0 s | +1.1 s | Bosses get half (+0.6 s at g4). |
+| Lint | Dinner Bell | wanderers 4 → 12 r; lure range +0% → +60% | 7.7 r; +28% | Roomba-type Hazards (Roombas, Robotic Mowers, Floor Scrubbers and the boss minis) within range steer towards the Decoy; every aiming Hazard is lured from its range × (1 + bonus). |
+| Lint | Reclaim | fibre worth 1% → 4% of volume | 2.4% | When the Decoy expires, clogs or is shot, lint fibre lands around it; absorbing all of it gives that volume back. |
+| Tumble | Loose Roots | −0.1 → −0.6 s cooldown per second held | −0.33 s | Base 1 s per second held. |
+| Tumble | Bristle Back | knockback 2 → 5 r, stun 0.5 → 2.0 s | 3.4 r, 1.2 s | Non-boss Hazards that touch a planted Tumble. The Broom, Lint Roller, Lawn Mower and ranged Hazards are stunned but not moved. |
+| Tumble | Snowball | magnet +0.5 → +2.5 while planted | +1.4 | Added after the cap. |
+| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.9 s, +4 parts | A boss chipped during a Hunker stun stays stunned that much longer after the chip, and more parts fall off. |
+| Tumble | Thick Undercoat | knockback resistance +0.02 → +0.20, suction −3% → −20% | +0.10, −11% | Always on, below the cap. |
+| Zap | Live Wire | meter fills +10% → +50% faster | +29% | |
+| Zap | Long Reach | range +1 → +4 r | +2.4 r | Base 4 r. |
+| Zap | Arc | +1 (g1–4), +2 (g5–8), +3 (g9–10) Hazards | +1 | Non-boss Hazards within 4 r of the first target. |
+| Zap | Static Cling | magnet +0.1 → +0.6 while the meter is ≥ 50% | +0.33 | Below the cap. |
+| Zap | Grounding | suction −2.5% → −10% while the meter is full | −6% | Below the cap. |
+
+**Floors** (`KEEPSAKE_FLOORS`), so two copies at any grade leave the Ability playable:
+- The Decoy cooldown is never shorter than the Decoy's duration. Two Quick Sheds pass it from grade 8 (16 s × 0.21 = 3.4 s becomes 4 s); a Quick Shed beside a Long Strand only when both are grade 10.
+- Hunker costs at least 0.2 s of cooldown per second held. Two Loose Roots pass it from grade 6.
+
+The stat effects (Thick Undercoat, Static Cling, Grounding) are bounded by the caps instead; every other effect stays reasonable at two grade-10 copies, so it has no floor.
+
+**Balance check** (`pnpm sim --seeds=60 --minutes=25`, Casual, October 2026). `--loadout=max` is the pair with the most wins over 30 seeds among all 15 grade-4 pairs per Character: Lint Quick Shed + Reclaim, Tumble Snowball ×2, Zap Static Cling + Grounding.
+
+| Character | No Ability: wins / deaths | Ability: wins / deaths, median win, T4 | Max Loadout: wins / deaths, median win, T4 |
+|---|---|---|---|
+| Lint | 15 / 38 | 27 / 28, 19:51, 5:11 | 26 / 29, 20:34, 5:12 |
+| Tumble | 6 / 39 | 7 / 38, 23:18, 6:03 | 13 / 38, 22:03, 6:05 |
+| Zap | 28 / 27 | 43 / 16, 15:01, 3:55 | 48 / 12, 14:02, 3:37 |
+
+- A grade-4 Loadout adds at most 10 points of win rate (Tumble) and wins at most 7% faster (Zap), inside the limits of +25 points and 15%.
+- Every Run board and Area board submission of these Runs passes validation. The closest any came to the growth limit was 66% of the allowance (a Zap City clear).
+- Zap still has the fastest Tier 4. Tumble does **not** have the fewest deaths: the bot dies to Upright Vacuums and Spray Bottles at Tiers 3–4, and Tumble is too slow to leave a vacuum cone. This was already true before Keepsakes and Abilities (no Ability: Lint 38, Tumble 39, Zap 27 deaths).
+- Every Loadout with Thick Undercoat cost the bot deaths (17–21 against 15 per 30 seeds). The likely cause is that with less knockback the bot stays in contact with Hazards longer. Worth watching in real play.
+
 ## Screens
 
 Title → Character select (Difficulty, Ability card and Loadout) → Run (HUD) → Perk draft (modal on Tier-up) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, Keepsakes kept, leaderboard name entry) → Shop / Under the Couch → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion, story captions) and a How-to-Play panel.

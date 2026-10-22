@@ -51,7 +51,19 @@ export const BOUNDS = {
   maxDebrisPerSec: 60,
   /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
   areaEntryGrowth: 1.6,
+  /**
+   * Area boards: fastest plausible growth per simulated second in each Area. The City is built at
+   * about 10× the House's scale and a Bunny there grows 3–4 cm/s for minutes at a time, so
+   * maxGrowthPerSec alone rejected real City clears (`pnpm sim --validate`: up to 116% of the old
+   * allowance). Its rate is 5 cm/s; the House and Neighborhood keep maxGrowthPerSec.
+   */
+  areaGrowthPerSec: { house: 2, neighborhood: 2, city: 5 },
 } as const;
+
+/** Largest maxRadius an Area board entry may claim after `sec` seconds in the Area from `radiusIn`. */
+export function areaRadiusAllowed(area: ScoreArea, radiusIn: number, sec: number): number {
+  return radiusIn * BOUNDS.areaEntryGrowth + 10 + BOUNDS.areaGrowthPerSec[area] * sec;
+}
 
 /** The Keepsakes tucked in for a Run (0–2 of the Character's own types, grades 1–10). */
 export type LeaderboardLoadout = SharedKeepsakeRef[];
@@ -308,7 +320,7 @@ export function validateAreaSubmission(body: unknown): AreaValidationResult {
   if (maxRadius > AREA_RADIUS[area].max) return fail('maxRadius', `maxRadius is too large for the ${area}.`);
   if (scoreTierForRadius(maxRadius) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
   const sec = durationMs / 1000;
-  if (maxRadius > radiusIn * BOUNDS.areaEntryGrowth + 10 + BOUNDS.maxGrowthPerSec * sec) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');
+  if (maxRadius > areaRadiusAllowed(area, radiusIn, sec)) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');
   if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec) return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the time spent in the area.');
 
   const expected = computeAreaScore({ area, radiusIn, maxRadius, debrisAbsorbed, durationMs, difficulty });
