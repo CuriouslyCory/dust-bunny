@@ -143,8 +143,9 @@ export class Game {
         const show = (): void => {
           this.resultsTimer = null;
           if (this.run !== run) return;
+          // A throttled tab can fire the caption timers late: wait while it is still playing too.
           const left = this.hud.bannerLeft;
-          if (left > 0.1) this.resultsTimer = window.setTimeout(show, left * 1000);
+          if (left > 0.1 || this.hud.bannerBusy) this.resultsTimer = window.setTimeout(show, Math.max(left, 0.1) * 1000);
           else this.go('results', e);
         };
         this.resultsTimer = window.setTimeout(show, VICTORY_HOLD_SECONDS * 1000);
