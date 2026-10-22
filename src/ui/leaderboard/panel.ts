@@ -18,6 +18,7 @@ import { CHARACTERS, getCharacter } from '../../data/characters';
 import { getDifficulty, isDifficultyId } from '../../data/difficulty';
 import { getGrade, getKeepsakeType, type KeepsakeTypeId } from '../../data/keepsakes';
 import { getTier } from '../../data/tiers';
+import { AREAS } from '../../data/areas';
 import { formatLength } from '../../data/units';
 import { SCORE_AREA_UNIT } from '../../shared/score';
 import { account as defaultAccount, type AccountClient } from '../../net/account';
@@ -68,10 +69,13 @@ const COLUMNS: Record<'run' | 'area', string[]> = {
   area: ['#', 'Name', 'Bunny', 'Score', 'Size', 'Time'],
 };
 
-/** An Area entry's peak radius (Area boards store radii in the Area's unit: 10 m in the Region, 10 km in the Continent). */
+/**
+ * An Area entry's peak radius (Area boards store radii in the Area's unit: 10 m in the Region, 10 km
+ * in the Continent), on the Area's readout ladder (Earths on the Globe, AU in the Solar System).
+ */
 function areaSizeCell(e: AreaLeaderboardEntry): HTMLElement {
   const unit = SCORE_AREA_UNIT[e.area] ?? 1;
-  const from = unit >= 100 ? 'm' : 'cm';
+  const from = AREAS[e.area]?.readout ?? 'cm';
   const max = formatLength(e.maxRadius * unit, from);
   return h('td', { textContent: unit === 1 ? `${Math.round(e.maxRadius)} cm` : max, title: `Grew from ${formatLength(e.radiusIn * unit, from)}` });
 }
