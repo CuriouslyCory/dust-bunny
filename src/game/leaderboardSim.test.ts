@@ -1,6 +1,6 @@
 /**
  * Leaderboard plausibility with Keepsakes, as a quick CI smoke check (about 3 s): the balance bot
- * (scripts/sim.ts) plays one seeded Zap Run with the grade-4 max Loadout until just after the
+ * (scripts/sim.ts) plays one seeded Zap Run with the max Loadout (grade 5) until just after the
  * house clear, and its Run board and house board submissions must pass validateSubmission /
  * validateAreaSubmission. Zap is the fastest grower and its Discharge scrap and Static Cling add
  * burst growth. The full check (every Character, every Area) is
@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest';
 describe('leaderboard submissions with max Loadouts (balance bot)', () => {
   it('every submission of a short seeded Run validates', () => {
     const root = fileURLToPath(new URL('../..', import.meta.url));
-    // s3: the bot clears the house within the 7 minutes, so an Area board entry is checked too.
-    const out = execFileSync(process.execPath, ['--import', 'tsx', 'scripts/sim.ts', '--quiet', '--validate', '--loadout=max', '--chars=zap', '--minutes=7', 's3'], {
+    // s2: the bot clears the house within the 7 minutes, so an Area board entry is checked too.
+    const out = execFileSync(process.execPath, ['--import', 'tsx', 'scripts/sim.ts', '--quiet', '--validate', '--loadout=max', '--chars=zap', '--minutes=7', 's2'], {
       cwd: root,
       encoding: 'utf8',
     });
