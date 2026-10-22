@@ -7,11 +7,14 @@
  * deserts, patches of ocean, ice shelves, the Great Barrier Reef, storm systems, archipelagos,
  * cordilleras, large islands, inland seas, island arcs; Tier 15 types (1.74–3.4) the Dust Planet:
  * the Moon, polar caps, landmasses, subcontinents, ocean basins, a whole continent and an ocean.
- * Room weights use the globe zone types (oceans, shelves, landmasses, archipelagos, icecaps).
+ * Room weights use the globe zone types (oceans, shelves, landmasses, archipelagos, icecaps); the
+ * arrival types' weights are lower (about 0.6 of the others') because they keep spawning through
+ * Tier 14 (the spawner's band is clamped to 14–15), where the larger types should lead.
  *
  * The Moon (`moon`, radius 1.74 = 1,737 km) is the Orbital Sweeper's stun obstacle: an Obstacle
- * until the Bunny reaches ≈2.5 (late Tier 14), spawned in every zone in Tier 14 and 15 and placed in
- * the open oceans by the generator (`GLOBE.moons`).
+ * until the Bunny reaches ≈2.5 (late Tier 14: Tier 15 types spawn a Tier early once absorbable),
+ * spawned lightly in every zone (Tier 15, so the initial scatter rarely drops one by the spawn)
+ * and placed in the open oceans by the generator (`GLOBE.moons`).
  *
  * Types whose id (or `model`) matches a loaded Globe model (public/models/manifest.json; island,
  * atoll, archipelago, ocean_patch, landmass, moon, satellite, rocket_stage, space_junk,
@@ -270,7 +273,7 @@ export const GLOBE_DEBRIS: DebrisType[] = [
   },
   // ── Tier 15: Dust Planet (r ≥ 3); the Moon from late Tier 14 ──────────────
   {
-    id: 'moon', name: 'The Moon', size: 1.74, mass: 3.0, tiers: [14, 15], area: 'globe',
+    id: 'moon', name: 'The Moon', size: 1.74, mass: 3.0, tiers: [15, 15], area: 'globe',
     colors: ['#ffffff', '#ecebe8'],
     recipe: [
       { shape: 'blob', radius: 1, noise: 0.06, detail: 2, pos: [0, 1, 0], color: '#b9b6b0' },

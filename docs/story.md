@@ -37,7 +37,7 @@ Rules for every story element:
 | 9 | The Universe | 20–21 | The Expansion | *One Place* | Everything, then nothing, then everything |
 | — | Epilogue | — | — | *The End?* | A biped, a fire, a wrapper |
 
-Acts 1–5 exist today (Act 5's map, Debris and look are placeholders until #25's World content lands; its weather Hazards and the Ice Sheet are built), with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; the Region's tuning is in `docs/design.md`). Acts 5–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
+Acts 1–6 exist today (Act 6, the Globe, with its wrap-around map, Debris, look, orbital Hazards and the Orbital Sweeper), with their story in the game (`src/data/story.ts`, `src/story/`; see Story in `docs/architecture.md`; each Act's tuning is in `docs/design.md`). Acts 7–9 are sketched below in enough detail to storyboard; their tuning tables belong in `docs/design.md` when they are built. They are tracked as #24 (Region, with the unit re-basing and pacing groundwork), #25 (Continent), #26 (Globe), #27 (Solar System), #28 (Galaxy) and #29 (Universe and the ending); the diegetic intro is #30.
 
 ---
 
@@ -246,12 +246,12 @@ World units are centimetres and the Bunny ends the City at r ≈ 800 cm. Acts 4�
 |---|---|---|---|---|
 | Region | 10 m | ~0.85 (re-based, same real size) | 10: 1 · 11: 3 | `8.5 m` → `40 m` |
 | Continent | 10 km | 0.85 (the size leap) | 12: 1 · 13: 3 | `8.5 km` → `45 km` |
-| Globe | 1,000 km | ~1 | 14: 1 · 15: 3 | `0.3 Earths` → `2 Earths` |
+| Globe | 1,000 km | 0.85 (the second size leap) | 14: 1 · 15: 3 | `0.13 Earths` → `≈ 0.6 Earths` (Earth radii: 1 unit = 0.157 Earths) |
 | Solar System | 0.01 AU | ~1 | 16: 1 · 17: 3 | `0.02 AU` → `1 AU` |
 | Galaxy | 100 ly | ~1 | 18: 1 · 19: 3 | `300 ly` → `60,000 ly` |
 | Universe | 10 Mly | ~1 | 20: 1 · 21: 3 | `30 Mly` → `everything` |
 
-The Region ends at ≈ 40 m, far below 1 Continent unit, so the Continent declares an arrival radius and the Bunny leaps to it off screen behind the chapter card (`docs/design.md`, "The size leap"). Every Act after the City is "start at ~1, grow to ~3, boss at Tier +1" in its own units, which is the House's Speck→Fluff curve, so Hazard sizes, absorb ratios and camera scales all reuse the same shape. The only new code is the unit ladder for the radius readout, which is itself a running gag: the progress pill goes from `1.47 / 3 cm` to `1.47 / 3 Earths` without changing layout.
+The Region ends at ≈ 40 m, far below 1 Continent unit, so the Continent declares an arrival radius (and the Globe another: the Continent ends at ≈ 45 km, 0.045 Globe units) and the Bunny leaps to it off screen behind the chapter card (`docs/design.md`, "The size leap"). Every Act after the City is "start at ~1, grow to ~3, boss at Tier +1" in its own units, which is the House's Speck→Fluff curve, so Hazard sizes, absorb ratios and camera scales all reuse the same shape. The only new code is the unit ladder for the radius readout, which is itself a running gag: the progress pill goes from `1.47 / 3 cm` to `1.47 / 3 Earths` without changing layout.
 
 ### The floor stays a floor
 
