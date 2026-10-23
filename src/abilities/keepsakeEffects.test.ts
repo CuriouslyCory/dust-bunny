@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { NO_INPUT, type InputState } from '../core/input';
 import { EventBus } from '../core/events';
-import { DECOY, DISCHARGE, HUNKER } from '../data/abilities';
+import { AMASS, DECOY, DISCHARGE } from '../data/abilities';
 import { ROBOVAC_9000 } from '../data/hazards';
 import { effectValue, getKeepsakeType, KEEPSAKE_FLOORS, keepsakeTypesFor, type KeepsakeTypeId, type Loadout } from '../data/keepsakes';
 import { createRun } from '../game/assembly';
@@ -11,7 +11,7 @@ import type { RoboVac9000 } from '../hazards/robovac';
 import { growthFactorAt } from '../systems/absorb';
 import { maxSpeedFor } from '../systems/movement';
 import { hazardRadius } from './system';
-import { abilityParamsFor, baseAbilityParams, getAbilitySystem, getKeepsakeEffects, type DecoyAbility, type DischargeAbility, type HunkerAbility } from './index';
+import { abilityParamsFor, baseAbilityParams, getAbilitySystem, getKeepsakeEffects, type AmassAbility, type DecoyAbility, type DischargeAbility } from './index';
 
 const CHAR: Record<string, string> = Object.fromEntries(['lint', 'tumble', 'zap'].flatMap((c) => keepsakeTypesFor(c).map((t) => [t.id, c])));
 
@@ -62,8 +62,8 @@ function collect(events: EventBus, name: string): Record<string, unknown>[] {
   return out;
 }
 
-/** Plants a Tumble (held) this tick. */
-function plant(run: Run, input: InputState) {
+/** Starts Tumble's Amass (held) this tick. */
+function amass(run: Run, input: InputState) {
   input.ability = true;
   input.abilityHeld = true;
   run.update(1 / 60);
@@ -191,88 +191,112 @@ describe('Lint · Decoy Keepsakes', () => {
   });
 });
 
-describe('Tumble · Hunker Keepsakes', () => {
-  it('Loose Roots: less cooldown per second held, never below 0.2 s', () => {
-    const saved = val('loose_roots', 'perSecondSaved', 1);
-    expect(saved).toBeGreaterThan(0);
-    const { run, input, sys, events } = setup([{ type: 'loose_roots', rarity: 1 }]);
+describe('Tumble · Amass Keepsakes', () => {
+  /** Holds the Amass for `seconds`, then lets go; returns the abilityEnded events. */
+  function channel(run: Run, input: InputState, events: EventBus, seconds: number) {
     const ended = collect(events, 'abilityEnded');
-    plant(run, input);
-    step(run, 2);
+    amass(run, input);
+    step(run, seconds);
     input.abilityHeld = false;
     run.update(1 / 60);
-    const held = (sys.controller as HunkerAbility).held;
-    expect(ended[0]!.cooldown).toBeCloseTo(HUNKER.cooldownBase + (HUNKER.cooldownPerSecondHeld - saved) * held);
-    expect(abilityParamsFor([{ type: 'loose_roots', rarity: 5 }, { type: 'loose_roots', rarity: 5 }]).hunker.cooldownPerSecondHeld).toBe(KEEPSAKE_FLOORS.hunkerPerSecondHeld);
+    return ended;
+  }
+
+  it('use the hand-set per-rarity ladders', () => {
+    expect([1, 2, 3, 4, 5].map((r) => val('dense_core', 'force', r))).toEqual([0.15, 0.25, 0.35, 0.5, 0.65]);
+    expect([1, 2, 3, 4, 5].map((r) => val('lingering_mass', 'hold', r))).toEqual([0.3, 0.6, 0.9, 1.2, 1.6]);
+    expect([1, 2, 3, 4, 5].map((r) => val('collapse', 'radius', r))).toEqual([1.6, 2.2, 2.9, 3.6, 4.5]);
+    expect([1, 2, 3, 4, 5].map((r) => val('feast', 'growth', r))).toEqual([0.12, 0.2, 0.3, 0.42, 0.6]);
+    expect([1, 2, 3, 4, 5].map((r) => val('unmoved', 'suction', r))).toEqual([0.03, 0.06, 0.1, 0.15, 0.2]);
+    expect(val('unmoved', 'guard', 3)).toBeCloseTo(0.15);
   });
 
-  it('Bristle Back: a Hazard touching the planted Tumble is stunned and knocked back', () => {
+  it('Dense Core: stronger pull and a wider full-strength core', () => {
     const g = 4;
-    const { run, input } = setup([{ type: 'bristle_back', rarity: g }]);
+    const p = abilityParamsFor([{ type: 'dense_core', rarity: g }]).amass;
+    expect(p.forceMul).toBeCloseTo(1 + val('dense_core', 'force', g));
+    expect(p.coreRadius).toBeCloseTo(AMASS.coreRadius + val('dense_core', 'core', g));
+    // The same far crumb travels further in the same time.
+    const pulled = (loadout: Loadout) => {
+      const { run, input } = setup(loadout, 'tumble');
+      const b = run.bunny;
+      const t = run.debris.types.findIndex((x) => x.lockedUntilTier === undefined);
+      const d = run.debris.spawn(t, b.x + 30 * b.radius, b.z, run.rng.fork('t'), { size: b.radius * 0.2 })!;
+      const d0 = d.x;
+      amass(run, input);
+      step(run, 0.5);
+      return d0 - d.x;
+    };
+    expect(pulled([{ type: 'dense_core', rarity: g }]) / pulled([])).toBeGreaterThan(1.3);
+  });
+
+  it('Lingering Mass: longer channel, cooldown still 5 s + 3.5 s per second, never past 3.6 s', () => {
+    const g = 3;
+    const { run, input, events } = setup([{ type: 'lingering_mass', rarity: g }]);
+    const ended = channel(run, input, events, 5);
+    const hold = AMASS.maxHold + val('lingering_mass', 'hold', g);
+    expect(ended).toMatchObject([{ reason: 'maxHold' }]);
+    expect(ended[0]!.heldFor).toBeCloseTo(hold);
+    expect(ended[0]!.cooldown).toBeCloseTo(AMASS.cooldownBase + AMASS.cooldownPerSecondHeld * hold);
+    expect(abilityParamsFor([{ type: 'lingering_mass', rarity: 5 }]).amass.maxHold).toBeCloseTo(3.6);
+    expect(abilityParamsFor([{ type: 'lingering_mass', rarity: 5 }, { type: 'lingering_mass', rarity: 5 }]).amass.maxHold).toBe(KEEPSAKE_FLOORS.amassMaxHold);
+  });
+
+  it('Collapse: releasing stuns and knocks back nearby Hazards; bosses get half the stun', () => {
+    const g = 4;
+    const { run, input, events, sys } = setup([{ type: 'collapse', rarity: g }]);
     const b = run.bunny;
     b.setRadius(5);
-    plant(run, input);
-    const h = run.hazards.spawn('roomba', b.x + b.radius + 9, b.z);
+    const collapsed = collect(events, 'amassCollapsed');
+    // A big Roomba (too big to pull or swallow) just inside the radius, and a boss.
+    const h = run.hazards.spawn('roomba', b.x + 300, b.z);
+    b.setRadius(h.size / 2);
+    h.x = b.x + b.radius + hazardRadius(h) + b.radius;
+    h.z = b.z;
+    const boss = run.hazards.spawn('robovac_9000', b.x - b.radius - ROBOVAC_9000.contactRadius - b.radius, b.z) as RoboVac9000;
+    boss.state = 'recover';
+    amass(run, input);
+    h.stunnedFor = 0;
     const d0 = Math.hypot(h.x - b.x, h.z - b.z);
-    run.update(1 / 60);
-    expect(h.stunnedFor).toBeGreaterThan(val('bristle_back', 'stun', g) - 0.1);
-    expect(getKeepsakeEffects(run)!.knocking).toBe(1);
-    step(run, 0.3);
-    expect(Math.hypot(h.x - b.x, h.z - b.z) - d0).toBeGreaterThan(val('bristle_back', 'knockback', g) * b.radius * 0.9);
-    expect(b.health).toBe(b.maxHealth);
-  });
-
-  it('Snowball: magnet bonus while planted, on top of the cap', () => {
-    const bonus = val('snowball', 'magnet', 4);
-    const { run, input } = setup([{ type: 'snowball', rarity: 4 }], 'tumble');
-    const b = run.bunny;
-    b.stats.add({ stat: 'magnetRadius', op: 'add', value: 5, source: 'test:perk' }); // far over the 0.75 cap
-    const capped = b.stats.get('magnetRadius');
-    expect(capped).toBeCloseTo(0.75);
-    plant(run, input);
-    expect(b.stats.get('magnetRadius')).toBeCloseTo(capped + bonus);
     input.abilityHeld = false;
     run.update(1 / 60);
-    expect(b.stats.get('magnetRadius')).toBeCloseTo(capped);
+    expect(collapsed).toMatchObject([{ hit: 2 }]);
+    expect(h.stunnedFor).toBeGreaterThan(val('collapse', 'stun', g) - 0.05);
+    expect(boss.stunCause).toBe('amass');
+    expect((sys.controller as AmassAbility).knocking).toBe(1);
+    step(run, 0.3);
+    expect(Math.hypot(h.x - b.x, h.z - b.z) - d0).toBeGreaterThan(AMASS.collapseKnockback * b.radius * 0.5);
   });
 
-  it('Dead Weight: the Hunker chip keeps the boss stunned longer and knocks more parts loose', () => {
-    const g = 4;
-    const chipped = (loadout: Loadout) => {
-      const { run, input, events } = setup(loadout, 'tumble');
-      const b = run.bunny;
-      b.setRadius(30);
-      plant(run, input);
-      const boss = run.hazards.spawn('robovac_9000', b.x + ROBOVAC_9000.contactRadius + b.radius - 3, b.z) as RoboVac9000;
-      boss.state = 'charge';
-      const hits = collect(events, 'bossHit');
-      const debris0 = run.debris.count;
-      run.update(1 / 60);
-      expect(hits).toHaveLength(1);
-      const parts = run.debris.count - debris0;
-      let stunned = 0;
-      while ((boss.state as string) === 'stunned' && stunned < 10) {
-        run.update(1 / 60);
-        stunned += 1 / 60;
-      }
-      return { parts, stunned };
-    };
-    const base = chipped([]);
-    const dw = chipped([{ type: 'dead_weight', rarity: g }]);
-    expect(dw.stunned - base.stunned).toBeCloseTo(val('dead_weight', 'bossStun', g), 1);
-    expect(dw.parts - base.parts).toBe(Math.round(val('dead_weight', 'extraParts', g)));
-  });
-
-  it('Thick Undercoat: always-on knockback resistance and suction, below the cap (two mythic copies land on it)', () => {
-    const g = 4;
-    const { run } = setup([{ type: 'thick_undercoat', rarity: g }]);
+  it('Feast: more growth during the channel and for 1 s after', () => {
+    const g = 5;
+    const { run, input } = setup([{ type: 'feast', rarity: g }]);
     const s = run.bunny.stats;
-    expect(s.get('knockbackResistance')).toBeCloseTo(0.5 + val('thick_undercoat', 'knockbackResistance', g));
-    expect(s.get('suctionMultiplier')).toBeCloseTo(1 - val('thick_undercoat', 'suction', g));
-    const two = setup([{ type: 'thick_undercoat', rarity: 5 }, { type: 'thick_undercoat', rarity: 5 }]).run.bunny.stats;
+    const g0 = s.get('growthMultiplier');
+    amass(run, input);
+    expect(s.get('growthMultiplier')).toBeCloseTo(g0 * (1 + val('feast', 'growth', g)));
+    input.abilityHeld = false;
+    run.update(1 / 60);
+    step(run, 0.8);
+    expect(s.get('growthMultiplier')).toBeCloseTo(g0 * (1 + val('feast', 'growth', g)));
+    step(run, 0.3);
+    expect(s.get('growthMultiplier')).toBeCloseTo(g0);
+  });
+
+  it('Unmoved: always-on knockback resistance and suction below the cap, and more channel guard', () => {
+    const g = 4;
+    const { run, input } = setup([{ type: 'unmoved', rarity: g }]);
+    const b = run.bunny;
+    const s = b.stats;
+    expect(s.get('knockbackResistance')).toBeCloseTo(0.5 + val('unmoved', 'knockbackResistance', g));
+    expect(s.get('suctionMultiplier')).toBeCloseTo(1 - val('unmoved', 'suction', g));
+    amass(run, input);
+    const hp = b.health;
+    b.damage(1, 'test');
+    expect(b.health).toBeCloseTo(hp - (1 - AMASS.damageReduction - 0.15));
+    const two = setup([{ type: 'unmoved', rarity: 5 }, { type: 'unmoved', rarity: 5 }]).run.bunny.stats;
     expect(two.get('knockbackResistance')).toBeCloseTo(0.9);
     expect(two.get('suctionMultiplier')).toBeCloseTo(0.6);
-    // A Perk on top can't go past the cap.
     two.add({ stat: 'knockbackResistance', op: 'add', value: 0.3, source: 'test:perk' });
     expect(two.get('knockbackResistance')).toBeCloseTo(0.9);
   });

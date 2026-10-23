@@ -5,7 +5,7 @@
  *
  * - **Solar wind.** No suction: while it hunts, telegraphs or recovers, a Bunny within `wind.reach`
  *   of its surface is pushed straight away from it (`applyPush`, fading with distance; nothing
- *   while the Bunny is hunkered or hidden, or once it can absorb the Sun), and small loose Debris
+ *   while the Bunny is Amassing or hidden, or once it can absorb the Sun), and small loose Debris
  *   there is blown outward.
  * - **Coronal mass ejections** are its charges: a red lane, then a dash. **Flare volleys** are the
  *   boss `ash` volley in orange.

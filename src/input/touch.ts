@@ -2,7 +2,7 @@
  * Touch controls: a dynamic virtual joystick (appears where the thumb lands on the left part of
  * the screen and follows it if dragged past its rim) plus a Dash button with a cooldown ring and,
  * above and to the left of it, the Ability button with its own ring (tap: Decoy / Discharge, hold:
- * Hunker). Tapping the right half also dashes; the buttons stop propagation, so pressing them never
+ * Amass). Tapping the right half also dashes; the buttons stop propagation, so pressing them never
  * does. Feeds the input abstraction as an InputSource.
  *
  * Enabled by Settings.touchControls ('auto' = on touch devices / after the first touch).

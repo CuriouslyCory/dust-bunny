@@ -124,28 +124,45 @@ export class Sfx {
     a.tone({ type: 'sine', freq: N(76), delay: 0.12, decay: 0.2, gain: 0.05 });
   }
 
-  /** Hunker plant: a heavy low thud as Tumble digs in. */
-  hunkerPlant(): void {
+  /** Amass start: a deep thud, then a low hum sinking inward as the core compacts. */
+  amassStart(): void {
     if (!this.gate('ability', 0.4, 2, 0.05)) return;
     const a = this.a;
     a.tone({ type: 'sine', freq: 120, freqEnd: 55, attack: 0.005, decay: 0.3, gain: 0.22 });
-    a.noise({ filter: 'lowpass', freq: 600, freqEnd: 150, decay: 0.18, gain: 0.16 });
+    a.tone({ type: 'sawtooth', freq: 70, freqEnd: 40, attack: 0.15, decay: 1.4, gain: 0.05, lowpass: 400 });
+    a.noise({ filter: 'lowpass', freq: 900, freqEnd: 150, attack: 0.1, decay: 1, gain: 0.08 });
   }
 
-  /** Hunker release: a light upward shake-off. */
-  hunkerRelease(): void {
+  /** Amass release: the field lets go, a light upward shake-off. */
+  amassRelease(): void {
     if (!this.gate('ability', 0.3, 2, 0.05)) return;
     const a = this.a;
     a.noise({ filter: 'bandpass', freq: 600, freqEnd: 1800, q: 1, attack: 0.02, decay: 0.16, gain: 0.12 });
     a.tone({ type: 'triangle', freq: 220, freqEnd: 330, decay: 0.12, gain: 0.05 });
   }
 
-  /** Something crashed into a planted Tumble. */
-  hunkerBlock(boss = false): void {
+  /** Amass swallowed a Hazard: a gulp and a small shockwave pop. */
+  amassSwallow(): void {
+    if (!this.gate('swallow', 0.25, 2, 0.08)) return;
+    const a = this.a;
+    a.tone({ type: 'sine', freq: 260, freqEnd: 70, decay: 0.22, gain: 0.14 });
+    a.noise({ filter: 'lowpass', freq: 1200, freqEnd: 300, decay: 0.12, gain: 0.12 });
+  }
+
+  /** A charging boss crashed into the dense core. */
+  amassBlock(): void {
     if (!this.gate('block', 0.3, 2, 0.08)) return;
     const a = this.a;
-    a.tone({ type: 'square', freq: boss ? 90 : 160, freqEnd: boss ? 50 : 90, decay: boss ? 0.35 : 0.15, gain: boss ? 0.12 : 0.07, lowpass: 700 });
-    a.noise({ filter: 'lowpass', freq: 900, decay: 0.1, gain: boss ? 0.18 : 0.1 });
+    a.tone({ type: 'square', freq: 90, freqEnd: 50, decay: 0.35, gain: 0.12, lowpass: 700 });
+    a.noise({ filter: 'lowpass', freq: 900, decay: 0.1, gain: 0.18 });
+  }
+
+  /** Collapse: the well implodes with a heavy boom. */
+  amassCollapse(): void {
+    if (!this.gate('collapse', 0.3, 1, 0.1)) return;
+    const a = this.a;
+    a.tone({ type: 'sine', freq: 90, freqEnd: 32, decay: 0.6, gain: 0.24 });
+    a.noise({ filter: 'lowpass', freq: 1600, freqEnd: 120, decay: 0.4, gain: 0.2 });
   }
 
   /** Static meter full: a quick bright crackle. */

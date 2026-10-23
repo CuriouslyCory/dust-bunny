@@ -18,7 +18,7 @@
  * and its chimney fires ash volleys (`BossTuning.ash`): an amber lane locks on the target, then a
  * burst of ash pellets flies along it; a hit deals damage and sheds mass (`shedMass`). The volley
  * aims through `aimTarget` (the Decoy pops it, `lure.shot`; nothing while the Bunny is hidden),
- * only starts on screen, and a planted Tumble takes nothing (its damage filter and `shedMass`).
+ * only starts on screen, and an Amassing Tumble takes 30% less (its damage filter).
  * Absorbing it opens the motorway west to the continent.
  *
  * The Ice Sheet (continent, Tier 13, ICE_SHEET) is a subclass in iceSheet.ts: only a charge into a
@@ -44,9 +44,8 @@
  *
  * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
  * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun
- * (a clog, a Hunker crash, a Discharge): it enters the same `stunned` state as a wall crash, so
- * one chip lands on contact. `bounceOff` is the crash into a planted Tumble when no stun is
- * allowed (the 6 s Ability-stun limit).
+ * (a clog, a charge into an Amassing Tumble, a Discharge): it enters the same `stunned` state as a
+ * wall crash, so one chip lands on contact.
  */
 import type { Rng } from '../core/rng';
 import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
@@ -66,7 +65,7 @@ export type AshState = 'idle' | 'telegraph' | 'firing';
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
 
 /** What stunned the boss last: a wall crash, Sagittarius A*'s indigestion, Spiky Dash, or an Ability (src/abilities). */
-export type BossStunCause = 'wall' | 'indigestion' | 'spiky' | 'decoy' | 'hunker' | 'discharge';
+export type BossStunCause = 'wall' | 'indigestion' | 'spiky' | 'decoy' | 'amass' | 'discharge';
 
 /** Stuns an Ability deals (src/abilities). */
 export type AbilityStunCause = Exclude<BossStunCause, 'wall' | 'indigestion' | 'spiky'>;
@@ -86,14 +85,14 @@ export class RoboVac9000 extends BaseHazard {
   /** Chip already taken during the current stun. */
   private hitThisStun = false;
   hits = 0;
-  /** Cause of the current / last stun (Keepsake effects such as Dead Weight read it on bossHit). */
+  /** Cause of the current / last stun. */
   stunCause: BossStunCause | null = null;
   /** Grounded: seconds after a Discharge during which it can't be Discharged again (counted down by the Ability System). */
   groundedFor = 0;
   /**
-   * Extra effect of the chip taken during the current stun (Dead Weight sets it for Hunker
-   * stuns): the stun lasts `hold` more seconds after the chip and `pieces` more parts fall off.
-   * Cleared whenever a new stun starts.
+   * Extra effect of the chip taken during the current stun (Amass sets it when a charge crashes
+   * into its core): the stun lasts `hold` more seconds after the chip and `pieces` more parts fall
+   * off. Cleared whenever a new stun starts.
    */
   chipBonus: { hold: number; pieces: number } | null = null;
   readonly minis = new Set<number>();
@@ -338,7 +337,7 @@ export class RoboVac9000 extends BaseHazard {
   }
 
   /**
-   * External stun from an Ability (Decoy clog, Hunker crash, Discharge): cancels any telegraph or
+   * External stun from an Ability (Decoy clog, Amass crash, Discharge): cancels any telegraph or
    * charge and enters the `stunned` state for `seconds`, so one chip lands on contact. The Ability
    * System enforces the 6 s boss limit before calling this.
    */
@@ -352,18 +351,9 @@ export class RoboVac9000 extends BaseHazard {
     run.events.emit('bossStunned', { hazardId: this.id, cause });
   }
 
-  /** True in the states where running into a planted Tumble stuns it (hunting or mid-charge). */
-  get crashesIntoPlanted(): boolean {
-    return this.state === 'hunt' || this.state === 'charge';
-  }
-
-  /** Bounces off a planted Tumble without a stun: a charge ends, and it backs off out of contact. */
-  bounceOff(run: Run): void {
-    if (this.state === 'charge' || this.state === 'hunt') {
-      this.lane.visible = false;
-      this.enter('recover', this.cfg.recover);
-    }
-    separateFromBunny(run, this, this.cfg.contactRadius * this.scale, this.cfg.height);
+  /** True mid-charge: running into an Amassing Tumble then stuns it like a wall. */
+  get charging(): boolean {
+    return this.state === 'charge';
   }
 
   /**

@@ -192,7 +192,7 @@ The Moon is the only stun source because the Globe has no obstacles. A real-size
 | Hunt speed / turn rate | 5 units/s / 1.2 rad/s | 5 / 1.3 |
 | CME (charge): trigger / telegraph / speed / distance | 32 / 1.6 s / 22 units/s / 42 | 32 / 1.5 / 22 / 40 |
 | Stun / recover | 3.8 s / 1.2 s, only from a charge into a giant planet the Bunny can't absorb yet (Jupiter, also while locked until Tier 17; Saturn, Uranus, Neptune; the Hot Jupiter); the map edge just ends it; Abilities and Spiky Dash still stun it | 3.5 / 1.2, the Moon |
-| Solar wind | while it hunts, telegraphs or recovers: a Bunny within 9 units of its surface is pushed away at up to 0.4 × its max speed (fading out; not when hunkered, hidden or able to absorb it); loose Debris ≤ 0.6 there is blown outward at up to 8 units/s | net pull 0.35, front only |
+| Solar wind | while it hunts, telegraphs or recovers: a Bunny within 9 units of its surface is pushed away at up to 0.4 × its max speed (fading out; not when Amassing, hidden or able to absorb it); loose Debris ≤ 0.6 there is blown outward at up to 8 units/s | net pull 0.35, front only |
 | Flare volleys | every 7 s hunting or recovering on screen: orange lane for 1.1 s, then 3 flares (20 units/s, range 28) from its limb | lasers: 6 s, 1 s, 4 bolts at 26 |
 | Eclipse | glow ×0.15 while stunned, no wind | — |
 | Hot Jupiter | on arrival and every 8 s of hunting, if no blocking giant is within 26 units of the Bunny, one lands 3 units beyond its edge (between it and the Sun the first time), sized max(2.4, 1.25 × the largest the Bunny can absorb) | the Moon, same rule |
@@ -219,7 +219,7 @@ Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptu
 | Size / contact radius | 2.8 / 2.5 units; drawn at model scale 1.4 (hole r 1.4, disc r 4.5, 7.6 tall with the north jet) | 2.8 / 2.6 |
 | Hunt speed / turn rate | 4.2 units/s / 1 rad/s | 5 / 1.2 |
 | Lunge (charge): trigger / telegraph / speed / distance | 24 / 1.6 s / 20 units/s / 28; the map edge ends it without a stun | 32 / 1.6 / 22 / 42 |
-| Pull | while it hunts: reach 12 beyond its edge, 0.5 × the Bunny's max speed at the edge (the bosses' suction, scaled by Suction Multiplier; not while hunkered, hidden or able to absorb it) | solar wind push 0.4 |
+| Pull | while it hunts: reach 12 beyond its edge, 0.5 × the Bunny's max speed at the edge (the bosses' suction, scaled by Suction Multiplier; not while hidden or able to absorb it) | solar wind push 0.4 |
 | Camera bend | lensing warp round the hole: strength 0.4 idle, up to 1 at full pull (Einstein ring 2 × the hole, fading out by 1.8 × the disc; off while the Bunny is over the disc); at full pull the camera leans 0.22 × the gap towards it (at most a third of the camera distance) and rolls 0.1 rad; reduced motion: no roll, a third of the lean | — |
 | Feeding | while it hunts, telegraphs, lunges or recovers: loose Debris ≤ 8 within 14 units of its edge spirals in at up to 7 units/s and is swallowed at its horizon (not its chips) | blows Debris ≤ 0.6 outward |
 | Indigestion | a `star_cluster` swallowed counts 1, an `open_cluster` ½, any cluster ≥ 4.5 counts 2; 2 within 6 s stuns it for 4.2 s (recover 1.2 s): amber ring, the glow sputters, the north jet coughs, the camera lets go | eclipse: a charge into a giant planet, 3.8 s |
@@ -407,6 +407,19 @@ Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't
 
 Each Character has a distinct colour and fur look.
 
+### Abilities
+
+Every Character has its own Ability from the first Run (E, the right mouse button or the touch Ability button). An Ability can stun a boss at most once every 6 s, and chipping a boss always needs contact. Only Keepsakes change how an Ability works; Perks and Shop Upgrades change the Character's stats within its caps.
+
+- **Decoy** (Lint, tap): a lint ball that Hazards aim at; a Hazard that touches it clogs.
+- **Amass** (Tumble, hold up to 2 s; cooldown 5 s + 3.5 s per second held, so a tap costs 5 s and a full hold 12 s): Tumble compacts its core into a gravity well.
+  - **Pull:** every Debris and non-boss Hazard up to 1.25 × Tumble's radius (r) is pulled in from the whole map, at 8 r/s within 3 r of its centre, falling off to 0.35 of that at the map's farthest corner, leaning 15° off straight inward so it spirals in like an accretion disc. Debris too big to absorb stops at the fur. Anything bigger than 1.25 r, locked Obstacles and bosses only shake in place, so a pull never boxes Tumble in.
+  - **While channelling:** 25% of normal speed, no Dash, immune to knockback and pushes, 30% less damage from Hazards, but vacuums and other suction pull 20% harder.
+  - **Swallow:** a non-boss Hazard up to 1.15 r that touches Tumble is absorbed (the growth of a normal absorb), bursts into 3 scrap pieces and sends out a shockwave that stuns small Hazards within 2 r for 0.4 s. Their absorb ring lights up while Amass is held.
+  - **Bosses:** never pulled. A charging boss that hits an Amassing Tumble crashes as into a wall (stunned, chipped at once, 2 extra parts), within the 6 s limit; a hunting boss, or one inside the limit, hits as usual.
+  - Replaces **Hunker** (plant in place for up to 10 s), which felt passive in play tests.
+- **Discharge** (Zap, tap when the Static meter is full): shorts out the nearest Hazard.
+
 ## Difficulty
 
 Picked on Character select (↑/↓ or the Difficulty switch), remembered in the save; `?difficulty=casual|arcade|hardcore` overrides it. Tuning lives in `src/data/difficulty.ts`.
@@ -457,7 +470,7 @@ How the rows are built: one falloff by distance from a boss's **peak** rarity (8
 
 ### Keepsake effects
 
-Values run from Common to Mythic along `common + (mythic − common) × ((r − 1) / 4)^0.7`: Rare, Epic and Legendary sit at 38%, 62% and 82% of the range. Two copies of a type add together. Ranges are in Bunny radii (r).
+Values run from Common to Mythic along `common + (mythic − common) × ((r − 1) / 4)^0.7`: Rare, Epic and Legendary sit at 38%, 62% and 82% of the range. Tumble's Amass Keepsakes use hand-set values per rarity instead (the table lists them). Saves and leaderboard Loadouts holding Hunker-era Keepsakes read them as Lingering Mass (Loose Roots), Collapse (Bristle Back), Feast (Snowball), Dense Core (Dead Weight) and Unmoved (Thick Undercoat), at the same rarity. Two copies of a type add together. Ranges are in Bunny radii (r).
 
 | Character | Type | Common → Mythic | Rare / Epic / Legendary | How it plays |
 |---|---|---|---|---|
@@ -466,11 +479,11 @@ Values run from Common to Mythic along `common + (mythic − common) × ((r − 
 | Lint | Thick Clog | clog stun +0.4 → +2.0 s | +1.0 / +1.4 / +1.7 s | Bosses get half. |
 | Lint | Dinner Bell | wanderers 4 → 12 r; lure range +0% → +60% | 7.0 / 8.9 / 10.5 r; +23 / +37 / +49% | Roomba-type Hazards (Roombas, Robotic Mowers, Floor Scrubbers and the boss minis) within range steer towards the Decoy; every aiming Hazard is lured from its range × (1 + bonus). |
 | Lint | Reclaim | fibre worth 1% → 4% of volume | 2.1 / 2.8 / 3.5% | When the Decoy expires, clogs or is shot, lint fibre lands around it; absorbing all of it gives that volume back. |
-| Tumble | Loose Roots | −0.1 → −0.6 s cooldown per second held | −0.29 / −0.41 / −0.51 s | Base 1 s per second held. |
-| Tumble | Bristle Back | knockback 2 → 5 r, stun 0.5 → 2.0 s | 3.1 / 3.8 / 4.5 r; 1.1 / 1.4 / 1.7 s | Non-boss Hazards that touch a planted Tumble. The Broom, Lint Roller, Lawn Mower and ranged Hazards are stunned but not moved. |
-| Tumble | Snowball | magnet +0.5 → +2.5 while planted | +1.3 / +1.7 / +2.1 | Added after the cap. |
-| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.8 / +1.0 / +1.3 s; +4 / +4 / +5 parts | A boss chipped during a Hunker stun stays stunned that much longer after the chip, and more parts fall off. |
-| Tumble | Thick Undercoat | knockback resistance +0.02 → +0.20, suction −3% → −20% | +0.09 / +0.13 / +0.17; −9 / −14 / −17% | Always on, below the cap. |
+| Tumble | Dense Core | pull +15% → +65%; core +0.8 → +3.5 r | +25 / +35 / +50%; +1.4 / +2.1 / +2.8 r | Stronger pull, and a wider full-strength core (base 3 r). |
+| Tumble | Lingering Mass | channel +0.3 → +1.6 s | +0.6 / +0.9 / +1.2 s | Longer max hold (base 2 s, at most 3.6 s with two copies); cooldown still 5 s + 3.5 s per second held. |
+| Tumble | Collapse | 1.6 r / 0.6 s → 4.5 r / 1.6 s | 2.2 r / 0.8 s; 2.9 r / 1.0 s; 3.6 r / 1.3 s | When Amass ends (released or at max hold) the well implodes: every Hazard within the radius of Tumble's surface is stunned that long and non-bosses are knocked back 2.5 r; bosses get half the stun, within the 6 s limit. |
+| Tumble | Feast | growth +12% → +60% | +20 / +30 / +42% | Everything absorbed (Debris, swallowed Hazards, scrap) during Amass and 1 s after. A timed effect, above the cap. |
+| Tumble | Unmoved | knockback resistance +0.02 → +0.20, suction −3% → −20%; Amass damage −15% more | +0.05 / +0.09 / +0.14; −6 / −10 / −15% | Always on, below the cap. The damage cut is +15% per copy at any rarity. |
 | Zap | Live Wire | meter fills +10% → +50% faster | +25 / +35 / +43% | |
 | Zap | Long Reach | range +1 → +4 r | +2.1 / +2.8 / +3.5 r | Base 4 r. |
 | Zap | Arc | +1 → +3 Hazards | +1 / +2 / +2 | Non-boss Hazards within 4 r of the first target. |
@@ -479,9 +492,9 @@ Values run from Common to Mythic along `common + (mythic − common) × ((r − 
 
 **Floors** (`KEEPSAKE_FLOORS`), so two copies at any rarity leave the Ability playable:
 - The Decoy cooldown is never shorter than the Decoy's duration. Two Legendary Quick Sheds pass it (16 s × 0.23 = 3.7 s becomes 4 s); a Quick Shed beside a Long Strand only when both are Mythic.
-- Hunker costs at least 0.2 s of cooldown per second held. Two Epic Loose Roots pass it.
+- Amass channels at most 3.6 s. Two Legendary Lingering Masses pass it (or a Rare beside a Mythic).
 
-The stat effects (Thick Undercoat, Static Cling, Grounding) are bounded by the caps instead; every other effect stays reasonable at two Mythic copies, so it has no floor.
+The stat effects (Unmoved, Static Cling, Grounding) are bounded by the caps instead; every other effect stays reasonable at two Mythic copies, so it has no floor.
 
 **Balance check** (`pnpm sim --seeds=60 --minutes=25`, Casual, October 2026). `--loadout=max` is the pair with the most wins over 30 seeds among all 15 pairs per Character at grade 4 of the old 1–10 scale (between Rare and Epic today): Lint Quick Shed + Reclaim, Tumble Snowball ×2, Zap Static Cling + Grounding.
 

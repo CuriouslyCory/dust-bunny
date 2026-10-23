@@ -85,7 +85,7 @@ export const CHARACTERS: readonly CharacterDef[] = [
     weaknesses: ['Slow', 'Sluggish turning', 'Long Dash cooldown'],
     look: { color: '#b08a5e', tipColor: '#d8b78a', furLength: 1.6, fluffiness: 0.85, eyeStyle: 'sleepy' },
     stats: { speed: 0.8, acceleration: 0.7, maxHealth: 5, startRadius: 1.2, dashCooldown: 4, knockbackResistance: 0.5 },
-    ability: 'hunker',
+    ability: 'amass',
     caps: {
       speed: { max: 1.05, reason: 'Pet hair is heavy. Tumble never outruns Lint.' },
       maxHealth: { max: 10, reason: 'Even a tumbleweed has limits.' },

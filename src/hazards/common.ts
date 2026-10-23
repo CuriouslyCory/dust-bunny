@@ -122,7 +122,7 @@ export function suctionSpeed(bunnyMaxSpeed: number, strength: number, falloff: n
 /** Displaces the Bunny towards (sx, sz) for one tick. Returns the pull speed applied. */
 export function applySuction(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
   const b = run.bunny;
-  if (falloff <= 0 || b.hiddenFromHazards || b.hunkered) return 0;
+  if (falloff <= 0 || b.hiddenFromHazards) return 0;
   const dx = sx - b.x;
   const dz = sz - b.z;
   const d = Math.hypot(dx, dz);
@@ -141,7 +141,7 @@ export function applySuction(run: Run, sx: number, sz: number, strength: number,
  */
 export function applyPush(run: Run, sx: number, sz: number, strength: number, falloff: number, dt: number): number {
   const b = run.bunny;
-  if (falloff <= 0 || b.hiddenFromHazards || b.hunkered) return 0;
+  if (falloff <= 0 || b.hiddenFromHazards || b.amassing) return 0;
   const dx = b.x - sx;
   const dz = b.z - sz;
   const d = Math.hypot(dx, dz);
@@ -174,12 +174,12 @@ export function pushBunnyOut(run: Run, x: number, z: number, radius: number): vo
 
 /**
  * Separates a Hazard body (circle of `radius` at h.x, h.z) from the Bunny: normally the Bunny is
- * pushed out, but a planted (hunkered) Bunny is a wall, so the Hazard is pushed back instead
+ * pushed out, but an Amassing Bunny can't be displaced, so the Hazard is pushed back instead
  * (resolved against walls and furniture at `height`).
  */
 export function separateFromBunny(run: Run, h: { x: number; z: number }, radius: number, height: number): void {
   const b = run.bunny;
-  if (!b.hunkered) {
+  if (!b.amassing) {
     pushBunnyOut(run, h.x, h.z, radius);
     return;
   }

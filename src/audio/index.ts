@@ -94,11 +94,11 @@ export function installAudio(game: Game): GameAudio {
   // Abilities (src/abilities/events.ts).
   ev.on('abilityUsed', (e) => {
     if (e.ability === 'decoy') sfx.decoyShed();
-    else if (e.ability === 'hunker') sfx.hunkerPlant();
+    else if (e.ability === 'amass') sfx.amassStart();
     else sfx.discharge();
   });
   ev.on('abilityEnded', (e) => {
-    if (e.ability === 'hunker') sfx.hunkerRelease();
+    if (e.ability === 'amass') sfx.amassRelease();
     else if (e.reason === 'expired' || e.reason === 'shot') sfx.decoyPop();
   });
   ev.on('hazardClogged', (e) => sfx.clog(e.boss));
@@ -121,7 +121,9 @@ export function installAudio(game: Game): GameAudio {
   ev.on('bossCollapse', (e) => sfx.crunch(e.duration));
   // Sagittarius A* gulps a star cluster.
   ev.on('bossSwallowed', () => sfx.rumble());
-  ev.on('hazardHitPlanted', (e) => sfx.hunkerBlock(e.boss));
+  ev.on('hazardSwallowed', () => sfx.amassSwallow());
+  ev.on('bossCrashedIntoAmass', () => sfx.amassBlock());
+  ev.on('amassCollapsed', () => sfx.amassCollapse());
   ev.on('staticFull', () => sfx.staticFull());
   ev.on('pickupCollected', () => sfx.pickup());
   ev.on('perkApplied', () => sfx.perk());

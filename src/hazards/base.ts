@@ -38,10 +38,13 @@ export abstract class BaseHazard implements Hazard {
     return this.stunnedFor > 0;
   }
 
-  /** Height this Hazard collides at when pushed back (by a planted Tumble, or while recoiling). */
+  /** Height this Hazard collides at when pushed back (by an Amassing Tumble, or while recoiling). */
   get collisionHeight(): number {
     return this.recoilHeight;
   }
+
+  /** Shake amplitude (world units) while Amass strains at it without moving it (0 = still). */
+  tension = 0;
 
   /** Called by the combat System when stunned; the wobble is driven by `stunnedFor` in sync(). */
   stun(_seconds: number): void {}
@@ -91,10 +94,12 @@ export abstract class BaseHazard implements Hazard {
 
   /** Called after tick: syncs the model transform and the absorbable marker. */
   protected sync(run: Run): void {
-    this.body.position.set(this.x, 0, this.z);
+    const t = this.tension;
+    this.body.position.set(this.x + (t > 0 ? t * Math.sin(this.time * 53 + this.id) : 0), 0, this.z + (t > 0 ? t * Math.cos(this.time * 61 + this.id) : 0));
     this.body.rotation.y = this.yaw;
     this.body.rotation.z = this.stunned ? Math.sin(this.time * 30) * 0.08 : 0;
-    const absorbable = bunnyCanAbsorb(run, this.size);
+    // Green ring: absorbable, or small enough for an Amass in progress to swallow on contact.
+    const absorbable = bunnyCanAbsorb(run, this.size) || (!this.def.boss && this.size <= run.bunny.amassSwallowSize);
     this.absorbMarker.visible = absorbable;
     if (absorbable) {
       const r = this.markerRadius();

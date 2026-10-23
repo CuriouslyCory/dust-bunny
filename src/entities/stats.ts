@@ -100,7 +100,7 @@ export type StatCaps = Partial<Record<StatKey, StatCapRange>>;
 
 /** Default priority of the cap stage (matches CAP_PRIORITY in src/data/characters.ts). */
 export const DEFAULT_CAP_PRIORITY = 250;
-/** Priority for timed and Ability-state effects (Pickups, Hazard slows, Hunker): after the cap stage. */
+/** Priority for timed and Ability-state effects (Pickups, Hazard slows, Amass): after the cap stage. */
 export const TIMED_PRIORITY = 300;
 
 export interface StatModifier {

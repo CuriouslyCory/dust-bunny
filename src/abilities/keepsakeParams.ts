@@ -4,8 +4,8 @@
  * floors in KEEPSAKE_FLOORS. The Run uses it through the params modifier registered in
  * ./keepsakeEffects.ts; Character select uses it for the Ability card numbers, so both agree.
  *
- * Effects that need code at runtime (Reclaim, Bristle Back's knockback, Dead Weight's parts, Thick
- * Undercoat's stat modifiers) read their values with `keepsakeTotals` and live in ./keepsakeEffects.ts.
+ * Effects that need code at runtime (Reclaim, Unmoved's stat modifiers) read their values with
+ * `keepsakeTotals` and live in ./keepsakeEffects.ts. Amass reads Collapse and Feast from its params.
  */
 import { KEEPSAKE_FLOORS, loadoutValue, type Loadout } from '../data/keepsakes';
 import { baseAbilityParams, type AbilityParams } from './params';
@@ -21,15 +21,16 @@ export function keepsakeTotals(loadout: Loadout | undefined) {
     wanderRange: v('dinner_bell', 'wanderRange'),
     lureRange: v('dinner_bell', 'lureRange'),
     reclaimVolume: v('reclaim', 'volume'),
-    // Tumble · Hunker
-    perSecondSaved: v('loose_roots', 'perSecondSaved'),
-    bristleKnockback: v('bristle_back', 'knockback'),
-    bristleStun: v('bristle_back', 'stun'),
-    plantedMagnet: v('snowball', 'magnet'),
-    deadWeightStun: v('dead_weight', 'bossStun'),
-    deadWeightParts: Math.round(v('dead_weight', 'extraParts')),
-    undercoatKnockback: v('thick_undercoat', 'knockbackResistance'),
-    undercoatSuction: v('thick_undercoat', 'suction'),
+    // Tumble · Amass
+    denseForce: v('dense_core', 'force'),
+    denseCore: v('dense_core', 'core'),
+    lingerHold: v('lingering_mass', 'hold'),
+    collapseRadius: v('collapse', 'radius'),
+    collapseStun: v('collapse', 'stun'),
+    feastGrowth: v('feast', 'growth'),
+    unmovedKnockback: v('unmoved', 'knockbackResistance'),
+    unmovedSuction: v('unmoved', 'suction'),
+    unmovedGuard: v('unmoved', 'guard'),
     // Zap · Discharge
     fillRate: v('live_wire', 'fillRate'),
     range: v('long_reach', 'range'),
@@ -55,10 +56,14 @@ export function applyLoadout(p: AbilityParams, loadout: Loadout | undefined): Ab
   d.wandererLureRange += k.wanderRange;
   d.lureRangeMul *= 1 + k.lureRange;
 
-  const h = p.hunker;
-  h.cooldownPerSecondHeld = Math.max(KEEPSAKE_FLOORS.hunkerPerSecondHeld, h.cooldownPerSecondHeld - k.perSecondSaved);
-  h.plantedMagnetBonus += k.plantedMagnet;
-  h.bossStunBonus += k.deadWeightStun;
+  const a = p.amass;
+  a.forceMul *= 1 + k.denseForce;
+  a.coreRadius += k.denseCore;
+  a.maxHold = Math.min(Math.max(a.maxHold, KEEPSAKE_FLOORS.amassMaxHold), a.maxHold + k.lingerHold);
+  a.collapseRadius += k.collapseRadius;
+  a.collapseStun += k.collapseStun;
+  a.feastBonus += k.feastGrowth;
+  a.damageReduction += k.unmovedGuard;
 
   const z = p.discharge;
   z.fillRate *= 1 + k.fillRate;

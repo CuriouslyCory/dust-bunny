@@ -2,7 +2,7 @@
  * Combat hooks shared by Pickups and Perks, installed once per Run (installCombatHooks):
  *
  * 1. One Bunny damage filter, evaluated in a fixed order:
- *      hiddenFromHazards (Dust Cloud) → hunkered (Hunker) → Spiky Dash while dashing → shield (Bubble Wrap)
+ *      hiddenFromHazards (Dust Cloud) → amassing (Amass: × (1 − amassGuard)) → Spiky Dash while dashing → shield (Bubble Wrap)
  *      → dodgeChance (Slippery) → revives (Second Wind, lethal hits only).
  *    Blocked hits grant i-frames so continuous contact does not burn every charge at once.
  * 2. The `combat` System (order 290, before Hazards): Regrowth heals, Spiky Dash stuns
@@ -84,8 +84,8 @@ export class CombatSystem implements System {
     const run = this.run;
     const b = run.bunny;
     if (b.hiddenFromHazards) return 0;
-    // Hunker: a planted Tumble takes no damage (and, since damage fails, no knockback or shedding).
-    if (b.hunkered) return 0;
+    // Amass: a channelling Tumble takes reduced damage (the rest of the chain still applies).
+    if (b.amassing && b.amassGuard > 0) amount *= Math.max(0, 1 - b.amassGuard);
     if (b.spikyDash && b.dashing) {
       b.invulnerable = Math.max(b.invulnerable, SPIKY_IFRAMES);
       return 0;

@@ -9,7 +9,7 @@
  * muzzle to the end of its range and blinks faster through the `telegraph` while the star swells.
  * Then the beam's front shoots along the lane at `beamSpeed` and the beam stays lit for `fire` s:
  * a Bunny it touches takes one hit per burst (damage, knocked sideways off the lane, sheds
- * `shedFraction`; `hitBunny`, so i-frames, Hunker and the Dust Cloud apply) and a Decoy in it
+ * `shedFraction`; `hitBunny`, so i-frames, Amass's guard and the Dust Cloud apply) and a Decoy in it
  * pops. Then `cooldown`. Step off the lane during the telegraph to dodge it.
  */
 import { AdditiveBlending, BoxGeometry, Mesh, MeshBasicMaterial, type Object3D } from 'three';
