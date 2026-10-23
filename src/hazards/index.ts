@@ -116,6 +116,8 @@ export class HazardManager implements System {
   /** Called instead of onContact while the Bunny is hunkered (see file header). */
   plantedContact: PlantedContact | null = null;
   private nextId = 1;
+  /** Absorbed this tick (removed with `hazardRemoved.absorbed`). */
+  private readonly absorbed = new Set<Hazard>();
 
   constructor(
     private readonly run: Run,
@@ -152,29 +154,42 @@ export class HazardManager implements System {
   update(dt: number, run: Run): void {
     this.director?.(dt, run, this);
     const b = run.bunny;
-    const absorbed = new Set<Hazard>();
     for (const h of [...this.hazards]) {
       if (h.dead) continue;
       h.update(dt, run);
       if (h.dead || !HazardManager.touches(run, h)) continue;
       if (canAbsorb(b.radius, b.stats.get('absorbRatio'), h.size)) {
-        run.hazardsAbsorbed++;
-        run.absorbMass(h.size, h.def.mass, h.def.id, { x: h.x, y: 0, z: h.z }, 'hazard');
-        h.dead = true;
-        absorbed.add(h);
-        run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: !!h.def.boss });
-        h.onAbsorbed?.(run);
+        this.absorb(h);
         if (run.ended) break;
       } else if (b.hunkered && this.plantedContact) {
         this.plantedContact(run, h);
       } else {
         h.onContact?.(run);
+        // A boss's last hit can end the Run (the last Area's boss).
+        if (run.ended) break;
       }
     }
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i]!;
-      if (h.dead) this.removeHazard(h, absorbed.has(h));
+      if (h.dead) this.removeHazard(h, this.absorbed.has(h));
     }
+    this.absorbed.clear();
+  }
+
+  /**
+   * The Bunny absorbs `h` whatever its size: growth from its mass, `hazardAbsorbed`, `onAbsorbed`.
+   * Called when the Bunny is big enough, and by a boss whose last hit breaks it.
+   */
+  absorb(h: Hazard): void {
+    if (h.dead) return;
+    const run = this.run;
+    const b = run.bunny;
+    run.hazardsAbsorbed++;
+    run.absorbMass(h.size, h.def.mass, h.def.id, { x: h.x, y: 0, z: h.z }, 'hazard');
+    h.dead = true;
+    this.absorbed.add(h);
+    run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: !!h.def.boss });
+    h.onAbsorbed?.(run);
   }
 
   private removeHazard(h: Hazard, absorbed: boolean): void {

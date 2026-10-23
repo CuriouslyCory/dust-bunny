@@ -9,7 +9,7 @@
 import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId } from './difficulty.js';
 import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
 import {
-  AREA_BOSS_TIER,
+  AREA_CLEAR_RADIUS,
   computeAreaScore,
   computeScore,
   isScoreArea,
@@ -207,17 +207,17 @@ export type AreaValidationResult = Validation<ValidAreaSubmission>;
 const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
- * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's Tier (Tier 5 = 45,
- * Tier 7 = 160, Tier 9 = 600 cm = 0.6 Region units), or for an Area the Bunny leaps into, its
+ * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's smallest arrival
+ * size (AREA_CLEAR_RADIUS: 26.1, 137.3, 518.7 cm = 0.5187 Region units), or for an Area the Bunny leaps into, its
  * arrival radius (the Continent, the Globe, the Solar System, the Galaxy and the Universe: 0.85 units, the radius after the leap); the cap is two
  * Tiers above the Area's last Debris Tier (the Region and later Areas: 10× their last Tier), which no real
  * Run approaches.
  */
 const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>> = {
   house: { minIn: BOUNDS.maxRadius.min, max: SCORE_TIER_MIN_RADII[6]! },
-  neighborhood: { minIn: SCORE_TIER_MIN_RADII[4]!, max: SCORE_TIER_MIN_RADII[8]! },
-  city: { minIn: SCORE_TIER_MIN_RADII[6]!, max: 3000 },
-  region: { minIn: SCORE_TIER_MIN_RADII[8]! / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
+  neighborhood: { minIn: AREA_CLEAR_RADIUS.house, max: SCORE_TIER_MIN_RADII[8]! },
+  city: { minIn: AREA_CLEAR_RADIUS.neighborhood, max: 3000 },
+  region: { minIn: AREA_CLEAR_RADIUS.city / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
   continent: { minIn: SCORE_ARRIVAL_RADIUS.continent, max: (SCORE_TIER_MIN_RADII[12]! * 10) / SCORE_AREA_UNIT.continent },
   globe: { minIn: SCORE_ARRIVAL_RADIUS.globe, max: (SCORE_TIER_MIN_RADII[14]! * 10) / SCORE_AREA_UNIT.globe },
   solar_system: { minIn: SCORE_ARRIVAL_RADIUS.solar_system, max: (SCORE_TIER_MIN_RADII[16]! * 10) / SCORE_AREA_UNIT.solar_system },
@@ -374,12 +374,12 @@ export function validateAreaSubmission(body: unknown): AreaValidationResult {
     return fail('durationMs', `durationMs must be an integer between ${BOUNDS.durationMs.min} and ${BOUNDS.durationMs.max}.`);
   if (!isInt(score) || score < 0) return fail('score', 'score must be a non-negative integer.');
 
-  // A Run starts in the house, and an Area is cleared by absorbing its boss, which arrives at a set Tier.
+  // A Run starts in the house, and an Area is cleared by beating its boss, which arrives at a set size.
   if (area === 'house' && radiusIn > BOUNDS.maxStartRadius) return fail('radiusIn', 'radiusIn is too large for the start of a Run.');
-  // Later Areas open only after the previous boss, so the Bunny arrives at least at that boss's Tier.
+  // Later Areas open only after the previous boss, so the Bunny arrives at least at that boss's arrival size.
   if (radiusIn < AREA_RADIUS[area].minIn) return fail('radiusIn', `Reaching the ${area} needs a radius of ${AREA_RADIUS[area].minIn * SCORE_AREA_UNIT[area]} cm.`);
   if (maxRadius > AREA_RADIUS[area].max) return fail('maxRadius', `maxRadius is too large for the ${area}.`);
-  if (scoreTierForRadius(maxRadius * SCORE_AREA_UNIT[area]) < AREA_BOSS_TIER[area]) return fail('maxRadius', `Clearing the ${area} needs Tier ${AREA_BOSS_TIER[area]}.`);
+  if (maxRadius < AREA_CLEAR_RADIUS[area]) return fail('maxRadius', `Clearing the ${area} needs a radius of ${AREA_CLEAR_RADIUS[area] * SCORE_AREA_UNIT[area]} cm.`);
   const sec = durationMs / 1000;
   if (maxRadius > areaRadiusAllowed(area, radiusIn, sec)) return fail('maxRadius', 'maxRadius is too large for the time spent in the area.');
   if (debrisAbsorbed > 50 + BOUNDS.maxDebrisPerSec * sec) return fail('debrisAbsorbed', 'debrisAbsorbed is too large for the time spent in the area.');

@@ -100,7 +100,7 @@ describe('universe generation', () => {
     const density = (t: RoomType) => (per[t] ?? 0) / area(t);
     expect(density('voids')).toBeLessThan(density('filaments') * 0.15);
     expect(density('sheets')).toBeLessThan(density('filaments'));
-    expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', tier: 21, arrivalDelay: 4 });
+    expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', hits: 7, paceTier: 21, size: Infinity, tier: 21, arrivalDelay: 4 });
   });
 });
 
@@ -134,7 +134,7 @@ describe('universe Debris catalogue', () => {
     const ga = UNIVERSE_DEBRIS.find((t) => t.id === 'great_attractor')!;
     expect(Object.keys(ga.rooms)).toHaveLength(0);
     expect(ga.size).toBeGreaterThan(AREAS.universe.arrivalRadius! * 0.7);
-    // Bosses' chips (the shed ladder) find Universe Debris at every Universe size.
+    // Bosses' hit pieces (the shed ladder) find Universe Debris at every Universe size.
     for (const size of [0.2, 0.6, 1.2, 2.4]) expect(pickShedType(DEBRIS_TYPES, size, 21, 'universe')?.area, `${size}`).toBe('universe');
   });
 

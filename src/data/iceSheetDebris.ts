@@ -4,7 +4,7 @@
  *
  * `calved_iceberg` never comes from the spawner (no room weights): the boss places it with an
  * explicit size (a fraction of the Bunny's radius, see ICE_SHEET.calve) at its front corners, and
- * its chips scatter it. It renders the `iceberg` Blender prop (`model`), or the recipe headless.
+ * its hits scatter it. It renders the `iceberg` Blender prop (`model`), or the recipe headless.
  */
 import type { DebrisType } from './debris';
 

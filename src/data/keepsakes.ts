@@ -243,7 +243,7 @@ export const KEEPSAKE_TYPES: readonly KeepsakeType[] = [
     name: 'Dead Weight',
     icon: '⚓',
     effects: { bossStun: { common: 0.3, mythic: 1.5 }, extraParts: { common: 2, mythic: 6 } },
-    describe: (v) => `Hunker boss stuns +${n1(v('bossStun'))} s; chips knock loose +${Math.round(v('extraParts'))} parts`,
+    describe: (v) => `Hunker boss stuns +${n1(v('bossStun'))} s; hits knock loose +${Math.round(v('extraParts'))} parts`,
   },
   {
     id: 'thick_undercoat',

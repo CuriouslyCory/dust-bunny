@@ -1,0 +1,288 @@
+/* Boss intro card (src/ui/screens/bossIntro.ts). `--boss` is the boss's accent colour. */
+.screen-bossIntro {
+  --boss: #e24b3b;
+  pointer-events: auto;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--boss) 26%, transparent), transparent 62%),
+    radial-gradient(ellipse at 50% 50%, rgba(20, 10, 6, 0.45), rgba(8, 4, 2, 0.82));
+  backdrop-filter: blur(3px) saturate(0.8);
+  -webkit-backdrop-filter: blur(3px) saturate(0.8);
+}
+
+.screen-bossIntro .boss-intro.panel {
+  --boss: #e24b3b;
+  width: min(600px, 100%);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  color: #f6e7d4;
+  background: linear-gradient(180deg, #2b1d16 0%, #1b120e 100%);
+  border: 3px solid color-mix(in srgb, var(--boss) 70%, #fff);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 70px color-mix(in srgb, var(--boss) 45%, transparent),
+    var(--shadow-lg);
+}
+
+.boss-intro.arming {
+  pointer-events: none;
+}
+
+.boss-intro.reveal {
+  animation: bi-slam 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+/* ── Stage: the model on a dark spotlight ──────────────────── */
+.bi-stage {
+  position: relative;
+  flex: none;
+  height: clamp(170px, 34vh, 300px);
+  background:
+    radial-gradient(ellipse 46% 16% at 50% 82%, color-mix(in srgb, var(--boss) 40%, transparent), transparent 100%),
+    radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--boss) 34%, #120a07) 0%, #120a07 58%, #060302 100%);
+  overflow: hidden;
+}
+
+/* Hazard stripes along the stage's foot. */
+.bi-stage::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 8px;
+  background: repeating-linear-gradient(-45deg, #1d1410 0 12px, var(--boss) 12px 24px);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.bi-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.bi-stage.no-model .bi-canvas {
+  display: none;
+}
+
+.bi-stage.no-model::before {
+  content: '⚠';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 84px;
+  color: color-mix(in srgb, var(--boss) 60%, #fff);
+  opacity: 0.6;
+}
+
+.bi-tag {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 14px 5px;
+  border-radius: var(--radius-pill);
+  background: repeating-linear-gradient(-45deg, #1d1410 0 10px, var(--danger) 10px 20px);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  color: #fff;
+  font: 700 var(--fs-sm) / 1.2 var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-shadow:
+    0 1px 2px #000,
+    0 0 6px #000;
+  white-space: nowrap;
+  animation: bi-tag 0.8s ease-in-out infinite alternate;
+}
+
+/* ── Text ─────────────────────────────────────────────────── */
+.bi-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px clamp(18px, 4vw, 30px) 20px;
+}
+
+.bi-text > * {
+  flex: none;
+}
+
+.boss-intro .bi-name {
+  margin: 0;
+  font: 700 clamp(30px, 6vw, 46px) / 1.05 var(--font-display);
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--boss) 30%, #fff);
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--boss) 80%, transparent),
+    0 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+.boss-intro.reveal .bi-name {
+  animation: bi-title 0.8s cubic-bezier(0.2, 1.2, 0.35, 1) 0.1s both;
+}
+
+.bi-desc {
+  margin: 0;
+  max-width: 52ch;
+  font-size: var(--fs-md);
+  line-height: 1.4;
+  color: #f3e3cf;
+}
+
+.boss-intro.reveal .bi-desc,
+.boss-intro.reveal .bi-story,
+.boss-intro.reveal .bi-hits {
+  animation: bi-rise 0.5s var(--ease-out, ease-out) both;
+}
+
+.boss-intro.reveal .bi-desc {
+  animation-delay: 0.35s;
+}
+
+.boss-intro.reveal .bi-story {
+  animation-delay: 0.5s;
+}
+
+.boss-intro.reveal .bi-hits {
+  animation-delay: 0.6s;
+}
+
+.boss-intro .bi-story {
+  margin: 0;
+  background: rgba(255, 247, 236, 0.07);
+  border: 1px solid rgba(255, 247, 236, 0.12);
+}
+
+.bi-hits {
+  margin: 0;
+  font: 700 var(--fs-sm) / 1.3 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--boss) 55%, #fff);
+}
+
+.bi-desc[hidden],
+.bi-hits[hidden] {
+  display: none;
+}
+
+/* Time left before the card closes itself. */
+.bi-timer {
+  width: min(320px, 80%);
+  height: 6px;
+  margin-top: 2px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 247, 236, 0.12);
+  overflow: hidden;
+}
+
+.bi-timer-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--boss), color-mix(in srgb, var(--boss) 30%, #fff));
+  transform-origin: left center;
+}
+
+.boss-intro .rl-row {
+  margin-top: 2px;
+}
+
+@keyframes bi-slam {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes bi-title {
+  0% {
+    opacity: 0;
+    letter-spacing: 0.4em;
+    transform: scale(1.5);
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    letter-spacing: 0.02em;
+    transform: none;
+  }
+}
+
+@keyframes bi-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes bi-tag {
+  0% {
+    box-shadow: 0 0 0 0 rgba(226, 75, 59, 0.0);
+  }
+  100% {
+    box-shadow: 0 0 16px 2px rgba(226, 75, 59, 0.85);
+  }
+}
+
+/* ── Phones (COMPACT_QUERY) ───────────────────────────────── */
+@media (max-width: 720px), (max-height: 560px) {
+  .bi-stage {
+    height: clamp(130px, 26vh, 220px);
+  }
+  .boss-intro .bi-name {
+    font-size: clamp(26px, 7vw, 34px);
+  }
+  .bi-desc {
+    font-size: var(--fs-sm);
+  }
+  .bi-text {
+    gap: 8px;
+    padding: 12px 16px 14px;
+  }
+}
+
+/* Landscape phones: model left, text right. */
+@media (max-height: 560px) and (min-aspect-ratio: 4/3) {
+  .screen-bossIntro .boss-intro.panel {
+    flex-direction: row;
+    width: min(760px, 100%);
+    max-height: 100%;
+  }
+  .bi-stage {
+    width: 40%;
+    height: auto;
+    min-height: 180px;
+  }
+  .bi-stage::after {
+    top: 0;
+    bottom: 0;
+    left: auto;
+    right: 0;
+    width: 6px;
+    height: auto;
+  }
+  .bi-text {
+    flex: 1 1 0;
+    justify-content: center;
+  }
+}

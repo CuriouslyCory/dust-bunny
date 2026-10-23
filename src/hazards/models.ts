@@ -10,10 +10,10 @@
  * `panels`, asat_laser `head` and globe_hurricane `spiral` turn about Y; space_station `arrays`
  * tilts about X; orbital_sweeper `net` and `wings` (flaps about Z); rogue_asteroid `rock`, sunspot
  * `head`, solar_flare `loop` and the_sun `corona` turn about Y; comet `tail` flutters (scale);
- * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide when chipped;
+ * solar_flare `loop` pulses (scale); the_sun `prominence_l` / `prominence_r` hide on a hit;
  * black_hole and sagittarius_a `disk`, globular_cluster `swarm` and pulsar `head` turn about Y;
  * supernova_remnant `shell` and supernova `core` pulse (scale); sagittarius_a `jet_n` swells (scale
- * Y) and hides when chipped, `jet_s` stays); quasar `disk`, colliding_galaxy `galaxy_a` / `galaxy_b`,
+ * Y) and hides on a hit, `jet_s` stays); quasar `disk`, colliding_galaxy `galaxy_a` / `galaxy_b`,
  * gamma_ray_burst `head` and the_expansion `ring` turn about Y; quasar `jets` pulse (scale Y);
  * cosmic_void `shell` and dark_energy_gust `core` pulse (scale); the_expansion `grid` stretches (scale X/Z).
  * If another module already registered a factory for an id, it is kept.
@@ -1162,7 +1162,7 @@ function theSun(): Object3D {
   // The boss, front +Z: a glowing granulated sphere (r 2.7, squashed to 0.7: 3.78 tall, centre
   // y 1.89), two dark sunspot eyes on the +Z side (centres (±0.98, 2.86, 2.1)), the `corona` node
   // (a fringe of flames round the equator, pivot at the centre) turning about Y, and
-  // `prominence_l` / `prominence_r` (loops over the −X / +X shoulders) that hide when chipped.
+  // `prominence_l` / `prominence_r` (loops over the −X / +X shoulders) that hide on a hit.
   const g = new Group();
   ball(g, 2.7, 0, 1.89, 0, glow('#ffb03a', 1.6), 0.7, 2);
   for (let i = 0; i < 10; i++) {

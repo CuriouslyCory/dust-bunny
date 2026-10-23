@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { AREAS } from '../data/areas';
 import {
+  bossAbsorbRadius,
+  bossArrivalRadius,
   AREA_BOSSES,
   AREA_DIRECTORS,
   BLACK_HOLE,
@@ -30,7 +32,6 @@ import type { LintRoller } from './lintRoller';
 import { HAZARD_MODEL_SIZES } from './models';
 import type { Mop } from './mop';
 import { beamLead, inBeam, type Pulsar } from './pulsar';
-import { bossSizeAfterHits } from './robovac';
 import type { Roomba } from './roomba';
 import type { SagittariusA } from './sagittariusA';
 import type { UprightVacuum } from './uprightVacuum';
@@ -83,6 +84,16 @@ function clearAround(run: Run, x: number, z: number, radius: number): void {
 }
 
 describe('galaxy Hazards', () => {
+  it('arrives short of its absorb radius (about a minute of growth) and 5 hits break it', () => {
+    expect(absorbRadiusFor(SAGITTARIUS_A.size, ratio)).toBeCloseTo(4, 1);
+    expect(bossArrivalRadius('galaxy', ratio)).toBeLessThan(bossAbsorbRadius('galaxy', ratio));
+    expect(bossAbsorbRadius('galaxy', ratio)).toBeCloseTo(absorbRadiusFor(SAGITTARIUS_A.size, ratio));
+    expect(AREA_BOSSES.galaxy).toMatchObject({ id: 'sagittarius_a', hits: 5 });
+    expect(hazardRegistry.require('sagittarius_a').boss).toBe(true);
+    expect(SAGITTARIUS_A.miniId).toBeUndefined();
+    expect(peakRarityForBoss('sagittarius_a')).toBe(4);
+  });
+
   it('run in Galaxy units (1 = 100 ly) with their own models, whose fallbacks carry the GLB node names', () => {
     const { run } = makeRun();
     expect(run.unit).toBe(AREAS.galaxy.unit);
@@ -117,17 +128,6 @@ describe('galaxy Hazards', () => {
     }
   });
 
-  it('keeps Sagittarius A* out of reach at Tier 19 entry, but reachable after two chips', () => {
-    const tier19 = tierRadius(makeRun().run, 19);
-    const { size, chipFactor } = SAGITTARIUS_A;
-    expect(absorbRadiusFor(size, ratio)).toBeCloseTo(4, 1);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), ratio)).toBeGreaterThan(tier19);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), ratio)).toBeLessThan(tier19);
-    expect(hazardRegistry.require('sagittarius_a').boss).toBe(true);
-    expect(SAGITTARIUS_A.miniId).toBeUndefined();
-    expect(AREA_BOSSES.galaxy).toEqual({ id: 'sagittarius_a', tier: 19, arrivalDelay: 4 });
-    expect(peakRarityForBoss('sagittarius_a')).toBe(4);
-  });
 
   it('galaxy spawn tables list only galaxy Hazards, Supernovae from Tier 19, never Sagittarius A*', () => {
     for (let t = GALAXY_DIRECTOR.firstTier; t <= 19; t++) {
@@ -143,7 +143,7 @@ describe('galaxy Hazards', () => {
     expect(tierValue(PULSAR.range, 19)).toBe(PULSAR.range[18]);
   });
 
-  it('the director spawns galaxy Hazards (placed clear of the map) and brings Sagittarius A* at Tier 19', () => {
+  it('the director spawns galaxy Hazards (placed clear of the map) and brings Sagittarius A* at its arrival size', () => {
     const { run, events } = makeRun('galaxy-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -152,13 +152,12 @@ describe('galaxy Hazards', () => {
     events.on('bossSpawned', (e) => bosses.push(e.name));
     run.bunny.health = 999;
     for (let i = 0; i < 60 * 30 && !run.ended; i++) run.update(STEP);
-    run.bunny.setRadius(tierRadius(run, 18) * 2.6);
+    run.bunny.setRadius(bossArrivalRadius('galaxy', run.bunny.stats.get('absorbRatio')) * 0.95);
     for (let i = 0; i < 60 * 60 && !run.ended; i++) run.update(STEP);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
-    run.bunny.setRadius(tierRadius(run, 19) * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('galaxy', run.bunny.stats.get('absorbRatio')) * 1.02);
     for (let i = 0; i < 60 * (AREA_BOSSES.galaxy.arrivalDelay + 1) && !run.ended; i++) run.update(STEP);
-    expect(run.tier).toBe(19);
     expect(bosses).toEqual(['Sagittarius A*']);
     expect(run.hazards.count('sagittarius_a')).toBe(1);
     for (const id of spawned) expect([...GALAXY_HAZARDS, 'sagittarius_a']).toContain(id);
@@ -415,7 +414,7 @@ describe('Sagittarius A*', () => {
     expect(stuns).toEqual(['indigestion']);
   });
 
-  it('ramming it with indigestion chips it: relativistic jets scatter (and it leaves them alone), the north jet hides', () => {
+  it('ramming it with indigestion lands a hit: relativistic jets scatter (and it leaves them alone), the north jet hides', () => {
     const { run, events, boss, b } = hunting('chips', 14);
     quiet(boss);
     feedCluster(run, boss);
@@ -423,19 +422,21 @@ describe('Sagittarius A*', () => {
     feedCluster(run, boss);
     run.hazards.update(STEP, run);
     expect(boss.state).toBe('stunned');
-    const hits: number[] = [];
-    events.on('bossHit', (e) => hits.push(e.size));
+    const hits: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     b.teleport(boss.x + SAGITTARIUS_A.contactRadius + b.radius * 0.9, boss.z);
     boss.onContact(run);
-    expect(hits).toEqual([bossSizeAfterHits(1, SAGITTARIUS_A.size, SAGITTARIUS_A.chipFactor)]);
-    const jets = ofType(run, [SAGITTARIUS_A.chipTypeId]);
-    expect(jets.length).toBeGreaterThan(SAGITTARIUS_A.chipPieces / 2);
+    expect(hits).toEqual(['1/5']);
+    // A hit no longer shrinks it.
+    expect(boss.size).toBe(SAGITTARIUS_A.size);
+    const jets = ofType(run, [SAGITTARIUS_A.partTypeId]);
+    expect(jets.length).toBeGreaterThan(SAGITTARIUS_A.hitPieces / 2);
     expect(boss.model.getObjectByName('jet_n')!.visible).toBe(false);
     expect(boss.jetRegrow).toBeCloseTo(SAGITTARIUS_A.jetRegrow);
     b.teleport(boss.x + 60, boss.z);
     for (let i = 0; i < 60 * 3; i++) run.hazards.update(STEP, run);
     expect(boss.state).not.toBe('stunned');
-    expect(ofType(run, [SAGITTARIUS_A.chipTypeId]).length).toBe(jets.length);
+    expect(ofType(run, [SAGITTARIUS_A.partTypeId]).length).toBe(jets.length);
   });
 
   it('clusters drift in between it and the Bunny when none are near, too big for the Bunny to eat; none while two are near', () => {

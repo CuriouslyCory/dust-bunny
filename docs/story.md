@@ -67,7 +67,7 @@ Notes: shot 2 is the thesis of the whole game and should be the most carefully a
 Two kinds, both short:
 
 1. **Tier beats** — one narrator line on every Tier-up. Shown as a caption in the header of the Perk draft modal (the game is already paused and the player is already reading). When there is no draft pending (every Perk owned), the line goes in the existing Tier-up banner's subtitle instead.
-2. **Area beats** — a chapter card on every Area change. The `areaEntered` fade grows from a quick dip to a 2.5 s black card with the chapter title and one line, skippable. The `exitOpened` ("House cleared!") banner keeps its headline and gets a narrator subtitle. Boss arrival (`bossSpawned`) gets a one-line banner introducing the boss in the same voice.
+2. **Area beats** — a chapter card on every Area change. The `areaEntered` fade grows from a quick dip to a 2.5 s black card with the chapter title and one line, skippable. The `exitOpened` ("House cleared!") banner keeps its headline and gets a narrator subtitle. Boss arrival (`bossSpawned`) opens a boss intro card that pauses the Run and introduces the boss in the same voice.
 
 Lines below are the primary variant; alternates live in `src/data/story.ts`.
 
@@ -216,7 +216,7 @@ After the first ending, the title screen's tagline changes to *Universe 2 · Rol
 | First Play | `playFromMenu` → `intro` screen (`simulate: false`) | Intro panels 1–7 | Today: static cards over the dust motes. Diegetic (#30): lower-third caption, full-bleed scene |
 | Tier-up | `tierUp` → `perkDraft` modal | Tier beat | One italic line under the modal's title: "Tier 4 · Dust Devil — *The house has noticed…*" |
 | Tier-up, no draft left | `tierUp` → `hud.banner` | Tier beat | Banner subtitle |
-| Boss arrives | `bossSpawned` → `hud.banner` | Boss intro | Banner headline = boss name, subtitle "⚠ Boss incoming!", caption = line |
+| Boss arrives | `bossSpawned` → `bossIntro` screen | Boss intro | Card: "⚠ Boss incoming" tag over the turning boss model, boss name, description, the line in italics, hits; held for the reading time at 100 WPM |
 | Area cleared | `exitOpened` → `hud.banner` ("House cleared!") | Clear line | Replaces the current "The front door is open" subtitle; the compass still shows the way |
 | Area entered | `areaEntered` → `chapter` screen | Chapter card | Dark card for the line's reading time (the Run waits behind it); "Chapter N" (small caps), amber rule, title, line; Space/Enter/tap cuts it short, then the card fades off the new Area |
 | One-off Debris (Voyager, the Moon…) | `debrisAbsorbed` with a `STORY.debris` entry, first time per Run | Easter-egg line | Banner `+ Voyager 1` with the line as its caption |
@@ -283,10 +283,10 @@ Each later Area reuses one of the five existing Hazard behaviours (wanderer with
 | Area | Wanderer (Roomba) | Lane patrol (Lint Roller / Mower) | Turret (Spray Bottle) | Trail (Mop / Flusher) | Cone (Leaf Blower / Litter Vac) | Boss |
 |---|---|---|---|---|---|---|
 | Region | Landfill Compactor | Freight train, Snowplow | Crop duster | River barge (wet trail) | Water bomber | **The Incinerator** — rail-mounted waste plant; feed conveyor pulls, chimney fires ash (sheds mass); stunned when it charges into a city; summons mini compactors |
-| Continent | Tornado | Glacier tongue | Volcano | River | Hurricane | **The Ice Sheet** — slow, enormous, pushes everything in front of it; stunned only by mountain ranges; chips calve off as absorbable icebergs |
+| Continent | Tornado | Glacier tongue | Volcano | River | Hurricane | **The Ice Sheet** — slow, enormous, pushes everything in front of it; stunned only by mountain ranges; hits calve off absorbable icebergs |
 | Globe | Debris-field satellite | Space station in orbit lane | Anti-satellite laser | Re-entry burn (fire trail, sheds mass) | Hurricane seen from above | **Orbital Sweeper** — net-and-laser cleanup satellite; charges; stunned by the Moon; summons a Kessler swarm of mini sweepers |
-| Solar System | Rogue asteroid | Comet (ice-tail trail) | Pulsar-like flare from the Sun | Comet tail | Solar flare | **The Sun** — CMEs as telegraphed charges; solar wind as a constant push; stunned when it charges into Jupiter (eclipse); chips are prominences |
-| Galaxy | Black hole (strong suction, the real vacuum) | Globular cluster orbit | Pulsar (rotating beam) | Supernova remnant (slow) | Supernova (blast) | **Sagittarius A*** — suction so strong it bends the camera; stunned when it eats a star cluster too fast; chips are jets |
+| Solar System | Rogue asteroid | Comet (ice-tail trail) | Pulsar-like flare from the Sun | Comet tail | Solar flare | **The Sun** — CMEs as telegraphed charges; solar wind as a constant push; stunned when it charges into Jupiter (eclipse); hits knock prominences loose |
+| Galaxy | Black hole (strong suction, the real vacuum) | Globular cluster orbit | Pulsar (rotating beam) | Supernova remnant (slow) | Supernova (blast) | **Sagittarius A*** — suction so strong it bends the camera; stunned when it eats a star cluster too fast; hits knock jets loose |
 | Universe | Quasar | Galaxy on a collision course | Gamma-ray burst | Void (slows) | Dark-energy gust | **The Expansion** — not a chaser: pushes all Debris outward; a tug-of-war bar (gravity vs expansion) replaces its health; absorb faster than it spreads and it collapses |
 
 ### Pacing

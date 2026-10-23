@@ -96,7 +96,7 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | Sprinkler      | 5         | 45                | ≈ 64            | turret: head sweeps, aims a lane, fires a burst of water | 1 per droplet, brief slow |
 | Leaf Blower    | 5         | 45                | ≈ 64            | amber cone warm-up, then a blast that pushes the Bunny away and blows small Debris | 1 on contact |
 | Lawn Mower     | 6         | 65                | ≈ 93            | unmanned push mower patrolling a lane | 1 + knockback, sheds mass |
-| Street Sweeper | 7 (boss)  | 150               | ≈ 214 (≈ 155 after two chips) | hunts with suction, telegraphed charges, stunned by houses / trees, summons mini mowers | 1, sheds mass |
+| Street Sweeper | 7 (boss)  | 150               | ≈ 214 (or 3 hits) | hunts with suction, telegraphed charges, stunned by houses / trees, summons mini mowers | 1, sheds mass |
 
 **The city (after the Street Sweeper, Bunny r ≈ 175–230 on arrival):**
 
@@ -106,7 +106,7 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | Floor Scrubber  | 7         | 190               | ≈ 271           | ride-on scrubber, Roomba behaviour, weak scrub-brush pull | 1 + knockback |
 | Litter Vacuum   | 7         | 220               | ≈ 314           | amber cone warm-up, then a suction cone that pulls the Bunny in | 1, sheds mass |
 | Street Flusher  | 8         | 300               | ≈ 429           | water truck patrolling a street, wide wet trail that slows | 1 + knockback; trail slows |
-| Garbage Truck   | 9 (boss)  | 560               | ≈ 800 (≈ 578 after two chips) | hunts with compactor suction, telegraphed charges, stunned by buildings / the barrier, summons mini scrubbers | 1, sheds mass |
+| Garbage Truck   | 9 (boss)  | 560               | ≈ 800 (or 3 hits) | hunts with compactor suction, telegraphed charges, stunned by buildings / the barrier, summons mini scrubbers | 1, sheds mass |
 
 **The Region (after the Garbage Truck; 1 world unit = 10 m, Bunny r ≈ 0.65–0.9 units on arrival):**
 
@@ -118,7 +118,7 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | Snowplow           | 10        | 1.7                  | ≈ 2.4           | lane patrol along a road, plows the Bunny aside | 1 + knockback, sheds mass |
 | Water Bomber       | 11        | 2.3                  | ≈ 3.3           | amber cone warm-up, then a water drop that blasts the Bunny away and soaks it | 1 on contact; blast slows |
 | Freight Train      | 11        | 2.45                 | ≈ 3.5           | long, fast lane patrol | 1 + knockback, sheds mass |
-| The Incinerator    | 11 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | hunts with feed-conveyor suction, telegraphed charges, chimney ash volleys, stunned by towns / the map edge, summons mini compactors | 1, sheds mass (ash too) |
+| The Incinerator    | 11 (boss) | 2.8                  | ≈ 4 (or 3 hits) | hunts with feed-conveyor suction, telegraphed charges, chimney ash volleys, stunned by towns / the map edge, summons mini compactors | 1, sheds mass (ash too) |
 
 **The Continent (after the Incinerator; 1 world unit = 10 km, Bunny r = 0.85 units on arrival).** Hazards are weather. Sizes keep the Region ladder's ratios to the Bunny (the Continent repeats the Region's shape: Tiers at 1 and 3 units, boss absorbable at ≈ 4).
 
@@ -129,7 +129,7 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | River Surge     | 12        | 1.5                  | ≈ 2.14          | fast flood surge (2.2 / 3.4 units/s) patrolling waypoints, wide muddy trail that slows (× 0.5) | 1 + knockback; trail slows |
 | Glacier Tongue  | 12        | 1.9                  | ≈ 2.71          | slow, heavy lane patrol (1.4 / 2.4 units/s, lanes 8–30), placed in tundra and mountain zones | 1 + big shove, sheds 8 % |
 | Hurricane       | 13        | 2.4                  | ≈ 3.43          | spinning bands; amber warm-up (1.1 s), then a wind cone (range 14) that blasts the Bunny away and soaks it | 1 on contact; blast slows |
-| The Ice Sheet   | 13 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | slow, enormous, bulldozes the Bunny and Debris ahead, telegraphed surges, stunned only by mountain ranges, calves icebergs | 1, sheds 5 % |
+| The Ice Sheet   | 13 (boss) | 2.8                  | ≈ 4 (or 3 hits) | slow, enormous, bulldozes the Bunny and Debris ahead, telegraphed surges, stunned only by mountain ranges, calves icebergs | 1, sheds 5 % |
 
 (Per-Tier pairs are Tier 12 / Tier 13.)
 
@@ -141,7 +141,7 @@ Tier thresholds are the Bunny's real radius (cm); in the Region the world unit i
 | Stun / recover | 3.5 s / 1.4 s, only from a charge into a mountain range (Abilities and Spiky Dash still stun it) | 3 / 1, towns and the map edge |
 | Bulldoze | Bunny within 2.4 units of the front cliff pushed at 0.6 × its max speed; Debris ≤ 1.6 units shoved ahead | suction 0.35 |
 | Calving | an iceberg every 9 s of hunting (alternate front corners, 5 s to regrow), both corners on a mountain crash; iceberg = 0.55 × Bunny radius (0.6–2 units, mass 2.4) | summons mini compactors |
-| Chips | × 0.85, 8 iceberg pieces | × 0.85, 8 parts |
+| Hits | 3, each knocks 8 icebergs loose | 3, 8 parts each |
 
 Mountain ranges for the map: a furniture Obstacle whose def id starts with `mountain`, or furniture standing in a `mountains` zone (the placeholder massifs).
 
@@ -155,7 +155,7 @@ Mountain ranges for the map: a furniture Obstacle whose def id starts with `moun
 | Space Station          | 14        | 1.9                  | ≈ 2.71          | lane patrol along the nearest orbit lane (within 20 units, else a lane through its spawn), east–west, 2.4 / 3.8 units/s, lanes 10–40 | 1 + big shove, sheds 8 % |
 | Hurricane              | 15        | 2.4                  | ≈ 3.43          | over oceans and shelf seas; spinning spiral, amber warm-up (1.1 s), then a wind cone (range 14) that blasts the Bunny away and soaks it | 1 on contact; blast slows |
 | Mini sweeper           | boss      | 0.6                  | ≈ 0.86          | the Kessler swarm: fast Roomba behaviour (5.5 / 7 units/s), weak intake pull | 1 + knockback |
-| The Orbital Sweeper    | 15 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | net pull at the front, telegraphed charges, twin laser volleys, stunned only by the Moon, summons the Kessler swarm | 1, sheds 4 % (lasers 3 %) |
+| The Orbital Sweeper    | 15 (boss) | 2.8                  | ≈ 4 (or 3 hits) | net pull at the front, telegraphed charges, twin laser volleys, stunned only by the Moon, summons the Kessler swarm | 1, sheds 4 % (lasers 3 %) |
 
 (Per-Tier pairs are Tier 14 / Tier 15.)
 
@@ -169,9 +169,9 @@ Mountain ranges for the map: a furniture Obstacle whose def id starts with `moun
 | Lasers | every 6 s hunting or recovering on screen: red lane for 1 s, then 4 bolts (26 units/s, range 30) from the lenses | ash: 5.5 s, 0.9 s, 5 pellets at 17 |
 | Kessler swarm | 3 mini sweepers every 13 s of hunting, up to 6 alive | 2 mini compactors / 14 s, up to 4 |
 | The Moon | on arrival and every 8 s of hunting, if no Moon the Bunny can't absorb is within 26 units of it, one lands 3 units beyond its edge (between it and the Sweeper the first time), sized max(the `moon` type's size, 1.25 × the largest the Bunny can absorb) | — |
-| Chips | × 0.85, 8 parts | × 0.85, 8 parts |
+| Hits | 3, 8 parts each | 3, 8 parts each |
 
-The Moon is the only stun source because the Globe has no obstacles. A real-size Moon (1.74 units) is food from r ≈ 2.5, before the boss arrives at Tier 15, so the Sweeper brings its own: big enough to block the Bunny (which can still shove it), so standing behind it baits a charge into it. Sim check with the Bunny started at Tier 15 (`pnpm sim --area=globe --radius=3.05`): 12 / 12 wins (4 Moon stuns, the rest Ability stuns and growth); without Abilities 11 / 12 wins, 7 Moon stuns.
+The Moon is the only stun source because the Globe has no obstacles. A real-size Moon (1.74 units) is food from r ≈ 2.5, before the boss arrives, so the Sweeper brings its own: big enough to block the Bunny (which can still shove it), so standing behind it baits a charge into it. Sim check with the Bunny started at Tier 15 (`pnpm sim --area=globe --radius=3.05`): 12 / 12 wins (4 Moon stuns, the rest Ability stuns and growth); without Abilities 11 / 12 wins, 7 Moon stuns.
 
 **The Solar System (after the Orbital Sweeper; 1 world unit = 0.01 AU, Bunny r = 0.85 units on arrival).** Hazards are rocks, ice and the Sun's own weather. The Solar System repeats the Globe's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps the size and speed of the Globe Hazard whose behaviour it reskins. The map has no obstacles.
 
@@ -182,7 +182,7 @@ The Moon is the only stun source because the Globe has no obstacles. A real-size
 | Sungrazer      | 16        | 1.5                  | ≈ 2.14          | comet streaking between waypoints within 24 units of its spawn, across zones (2.8 / 4 units/s); its icy tail trail (7 s, wide) slows to 0.55 × | 1 + knockback |
 | Comet          | 16        | 1.6                  | ≈ 2.29          | rides the orbit ring nearest its spawn (within 20 units) one way round, no ends (3.2 / 4.6 units/s), a short lane sliding ahead of it, its tail streaming 7.5 units behind | 1 + big shove, sheds 8 % |
 | Solar Flare    | 17        | 2.4                  | ≈ 3.43          | plasma arch: its loop swells through the amber warm-up (1.1 s), then a dry blast cone (range 15, 1.25 × max speed) | 1 on contact |
-| The Sun        | 17 (boss) | 2.8                  | ≈ 4 (≈ 2.9 after two chips) | solar wind push, CMEs (telegraphed charges), flare volleys, stunned only by a giant planet (an eclipse), chips are prominences | 1, sheds 5 % (flares 3 %) |
+| The Sun        | 17 (boss) | 2.8                  | ≈ 4 (or 3 hits) | solar wind push, CMEs (telegraphed charges), flare volleys, stunned only by a giant planet (an eclipse), hits knock prominences loose | 1, sheds 5 % (flares 3 %) |
 
 (Per-Tier pairs are Tier 16 / Tier 17.)
 
@@ -197,9 +197,9 @@ The Moon is the only stun source because the Globe has no obstacles. A real-size
 | Eclipse | glow ×0.15 while stunned, no wind | — |
 | Hot Jupiter | on arrival and every 8 s of hunting, if no blocking giant is within 26 units of the Bunny, one lands 3 units beyond its edge (between it and the Sun the first time), sized max(2.4, 1.25 × the largest the Bunny can absorb) | the Moon, same rule |
 | Minis | none | 3 mini sweepers / 13 s, up to 6 |
-| Chips | × 0.85, 8 prominences (0.45 × the Bunny's radius); each chip hides a prominence arc for 8 s | × 0.85, 8 parts |
+| Hits | 3, each knocks 8 prominences loose (0.45 × the Bunny's radius) and hides a prominence arc for 8 s | 3, 8 parts each |
 
-Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptune (2.9) stay too big until r ≈ 4.2, so they and Jupiter (until it is eaten) are what its charges hit, with the Hot Jupiter as the fallback when none is near. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
+Jupiter unlocks at Tier 17, about when the Sun arrives; Saturn (3.0) and Neptune (2.9) stay too big until r ≈ 4.2, so they and Jupiter (until it is eaten) are what its charges hit, with the Hot Jupiter as the fallback when none is near. Sim check with the Bunny started at Tier 17 (`pnpm sim --area=solar_system --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:46–0:53 per Character (6 chips); without Abilities 18 / 18, 0:52–0:59 (1 chip: the bot wins mostly by outgrowing it, as on the Globe). (Measured when a ram still chipped the boss smaller, before hits.) The whole Act (`--area=solar_system --seeds=6 --minutes=12`, before the growth pass): 17 / 17 boss kills, no deaths, Act median Lint 6:27, Tumble 8:16, Zap 4:37 (one Lint Run starved in Tier 16).
 
 **The Galaxy (after the Sun; 1 world unit = 100 ly, Bunny r = 0.85 units on arrival).** Hazards are the Galaxy's own vacuums, lighthouses and explosions. The Galaxy repeats the Solar System's shape (Tiers at 1 and 3 units, boss absorbable at ≈ 4), so each Hazard keeps about the size of the Solar System Hazard whose behaviour it reskins. The map has no obstacles.
 
@@ -210,7 +210,7 @@ Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptu
 | Supernova Remnant | 18        | 1.4                  | ≈ 2.0           | slow filament shell roaming across zones (1.6 / 2.2 units/s, waypoints within 22 units), its shell breathing; its trail of glowing filament rings (10 s) slows to 0.5 × | 1 + knockback |
 | Globular Cluster  | 18        | 1.5                  | ≈ 2.14          | rides the galactic orbit ring nearest its spawn one way round (2.8 / 4.2 units/s), its star swarm turning | 1 + big shove, sheds 8 % |
 | Supernova         | 19        | 2.3                  | ≈ 3.29          | overheated star: its core swells through the amber warm-up (1.4 s), then a short shock blast (1.1 s, range 14, ±30°, 1.5 × max speed) pushes the Bunny and loose Debris ≤ 1.1 away; off 2.8 s | 1 on contact |
-| Sagittarius A*    | 19 (boss) | 2.8                  | ≈ 4 (≈ 2.89 after two chips) | a pull that bends the camera, eats loose Debris, indigestion from star clusters, jet volleys, lunges; chips are relativistic jets | 1, sheds 5 % (jets 3 %) |
+| Sagittarius A*    | 19 (boss) | 2.8                  | ≈ 4 (or 5 hits) | a pull that bends the camera, eats loose Debris, indigestion from star clusters, jet volleys, lunges; hits knock relativistic jets loose | 1, sheds 5 % (jets 3 %) |
 
 (Per-Tier pairs are Tier 18 / Tier 19.)
 
@@ -221,11 +221,11 @@ Jupiter unlocks at Tier 17 and the Sun arrives 4 s later; Saturn (3.0) and Neptu
 | Lunge (charge): trigger / telegraph / speed / distance | 24 / 1.6 s / 20 units/s / 28; the map edge ends it without a stun | 32 / 1.6 / 22 / 42 |
 | Pull | while it hunts: reach 12 beyond its edge, 0.5 × the Bunny's max speed at the edge (the bosses' suction, scaled by Suction Multiplier; not while hunkered, hidden or able to absorb it) | solar wind push 0.4 |
 | Camera bend | lensing warp round the hole: strength 0.4 idle, up to 1 at full pull (Einstein ring 2 × the hole, fading out by 1.8 × the disc; off while the Bunny is over the disc); at full pull the camera leans 0.22 × the gap towards it (at most a third of the camera distance) and rolls 0.1 rad; reduced motion: no roll, a third of the lean | — |
-| Feeding | while it hunts, telegraphs, lunges or recovers: loose Debris ≤ 8 within 14 units of its edge spirals in at up to 7 units/s and is swallowed at its horizon (not its chips) | blows Debris ≤ 0.6 outward |
+| Feeding | while it hunts, telegraphs, lunges or recovers: loose Debris ≤ 8 within 14 units of its edge spirals in at up to 7 units/s and is swallowed at its horizon (not the jets its hits knock loose) | blows Debris ≤ 0.6 outward |
 | Indigestion | a `star_cluster` swallowed counts 1, an `open_cluster` ½, any cluster ≥ 4.5 counts 2; 2 within 6 s stuns it for 4.2 s (recover 1.2 s): amber ring, the glow sputters, the north jet coughs, the camera lets go | eclipse: a charge into a giant planet, 3.8 s |
 | Clusters drift in | on arrival and every 9 s of hunting, if less than 2 meals' worth of clusters is within 22 units of it, 2 star clusters land side by side on the line towards the Bunny (2.5 units short of the Bunny's edge, no further than the cluster's size + 7 from the boss's edge, inside its Debris pull), sized max(2.1, 1.2 × the largest the Bunny can absorb) | the Hot Jupiter, same idea |
 | Jets (volley) | every 6.5 s hunting or recovering on screen: violet lane for 1.1 s, then 4 bolts (26 units/s, range 30); the north jet swells while it aims | flares: 7 s, 1.1 s, 3 at 20 |
-| Chips | × 0.85, 8 relativistic jets (0.45 × the Bunny's radius); each chip hides the north jet for 6 s | × 0.85, 8 prominences |
+| Hits | 5, each knocks 8 relativistic jets loose (0.45 × the Bunny's radius) and hides the north jet for 6 s | 3, 8 prominences each |
 | Minis | none | none |
 
 Clusters are the only stun source besides Abilities and Spiky Dash: the Galaxy has no obstacles, and natural star clusters (2.1) are food from Tier 19, so the boss's own clusters arrive too big for the Bunny to eat and double as cover against its pull. Leading it across clusters (or waiting behind the ones that drift in) is the fight. Sim check with the Bunny started at Tier 19 (`pnpm sim --area=galaxy --radius=3.05 --seeds=6`): 18 / 18 wins, no deaths, median fight 0:28–0:45 per Character, 43 indigestion stuns; without Abilities 18 / 18, 0:31–0:43, 45 indigestion stuns. The whole Act (`--area=galaxy --seeds=6 --minutes=15`, placeholder ladder and growth, before the world pass): 15 / 15 boss kills, no deaths, 29 indigestion stuns; Tier 19 at Lint 9:29, Tumble 12:39, Zap 7:51 (three Tumble Runs still in Tier 18 at 15 minutes), Act median Lint 10:21, Tumble 12:53, Zap 8:37.
@@ -246,17 +246,21 @@ Clusters are the only stun source besides Abilities and Spiky Dash: the Galaxy h
 | The Expansion (`THE_EXPANSION`) | Value |
 |---|---|
 | Body | none (`intangible`): never touched, absorbed, clogged, Discharged or Spiky-Dashed; the lattice centres on the Bunny, its hollow at 3 × the Bunny's radius; unfolds over a 3 s intro (no flow, no drain) |
-| Bar | `gravity` starts at 0.3; 1 collapses it, 0 is the Big Rip |
+| Bar | `gravity` starts at 0.3; 1 collapses it. The bar from 0.3 to 1 is cut into 7 notches (its 7 hits, `AREA_BOSSES`): passing one sticks ("Notch n/7") |
 | Gravity gain | 0.09 × (size ÷ r₀)³ per thing absorbed (Debris and Hazards; r₀ = the Bunny's radius when it arrived), into a pending pool (≤ 0.35) that flows into the bar at up to 0.02 per s |
 | Drain | 0.005 → 0.012 per s, ramping over the first 90 s |
 | Hubble flow | Debris within the view radius moves away from the Bunny at H × distance, H 0.05 → 0.15 per s over 90 s, capped at 0.5 × the Bunny's max speed; 3 interleaved slices per tick |
 | Filament strands | every 2.5 s, if fewer than 10 absorbable Debris ≥ 0.3 r are within 0.6 × the view radius (or the bar is below 0.5): 5 pieces of 0.45–0.8 × the largest absorbable size land in a line just beyond the view (ahead of a rolling Bunny) and drift in at 0.45 × its max speed to 0.3 × the view radius |
-| Big Rip | 1 damage, sheds 6 %, bar back to 0.25 with 3 s of no drain |
+| Big Rip | at the floor (0 before the first notch, then 0.3 below the last notch passed): 1 damage, sheds 6 %, bar back to 0.25 above the floor with 3 s of no drain; a Rip never takes a notch back |
 | Collapse | other Hazards fall in; every Debris within 1.3 × the view radius rushes into the Bunny over 2.4 s (removed, no growth); then `bossDefeated`, `run.clearArea()` → `victory` |
 
 Why the gain is measured against r₀ and capped: measured against the current radius, a slow fight let the Bunny outgrow the Universe's Debris ladder (r 9–12 against a top size of 3.1), every gain vanished and the fight could not be won; against r₀, growing only makes the bar easier. Without `maxRise` Zap won in 0:30–0:40, with it no fight is shorter than about a minute. Strands below half a bar are the comeback: a player who keeps rolling always gets food. Sim check with the Bunny started at Tier 21 (`pnpm sim --area=universe --radius=3.05 --seeds=6 --minutes=5`): 18 / 18 wins, no deaths, fight (spawn → collapse) median Lint 1:19, Tumble 1:36, Zap 1:01 (Lint 1:08–1:20, Zap 1:00–1:04; Tumble 1:19–4:08, its slow seed working Debris piled at the map's edge), 1 Big Rip. The whole Act (`--area=universe --seeds=6 --minutes=15`, the groundwork's placeholder ladder and growth): 16 / 18 wins, no deaths, no Big Rips; fight median Lint 1:20 (1:05–1:38), Tumble 1:25 (1:01–2:04), Zap 1:04 (1:01–1:11); Tier 21 at Lint 8:19, Tumble 12:26, Zap 5:05, Act median Lint 10:01, Tumble 12:38, Zap 6:12. Both losses are Tumble Runs that met the Expansion at 12:54 and 14:08, too late for the 15-minute cap; with `--minutes=20` both win (fights 1:21 and 2:44). Every fight that started with two minutes or more left was won.
 
 A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absorbs it for a big mass gain. Absorbing the Robo-Vac 9000 opens the front door to the neighborhood, the Street Sweeper opens the road to the city, the Garbage Truck the highway on-ramp to the region, the Incinerator the motorway west to the continent, the Ice Sheet the launch corridor up to the Globe, the Orbital Sweeper the escape trajectory to the Solar System, the Sun the heliopause to the Galaxy, Sagittarius A* the intergalactic gate to the Universe, and absorbing the Expansion wins the Run.
+
+**The boss phase.** Each Area's boss (`AREA_BOSSES`) arrives by size, not by Tier: a few seconds after the Bunny reaches `lead` × the radius that absorbs it (`AREA_BOSSES`), about a minute of gathering short of it, and a boss intro card (the Run paused) says what it is and how to fight it. The "From Tier" column above is where that usually lands; the Expansion, never absorbed by size, arrives at Tier 21. Then the player chooses: **fight** or **grow**. A boss has health in **hits** (3 for the Robo-Vac 9000 through the Sun, 5 for Sagittarius A*, 7 for the Expansion's notches): ramming it while it is stunned (a crash, indigestion, Spiky Dash or an Ability stun; one hit per stun) lands one and knocks absorbable parts loose, and the last hit breaks it and the Bunny absorbs it whatever its size. Hits never shrink it, so growing still means reaching its full absorb radius; a Bunny that does absorbs it on contact. A health card at top centre shows one pip per hit left and the size that absorbs it outright.
+
+**Quiet Areas.** Once the Bunny reaches 85 % (`QUIET_SHARE`) of the next Area's boss arrival size, the Area goes quiet: no more Debris tops up and no more Hazards spawn (boss summons still come). A Bunny that lingers after its boss can catch up a little, but can't walk into the next Act already on top of the next boss.
 
 ## Pacing and scale (Acts 4–9)
 
@@ -367,7 +371,7 @@ Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't
 |---|---|---|
 | 17–18 (arrival, r 0.85–1) | cosmic lint 0.11, red dwarf 0.13, brown dwarf 0.16, comet cloud 0.19, rogue planet‡ (`free_floating_planet`, prop `rogue_planet`) 0.22, white dwarf 0.25, binary star 0.29, space sock‡ 0.33 (masses 1.26–1.5) | stars in the arms and the bar, lint, brown dwarfs and socks in the dust lanes, comet clouds and rogue planets in the halo |
 | 18 (Dust Nebula, r 1–3) | sun-like star 0.45, Bok globule 0.5, planetary nebula 0.57, blue giant 0.66, lint cloud 0.75, dark nebula 0.85, red giant 0.95, open cluster 1.05 (masses 2.31–2.9); Oort cloud 1.15, sock nebula 1.25, blue supergiant 1.35 (Tiers 18–19, masses 2.7–2.9) | young stars and open clusters in the arms, globules, lint and dark nebulae in the dust lanes, red giants in the core and the bar, Oort clouds in the halo |
-| 19 (Dust Cluster, r ≥ 3) | red supergiant 1.8, emission nebula 2.0, supergiant binary 2.15, stellar nursery 2.3, molecular cloud 2.5, yellow hypergiant 2.6, star cluster‡ 2.8, interstellar lint 3.1 (masses 3.9–4.9); relativistic jet 1.4 (Sagittarius A*'s chip, placed only) | supergiants and nebulae in the arms, star clusters crowding the core and the bar (absorbable from r = 4, about when Sagittarius A* is, so they block its charges for most of the fight), molecular clouds and lint in the dust lanes |
+| 19 (Dust Cluster, r ≥ 3) | red supergiant 1.8, emission nebula 2.0, supergiant binary 2.15, stellar nursery 2.3, molecular cloud 2.5, yellow hypergiant 2.6, star cluster‡ 2.8, interstellar lint 3.1 (masses 3.9–4.9); relativistic jet 1.4 (Sagittarius A*'s hit pieces, placed only) | supergiants and nebulae in the arms, star clusters crowding the core and the bar (absorbable from r = 4, about when Sagittarius A* is, so they block its charges for most of the fight), molecular clouds and lint in the dust lanes |
 
 **Galaxy pacing check** (`pnpm sim --area=galaxy --seeds=8`, Hazards on, growth 0.21): Tier 18 at Lint 0:44, Tumble 0:59, Zap 0:36; Tier 19 at 5:34, 6:51, 4:12; Act (arrival to absorbing Sagittarius A*) Lint 6:14, Tumble 7:17, Zap 4:43, 6:07 over all 22 clears (22 wins in 24; the two deaths were to the placeholder Hazards). The groundwork's sparse Tier 18 band took 7:30–12:33; the Tier 18 types are denser, heavier (×1.1, the five biggest a little lighter so Perk-boosted absorb ratios gain less from them) and cover every zone. Growth 0.22 gave 5:36 over all clears (Zap 3:56), 0.2 gave 6:22. Full Runs (`pnpm sim --seeds=6 --minutes=80 --validate`) clear the Galaxy much faster than an `--area` start, as the Solar System does (by Tier 17 a Run carries up to five Gluttons and three Sticky Fibers): Lint 2:37, Tumble 4:42, Zap 2:20 (medians of 3, 2 and 5 clears; the Solar System in the same Runs took 3:29, 4:15, 2:43), and every Run and Area board submission validated (the Galaxy board peaked at 45% of its growth limit, after its rate went from 0.08 to 0.1 units/s: a Zap clear of 52 s had reached 103%). With the real Sagittarius A* fight (`pnpm sim --area=galaxy --seeds=6 --minutes=15`): Tier 19 at Lint 5:28, Tumble 7:13, Zap 4:18; Act Lint 5:58, Tumble 7:47, Zap 4:40; 18 / 18 wins, no deaths. Full Runs (`--seeds=6 --minutes=80 --validate`): Galaxy Act Lint 2:48, Tumble 4:04, Zap 2:00 (3, 2 and 5 clears), Sagittarius A* 10 / 10; one Zap victory in 23:21 reached 104% of the Run board's old 2.5 per second, so it allows 2.8 (all 28 max-Loadout Zap submissions then validated, the Run board at 79%). Full Runs are short here because by the Galaxy a Run carries most of its growth Perks; growth stays tuned for `--area=` starts, which the issue's acceptance names.
 
@@ -384,7 +388,7 @@ Jupiter, Saturn, Uranus and Neptune stop the Sun's charges while the Bunny can't
 | Debris | see the Universe Debris ladder below |
 | Look | painted web (`universeTextures.ts`): near-black voids, blue sheets' mist, blue-white filaments with knots, warm gold nodes in violet halos, a tiled field of tiny galaxies; 38,000 web galaxies and 24,000 deep galaxies (parallax) as points, thinned as the camera pulls back; warm glows on the nearest nodes and the key light from the heaviest; a CMB-orange tint at the screen's edges (CSS); the Bunny a cluster of four small black holes in the fur |
 | Hazards (`UNIVERSE_DIRECTOR`) | Quasar, Colliding Galaxy, Gamma-ray Burst, Cosmic Void from Tier 20; Dark-energy Gust from Tier 21; the Expansion arrives 4 s after Tier 21 (see the Universe under Hazards) |
-| Boss | the Expansion (`THE_EXPANSION`): not a body; a tug-of-war bar (gravity vs expansion) instead of health, a Hubble flow on loose Debris, the Big Rip and the collapse (see the Expansion table above); arrives 4 s after Tier 21; collapsing it wins the Run and drops a Keepsake from its drop table (peak Mythic, 84%) |
+| Boss | the Expansion (`THE_EXPANSION`): not a body; a tug-of-war bar (gravity vs expansion) instead of health, a Hubble flow on loose Debris, 7 notches that stick, the Big Rip and the collapse (see the Expansion table above); arrives 4 s after Tier 21; collapsing it wins the Run and drops a Keepsake from its drop table (peak Mythic, 84%) |
 
 **Universe Debris ladder** (`src/data/universeDebris.ts`, sizes are radii in Universe units; absorbable at size ÷ 0.7). Every type renders a Blender prop (the Universe props by id or `model`; the Galaxy's `cosmic_lint`, `space_sock`, `yellow_star` and `emission_nebula`; the House's `couch`) and glows with its own per-part emission (`material.glow` 0.38 × the type's factor; the couch, which has none, a uniform `emissive`). The pale galaxies take `tintAll`, so one prop reads at several sizes and colours. ‡ placed by the map.
 
@@ -449,7 +453,7 @@ Each boss leaves a **Keepsake** in the fur of the Character that absorbed it. Ke
 
 How the rows are built: one falloff by distance from a boss's **peak** rarity (84 / 10 / 5 / 0.9 / 0.1 % at 0–4 rarities away, normalised). The peak moves from Common (Act 1) to Mythic (Act 9) along `peak = 3 + 2·sign(x)·|x|^1.5` with `x = (act − 5) / 4` (1.00, 1.70, 2.29, 2.75, 3.00, 3.25, 3.71, 4.30, 5.00), so Acts 4–6 all peak at Epic. A peak between two rarities blends the two neighbouring peak rows (the Incinerator, peak 2.75, is ¼ the Rare row and ¾ the Epic row). Blending rather than sliding the falloff keeps the chance of "this rarity or better" rising from each boss to the next at every rarity; `src/data/keepsakes.test.ts` checks that, the sums and the symmetry. Until Act 9 ships, Sagittarius A* is the best source of Mythic.
 
-- **Drops:** every boss kill credits 1 Keepsake with a random type (seeded from the Run seed) and a rolled rarity (the seed plus a salt drawn per Run, so replaying a `?seed=` can't farm a lucky Mythic); Hardcore adds 1, with its own rarity roll. Shortly after the kill (once the area-cleared banner is done) the Run pauses on a reveal of what the boss left. On a Character's first kill of a boss the player chooses 1 of 3 offered types there instead (one rarity for all three); the first offer is credited at once, and leaving the reveal locks in the highlighted one. If the Run ends before the reveal shows (a boss that wins the Run), the drop and the choice are on the results screen instead. Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. Chipping doesn't change the reward.
+- **Drops:** every boss kill credits 1 Keepsake with a random type (seeded from the Run seed) and a rolled rarity (the seed plus a salt drawn per Run, so replaying a `?seed=` can't farm a lucky Mythic); Hardcore adds 1, with its own rarity roll. Shortly after the kill (once the area-cleared banner is done) the Run pauses on a reveal of what the boss left. On a Character's first kill of a boss the player chooses 1 of 3 offered types there instead (one rarity for all three); the first offer is credited at once, and leaving the reveal locks in the highlighted one. If the Run ends before the reveal shows (a boss that wins the Run), the drop and the choice are on the results screen instead. Keepsakes are credited on the kill, so a Run that then ends in death or a quit keeps them. Runs with `?debug` or started past the house drop nothing. How the boss is beaten (hits or growing) doesn't change the reward.
 - **Loadout:** on Character select two slots take Keepsakes from that Character's **Hoard** (both may hold the same type; copies add up). It is fixed for the Run, remembered per Character on the device, and sent with leaderboard entries.
 - **Felting** (Under the Couch): 3 of the same type and rarity make 1 of the next rarity for 160 × r² Fluff (r = the new rarity, 1–5: Rare 640, Epic 1,440, Legendary 2,560, Mythic 4,000), and only up to one rarity above the peak of the best boss that Character has beaten (Robo-Vac 9000: Rare; Street Sweeper: Epic; Incinerator: Legendary; The Sun: Mythic). **Shedding** discards one for 40 × r² Fluff (Common 40 … Mythic 1,000). Neither counts as Fluff earned.
 - **Before rarities** Keepsakes had grades 1–10 named after each boss's filth. Saves, cloud saves and leaderboard Loadouts from then are read two grades to a rarity (1–2 Common, 3–4 Rare, 5–6 Epic, 7–8 Legendary, 9–10 Mythic), counts added together.
@@ -469,7 +473,7 @@ Values run from Common to Mythic along `common + (mythic − common) × ((r − 
 | Tumble | Loose Roots | −0.1 → −0.6 s cooldown per second held | −0.29 / −0.41 / −0.51 s | Base 1 s per second held. |
 | Tumble | Bristle Back | knockback 2 → 5 r, stun 0.5 → 2.0 s | 3.1 / 3.8 / 4.5 r; 1.1 / 1.4 / 1.7 s | Non-boss Hazards that touch a planted Tumble. The Broom, Lint Roller, Lawn Mower and ranged Hazards are stunned but not moved. |
 | Tumble | Snowball | magnet +0.5 → +2.5 while planted | +1.3 / +1.7 / +2.1 | Added after the cap. |
-| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.8 / +1.0 / +1.3 s; +4 / +4 / +5 parts | A boss chipped during a Hunker stun stays stunned that much longer after the chip, and more parts fall off. |
+| Tumble | Dead Weight | +0.3 → +1.5 s, +2 → +6 parts | +0.8 / +1.0 / +1.3 s; +4 / +4 / +5 parts | A boss hit during a Hunker stun stays stunned that much longer after the hit, and more parts fall off. |
 | Tumble | Thick Undercoat | knockback resistance +0.02 → +0.20, suction −3% → −20% | +0.09 / +0.13 / +0.17; −9 / −14 / −17% | Always on, below the cap. |
 | Zap | Live Wire | meter fills +10% → +50% faster | +25 / +35 / +43% | |
 | Zap | Long Reach | range +1 → +4 r | +2.1 / +2.8 / +3.5 r | Base 4 r. |

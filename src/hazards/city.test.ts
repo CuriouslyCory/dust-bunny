@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
-import { AREA_BOSSES, AREA_DIRECTORS, BROOM, CITY_DIRECTOR, DIRECTOR, DIRECTOR_EXCLUDE, GARBAGE_TRUCK, LEAF_BLOWER, MINI_SCRUBBER, NEIGHBORHOOD_DIRECTOR, STREET_FLUSHER, tierValue } from '../data/hazards';
+import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, BROOM, CITY_DIRECTOR, DIRECTOR, DIRECTOR_EXCLUDE, GARBAGE_TRUCK, LEAF_BLOWER, MINI_SCRUBBER, NEIGHBORHOOD_DIRECTOR, STREET_FLUSHER, tierValue } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
@@ -10,7 +10,7 @@ import { absorbRadiusFor, hazardFloorFree } from './common';
 import { spawnWeights } from './director';
 import { hazardRegistry } from './index';
 import type { Mop } from './mop';
-import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
+import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
 
@@ -62,14 +62,6 @@ describe('city Hazards', () => {
     expect(hazardRegistry.require('garbage_truck').boss).toBe(true);
   });
 
-  it('keeps the Garbage Truck out of reach at Tier 9 entry, but reachable after two stun hits', () => {
-    const ratio = 0.7;
-    const tier9 = getTier(9).minRadius;
-    const { size, chipFactor } = GARBAGE_TRUCK;
-    expect(absorbRadiusFor(size, ratio)).toBeGreaterThan(tier9);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), ratio)).toBeGreaterThan(tier9);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), ratio)).toBeLessThan(tier9);
-  });
 
   it('city spawn tables only list city Hazards, Street Flushers from Tier 8, and never the boss or its minis', () => {
     for (let t = CITY_DIRECTOR.firstTier; t <= 9; t++) {
@@ -91,7 +83,7 @@ describe('city Hazards', () => {
     expect(tierValue(STREET_FLUSHER.speed, 9)).toBe(STREET_FLUSHER.speed[8]);
   });
 
-  it('the director spawns city Hazards (never house or outdoor ones) and brings the Garbage Truck at Tier 9', () => {
+  it('the director spawns city Hazards (never house or outdoor ones) and brings the Garbage Truck at its arrival size', () => {
     const { run, events } = makeRun('city-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -104,14 +96,13 @@ describe('city Hazards', () => {
     };
     step(40);
     expect(run.tier).toBe(7);
-    run.bunny.setRadius(getTier(8).minRadius * 1.1);
+    run.bunny.setRadius(bossArrivalRadius('city', run.bunny.stats.get('absorbRatio')) * 0.95);
     step(30);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
 
-    run.bunny.setRadius(getTier(9).minRadius * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('city', run.bunny.stats.get('absorbRatio')) * 1.02);
     step(AREA_BOSSES.city.arrivalDelay + 1);
-    expect(run.tier).toBe(9);
     expect(bosses).toEqual(['Garbage Truck']);
     expect(run.hazards.count('garbage_truck')).toBe(1);
     for (const id of spawned) expect([...CITY_HAZARDS, ...BOSS_IDS]).toContain(id);

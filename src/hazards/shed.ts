@@ -1,7 +1,7 @@
 /**
  * Mass shedding: a Hazard knocks volume off the Bunny, and that volume lands back on the
  * floor as absorbable Debris that can be re-absorbed (roughly all of it, if you collect
- * every piece). Also used to scatter boss parts when the Robo-Vac 9000 is chipped.
+ * every piece). Also used to scatter boss parts when a boss takes a hit.
  */
 import type { Rng } from '../core/rng';
 import type { DebrisType } from '../data/debris';

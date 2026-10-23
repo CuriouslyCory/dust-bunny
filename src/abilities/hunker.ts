@@ -10,8 +10,8 @@
  * Hazard contact while planted goes to `plantedContact` (HazardManager.plantedContact) instead of
  * onContact:
  *   - a boss hunting or charging into it is stunned for its stunTime (+ bossStunBonus) like a wall
- *     crash, if the boss limit allows, and the chip lands at once (onContact while stunned);
- *     otherwise it bounces off. A boss that is already stunned is chipped as usual.
+ *     crash, if the boss limit allows, and the hit lands at once (onContact while stunned);
+ *     otherwise it bounces off. A boss that is already stunned takes a hit as usual.
  *   - other Hazards run `onPlanted` if they have one (Broom, Lint Roller), else recoil
  *     (HAZARD_RECOIL) and are pushed back out of contact.
  */

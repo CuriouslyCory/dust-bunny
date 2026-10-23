@@ -130,7 +130,7 @@ export class AbilitySystem implements System {
     return last === undefined || this.run.time - last >= this.params.bossStunInterval;
   }
 
-  /** Stuns a boss with an Ability if the limit allows (abilityStun, so a chip lands on contact). */
+  /** Stuns a boss with an Ability if the limit allows (abilityStun, so a hit lands on contact). */
   stunBoss(boss: RoboVac9000, seconds: number, cause: AbilityStunCause): boolean {
     if (!this.canStunBoss(boss)) return false;
     this.lastBossStun.set(boss.id, this.run.time);

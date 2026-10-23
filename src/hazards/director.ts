@@ -2,17 +2,17 @@
  * Hazard spawn director. Per Tier (src/data/hazards.ts DIRECTOR.tiers): an alive budget and
  * spawn interval that ramp with Tier progress, weighted Hazard types with per-type caps.
  * Spawns in a ring just outside the camera view, despawns Hazards that stay far away or
- * have become too small to matter, and brings in the area's boss (AREA_BOSSES): the Robo-Vac
- * 9000 at Tier 5 in the house, the Street Sweeper at Tier 7 in the neighborhood, the Garbage Truck
- * at Tier 9 in the city, the Incinerator at Tier 11 in the region, the Ice Sheet at Tier 13 in the
- * continent. Entering a new area resets the director (grace period, boss). The Run's Difficulty
+ * have become too small to matter, and brings in the area's boss (AREA_BOSSES) once the Bunny
+ * reaches its arrival size (`bossArrivalRadius`: `lead` × the radius that absorbs it, the
+ * Expansion at Tier 21). Close to the next Area's boss size the Area goes quiet (`areaQuiet`): no
+ * more Hazards spawn. Entering a new area resets the director (grace period, boss). The Run's Difficulty
  * scales the budget, spawn interval and grace period. Its absolute margins (DIRECTOR.spawnMargin,
  * ringMin, despawnMin and the debug / boss fallbacks) are real cm, divided by the Area's unit (`run.unit`). A def with `spawnZones` is only
  * placed in those zones when the layout has one (the River Barge on the river).
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
-import { AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, type TierSpawnTable } from '../data/hazards';
+import { AREA_BOSSES, AREA_DIRECTORS, bossArrivalRadius, DIRECTOR, DIRECTOR_EXCLUDE, quietRadius, type TierSpawnTable } from '../data/hazards';
 import { DIFFICULTIES, type DifficultyDef } from '../data/difficulty';
 import { tierProgress } from '../data/tiers';
 import type { AreaId, RoomType } from '../world/types';
@@ -22,6 +22,14 @@ import { onScreen, viewRadiusFor } from '../systems/camera';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { HazardManager, hazardRegistry, type Hazard } from './index';
 import { nearestImageX } from '../world/wrap';
+
+/**
+ * True once the Bunny is close to the next Area's boss arrival size (`quietRadius`): neither the
+ * director nor the Debris spawner adds anything more in this Area.
+ */
+export function areaQuiet(run: Run): boolean {
+  return run.bunny.realRadius >= quietRadius(run.area, run.bunny.stats.get('absorbRatio'));
+}
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {
   const { tiers: t, firstTier: first } = AREA_DIRECTORS[area];
@@ -95,7 +103,7 @@ export class HazardDirector {
     this.despawn(dt, run, mgr, viewR);
 
     const boss = AREA_BOSSES[run.area];
-    if (run.tier >= boss.tier && !this.bossSpawned && hazardRegistry.has(boss.id)) {
+    if (!this.bossSpawned && b.radius >= bossArrivalRadius(run.area, b.stats.get('absorbRatio')) && hazardRegistry.has(boss.id)) {
       if (this.bossTimer < 0) this.bossTimer = boss.arrivalDelay;
       this.bossTimer -= dt;
       if (this.bossTimer <= 0) this.spawnBoss(run, mgr);
@@ -103,6 +111,8 @@ export class HazardDirector {
 
     this.spawnTimer -= dt;
     if (this.spawnTimer > 0) return;
+    // Close to the next Area's boss size: this Area goes quiet (src/data/hazards.ts, QUIET_SHARE).
+    if (areaQuiet(run)) return;
     const progress = tierProgress(b.realRadius);
     const d = this.difficulty;
     this.spawnTimer = spawnInterval(run.tier, progress, run.area) * d.spawnInterval;

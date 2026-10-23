@@ -81,7 +81,7 @@ export const DISCHARGE = {
   drainPerSec: 0.1,
   /** Target range from the Bunny's surface, in Bunny radii. */
   range: 4,
-  /** Boss stun from a Discharge (no chip), then Grounded: immune to Discharge for groundedFor seconds. */
+  /** Boss stun from a Discharge (no hit), then Grounded: immune to Discharge for groundedFor seconds. */
   bossStun: 1.5,
   groundedFor: 10,
   /** A shorted-out non-boss Hazard bursts into this many absorbable scrap pieces of scrapSize × r. */

@@ -6,7 +6,7 @@
  *     aims at the Bunny aims at it instead while it is inside that Hazard's aggro / trigger range
  *     (× lureRangeMul). Suction still pulls the Bunny by distance; vacuums also drag the Decoy in.
  *   Clog: a non-ranged Hazard whose body touches it pops it and is stunned for clogStun (bosses:
- *     bossClogStun via the boss limit, so a chip lands while the boss is clogged). An intangible
+ *     bossClogStun via the boss limit, so a hit lands while the boss is clogged). An intangible
  *     Hazard (the Expansion) never touches it.
  *   Ranged Hazards (turrets, Leaf Blower) are never clogged; their spray or blast pops it (shot).
  */

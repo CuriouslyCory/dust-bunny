@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { AREA_BOSSES } from '../data/hazards';
+import { bossArrivalRadius } from '../data/hazards';
+import { STAT_LIMITS } from '../entities/stats';
 import { TIERS, tierForRadius } from '../data/tiers';
 import { AREA_ORDER } from '../world/types';
-import { AREA_BOSS_TIER, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_ARRIVAL_RADIUS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREA_CLEAR_RADIUS, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_ARRIVAL_RADIUS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
 import { AREAS } from '../data/areas';
 
 const base = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 3, durationMs: 300_000, victory: false };
@@ -77,9 +78,15 @@ describe('computeAreaScore', () => {
 });
 
 describe('score areas', () => {
-  it('mirror AREA_ORDER, the boss Tiers and the Area units', () => {
+  it('mirror AREA_ORDER, the boss arrival sizes and the Area units', () => {
     expect([...SCORE_AREAS]).toEqual([...AREA_ORDER]);
-    for (const a of SCORE_AREAS) expect(AREA_BOSS_TIER[a]).toBe(AREA_BOSSES[a].tier);
+    // The smallest boss arrival size: the highest absorb ratio (STAT_LIMITS), rounded down.
+    const top = STAT_LIMITS.absorbRatio![1];
+    for (const a of SCORE_AREAS) {
+      const arrival = bossArrivalRadius(a, top);
+      expect(AREA_CLEAR_RADIUS[a], a).toBeLessThanOrEqual(arrival);
+      expect(AREA_CLEAR_RADIUS[a], a).toBeGreaterThan(arrival * 0.995);
+    }
     for (const a of SCORE_AREAS) expect(SCORE_AREA_UNIT[a]).toBe(AREAS[a].unit);
     for (const a of SCORE_AREAS) expect((SCORE_ARRIVAL_RADIUS as Partial<Record<string, number>>)[a], a).toBe(AREAS[a].arrivalRadius);
   });

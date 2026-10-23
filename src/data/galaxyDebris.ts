@@ -22,8 +22,8 @@
  * Star clusters (`star_cluster`, 2.8: absorbable from r = 4, about when Sagittarius A* is) stun
  * Sagittarius A*; besides the spawner's weights (heaviest in the galactic core and the bar), the
  * map places `GALAXY.coreClusters` of them round the core (src/world/galaxy.ts). `open_cluster`
- * is the Tier 18 cluster. `relativistic_jet` is the boss's chip (no room weights: only the boss
- * places it, sized like any boss chip).
+ * is the Tier 18 cluster. `relativistic_jet` is what the boss's hits knock loose (no room weights: only the boss
+ * places it, sized like any boss's hit pieces).
  *
  * One-offs placed by the map: a rogue planet (`free_floating_planet`) and a sock (`space_sock`)
  * a few units from the spawn, on screen at arrival; the rogue planet has its own narrator line
@@ -260,7 +260,7 @@ export const GALAXY_DEBRIS: DebrisType[] = [
     material: { ...lit('#c8a8e8', 1, 0.25), tintAll: true },
     rooms: { dust_lanes: 0.8, halo: 0.5, inner_arms: 0.3, outer_arms: 0.3 },
   },
-  // ── Sagittarius A*'s chips ──────────────
+  // ── Sagittarius A*'s hit pieces ─────────
   {
     id: 'relativistic_jet', name: 'Relativistic Jet', size: 1.4, mass: 2.2, tiers: [19, 19], area: 'galaxy',
     colors: ['#e6d8ff', '#cfe0ff', '#ffffff'],
@@ -269,7 +269,7 @@ export const GALAXY_DEBRIS: DebrisType[] = [
       { shape: 'sphere', radius: 0.25, pos: [0, 0.35, -0.9], color: '#f4f0ff' },
     ],
     material: { ...lit('#b49cff'), tintAll: true },
-    // A chip: only Sagittarius A* places it.
+    // A hit piece: only Sagittarius A* places it.
     rooms: {},
   },
 ];

@@ -2,9 +2,10 @@
  * The Keepsake reward moment (browser only): on `keepsakesDropped`, fibre particles in the best
  * drop's rarity colour stream into the Bunny, then the Run pauses on the Keepsake reveal
  * (src/ui/screens/keepsakeReveal.ts: what was won, the narrator caption, a first kill's choice).
- * The reveal waits for the area-cleared banner that `exitOpened` shows at the same moment (longer
- * when it carries the narrator's cleared line) and for play to be on screen (a Perk draft, chapter
- * card or pause menu goes first).
+ * The reveal opens REVEAL_DELAY s after the kill, once play is on screen (a Perk draft, chapter card
+ * or pause menu goes first), so it comes before the Bunny can roll out of the Area. The area-cleared
+ * banner `exitOpened` shows at the same moment is held while the reveal is up (`hud.holdBanner`) and
+ * resumes where it was when it closes (the reveal's `exit` releases it).
  */
 import { Color } from 'three';
 import { bossNameFor, getRarity } from '../data/keepsakes';
@@ -13,7 +14,7 @@ import { dropCaption, getKeepsakeTracker } from '../meta/keepsakes';
 import { narrate } from './keepsakeUi';
 import { openKeepsakeReveal } from './screens/keepsakeReveal';
 
-/** Seconds before the reveal, at least: the area-cleared banner (src/ui/areaHud.ts) shows meanwhile. */
+/** Seconds before the reveal: the area-cleared banner (src/ui/areaHud.ts) shows meanwhile. */
 const REVEAL_DELAY = 3.7;
 /** Seconds between checks while another screen (Perk draft, chapter card, pause) is up. */
 const RETRY = 0.25;
@@ -45,13 +46,10 @@ export function installKeepsakeHud(game: Game): void {
     const show = (): void => {
       // The Run may have ended (the last boss wins it): the results screen lists the drop instead.
       if (game.run !== run || run.ended || !record) return;
-      // Still reading the cleared line: wait for it rather than cut it off (checking again soon, in
-      // case the player dismisses it).
-      if (game.hud.bannerLeft > 0.1) {
-        window.setTimeout(show, RETRY * 1000);
-        return;
-      }
+      // The cleared line waits behind the reveal rather than hold it back (released on close).
+      game.hud.holdBanner();
       if (!openKeepsakeReveal(game, { run: record, drops: e.drops, firstKill: e.firstKill, caption })) {
+        game.hud.releaseBanner();
         window.setTimeout(show, RETRY * 1000);
       }
     };

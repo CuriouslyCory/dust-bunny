@@ -1,21 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
-import { DIRECTOR, ROBOVAC_9000, ROOMBA, UPRIGHT_VACUUM } from '../data/hazards';
+import { AREA_BOSSES, bossAbsorbRadius, bossArrivalRadius, bossPace, DIRECTOR, DIRECTOR_EXCLUDE, quietRadius, ROBOVAC_9000, ROOMBA, UPRIGHT_VACUUM } from '../data/hazards';
+import { AREAS } from '../data/areas';
+import { AREA_ORDER, nextArea } from '../world/types';
+import type { RoboVac9000 } from './robovac';
 import { getTier, MAX_TIER, TIERS } from '../data/tiers';
 import { TUNING } from '../data/tuning';
 import { Run } from '../game/run';
 import { stepBunnyMovement } from '../systems/movement';
 import { NO_INPUT } from '../core/input';
 import { absorbRadiusFor, hazardFloorFree, suctionFalloff, suctionReachFor, suctionSpeed } from './common';
-import { hazardBudget, pickHazardType, spawnInterval, spawnRing, spawnWeights } from './director';
+import { areaQuiet, hazardBudget, pickHazardType, spawnInterval, spawnRing, spawnWeights } from './director';
 import { puddleScale } from './mop';
-import { bossSizeAfterHits } from './robovac';
 import { planShed } from './shed';
 import { inCone, type UprightVacuum } from './uprightVacuum';
 import type { SprayBottle } from './sprayBottle';
 import { onScreen, spawnView } from '../systems/camera';
 import { installGameplay } from '../game/assembly';
+
+/** Bosses and their summons (still spawned in a quiet Area). */
+const isBoss = (id: string) => DIRECTOR_EXCLUDE.includes(id);
 
 const makeRun = (seed = 'hazards') => {
   const events = new EventBus();
@@ -121,6 +126,99 @@ describe('absorbing Hazards', () => {
     expect(b.radius).toBeGreaterThan(r0 * 1.05);
   });
 
+  it('breaks the Robo-Vac 9000 on its third hit (never shrinking it), and the Bunny absorbs it', () => {
+    const { run, events } = makeRun();
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(40);
+    const boss = run.hazards.spawn('robovac_9000', b.x + 200, b.z) as RoboVac9000;
+    expect(boss.maxHits).toBe(AREA_BOSSES.house.hits);
+    const hits: string[] = [];
+    const order: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
+    events.on('hazardAbsorbed', (e) => order.push(`absorbed:${e.defId}`));
+    events.on('bossDefeated', () => order.push('bossDefeated'));
+    events.on('exitOpened', () => order.push('exitOpened'));
+    for (let i = 1; i <= 3; i++) {
+      boss.abilityStun(run, 2, 'hunker');
+      boss.onContact(run);
+      // One hit per stun.
+      boss.onContact(run);
+      expect(boss.hits).toBe(i);
+      expect(boss.size).toBe(ROBOVAC_9000.size);
+    }
+    expect(hits).toEqual(['1/3', '2/3', '3/3']);
+    expect(boss.dead).toBe(true);
+    expect(order).toEqual(['absorbed:robovac_9000', 'bossDefeated', 'exitOpened']);
+    expect(run.houseCleared).toBe(true);
+    expect(b.radius).toBeGreaterThan(40);
+  });
+
+  it('slows a boss against a Bunny below its pace Tier, and lands no contact damage right after a hit', () => {
+    expect(bossPace('robovac_9000', getTier(5).minRadius)).toBe(1);
+    expect(bossPace('robovac_9000', getTier(5).minRadius * 2)).toBe(1);
+    expect(bossPace('robovac_9000', getTier(5).minRadius * 0.8)).toBeCloseTo(0.8);
+    expect(bossPace('roomba', 1)).toBe(1);
+
+    const { run } = makeRun();
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    b.setRadius(36);
+    const boss = run.hazards.spawn('robovac_9000', b.x + 200, b.z) as RoboVac9000;
+    boss.abilityStun(run, 2, 'hunker');
+    expect(boss.hittable).toBe(true);
+    boss.onContact(run);
+    expect(boss.hittable).toBe(false);
+    // Recovered, but still inside the grace: touching it does nothing.
+    boss.state = 'hunt';
+    b.invulnerable = 0;
+    const hp = b.health;
+    boss.onContact(run);
+    expect(b.health).toBe(hp);
+    boss.hitGrace = 0;
+    boss.onContact(run);
+    expect(b.health).toBe(hp - 1);
+  });
+
+  it('brings the boss in short of its absorb radius, and goes quiet near the next boss', () => {
+    const { run, events } = makeRun();
+    installGameplay(run);
+    moveToOpenFloor(run);
+    const b = run.bunny;
+    const ratio = b.stats.get('absorbRatio');
+    const arrival = bossArrivalRadius('house', ratio);
+    expect(arrival).toBeCloseTo(AREA_BOSSES.house.lead! * absorbRadiusFor(ROBOVAC_9000.size, ratio));
+    expect(arrival).toBeLessThan(absorbRadiusFor(ROBOVAC_9000.size, ratio));
+    // The grow path stays open: the house goes quiet well after its own boss can be absorbed.
+    for (const a of AREA_ORDER) {
+      if (!nextArea(a) || !Number.isFinite(AREA_BOSSES[a].size)) continue;
+      expect(quietRadius(a, ratio), a).toBeGreaterThan(bossAbsorbRadius(a, ratio) * AREAS[a].unit * 1.2);
+    }
+    let spawned = -1;
+    events.on('bossSpawned', () => (spawned = run.time));
+    b.setRadius(arrival * 0.97);
+    for (let i = 0; i < 60 * 6; i++) run.update(1 / 60);
+    expect(spawned).toBe(-1);
+    b.setRadius(arrival * 1.01);
+    for (let i = 0; i < 60 * (AREA_BOSSES.house.arrivalDelay + 1) && spawned < 0; i++) run.update(1 / 60);
+    expect(spawned).toBeGreaterThan(0);
+
+    // Close to the Street Sweeper's arrival size: no more Debris tops up and no Hazards spawn.
+    expect(areaQuiet(run)).toBe(false);
+    b.setRadius(quietRadius('house', ratio) + 1);
+    expect(areaQuiet(run)).toBe(true);
+    for (const h of run.hazards.hazards) if (!h.def.boss) h.dead = true;
+    run.update(1 / 60);
+    const debris = run.debris.count;
+    let spawns = 0;
+    events.on('hazardSpawned', (e) => {
+      if (!isBoss(e.defId)) spawns++;
+    });
+    for (let i = 0; i < 60 * 20; i++) run.update(1 / 60);
+    expect(spawns).toBe(0);
+    expect(run.debris.count).toBeLessThanOrEqual(debris);
+  });
+
   it('opens the front door when the Robo-Vac 9000 is absorbed, and the Run continues outside', () => {
     const { run, events } = makeRun();
     moveToOpenFloor(run);
@@ -149,12 +247,6 @@ describe('absorbing Hazards', () => {
     expect(run.debris.count).toBeGreaterThan(500);
   });
 
-  it('keeps the boss out of reach at Tier 5 entry, but reachable after two stun hits', () => {
-    const ratio = 0.7;
-    const tier5 = getTier(5).minRadius;
-    expect(absorbRadiusFor(ROBOVAC_9000.size, ratio)).toBeGreaterThan(tier5);
-    expect(absorbRadiusFor(bossSizeAfterHits(2), ratio)).toBeLessThan(tier5);
-  });
 
   it('makes every Hazard absorbable by the end of the Tier ladder (except the boss at full size)', () => {
     const top = TIERS[TIERS.length - 1]!.minRadius;
@@ -325,7 +417,7 @@ describe('director in a headless Run', () => {
 
     run.bunny.health = 999;
     run.bunny.setRadius(getTier(5).minRadius * 1.02);
-    for (let i = 0; i < 60 * (ROBOVAC_9000.arrivalDelay + 1) && !run.ended; i++) run.update(1 / 60);
+    for (let i = 0; i < 60 * (AREA_BOSSES.house.arrivalDelay + 1) && !run.ended; i++) run.update(1 / 60);
     expect(run.tier).toBe(5);
     expect(boss).toBe(1);
     expect(run.hazards.count('robovac_9000')).toBe(1);

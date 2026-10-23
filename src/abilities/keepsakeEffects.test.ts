@@ -236,9 +236,9 @@ describe('Tumble · Hunker Keepsakes', () => {
     expect(b.stats.get('magnetRadius')).toBeCloseTo(capped);
   });
 
-  it('Dead Weight: the Hunker chip keeps the boss stunned longer and knocks more parts loose', () => {
+  it('Dead Weight: the Hunker hit keeps the boss stunned longer and knocks more parts loose', () => {
     const g = 4;
-    const chipped = (loadout: Loadout) => {
+    const hitWith = (loadout: Loadout) => {
       const { run, input, events } = setup(loadout, 'tumble');
       const b = run.bunny;
       b.setRadius(30);
@@ -257,8 +257,8 @@ describe('Tumble · Hunker Keepsakes', () => {
       }
       return { parts, stunned };
     };
-    const base = chipped([]);
-    const dw = chipped([{ type: 'dead_weight', rarity: g }]);
+    const base = hitWith([]);
+    const dw = hitWith([{ type: 'dead_weight', rarity: g }]);
     expect(dw.stunned - base.stunned).toBeCloseTo(val('dead_weight', 'bossStun', g), 1);
     expect(dw.parts - base.parts).toBe(Math.round(val('dead_weight', 'extraParts', g)));
   });

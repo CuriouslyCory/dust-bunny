@@ -190,11 +190,11 @@ describe('galaxy Debris catalogue', () => {
     expect(lit).toBeLessThan(em.count);
   });
 
-  it("has Sagittarius A*'s chip and stun types; star clusters crowd the core and the bar and stay too big until r = 4", () => {
-    expect(getDebrisType(SAGITTARIUS_A.chipTypeId!)?.area).toBe('galaxy');
+  it("has Sagittarius A*'s part and stun types; star clusters crowd the core and the bar and stay too big until r = 4", () => {
+    expect(getDebrisType(SAGITTARIUS_A.partTypeId!)?.area).toBe('galaxy');
     expect(Object.keys(getDebrisType('relativistic_jet')!.rooms)).toHaveLength(0);
     for (const id of Object.keys(SAGITTARIUS_A.clusters.meals)) expect(getDebrisType(id)?.area, id).toBe('galaxy');
-    expect(AREA_BOSSES.galaxy).toEqual({ id: 'sagittarius_a', tier: 19, arrivalDelay: 4 });
+    expect(AREA_BOSSES.galaxy).toMatchObject({ id: 'sagittarius_a', hits: 5, arrivalDelay: 4 });
     const cluster = getDebrisType('star_cluster')!;
     expect(cluster.size / ratio).toBeCloseTo(4, 1);
     for (const zone of ['galactic_core', 'bar'] as const) {

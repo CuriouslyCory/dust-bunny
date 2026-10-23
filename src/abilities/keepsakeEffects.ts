@@ -14,8 +14,8 @@
  *     Bristle Back     plantedTouched (non-boss): stunned, and knocked back `knockback` r over
  *                      0.2 s (walls stop it). Hazards with their own planted reaction (Broom, Lint
  *                      Roller family) and ranged ones (turrets, Leaf Blower) are stunned only.
- *     Dead Weight      bossStunned by Hunker: the chip that follows keeps the boss stunned
- *                      `bossStun` s longer and knocks `extraParts` more parts loose (boss.chipBonus).
+ *     Dead Weight      bossStunned by Hunker: the hit that follows keeps the boss stunned
+ *                      `bossStun` s longer and knocks `extraParts` more parts loose (boss.hitBonus).
  *     Thick Undercoat  always-on stat modifiers below the cap stage: knockbackResistance + total,
  *                      suctionMultiplier × (1 − total).
  */
@@ -72,7 +72,7 @@ export class KeepsakeEffects implements System {
     }
     if (k.deadWeightStun > 0 || k.deadWeightParts > 0) {
       hooks.bossStunned = (_r, boss, cause) => {
-        if (cause === 'hunker') boss.chipBonus = { hold: system.params.hunker.bossStunBonus, pieces: k.deadWeightParts };
+        if (cause === 'hunker') boss.hitBonus = { hold: system.params.hunker.bossStunBonus, pieces: k.deadWeightParts };
       };
     }
     if (k.undercoatKnockback > 0) run.bunny.stats.add({ stat: 'knockbackResistance', op: 'add', value: k.undercoatKnockback, source: UNDERCOAT_SOURCE });

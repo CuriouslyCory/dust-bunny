@@ -144,8 +144,12 @@ export function isScoreArea(v: unknown): v is ScoreArea {
   return typeof v === 'string' && (SCORE_AREAS as readonly string[]).includes(v);
 }
 
-/** Tier at which each Area's boss arrives, mirrored from `AREA_BOSSES` (test-synced): a clear needs it. */
-export const AREA_BOSS_TIER: Readonly<Record<ScoreArea, number>> = { house: 5, neighborhood: 7, city: 9, region: 11, continent: 13, globe: 15, solar_system: 17, galaxy: 19, universe: 21 };
+/**
+ * Smallest radius (the Area's unit) at which each Area's boss can arrive, so the least a clear
+ * needs: `AreaBoss.lead` × its size ÷ the highest absorb ratio (0.95), rounded down, or the
+ * Expansion's Tier 21 (3 units). Mirrored from `AREA_BOSSES` (test-synced).
+ */
+export const AREA_CLEAR_RADIUS: Readonly<Record<ScoreArea, number>> = { house: 26.1, neighborhood: 137.3, city: 518.7, region: 1.62, continent: 1.47, globe: 1.709, solar_system: 1.679, galaxy: 1.679, universe: 3 };
 
 /**
  * Centimetres per world unit in each Area, mirrored from `AREAS[area].unit` (test-synced). Area

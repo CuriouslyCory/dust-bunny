@@ -2,7 +2,8 @@
  * Debris spawner. At Run start it populates the house (start cluster under the couch,
  * template placements, a distance-banded scatter). During the Run it keeps the number of
  * meaningful absorbable Debris around the Bunny near a target by spawning outside the
- * camera view, and culls far-away Debris that has become too small to matter.
+ * camera view, and culls far-away Debris that has become too small to matter. It stops topping
+ * up once the Bunny is close to the next Area's boss size (`quietRadius`).
  */
 import { len2 } from '../core/math';
 import type { Rng } from '../core/rng';
@@ -14,6 +15,7 @@ import { BASE_BUNNY_STATS } from '../entities/stats';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { AREAS, areaDebrisTier, type AreaTuning } from '../data/areas';
+import { quietRadius } from '../data/hazards';
 import { roomAt } from '../world/house';
 import type { HouseLayout, RoomType } from '../world/types';
 import { canonicalX } from '../world/wrap';
@@ -146,6 +148,8 @@ export class DebrisSpawner implements System {
     if (this.timer > 0) return;
     this.timer = TUNING.spawner.interval;
     this.cull(run);
+    // Close to the next Area's boss size: no more Debris here (src/data/hazards.ts, QUIET_SHARE).
+    if (run.bunny.realRadius >= quietRadius(run.area, run.bunny.stats.get('absorbRatio'))) return;
     this.topUp(run);
   }
 

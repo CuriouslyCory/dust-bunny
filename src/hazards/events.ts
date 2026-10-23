@@ -32,8 +32,11 @@ declare module '../core/events' {
     bossRip: { hazardId: number; damaged: boolean; volume: number };
     /** The bar reached the gravity end: the Expansion collapses, `debris` pieces rush into the Bunny; `bossDefeated` follows after `duration` s. */
     bossCollapse: { hazardId: number; debris: number; duration: number };
-    /** The Bunny rammed the stunned boss and chipped it smaller. */
-    bossHit: { hazardId: number; size: number; absorbRadius: number };
+    /**
+     * The Bunny rammed the stunned boss and landed hit `hits` of `maxHits` (the last one breaks it;
+     * the Expansion: gravity passed its `hits`-th notch).
+     */
+    bossHit: { hazardId: number; hits: number; maxHits: number };
     /** An area boss was absorbed (`defId` says which; the house boss opens the front door). */
     bossDefeated: { hazardId: number; defId: string; timeSec: number };
     /** The Run is won (emitted right before runEnded with reason 'victory'). */
