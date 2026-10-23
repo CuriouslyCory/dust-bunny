@@ -194,7 +194,7 @@ describe('cloud save', () => {
     await vi.advanceTimersByTimeAsync(31_000);
     const row = s.server.rows.get('u1')!;
     expect(row.characters.lint!.hoard).toEqual({ 'reclaim:rare': 1 });
-    expect(row.fluff).toBe(1000 - 640 + 40);
+    expect(row.fluff).toBe(1000 - 120 + 40);
     expect(row.stats.totalFluffEarned).toBe(1000);
   });
 

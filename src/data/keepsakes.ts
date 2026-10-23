@@ -405,10 +405,13 @@ export const KEEPSAKE_FLOORS = {
 
 /** Keepsakes of one type and rarity felted into one of the next rarity. */
 export const FELT_INPUT = 3;
-/** Fluff to felt into `resultRarity`: 160 × r² (rare 640, epic 1,440, legendary 2,560, mythic 4,000). */
-export const feltCost = (resultRarity: number): number => 160 * resultRarity * resultRarity;
 /** Fluff for shedding (discarding) one Keepsake of `rarity`: 40 × r² (common 40 … mythic 1,000). */
 export const shedValue = (rarity: number): number => 40 * rarity * rarity;
+/**
+ * Fluff to felt into `resultRarity`: what shedding the inputs would return, so shedding three of a
+ * kind pays for felting another three (rare 120, epic 480, legendary 1,080, mythic 1,920).
+ */
+export const feltCost = (resultRarity: number): number => FELT_INPUT * shedValue(resultRarity - 1);
 
 /**
  * Highest rarity Felting may produce for a Character: one above the best peak rarity
