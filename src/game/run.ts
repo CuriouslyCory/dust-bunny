@@ -393,6 +393,7 @@ export class Run {
       maxRadius: this.bunny.maxRadius > a.maxRadiusIn ? this.bunny.maxRadius : Math.max(a.radiusIn, this.bunny.radius),
       debrisAbsorbed: this.debrisAbsorbed - a.debris,
       cleared,
+      loadout: this.tucked.map((k) => ({ ...k })),
     };
   }
 

@@ -19,6 +19,8 @@ export interface AreaStats {
   debrisAbsorbed: number;
   /** The Area's boss was absorbed (in the last Area: the Run was won). */
   cleared: boolean;
+  /** Keepsakes tucked in when the Run left the Area (it can grow mid-Run; missing in Runs saved before). */
+  loadout?: KeepsakeRef[];
 }
 
 export interface RunStats {

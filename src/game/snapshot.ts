@@ -93,8 +93,20 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 const isStr = (v: unknown): v is string => typeof v === 'string';
 const isArea = (v: unknown): v is AreaId => AREA_ORDER.includes(v as AreaId);
 
+const isRef = (k: unknown): boolean => isObj(k) && isStr(k.type) && isNum(k.rarity);
+
 function isAreaStats(v: unknown): v is AreaStats {
-  return isObj(v) && isArea(v.area) && isNum(v.startSec) && isNum(v.timeSec) && isNum(v.radiusIn) && isNum(v.maxRadius) && isNum(v.debrisAbsorbed) && typeof v.cleared === 'boolean';
+  return (
+    isObj(v) &&
+    isArea(v.area) &&
+    isNum(v.startSec) &&
+    isNum(v.timeSec) &&
+    isNum(v.radiusIn) &&
+    isNum(v.maxRadius) &&
+    isNum(v.debrisAbsorbed) &&
+    typeof v.cleared === 'boolean' &&
+    (v.loadout === undefined || (Array.isArray(v.loadout) && v.loadout.every(isRef)))
+  );
 }
 
 function isNumRecord(v: unknown): v is Record<string, number> {
@@ -111,7 +123,7 @@ export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
   if (!isNum(s.savedAt) || !isStr(s.seed) || !isStr(s.characterId) || !CHARACTERS.some((c) => c.id === s.characterId)) return null;
   if (s.difficulty !== undefined && !isDifficultyId(s.difficulty)) return null;
   if (!Array.isArray(s.modifiers) || !s.modifiers.every((m) => isObj(m) && isStr(m.stat) && (m.op === 'add' || m.op === 'mul') && isNum(m.value) && isStr(m.source))) return null;
-  if (!Array.isArray(s.loadout) || !s.loadout.every((k) => isObj(k) && isStr(k.type) && isNum(k.rarity))) return null;
+  if (!Array.isArray(s.loadout) || !s.loadout.every(isRef)) return null;
   if (!isArea(s.area) || typeof s.areaCleared !== 'boolean') return null;
   if (!isNum(s.time) || s.time < 0 || !isNum(s.tier) || s.tier < 1 || !isNumRecord(s.tierTimes) || !isNum(s.debrisAbsorbed) || !isNum(s.hazardsAbsorbed)) return null;
   if (!isNumRecord(s.areaTimes) || !Object.keys(s.areaTimes).every(isArea)) return null;

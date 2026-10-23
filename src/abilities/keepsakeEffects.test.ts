@@ -451,6 +451,27 @@ describe('Tucking a Keepsake in mid-Run', () => {
     expect(decoy.decoy).toBeTruthy();
   });
 
+  it('Static Cling and Grounding already on while charged take a tucked-in copy at once', () => {
+    /** Magnet radius and suction with the meter full (Static Cling ≥ 50%, Grounding full). */
+    const charged = (run: Run, sys: ReturnType<typeof setup>['sys']) => {
+      const z = sys.controller as unknown as { charge: number; full: boolean; syncStats(): void };
+      z.charge = 1;
+      z.full = true;
+      z.syncStats();
+      return { magnet: run.bunny.stats.get('magnetRadius'), suction: run.bunny.stats.get('suctionMultiplier') };
+    };
+    for (const type of ['static_cling', 'grounding'] as const) {
+      const { run, sys } = setup([{ type, rarity: 3 }]);
+      charged(run, sys);
+      run.tuckIn({ type, rarity: 5 });
+      const two = setup([{ type, rarity: 3 }, { type, rarity: 5 }]);
+      const want = charged(two.run, two.sys);
+      const got = charged(run, sys);
+      expect(got.magnet).toBeCloseTo(want.magnet);
+      expect(got.suction).toBeCloseTo(want.suction);
+    }
+  });
+
   it('code effects install too: Unmoved replaces its modifiers instead of stacking, Reclaim hooks the Decoy', () => {
     const tumble = setup([], 'tumble');
     tumble.run.tuckIn({ type: 'unmoved', rarity: 5 });

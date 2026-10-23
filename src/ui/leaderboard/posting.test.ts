@@ -102,6 +102,17 @@ describe('RunPosts', () => {
     expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
   });
 
+  it('an Area entry rebuilt after Save & quit sends the Loadout the Area was left with', async () => {
+    const { client } = offlineClient();
+    // Resumed with a Keepsake tucked in after the house: the house's stats still say it had none.
+    const loadout = [{ type: 'reclaim', rarity: 2 } as const];
+    const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
+    posts.finish({ reason: 'died', stats: { ...stats([{ ...house, loadout: [] }, neighborhood]), loadout } });
+    await posts.post('Bea');
+    expect(posts.get('house')?.result?.entry.loadout ?? []).toEqual([]);
+    expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
+  });
+
   it('sends the Universes count with the Run board entry only', async () => {
     const { client } = offlineClient();
     const seen: unknown[] = [];
