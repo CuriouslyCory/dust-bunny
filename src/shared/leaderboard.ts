@@ -10,6 +10,7 @@ import { DEFAULT_DIFFICULTY, DIFFICULTY_IDS, isDifficultyId, type DifficultyId }
 import { parseLoadout, type SharedKeepsakeRef } from './keepsakes.js';
 import {
   AREA_CLEAR_RADIUS,
+  AREA_EXIT_RADIUS,
   computeAreaScore,
   computeScore,
   isScoreArea,
@@ -66,6 +67,11 @@ export const BOUNDS = {
   maxGrowthPerSec: 3.2,
   /** Fastest plausible absorb rate, Debris per simulated second. */
   maxDebrisPerSec: 60,
+  /**
+   * Area boards: share of the previous boss's exit radius (AREA_EXIT_RADIUS) a Bunny can still enter
+   * the next Area with, after shedding mass late in the fight or before leaving (27% of its volume).
+   */
+  exitShed: 0.9,
   /** Area boards: headroom on the entry radius for one-off jumps such as absorbing the boss. */
   areaEntryGrowth: 1.6,
   /**
@@ -207,17 +213,18 @@ export type AreaValidationResult = Validation<ValidAreaSubmission>;
 const RUN_ID = /^[A-Za-z0-9_-]{8,64}$/;
 
 /**
- * Radius bounds per Area, in the Area's unit: arriving needs the previous boss's smallest arrival
- * size (AREA_CLEAR_RADIUS: 26.1, 137.3, 518.7 cm = 0.5187 Region units), or for an Area the Bunny leaps into, its
+ * Radius bounds per Area, in the Area's unit: arriving needs the radius right after beating the
+ * previous boss, less what shedding can take (`exitShed` × AREA_EXIT_RADIUS: 35.7, 134.9, 486.6 cm =
+ * 0.4866 Region units), or for an Area the Bunny leaps into, its
  * arrival radius (the Continent, the Globe, the Solar System, the Galaxy and the Universe: 0.85 units, the radius after the leap); the cap is two
  * Tiers above the Area's last Debris Tier (the Region and later Areas: 10× their last Tier), which no real
  * Run approaches.
  */
 const AREA_RADIUS: Readonly<Record<AreaBoardId, { minIn: number; max: number }>> = {
   house: { minIn: BOUNDS.maxRadius.min, max: SCORE_TIER_MIN_RADII[6]! },
-  neighborhood: { minIn: AREA_CLEAR_RADIUS.house, max: SCORE_TIER_MIN_RADII[8]! },
-  city: { minIn: AREA_CLEAR_RADIUS.neighborhood, max: 3000 },
-  region: { minIn: AREA_CLEAR_RADIUS.city / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
+  neighborhood: { minIn: BOUNDS.exitShed * AREA_EXIT_RADIUS.house, max: SCORE_TIER_MIN_RADII[8]! },
+  city: { minIn: BOUNDS.exitShed * AREA_EXIT_RADIUS.neighborhood, max: 3000 },
+  region: { minIn: (BOUNDS.exitShed * AREA_EXIT_RADIUS.city) / SCORE_AREA_UNIT.region, max: (SCORE_TIER_MIN_RADII[10]! * 10) / SCORE_AREA_UNIT.region },
   continent: { minIn: SCORE_ARRIVAL_RADIUS.continent, max: (SCORE_TIER_MIN_RADII[12]! * 10) / SCORE_AREA_UNIT.continent },
   globe: { minIn: SCORE_ARRIVAL_RADIUS.globe, max: (SCORE_TIER_MIN_RADII[14]! * 10) / SCORE_AREA_UNIT.globe },
   solar_system: { minIn: SCORE_ARRIVAL_RADIUS.solar_system, max: (SCORE_TIER_MIN_RADII[16]! * 10) / SCORE_AREA_UNIT.solar_system },

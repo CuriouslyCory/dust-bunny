@@ -207,6 +207,9 @@ describe('absorbing Hazards', () => {
     expect(areaQuiet(run)).toBe(false);
     b.setRadius(quietRadius('house', ratio) + 1);
     expect(areaQuiet(run)).toBe(true);
+    // Shedding below it never turns spawning back on.
+    b.setRadius(quietRadius('house', ratio) * 0.8);
+    expect(areaQuiet(run)).toBe(true);
     for (const h of run.hazards.hazards) if (!h.def.boss) h.dead = true;
     run.update(1 / 60);
     const debris = run.debris.count;

@@ -12,7 +12,7 @@
  */
 import { lerp } from '../core/math';
 import type { Rng } from '../core/rng';
-import { AREA_BOSSES, AREA_DIRECTORS, bossArrivalRadius, DIRECTOR, DIRECTOR_EXCLUDE, quietRadius, type TierSpawnTable } from '../data/hazards';
+import { AREA_BOSSES, AREA_DIRECTORS, areaQuietFor, bossArrivalRadius, DIRECTOR, DIRECTOR_EXCLUDE, type TierSpawnTable } from '../data/hazards';
 import { DIFFICULTIES, type DifficultyDef } from '../data/difficulty';
 import { tierProgress } from '../data/tiers';
 import type { AreaId, RoomType } from '../world/types';
@@ -24,11 +24,11 @@ import { HazardManager, hazardRegistry, type Hazard } from './index';
 import { nearestImageX } from '../world/wrap';
 
 /**
- * True once the Bunny is close to the next Area's boss arrival size (`quietRadius`): neither the
- * director nor the Debris spawner adds anything more in this Area.
+ * True once the Bunny has been close to the next Area's boss arrival size (`areaQuietFor`): neither
+ * the director nor the Debris spawner adds anything more in this Area.
  */
 export function areaQuiet(run: Run): boolean {
-  return run.bunny.realRadius >= quietRadius(run.area, run.bunny.stats.get('absorbRatio'));
+  return areaQuietFor(run.area, run.bunny);
 }
 
 export function spawnTable(tier: number, area: AreaId = 'house'): TierSpawnTable {

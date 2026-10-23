@@ -152,6 +152,14 @@ export function isScoreArea(v: unknown): v is ScoreArea {
 export const AREA_CLEAR_RADIUS: Readonly<Record<ScoreArea, number>> = { house: 26.1, neighborhood: 137.3, city: 518.7, region: 1.62, continent: 1.47, globe: 1.709, solar_system: 1.679, galaxy: 1.679, universe: 3 };
 
 /**
+ * Smallest radius (the Area's unit) right after beating each Area's boss: its smallest arrival
+ * size (`AREA_CLEAR_RADIUS`) grown by absorbing the full-size boss (`growRadius` with the boss's
+ * mass, the Area's growth and a growth multiplier of 1, the lowest any Run has), rounded down. The
+ * Expansion is never absorbed: its clear radius. Mirrored from the game data (test-synced).
+ */
+export const AREA_EXIT_RADIUS: Readonly<Record<ScoreArea, number>> = { house: 39.7, neighborhood: 149.9, city: 540.7, region: 1.893, continent: 1.931, globe: 2.096, solar_system: 2.076, galaxy: 2.092, universe: 3 };
+
+/**
  * Centimetres per world unit in each Area, mirrored from `AREAS[area].unit` (test-synced). Area
  * board radii are in the Area's own unit.
  */

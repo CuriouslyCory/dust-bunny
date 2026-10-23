@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bossArrivalRadius } from '../data/hazards';
+import { AREA_BOSSES, bossArrivalRadius } from '../data/hazards';
+import { hazardRegistry } from '../hazards';
+import '../hazards/content';
+import { growRadius, growthFactorAt } from '../systems/absorb';
 import { STAT_LIMITS } from '../entities/stats';
 import { TIERS, tierForRadius } from '../data/tiers';
 import { AREA_ORDER } from '../world/types';
-import { AREA_CLEAR_RADIUS, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_ARRIVAL_RADIUS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
+import { AREA_CLEAR_RADIUS, AREA_EXIT_RADIUS, computeAreaScore, computeScore, progressRadius, SCORE_AREA_UNIT, SCORE_AREAS, SCORE_ARRIVAL_RADIUS, SCORE_MAX_TIER, SCORE_TIER_MIN_RADII, scoreTierForRadius } from './score';
 import { AREAS } from '../data/areas';
 
 const base = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 3, durationMs: 300_000, victory: false };
@@ -86,6 +89,11 @@ describe('score areas', () => {
       const arrival = bossArrivalRadius(a, top);
       expect(AREA_CLEAR_RADIUS[a], a).toBeLessThanOrEqual(arrival);
       expect(AREA_CLEAR_RADIUS[a], a).toBeGreaterThan(arrival * 0.995);
+      // Absorbing the full-size boss at that size (the lowest growth multiplier, 1).
+      const boss = AREA_BOSSES[a];
+      const exit = Number.isFinite(boss.size) ? growRadius(arrival, boss.size, hazardRegistry.require(boss.id).mass, 1, growthFactorAt(arrival * AREAS[a].unit) * AREAS[a].growth) : arrival;
+      expect(AREA_EXIT_RADIUS[a], a).toBeLessThanOrEqual(exit);
+      expect(AREA_EXIT_RADIUS[a], a).toBeGreaterThan(exit * 0.995);
     }
     for (const a of SCORE_AREAS) expect(SCORE_AREA_UNIT[a]).toBe(AREAS[a].unit);
     for (const a of SCORE_AREAS) expect((SCORE_ARRIVAL_RADIUS as Partial<Record<string, number>>)[a], a).toBe(AREAS[a].arrivalRadius);

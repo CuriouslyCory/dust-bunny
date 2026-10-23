@@ -2884,6 +2884,14 @@ export function quietRadius(area: AreaId, absorbRatio: number): number {
   return next ? QUIET_SHARE * bossArrivalRadius(next, absorbRatio) * areaUnit(next) : Infinity;
 }
 
+/**
+ * True once the Bunny has reached `quietRadius` in `area`: judged on the largest radius reached
+ * (`maxRadius`, the Area's unit), so shedding mass below it never turns spawning back on.
+ */
+export function areaQuietFor(area: AreaId, bunny: { maxRadius: number; unit: number; stats: { get(stat: 'absorbRatio'): number } }): boolean {
+  return bunny.maxRadius * bunny.unit >= quietRadius(area, bunny.stats.get('absorbRatio'));
+}
+
 /** Hazards the director never picks at random (bosses and their summons). */
 export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a', 'the_expansion'];
 

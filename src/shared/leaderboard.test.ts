@@ -11,7 +11,7 @@ import {
   validateSubmission,
   type ScoreSubmission,
 } from './leaderboard';
-import { AREA_CLEAR_RADIUS, computeAreaScore, computeScore } from './score';
+import { AREA_CLEAR_RADIUS, AREA_EXIT_RADIUS, computeAreaScore, computeScore } from './score';
 
 function submission(over: Partial<ScoreSubmission> = {}): ScoreSubmission {
   const s = { name: 'Fluffy', character: 'lint', maxRadius: 12.5, debrisAbsorbed: 340, tierReached: 3, durationMs: 240_000, victory: false, score: 0, ...over };
@@ -198,6 +198,9 @@ describe('validateAreaSubmission', () => {
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: AREA_CLEAR_RADIUS.neighborhood - 5 }))).toBe('maxRadius');
     expect(areaErr(area({ radiusIn: 30 }))).toBe('radiusIn'); // a Run starts small
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 0.2, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBe('radiusIn'); // arrived before the Robo-Vac fell
+    // Beating the Robo-Vac means absorbing it: no Bunny leaves the house at its bare arrival size.
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: AREA_CLEAR_RADIUS.house + 1, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBe('radiusIn');
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: AREA_EXIT_RADIUS.house * 0.92, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBeNull();
     expect(areaErr(area({ area: 'city', radiusIn: AREA_CLEAR_RADIUS.neighborhood - 10, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBe('radiusIn');
     expect(areaErr(area({ maxRadius: 600, durationMs: 1_000_000 }))).toBe('maxRadius'); // far beyond anything the house offers
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 900, debrisAbsorbed: 2000, durationMs: 1_000_000 }))).toBe('maxRadius');
