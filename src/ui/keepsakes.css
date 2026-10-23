@@ -578,3 +578,17 @@
 .kr-sub {
   margin: 6px 0 10px;
 }
+.kr-tuck-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+.kr-tucked {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rarity, var(--honey));
+  background: color-mix(in srgb, var(--rarity, var(--honey)) 22%, var(--paper));
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}

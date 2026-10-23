@@ -88,6 +88,20 @@ describe('RunPosts', () => {
     expect((await client.getTop()).entries[0]?.loadout).toEqual(loadout);
   });
 
+  it('an Area entry keeps the Loadout it was cleared with; a Keepsake tucked in later goes on the Run entry', async () => {
+    const { client } = offlineClient();
+    const loadout: { type: 'reclaim'; rarity: number }[] = [];
+    const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
+    posts.addArea(house);
+    // Tucked in mid-Run, after the house (the live `run.loadout` grows).
+    loadout.push({ type: 'reclaim', rarity: 2 });
+    posts.finish({ reason: 'died', stats: { ...stats([house, neighborhood]), loadout: [...loadout] } });
+    await posts.post('Bea');
+    expect(posts.get('house')?.state).toBe('posted');
+    expect(posts.get('house')?.result?.entry.loadout ?? []).toEqual([]);
+    expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
+  });
+
   it('sends the Universes count with the Run board entry only', async () => {
     const { client } = offlineClient();
     const seen: unknown[] = [];

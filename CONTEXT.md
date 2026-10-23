@@ -40,7 +40,7 @@
 - **Keepsake** — an Ability modifier a boss leaves tangled in the fur of the Character that absorbed it. Five types per Character, usable only by that Character. Shown as type plus rarity, e.g. "Thick Clog · Epic". Not "loot" or "item".
 - **Rarity** — a Keepsake's strength: Common, Rare, Epic, Legendary or Mythic (1–5). Rolled on each drop from the boss's **drop table**, which favours higher rarities the later the boss (the Robo-Vac 9000 is 84% Common, the Ice Sheet 74% Epic, the Expansion 84% Mythic). A boss's most likely rarity is its **peak**. Replaces the old **grade** (1–10, one per boss), which saves and leaderboards from before are read as, two grades to a rarity.
 - **Hoard** — one Character's Keepsakes, counted by type and rarity (at most 99 of each). Kept in the save and the cloud save.
-- **Loadout** — the 0–2 Keepsakes tucked into a Character's fur for a Run; fixed for the Run and remembered per Character on the device.
+- **Loadout** — the 0–2 Keepsakes tucked into a Character's fur for a Run; remembered per Character on the device. Nothing leaves it during a Run, but a slot left open can take a Keepsake a boss just dropped (from the Keepsake reveal), which then stays tucked in for the rest of the Run.
 - **Tuck in** — the UI verb for putting a Keepsake into a Loadout slot.
 - **Felting** — turning 3 Keepsakes of the same type and rarity into 1 of the next rarity, for Fluff, up to one rarity above the peak of the best boss that Character has beaten. **Shedding** discards one for a little Fluff.
 - **Under the Couch** — the Bunny's den and hub screen where each Character's Hoard is shown and felted.

@@ -4,7 +4,8 @@
  * already slows the Bunny. Reads input from `run.inputState` (`ability` edge, `abilityHeld`).
  *
  * Shared rules owned here:
- *   - every tunable comes from `params` (resolveAbilityParams, see ./params.ts);
+ *   - every tunable comes from `params` (resolveAbilityParams, see ./params.ts; resolved again
+ *     on keepsakeTuckedIn, so controllers read it each time rather than keeping a copy);
  *   - the boss limit: a boss can be stunned by an Ability at most once per
  *     params.bossStunInterval seconds (stunBoss). Wall crashes and Spiky Dash don't count;
  *   - Grounded: `hazard.groundedFor` (set by Discharge) counts down here.
@@ -94,22 +95,29 @@ export class AbilitySystem implements System {
   readonly id = ABILITY_SYSTEM_ID;
   readonly order = SYSTEM_ORDER.ability;
   readonly data: AbilityData;
-  readonly params: AbilityParams;
   readonly controller: AbilityController;
   readonly rng: Rng;
   readonly hooks: AbilityHooks = {};
   /** Simulated second of each boss's last Ability stun (by Hazard id). */
   private readonly lastBossStun = new Map<number, number>();
   private area: string;
+  private resolved: AbilityParams;
 
   constructor(readonly run: Run) {
     this.data = getAbility(getCharacter(run.config.characterId).ability);
-    this.params = resolveAbilityParams(run);
+    this.resolved = resolveAbilityParams(run);
+    // A Keepsake tucked in mid-Run changes the numbers from the next read on.
+    run.disposables.add(run.events.on('keepsakeTuckedIn', () => (this.resolved = resolveAbilityParams(run))));
     this.rng = run.rng.fork('ability');
     this.area = run.area;
     const factory = factories.get(this.data.id);
     if (!factory) throw new Error(`No controller registered for Ability "${this.data.id}"`);
     this.controller = factory(this);
+  }
+
+  /** Every tunable the Ability reads (re-resolved when a Keepsake is tucked in mid-Run). */
+  get params(): AbilityParams {
+    return this.resolved;
   }
 
   update(dt: number, run: Run): void {

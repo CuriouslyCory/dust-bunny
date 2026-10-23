@@ -392,3 +392,78 @@ describe('Zap · Discharge Keepsakes', () => {
     expect(two.run.bunny.stats.get('suctionMultiplier')).toBeCloseTo(1.2);
   });
 });
+
+describe('Tucking a Keepsake in mid-Run', () => {
+  it('fills open Loadout slots for the rest of the Run, then refuses', () => {
+    const { run, events } = setup([], 'lint');
+    const tucked = collect(events, 'keepsakeTuckedIn');
+    expect(run.openLoadoutSlots).toBe(2);
+    // Another Character's Keepsake never goes in.
+    expect(run.tuckIn({ type: 'arc', rarity: 3 })).toBe(false);
+    expect(run.tuckIn({ type: 'thick_clog', rarity: 2 })).toBe(true);
+    expect(run.tuckIn({ type: 'thick_clog', rarity: 4 })).toBe(true);
+    expect(run.openLoadoutSlots).toBe(0);
+    expect(run.tuckIn({ type: 'reclaim', rarity: 1 })).toBe(false);
+    expect(run.loadout).toEqual([
+      { type: 'thick_clog', rarity: 2 },
+      { type: 'thick_clog', rarity: 4 },
+    ]);
+    expect(tucked).toEqual([
+      { characterId: 'lint', ref: { type: 'thick_clog', rarity: 2 }, loadout: [{ type: 'thick_clog', rarity: 2 }] },
+      { characterId: 'lint', ref: { type: 'thick_clog', rarity: 4 }, loadout: run.loadout },
+    ]);
+    // The Run's stats (leaderboard) and snapshot (Save & quit) carry it.
+    expect(run.getStats().loadout).toEqual(run.loadout);
+    expect(run.toSnapshot().loadout).toEqual(run.loadout);
+  });
+
+  it('no slot opens once the Run has ended', () => {
+    const { run } = setup([{ type: 'long_strand', rarity: 1 }]);
+    expect(run.openLoadoutSlots).toBe(1);
+    run.end('quit');
+    expect(run.openLoadoutSlots).toBe(0);
+    expect(run.tuckIn({ type: 'quick_shed', rarity: 1 })).toBe(false);
+    expect(run.loadout).toHaveLength(1);
+  });
+
+  it('the Ability plays with the new numbers at once, as if the Run had started with them', () => {
+    for (const [c, a, b] of [
+      ['lint', 'long_strand', 'quick_shed'],
+      ['tumble', 'dense_core', 'collapse'],
+      ['zap', 'long_reach', 'arc'],
+    ] as const) {
+      const { run, sys } = setup([], c);
+      run.tuckIn({ type: a, rarity: 3 });
+      expect(sys.params).toEqual(abilityParamsFor([{ type: a, rarity: 3 }]));
+      run.tuckIn({ type: b, rarity: 5 });
+      expect(sys.params).toEqual(setup([{ type: a, rarity: 3 }, { type: b, rarity: 5 }], c).sys.params);
+    }
+  });
+
+  it('a Decoy already on the floor lasts as long as Long Strand now says', () => {
+    const { run, input, sys } = setup([], 'lint');
+    input.ability = true;
+    run.update(1 / 60);
+    const decoy = sys.controller as DecoyAbility;
+    expect(decoy.decoy).toBeTruthy();
+    run.tuckIn({ type: 'long_strand', rarity: 5 });
+    step(run, DECOY.duration + 0.1);
+    expect(decoy.decoy).toBeTruthy();
+  });
+
+  it('code effects install too: Unmoved replaces its modifiers instead of stacking, Reclaim hooks the Decoy', () => {
+    const tumble = setup([], 'tumble');
+    tumble.run.tuckIn({ type: 'unmoved', rarity: 5 });
+    tumble.run.tuckIn({ type: 'unmoved', rarity: 5 });
+    const started = setup([{ type: 'unmoved', rarity: 5 }, { type: 'unmoved', rarity: 5 }]).run.bunny.stats;
+    expect(tumble.run.bunny.stats.get('knockbackResistance')).toBeCloseTo(started.get('knockbackResistance'));
+    expect(tumble.run.bunny.stats.get('suctionMultiplier')).toBeCloseTo(started.get('suctionMultiplier'));
+    expect(getKeepsakeEffects(tumble.run)!.totals).toEqual(getKeepsakeEffects(setup([{ type: 'unmoved', rarity: 5 }, { type: 'unmoved', rarity: 5 }]).run)!.totals);
+
+    const lint = setup([], 'lint');
+    expect(lint.sys.hooks.decoyEnded).toBeUndefined();
+    lint.run.tuckIn({ type: 'reclaim', rarity: 2 });
+    expect(lint.sys.hooks.decoyEnded).toBeTypeOf('function');
+    expect(getKeepsakeEffects(lint.run)!.totals.reclaimVolume).toBeCloseTo(val('reclaim', 'volume', 2));
+  });
+});
