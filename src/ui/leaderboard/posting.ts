@@ -73,7 +73,7 @@ export class RunPosts {
     readonly difficulty: DifficultyId | undefined,
     /** False for debug / later-Area starts: entries are shown but never posted. */
     readonly ranked = true,
-    /** Keepsakes tucked in for the Run (sent with every entry). */
+    /** Keepsakes tucked in for the Run (`run.loadout`, which can grow mid-Run). An Area entry sends the Loadout it was left with (`AreaStats.loadout`), else a copy of this as it is when the entry is added. */
     readonly loadout: Loadout = [],
     /** The player's Universes count after the Run (sent with the Run board entry; omitted when absent). */
     private readonly universesFor?: (e: GameEvents['runEnded']) => number,
@@ -118,10 +118,11 @@ export class RunPosts {
   /** Adds a cleared Area's entry (ignored if the Area already has one or wasn't cleared). */
   addArea(stats: AreaStats): void {
     if (!stats.cleared || this.posts.has(stats.area)) return;
+    const loadout = (stats.loadout ?? this.loadout).map((k) => ({ ...k }));
     this.posts.set(stats.area, {
       board: stats.area,
       ...this.fresh(),
-      build: (name) => areaSubmission(stats, this.characterId, this.difficulty, name, this.runId, this.loadout),
+      build: (name) => areaSubmission(stats, this.characterId, this.difficulty, name, this.runId, loadout),
     });
     this.changed();
   }

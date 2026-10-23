@@ -3,7 +3,8 @@
  * are applied): registers the characterSelect / perkDraft / keepsakeReveal / shop / underTheCouch screens and the
  * results "Kept" section; feeds owned Upgrades, the last Character and Difficulty and that
  * Character's last Loadout into game.nextRunConfig; opens the Perk draft modal on tierUp; awards
- * Fluff on runEnded and Keepsakes on bossDefeated; adds HUD widgets and the Keepsake reward moment.
+ * Fluff on runEnded and Keepsakes on bossDefeated; remembers a Keepsake tucked in mid-Run in the
+ * Loadout; adds HUD widgets and the Keepsake reward moment.
  * Pickup / Perk content and the per-Run combat hooks and Pickup director are the Run assembly's
  * job (src/game/assembly.ts).
  */
@@ -69,6 +70,8 @@ export function installRoguelike(game: Game): void {
     if (kept) e.snapshot.keepsakes = kept;
   });
   game.events.on('bossDefeated', (e) => tracker.bossDefeated(e.defId));
+  // A Keepsake tucked in mid-Run (the Keepsake reveal) stays in the remembered Loadout for the next Run.
+  game.events.on('keepsakeTuckedIn', (e) => meta.setLastLoadout(e.characterId, e.loadout));
   game.events.on('runEnded', (e) => tracker.finish(e));
   installKeepsakeHud(game);
 

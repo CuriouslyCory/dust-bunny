@@ -37,6 +37,22 @@ function playedRun(): Run {
 }
 
 describe('Run snapshot', () => {
+  it('each finished Area keeps the Loadout it was left with, through Save & quit', () => {
+    const run = createRun(new EventBus(), config({ characterId: 'lint' }));
+    step(run, 1);
+    run.enterArea('neighborhood');
+    expect(run.tuckIn({ type: 'long_strand', rarity: 2 })).toBe(true);
+    const back = resume(stored(run.toSnapshot()));
+    expect(back.loadout).toEqual([{ type: 'long_strand', rarity: 2 }]);
+    back.enterArea('city');
+    const areas = back.getStats().areas!;
+    expect(areas.map((a) => [a.area, a.loadout])).toEqual([
+      ['house', []],
+      ['neighborhood', [{ type: 'long_strand', rarity: 2 }]],
+      ['city', [{ type: 'long_strand', rarity: 2 }]],
+    ]);
+  });
+
   it('resumes in the saved Area with the same Character, Loadout, Perks, Pickups and Bunny', () => {
     const run = playedRun();
     const snap = stored(run.toSnapshot());

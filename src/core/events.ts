@@ -10,6 +10,7 @@
  */
 import type { AreaStats, RunEndReason, RunStats } from '../game/runStats';
 import type { RunSnapshot } from '../game/snapshot';
+import type { KeepsakeRef } from '../data/keepsakes';
 import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 
@@ -67,6 +68,8 @@ export interface GameEvents {
   pickupCollected: { pickupId: number; defId: string };
   pickupExpired: { defId: string };
   perkApplied: { perkId: string; stacks: number };
+  /** A Keepsake was tucked into an open Loadout slot mid-Run (`Run.tuckIn`); `loadout` is the Run's whole Loadout now. */
+  keepsakeTuckedIn: { characterId: string; ref: KeepsakeRef; loadout: KeepsakeRef[] };
   /** An Area's exit opened (after its boss). Position = centre of the opening. */
   exitOpened: { area: AreaId; x: number; z: number };
   /** The Bunny left a cleared Area for the next one (emitted just before areaEntered). */

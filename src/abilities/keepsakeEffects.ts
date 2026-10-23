@@ -9,7 +9,8 @@
  *   guard, Live Wire, Long Reach, Arc, Static Cling and Grounding (added by Discharge below the
  *   cap stage).
  *
- *   Code effects, installed per Run by installKeepsakeEffects (AbilitySystem hooks):
+ *   Code effects, installed per Run by installKeepsakeEffects (AbilitySystem hooks), and again on
+ *   keepsakeTuckedIn (a Keepsake tucked in mid-Run, `Run.tuckIn`):
  *     Reclaim          decoyEnded: fibre Debris worth `volume` × the Bunny's volume at the Decoy
  *                      spot, split like shed mass (planShed), so re-absorbing it all gives it back.
  *     Unmoved          always-on stat modifiers below the cap stage: knockbackResistance + total,
@@ -35,19 +36,29 @@ addAbilityParamsModifier((p, run) => applyLoadout(p, run.loadout));
 export class KeepsakeEffects implements System {
   readonly id = KEEPSAKE_SYSTEM_ID;
   readonly order = 95;
-  readonly totals: KeepsakeTotals;
+  totals: KeepsakeTotals;
 
   constructor(private readonly system: AbilitySystem) {
     const run = system.run;
-    const k = (this.totals = keepsakeTotals(run.loadout));
-    const hooks = system.hooks;
+    this.totals = this.apply();
+    // A Keepsake tucked in mid-Run: the Loadout only grows, so applying it again adds its effects.
+    run.disposables.add(run.events.on('keepsakeTuckedIn', () => (this.totals = this.apply())));
+  }
+
+  /** Installs the current Loadout's code effects (again: Unmoved's modifiers are replaced, not stacked). */
+  private apply(): KeepsakeTotals {
+    const run = this.system.run;
+    const k = keepsakeTotals(run.loadout);
+    const hooks = this.system.hooks;
     if (k.reclaimVolume > 0) {
       hooks.decoyEnded = (r, reason, x, z) => {
         if (reason !== 'area') this.reclaim(r, x, z);
       };
     }
+    run.bunny.stats.removeSource(UNMOVED_SOURCE);
     if (k.unmovedKnockback > 0) run.bunny.stats.add({ stat: 'knockbackResistance', op: 'add', value: k.unmovedKnockback, source: UNMOVED_SOURCE });
     if (k.unmovedSuction > 0) run.bunny.stats.add({ stat: 'suctionMultiplier', op: 'mul', value: 1 - k.unmovedSuction, source: UNMOVED_SOURCE });
+    return k;
   }
 
   /** Reclaim: absorbable fibre worth reclaimVolume × the Bunny's volume around (x, z). Returns pieces placed. */

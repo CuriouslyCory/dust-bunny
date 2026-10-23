@@ -10,7 +10,7 @@ import { AREAS, areaUnit } from '../data/areas';
 import { CAP_PRIORITY, getCharacter } from '../data/characters';
 import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
-import { isLoadoutFor, type Loadout } from '../data/keepsakes';
+import { isLoadoutFor, LOADOUT_SLOTS, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { tierForRadius } from '../data/tiers';
 import { Bunny } from '../entities/bunny';
 import { DebrisField, type Debris } from '../entities/debris';
@@ -110,8 +110,10 @@ export class Run {
   readonly rng: Rng;
   /** Difficulty tuning for this Run (Hazards, director, start stats, area heal, Fluff). */
   readonly difficulty: DifficultyDef;
-  /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped). */
-  readonly loadout: Loadout;
+  /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped; `tuckIn` fills an open slot). */
+  get loadout(): Loadout {
+    return this.tucked;
+  }
   /** Current area's layout: the house floor, the neighborhood, the city, the region, the continent, the globe, the solar system, the galaxy, the universe (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
@@ -176,6 +178,7 @@ export class Run {
   endReason: RunEndReason | null = null;
 
   private systems: System[] = [];
+  private readonly tucked: KeepsakeRef[];
   private perks = new Map<string, number>();
   /** Areas already left, and where the current one started (null only during a debug-area start). */
   private areasDone: AreaStats[] = [];
@@ -187,7 +190,7 @@ export class Run {
   ) {
     this.rng = new Rng(config.seed);
     this.difficulty = getDifficulty(config.difficulty);
-    this.loadout = config.loadout && isLoadoutFor(config.characterId, config.loadout) ? config.loadout.map((k) => ({ ...k })) : [];
+    this.tucked = config.loadout && isLoadoutFor(config.characterId, config.loadout) ? config.loadout.map((k) => ({ ...k })) : [];
     this.house = generateHouse(config.seed);
 
     const character = getCharacter(config.characterId);
@@ -390,6 +393,7 @@ export class Run {
       maxRadius: this.bunny.maxRadius > a.maxRadiusIn ? this.bunny.maxRadius : Math.max(a.radiusIn, this.bunny.radius),
       debrisAbsorbed: this.debrisAbsorbed - a.debris,
       cleared,
+      loadout: this.tucked.map((k) => ({ ...k })),
     };
   }
 
@@ -628,6 +632,25 @@ export class Run {
       areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
       loadout: this.loadout.map((k) => ({ ...k })),
     };
+  }
+
+  /** Loadout slots still empty (0 once the Run has ended). */
+  get openLoadoutSlots(): number {
+    return this.ended ? 0 : LOADOUT_SLOTS - this.tucked.length;
+  }
+
+  /**
+   * Tucks a Keepsake into an open Loadout slot for the rest of the Run (a boss drop, from the
+   * Keepsake reveal) and emits keepsakeTuckedIn, so the Ability params and Keepsake effects pick it
+   * up. False when no slot is open, the Run has ended, or the Keepsake isn't this Character's.
+   */
+  tuckIn(ref: KeepsakeRef): boolean {
+    if (this.openLoadoutSlots <= 0) return false;
+    const next = [...this.tucked, { type: ref.type, rarity: ref.rarity }];
+    if (!isLoadoutFor(this.config.characterId, next)) return false;
+    this.tucked.push(next[next.length - 1]!);
+    this.events.emit('keepsakeTuckedIn', { characterId: this.config.characterId, ref: { ...ref }, loadout: this.tucked.map((k) => ({ ...k })) });
+    return true;
   }
 
   /** Ends the Run once and emits runEnded. */

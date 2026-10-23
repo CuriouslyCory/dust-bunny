@@ -36,8 +36,9 @@ export class DischargeAbility implements AbilityController {
   private readonly bolts: BoltView[] = [];
   private time = 0;
   private full = false;
-  private cling = false;
-  private grounding = false;
+  /** Static Cling's and Grounding's installed values (0 / 1 = not installed). */
+  private cling = 0;
+  private grounding = 1;
 
   constructor(private readonly system: AbilitySystem) {
     system.run.bunny.staticCharge = 0;
@@ -90,20 +91,23 @@ export class DischargeAbility implements AbilityController {
     if (input.ability && t && b.alive) this.fire(t);
   }
 
-  /** Static Cling (meter ≥ 50%) and Grounding (meter full) stat effects, when their params are set. */
+  /**
+   * Static Cling (meter ≥ 50%) and Grounding (meter full) stat effects, when their params are set.
+   * Compares values, not just on/off, so a copy tucked in mid-Run takes effect while charged.
+   */
   private syncStats(): void {
     const stats = this.system.run.bunny.stats;
-    const cling = this.p.chargedMagnetBonus > 0 && this.charge >= 0.5;
+    const cling = this.charge >= 0.5 ? this.p.chargedMagnetBonus : 0;
     if (cling !== this.cling) {
       this.cling = cling;
-      if (cling) stats.add({ stat: 'magnetRadius', op: 'add', value: this.p.chargedMagnetBonus, source: CLING_SOURCE, priority: CHARGED_STAT_PRIORITY });
-      else stats.removeSource(CLING_SOURCE);
+      stats.removeSource(CLING_SOURCE);
+      if (cling > 0) stats.add({ stat: 'magnetRadius', op: 'add', value: cling, source: CLING_SOURCE, priority: CHARGED_STAT_PRIORITY });
     }
-    const grounding = this.p.fullSuctionMul !== 1 && this.full;
+    const grounding = this.full ? this.p.fullSuctionMul : 1;
     if (grounding !== this.grounding) {
       this.grounding = grounding;
-      if (grounding) stats.add({ stat: 'suctionMultiplier', op: 'mul', value: this.p.fullSuctionMul, source: GROUNDING_SOURCE, priority: CHARGED_STAT_PRIORITY });
-      else stats.removeSource(GROUNDING_SOURCE);
+      stats.removeSource(GROUNDING_SOURCE);
+      if (grounding !== 1) stats.add({ stat: 'suctionMultiplier', op: 'mul', value: grounding, source: GROUNDING_SOURCE, priority: CHARGED_STAT_PRIORITY });
     }
   }
 
