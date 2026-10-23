@@ -1,6 +1,7 @@
 /**
  * Game: owns the renderer, scene, loop, input, event bus, screens and the current Run.
- * State machine = the active screen (see ui/screens.ts): title → playing ↔ paused → results.
+ * State machine = the active screen (see ui/screens.ts): title → playing ↔ paused → results,
+ * or paused → Save & quit → title → Resume → playing (`saveAndQuit` / `resumeRun`).
  */
 import {
   ACESFilmicToneMapping,
@@ -42,6 +43,8 @@ import type { EndingParams } from '../story/endingScreen';
 import { storyAvailable } from '../story/index';
 import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
+import type { RunSnapshot } from './snapshot';
+import { getSuspendedRuns } from '../meta/suspendedRun';
 import { RunView } from './runView';
 
 /** Seconds between the last Area's victory and the ending (the last absorb lands first). */
@@ -244,8 +247,6 @@ export class Game {
    * ./assembly.ts), emits runStarted and switches to the playing screen (or `runOpening`'s).
    */
   startRun(config: Partial<RunConfig> = {}): Run {
-    this.disposeRun();
-    this.pausedBy = null;
     const full: RunConfig = {
       seed: config.seed ?? this.nextRunConfig.seed ?? randomSeed(),
       characterId: config.characterId ?? this.nextRunConfig.characterId ?? DEFAULT_CHARACTER_ID,
@@ -256,14 +257,39 @@ export class Game {
       loadout: config.loadout ?? this.nextRunConfig.loadout,
     };
     this.nextRunConfig.seed = undefined;
+    return this.launch(full);
+  }
+
+  /**
+   * Starts a saved Run again (Save & quit → Resume) in the Area it was left in, with the config it
+   * was saved with: `nextRunConfig` (Character select, Upgrades bought since) doesn't apply, and
+   * there is no opening (no intro). `loadout` overrides the saved Loadout (the title repairs it
+   * against the Hoard, which may have changed in the meantime).
+   */
+  resumeRun(snapshot: RunSnapshot, loadout: RunConfig['loadout'] = snapshot.loadout): Run {
+    return this.launch({
+      seed: snapshot.seed,
+      characterId: snapshot.characterId,
+      difficulty: snapshot.difficulty,
+      modifiers: snapshot.modifiers.map((m) => ({ ...m })),
+      area: snapshot.startArea,
+      loadout,
+      resume: snapshot,
+    });
+  }
+
+  private launch(full: RunConfig): Run {
+    this.disposeRun();
+    this.pausedBy = null;
     const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
-    this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId });
-    const opening = this.runOpening?.(run) ?? null;
+    const resumed = !!full.resume;
+    this.events.emit('runStarted', { seed: full.seed, characterId: full.characterId, ...(resumed ? { resumed } : {}) });
+    const opening = resumed ? null : (this.runOpening?.(run) ?? null);
     this.go(opening?.screen ?? 'playing', opening?.params);
     return run;
   }
@@ -271,6 +297,27 @@ export class Game {
   /** Ends the current Run as quit (→ results). */
   quitRun(): void {
     this.run?.end('quit');
+  }
+
+  /** True while there is a Run in progress that Save & quit can keep. */
+  get canSaveRun(): boolean {
+    return !!this.run && !this.run.ended;
+  }
+
+  /**
+   * Save & quit: stores the Run in progress on this device (src/meta/suspendedRun.ts; listeners of
+   * `runSuspended` add their own fields first), disposes it without ending it (no runEnded, no
+   * Fluff yet) and returns to the title. False, changing nothing, without a Run in progress.
+   */
+  saveAndQuit(): boolean {
+    const run = this.run;
+    if (!run || run.ended) return false;
+    const snapshot = run.toSnapshot();
+    this.events.emit('runSuspended', { snapshot });
+    getSuspendedRuns().save(snapshot);
+    this.disposeRun();
+    this.go('title');
+    return true;
   }
 
   disposeRun(): void {

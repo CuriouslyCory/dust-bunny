@@ -9,6 +9,7 @@
  *   }
  */
 import type { AreaStats, RunEndReason, RunStats } from '../game/runStats';
+import type { RunSnapshot } from '../game/snapshot';
 import type { DifficultyId } from '../shared/difficulty';
 import type { AreaId } from '../world/types';
 
@@ -19,8 +20,13 @@ export interface Vec3Like {
 }
 
 export interface GameEvents {
-  /** A new Run has been created and is about to start simulating. */
-  runStarted: { seed: string; characterId: string };
+  /** A new Run has been created and is about to start simulating (`resumed`: a saved Run put back, see `Game.resumeRun`). */
+  runStarted: { seed: string; characterId: string; resumed?: boolean };
+  /**
+   * Save & quit: the Run is about to be stored and disposed (`Game.saveAndQuit`). Listeners may
+   * write their own fields into `snapshot` (the Keepsake tracker, leaderboard posting).
+   */
+  runSuspended: { snapshot: RunSnapshot };
   /** Debris (or anything absorbable) was absorbed by the Bunny. */
   debrisAbsorbed: {
     typeId: string;

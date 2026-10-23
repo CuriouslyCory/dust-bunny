@@ -21,6 +21,7 @@ import { registerShopScreen } from '../ui/screens/shop';
 import { registerUnderTheCouchScreen } from '../ui/screens/underTheCouch';
 import { KeepsakeTracker, setKeepsakeTracker } from './keepsakes';
 import { getMeta } from './meta';
+import { abandonSuspendedRun, getSuspendedRuns } from './suspendedRun';
 
 export function installRoguelike(game: Game): void {
   registerGameplayContent();
@@ -50,7 +51,22 @@ export function installRoguelike(game: Game): void {
   setKeepsakeTracker(tracker);
   game.events.on('runStarted', (e) => {
     const run = game.run;
-    tracker.start({ seed: e.seed, characterId: e.characterId, difficulty: run?.difficulty.id, ranked: isRankedRun(game.debug, run?.config) });
+    const resumed = e.resumed ? run?.config.resume?.keepsakes : undefined;
+    tracker.start({ seed: e.seed, characterId: e.characterId, difficulty: run?.difficulty.id, ranked: isRankedRun(game.debug, run?.config) }, resumed);
+    draftOnPlay = !!e.resumed;
+    // A new Run replaces a saved one (the title asks first): it counts as quit.
+    if (!e.resumed) abandonSuspendedRun(getSuspendedRuns(), meta);
+  });
+  // A Run saved with a Perk draft waiting opens it again once play is on screen.
+  let draftOnPlay = false;
+  game.events.on('screenChanged', (e) => {
+    if (e.to !== 'playing' || !draftOnPlay) return;
+    draftOnPlay = false;
+    openPerkDraft(game);
+  });
+  game.events.on('runSuspended', (e) => {
+    const kept = tracker.suspend();
+    if (kept) e.snapshot.keepsakes = kept;
   });
   game.events.on('bossDefeated', (e) => tracker.bossDefeated(e.defId));
   game.events.on('runEnded', (e) => tracker.finish(e));

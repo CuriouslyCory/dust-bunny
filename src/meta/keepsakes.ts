@@ -119,11 +119,23 @@ export class KeepsakeTracker {
     private readonly newSalt: () => string = randomSalt,
   ) {}
 
-  start(info: RunStartInfo): RunKeepsakes {
+  /**
+   * A Run started. `resumed`: a saved Run put back (Save & quit) carries on with its salt and the
+   * drops it already had (their offers closed: the reveal was left when the Run was saved).
+   */
+  start(info: RunStartInfo, resumed?: Pick<RunKeepsakes, 'salt' | 'drops'>): RunKeepsakes {
     // A Run left on the results screen without choosing keeps its first offers.
     if (this.current) this.current.settled = true;
-    this.current = { ...info, drops: [], result: null, settled: false, salt: this.newSalt() };
+    const drops = (resumed?.drops ?? []).map((d) => ({ ...d, ref: { ...d.ref }, locked: true }));
+    this.current = { ...info, drops, result: null, settled: false, salt: resumed?.salt ?? this.newSalt() };
     return this.current;
+  }
+
+  /** What a saved Run keeps of this tracker (Save & quit; null without a Run). */
+  suspend(): Pick<RunKeepsakes, 'salt' | 'drops'> | null {
+    const run = this.current;
+    if (!run || run.result) return null;
+    return { salt: run.salt, drops: run.drops.map((d) => ({ ...d, ref: { ...d.ref } })) };
   }
 
   /** Credits the current Run's Character for a boss. Returns the drops (empty when unranked or ended). */

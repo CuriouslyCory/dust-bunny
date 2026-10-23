@@ -47,11 +47,12 @@ export function registerGameplayContent(): void {
 
 const hazardDirectors = new WeakMap<Run, HazardDirector>();
 
-/** Creates a Run with its content registered (before starting Perks apply) and its rules installed. */
+/** Creates a Run with its content registered (before starting Perks apply) and its rules installed (then restores `config.resume`). */
 export function createRun(events: EventBus, config: RunConfig, rules: GameplayRules = {}): Run {
   registerGameplayContent();
   const run = new Run(events, config);
   installGameplay(run, rules);
+  if (config.resume) run.restore(config.resume);
   return run;
 }
 

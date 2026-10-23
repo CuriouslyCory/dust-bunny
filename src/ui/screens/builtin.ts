@@ -1,5 +1,7 @@
 /**
  * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
+ * With a Run saved (pause → Save & quit) the title leads with Resume run and Play becomes New run,
+ * which asks once before abandoning the saved Run.
  * Replace one by re-registering the same id before it is first shown. The title menu shows
  * Shop / Leaderboard buttons and the account chip (top right), and Play routes through
  * 'characterSelect' when that screen is registered. (A first Run opens on the story's 'intro'
@@ -8,7 +10,12 @@
 import type { Game } from '../../game/game';
 import { getMeta } from '../../meta/meta';
 import { accountChip } from '../account/screen';
-import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
+import { AREAS } from '../../data/areas';
+import { getCharacter } from '../../data/characters';
+import { getTier } from '../../data/tiers';
+import type { RunSnapshot } from '../../game/snapshot';
+import { getSuspendedRuns, resumeSuspendedRun } from '../../meta/suspendedRun';
+import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
 import { registerBossIntroScreen } from './bossIntro';
@@ -70,11 +77,49 @@ function logo(): HTMLElement {
   return el;
 }
 
+/** One line about a saved Run: Character · Area · Tier · time played. */
+export function savedRunSummary(s: RunSnapshot): string {
+  return [getCharacter(s.characterId).name, AREAS[s.area].name, getTier(s.tier).name, fmtTime(s.time)].join(' · ');
+}
+
 export function registerBuiltinScreens(): void {
   registerScreen({
     id: 'title',
     create(game) {
-      const play = button('Play', () => playFromMenu(game), { variant: 'primary', size: 'lg', icon: '▶' });
+      const saved = getSuspendedRuns();
+      /** "New run" was pressed once while a Run is saved: the next press abandons it. */
+      let confirmNew = false;
+      const resume = button('Resume run', () => resumeSuspendedRun(game, saved, getMeta()), { variant: 'primary', size: 'lg', icon: '▶' });
+      const resumeInfo = h('p', { className: 'saved-run-info' });
+      const startNew = (): void => {
+        if (saved.has && !confirmNew) {
+          confirmNew = true;
+          refresh();
+          return;
+        }
+        playFromMenu(game);
+      };
+      const play = button('Play', startNew, { variant: 'primary', size: 'lg', icon: '▶' });
+      const playLabel = play.querySelector('.btn-label') as HTMLElement;
+      const savedRun = h('div', { className: 'saved-run' }, resume, resumeInfo);
+      /** Resume first while a Run is saved; Play becomes "New run" (asking before it abandons the saved one). */
+      const refresh = (): void => {
+        const s = saved.peek();
+        savedRun.hidden = !s;
+        resumeInfo.textContent = s ? savedRunSummary(s) : '';
+        if (!s) confirmNew = false;
+        playLabel.textContent = !s ? 'Play' : confirmNew ? 'Abandon saved run?' : 'New run';
+        play.classList.toggle('btn-primary', !s);
+        play.classList.toggle('primary', !s);
+        play.classList.toggle('btn-secondary', !!s);
+        play.classList.toggle('btn-danger', confirmNew);
+        play.classList.toggle('btn-lg', !s);
+        play.classList.toggle('btn-md', !!s);
+        hint.textContent = !s ? 'Enter to play · WASD / arrows to roll · Space to dash' : confirmNew ? 'Press New run again to give up the saved run (it counts as quit)' : 'Enter to resume · WASD / arrows to roll · Space to dash';
+      };
+      saved.onChange(() => {
+        if (game.screens.current?.id === 'title') refresh();
+      });
       const shop = button('Shop', () => game.go('shop', { back: 'title' }), { icon: '🛍' });
       const board = button('Leaderboard', () => game.go('leaderboard'), { icon: '🏆' });
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'title' }), { icon: '?' });
@@ -83,6 +128,7 @@ export function registerBuiltinScreens(): void {
       const chip = accountChip(game);
       const chipSlot = h('div', {}, chip);
       const tagline = h('p', { className: 'tagline', textContent: TAGLINE });
+      const hint = h('p', { className: 'hint title-hint' });
       const el = h(
         'div',
         { className: 'title-screen' },
@@ -94,8 +140,8 @@ export function registerBuiltinScreens(): void {
           mascot('title-mascot'),
           logo(),
           tagline,
-          menu(play, secondary),
-          h('p', { className: 'hint title-hint', textContent: 'Enter to play · WASD / arrows to roll · Space to dash' }),
+          menu(savedRun, play, secondary),
+          hint,
         ),
       );
       return {
@@ -105,12 +151,14 @@ export function registerBuiltinScreens(): void {
           board.hidden = !screenRegistry.has('leaderboard');
           chipSlot.hidden = !screenRegistry.has('account');
           tagline.textContent = universeTagline(getMeta().universes);
-          focusFirst(el, play);
+          confirmNew = false;
+          refresh();
+          focusFirst(el, saved.has ? resume : play);
         },
         onKey(e) {
           if (handleMenuKeys(e, el)) return true;
           if (isKey(e, 'Enter', 'Space') && !focusOnControl()) {
-            playFromMenu(game);
+            if (!resumeSuspendedRun(game, saved, getMeta())) playFromMenu(game);
             return true;
           }
           return false;
@@ -153,6 +201,8 @@ export function registerBuiltinScreens(): void {
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'paused' }), { icon: '?' });
       const mute = button('', () => settings.update({ muted: !settings.value.muted }), { icon: '🔊' });
       const end = button('End run', () => game.quitRun(), { variant: 'ghost' });
+      // Keeps the Run on this device to resume from the title (src/meta/suspendedRun.ts).
+      const save = button('Save & quit', () => game.saveAndQuit(), { icon: '💾' });
       const quit = button(
         'Quit to title',
         () => {
@@ -166,10 +216,13 @@ export function registerBuiltinScreens(): void {
         (mute.querySelector('.btn-label') as HTMLElement).textContent = s.muted ? 'Unmute' : 'Mute';
         (mute.querySelector('.btn-icon') as HTMLElement).textContent = s.muted ? '🔇' : '🔊';
       });
-      const el = panel({ title: 'Paused', className: 'pause-panel' }, menu(resume, h('div', { className: 'menu-grid' }, set, howTo, mute, end), quit));
+      const el = panel({ title: 'Paused', className: 'pause-panel' }, menu(resume, save, h('div', { className: 'menu-grid' }, set, howTo, mute, end), quit));
       return {
         el,
-        enter: () => focusFirst(el, resume),
+        enter: () => {
+          save.hidden = !game.canSaveRun;
+          focusFirst(el, resume);
+        },
         onKey(e) {
           if (!e.repeat && isKey(e, 'Escape', 'KeyP')) {
             game.go('playing');
