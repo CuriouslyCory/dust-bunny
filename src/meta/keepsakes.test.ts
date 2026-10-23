@@ -151,15 +151,17 @@ describe('Felting and shedding', () => {
     return meta;
   };
 
-  it('felts three of a rarity into one of the next for 160 × r² Fluff', () => {
+  it('felts three of a rarity into one of the next for the Fluff shedding them would return', () => {
     const meta = setup();
     expect(meta.feltCeiling('lint')).toBe(2);
     const r = meta.felt('lint', ref('thick_clog', 1));
     expect(r).toMatchObject({ ok: true, result: ref('thick_clog', 2), cost: feltCost(2), first: true });
     expect(meta.keepsakeCount('lint', ref('thick_clog', 1))).toBe(1);
     expect(meta.keepsakeCount('lint', ref('thick_clog', 2))).toBe(1);
-    expect(feltCost(2)).toBe(640);
-    expect(meta.fluff).toBe(1000 - 640);
+    expect(feltCost(2)).toBe(120);
+    expect(feltCost(2)).toBe(3 * shedValue(1));
+    expect(feltCost(5)).toBe(1920);
+    expect(meta.fluff).toBe(1000 - 120);
     expect(meta.data.stats.totalFluffEarned).toBe(500);
     expect(meta.data.stats.feltings).toBe(1);
     expect(meta.felt('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'count' });
@@ -170,8 +172,8 @@ describe('Felting and shedding', () => {
     meta.creditKeepsakes('lint', [ref('reclaim', 2), ref('reclaim', 2), ref('reclaim', 2)]);
     expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: false, reason: 'ceiling', ceiling: 2 });
     meta.creditKeepsakes('lint', [], 'street_sweeper');
-    expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: true, cost: 1440, ceiling: 3 });
-    expect(setup(100).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'poor', cost: 640 });
+    expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: true, cost: 480, ceiling: 3 });
+    expect(setup(100).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'poor', cost: 120 });
     expect(setup(1000, []).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'ceiling', ceiling: 0 });
     expect(meta.feltCheck('lint', ref('reclaim', 5))).toMatchObject({ ok: false, reason: 'max' });
     expect(meta.feltCheck('lint', ref('arc', 1))).toMatchObject({ ok: false, reason: 'unknown' });
