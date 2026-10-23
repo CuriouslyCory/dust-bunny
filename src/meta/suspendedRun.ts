@@ -4,8 +4,9 @@
  *
  * - Save & quit writes it (`save`); Resume reads it and clears it as the Run starts again (`take`),
  *   so a snapshot is resumed at most once: dying after a resume can't be undone by resuming again.
- * - Starting a new Run instead abandons it (`abandonSuspendedRun`, on runStarted; the title asks
- *   first): its Fluff and stats are credited as a quit.
+ * - Starting a new Run instead abandons it (`abandonSuspendedRun`): its Fluff and stats are
+ *   credited as a quit. The title does it as soon as New run is confirmed; any other new Run start
+ *   does it on runStarted.
  * - It stays on the device, like settings and the Loadout: cloud saves don't carry it.
  * - An unreadable or outdated slot reads as empty (`parseRunSnapshot`) and is dropped.
  */
@@ -21,12 +22,14 @@ type Storage = KeyValueStorage & { removeItem?(key: string): void };
 
 export class SuspendedRunStore {
   private memory: string | null = null;
+  /** The last write didn't reach storage: `memory` is the truth for this page from then on. */
+  private stale = false;
   private listeners = new Set<() => void>();
 
   constructor(private readonly storage: Storage | null) {}
 
   private read(): string | null {
-    if (!this.storage) return this.memory;
+    if (!this.storage || this.stale) return this.memory;
     try {
       return this.storage.getItem(SUSPENDED_RUN_KEY);
     } catch {
@@ -41,8 +44,11 @@ export class SuspendedRunStore {
         if (value !== null) this.storage.setItem(SUSPENDED_RUN_KEY, value);
         else if (this.storage.removeItem) this.storage.removeItem(SUSPENDED_RUN_KEY);
         else this.storage.setItem(SUSPENDED_RUN_KEY, '');
+        this.stale = false;
       } catch {
-        // Storage full or disabled: the in-memory copy still serves this page.
+        // Storage full or disabled: the in-memory copy serves this page (a saved Run is still
+        // resumable here, and a taken one can't be taken again).
+        this.stale = true;
       }
     }
     for (const fn of this.listeners) fn();

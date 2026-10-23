@@ -44,6 +44,27 @@ describe('SuspendedRunStore', () => {
     expect(new SuspendedRunStore(storage).peek()).toBeNull();
   });
 
+  it('keeps working from memory when storage writes fail', () => {
+    const storage = memStorage();
+    const store = new SuspendedRunStore(storage);
+    const s = snapshot();
+    store.save(s);
+    // Storage fills up (or is locked): writes throw, reads still work.
+    storage.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    storage.removeItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    expect(store.take()).toEqual(s);
+    // The stale copy left in storage can't be taken (or credited) again on this page.
+    expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(true);
+    expect(store.take()).toBeNull();
+    const next = { ...snapshot(), time: 42 };
+    store.save(next);
+    expect(store.peek()?.time).toBe(42);
+  });
+
   it('works in memory without storage', () => {
     const store = new SuspendedRunStore(null);
     store.save(snapshot());

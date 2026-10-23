@@ -14,7 +14,7 @@ import { AREAS } from '../../data/areas';
 import { getCharacter } from '../../data/characters';
 import { getTier } from '../../data/tiers';
 import type { RunSnapshot } from '../../game/snapshot';
-import { getSuspendedRuns, resumeSuspendedRun } from '../../meta/suspendedRun';
+import { abandonSuspendedRun, getSuspendedRuns, resumeSuspendedRun } from '../../meta/suspendedRun';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
@@ -97,6 +97,8 @@ export function registerBuiltinScreens(): void {
           refresh();
           return;
         }
+        // Confirmed: the saved Run is gone now (a quit), even if Character select is left with Back.
+        abandonSuspendedRun(saved, getMeta());
         playFromMenu(game);
       };
       const play = button('Play', startNew, { variant: 'primary', size: 'lg', icon: '▶' });
