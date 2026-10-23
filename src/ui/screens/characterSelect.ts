@@ -4,7 +4,7 @@
  * Difficulty picker; remembers both choices in the save.
  * Under the stats: the Character's Ability card (numbers with the Loadout applied) and two
  * Keepsake slots; a slot opens a picker filtered to that Character's Hoard. The Loadout is
- * remembered per Character on this device and set as game.nextRunConfig.loadout. Stat bars carry
+ * remembered per Character (synced by the cloud save) and set as game.nextRunConfig.loadout. Stat bars carry
  * a tick at the Character's cap, with the cap's reason on hover.
  * Keys: ←/→ (A/D) or 1–3 to choose, ↑/↓ for the Difficulty, Enter/Space to start, S for the
  * Shop, U for Under the Couch, Esc for the title.

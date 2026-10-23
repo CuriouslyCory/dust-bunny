@@ -1,7 +1,8 @@
 /**
  * Cloud save: keeps a signed-in player's Fluff, Upgrades, Keepsake Hoards (per Character, with the
- * bosses it has beaten) and lifetime stats on the server (api/progress.ts), so they follow the
- * account between devices. Settings, last Character, Difficulty and Loadout stay on the device.
+ * bosses it has beaten), remembered Loadouts (per Character) and lifetime stats on the server
+ * (api/progress.ts), so they follow the account between devices. Settings, last Character and
+ * Difficulty stay on the device.
  *
  * - On sign-in: download, then keep whichever copy has more progress (rule in
  *   src/shared/progress.ts). Progress made before signing in is uploaded to the account.
@@ -10,15 +11,19 @@
  * - The device remembers which account it last synced. Signing in to a different account loads that
  *   account's progress (or a fresh save) instead of handing it the previous player's.
  * - It also remembers when it has changes the server hasn't confirmed (say, an Upgrade bought
- *   offline). Spending, Felting and shedding change neither lifetime counter, so on such a tie the device's copy wins;
- *   without unsynced changes a tie goes to the server, so a stale device can't undo another
- *   device's purchases.
+ *   offline). Spending, Felting, shedding and tucking in a Loadout change neither lifetime
+ *   counter, so on such a tie the device's copy wins; without unsynced changes a tie goes to the
+ *   server, so a stale device can't undo another device's purchases (or its Loadout).
  * - `universes` only goes up: adopting a server copy keeps the larger count, and so does the server
  *   when it stores an upload (except when loading another account's save, which replaces it).
+ * - An adopted Loadout is repaired against the adopted Hoard. A server copy without `loadouts`
+ *   (stored before Loadouts synced) keeps the device's, which then upload.
  */
+import type { KeepsakeRef } from '../data/keepsakes';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, isEmptyProgress, mergeUniverses, sameProgress, validateProgress, type Progress } from '../shared/progress';
 import type { MetaProgress } from './meta';
+import { repairLoadout } from './hoard';
 import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from './save';
 
 /** localStorage key: id of the account this device's save was last synced with. */
@@ -42,10 +47,13 @@ export function progressOf(d: SaveData): Progress {
   const { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } = d.stats;
   const characters: Progress['characters'] = {};
   for (const [id, c] of Object.entries(d.characters)) characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
+  const loadouts: Record<string, KeepsakeRef[]> = {};
+  for (const [id, l] of Object.entries(d.lastLoadout)) if (l.length) loadouts[id] = l.map((k) => ({ type: k.type, rarity: k.rarity }));
   return {
     fluff: d.fluff,
     upgrades: { ...d.upgrades },
     characters,
+    loadouts,
     stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned },
     universes: d.universes,
   };
@@ -125,6 +133,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   /**
    * Replaces the synced fields of the local save (the store's listeners see it as one change).
    * `universes` keeps the larger count unless `replace` (another account's save is being loaded).
+   * Without `loadouts` in `p` the device's Loadouts stay; either way they are repaired against the
+   * adopted Hoards.
    */
   function adopt(p: Progress, replace = false): void {
     lastSynced = p;
@@ -138,6 +148,12 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       d.stats = { ...d.stats, ...p.stats };
       d.characters = {};
       for (const [id, c] of Object.entries(p.characters)) d.characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
+      const loadouts: Record<string, readonly unknown[]> = p.loadouts ?? (replace ? {} : d.lastLoadout);
+      d.lastLoadout = {};
+      for (const [id, l] of Object.entries(loadouts)) {
+        const repaired = repairLoadout(id, l, d.characters[id]);
+        if (repaired.length) d.lastLoadout[id] = repaired;
+      }
     });
   }
 

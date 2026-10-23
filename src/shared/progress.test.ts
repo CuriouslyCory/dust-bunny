@@ -135,3 +135,36 @@ describe('characters (Keepsake Hoards)', () => {
     expect(isEmptyProgress(p({ fluff: 0, upgrades: {}, characters: hoards }, { runs: 0, totalFluffEarned: 0 }))).toBe(false);
   });
 });
+
+describe('loadouts (remembered Loadouts)', () => {
+  const loadouts = { lint: [{ type: 'reclaim', rarity: 2 }, { type: 'reclaim', rarity: 2 }], zap: [{ type: 'arc', rarity: 5 }] };
+
+  it('accepts Loadouts, drops empty ones, converts old slots and leaves a missing field undefined', () => {
+    expect(validateProgress(p({ loadouts: { ...loadouts, tumble: [] } }))).toEqual({ ok: true, value: p({ loadouts }) });
+    const v = validateProgress(p());
+    expect(v.ok && 'loadouts' in v.value).toBe(false);
+    const old = validateProgress({ ...p(), loadouts: { tumble: [{ type: 'snowball', grade: 6 }] } });
+    expect(old.ok && old.value.loadouts).toEqual({ tumble: [{ type: 'feast', rarity: 3 }] });
+  });
+
+  it.each([
+    ['unknown character', { bob: [] }, 'loadouts'],
+    ['array', [], 'loadouts'],
+    ["another character's type", { lint: [{ type: 'arc', rarity: 1 }] }, 'loadouts.lint'],
+    ['three slots', { lint: [{ type: 'reclaim', rarity: 1 }, { type: 'reclaim', rarity: 1 }, { type: 'reclaim', rarity: 1 }] }, 'loadouts.lint'],
+    ['rarity 6', { lint: [{ type: 'reclaim', rarity: 6 }] }, 'loadouts.lint'],
+  ])('rejects %s', (_, raw, field) => {
+    const v = validateProgress({ ...p(), loadouts: raw });
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.field).toBe(field);
+  });
+
+  it('compares Loadouts (slot order counts; missing reads as none) in sameProgress but not in compareProgress', () => {
+    const a = p({ loadouts: { lint: [{ type: 'reclaim', rarity: 1 }, { type: 'thick_clog', rarity: 1 }] } });
+    expect(sameProgress(a, p({ loadouts: { lint: [{ type: 'reclaim', rarity: 1 }, { type: 'thick_clog', rarity: 1 }] } }))).toBe(true);
+    expect(sameProgress(a, p({ loadouts: { lint: [{ type: 'thick_clog', rarity: 1 }, { type: 'reclaim', rarity: 1 }] } }))).toBe(false);
+    expect(sameProgress(a, p())).toBe(false);
+    expect(sameProgress(p({ loadouts: {} }), p())).toBe(true);
+    expect(compareProgress(a, p())).toBe(0);
+  });
+});

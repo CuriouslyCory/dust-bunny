@@ -14,6 +14,7 @@ const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: R
   fluff,
   upgrades,
   characters: {},
+  loadouts: {},
   universes,
   stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
 });
@@ -41,7 +42,8 @@ function fakeServer() {
       rows.set(user, { ...stored, universes });
       return Response.json({ accepted: false, progress: rows.get(user) });
     }
-    rows.set(user, { ...v.value, universes });
+    // A body without Loadouts (an older bundle) keeps the stored ones.
+    rows.set(user, { ...v.value, loadouts: v.value.loadouts ?? stored?.loadouts, universes });
     return Response.json({ accepted: true, progress: rows.get(user) });
   });
   return {
@@ -196,6 +198,61 @@ describe('cloud save', () => {
     expect(row.characters.lint!.hoard).toEqual({ 'reclaim:rare': 1 });
     expect(row.fluff).toBe(1000 - 120 + 40);
     expect(row.stats.totalFluffEarned).toBe(1000);
+  });
+
+  it("syncs the remembered Loadouts, so another device's next Run starts with the same Keepsakes tucked in", async () => {
+    const k = { type: 'reclaim', rarity: 2 } as const;
+    const thick = { type: 'thick_clog', rarity: 1 } as const;
+    const hoard = (d: { characters: Record<string, { hoard: Record<string, number>; bossesBeaten: string[] }> }) =>
+      void (d.characters.lint = { hoard: { 'reclaim:rare': 2, 'thick_clog:common': 1 }, bossesBeaten: ['robovac_9000'] });
+
+    // Computer: tucks in a Loadout (a tie: uploads like spending), then finishes a Run.
+    const pc = setup(prog(100, 100, 3));
+    pc.meta.store.update(hoard);
+    await pc.signIn('u1');
+    pc.meta.setLastLoadout('lint', [k, k]);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(pc.server.rows.get('u1')?.loadouts).toEqual({ lint: [k, k] });
+    pc.meta.store.update((d) => {
+      d.stats.runs += 1;
+      d.stats.totalFluffEarned += 20;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+
+    // Phone (synced before, with another Loadout): signing in adopts the computer's.
+    const phone = setup(prog(100, 100, 3), { [CLOUD_USER_KEY]: 'u1' });
+    phone.meta.store.update(hoard);
+    phone.meta.setLastLoadout('lint', [thick]);
+    phone.server.rows.set('u1', pc.server.rows.get('u1')!);
+    await phone.signIn('u1');
+    expect(phone.meta.lastLoadout('lint')).toEqual([k, k]);
+    expect(phone.server.puts).toEqual([]);
+
+    // Emptying a Loadout syncs too.
+    phone.meta.setLastLoadout('lint', []);
+    await vi.advanceTimersByTimeAsync(150);
+    expect(phone.server.rows.get('u1')?.loadouts).toEqual({});
+  });
+
+  it('repairs an adopted Loadout against the adopted Hoard', async () => {
+    const s = setup(null);
+    const remote = prog(10, 500, 12);
+    remote.characters = { lint: { hoard: { 'reclaim:rare': 1 }, bossesBeaten: [] } };
+    remote.loadouts = { lint: [{ type: 'reclaim', rarity: 2 }, { type: 'reclaim', rarity: 2 }] };
+    s.server.rows.set('u1', remote);
+    await s.signIn('u1');
+    expect(s.meta.data.lastLoadout).toEqual({ lint: [{ type: 'reclaim', rarity: 2 }] });
+  });
+
+  it('keeps the device Loadouts when the server copy predates synced Loadouts, then uploads them', async () => {
+    const s = setup(prog(100, 100, 3), { [CLOUD_USER_KEY]: 'u1' });
+    s.meta.store.update((d) => void (d.characters.lint = { hoard: { 'reclaim:rare': 1 }, bossesBeaten: [] }));
+    s.meta.setLastLoadout('lint', [{ type: 'reclaim', rarity: 2 }]);
+    const { loadouts: _l, ...older } = progressOf(s.meta.data);
+    s.server.rows.set('u1', older);
+    await s.signIn('u1');
+    expect(s.meta.lastLoadout('lint')).toEqual([{ type: 'reclaim', rarity: 2 }]);
+    expect(s.server.rows.get('u1')?.loadouts).toEqual({ lint: [{ type: 'reclaim', rarity: 2 }] });
   });
 
   it('adopts the server copy when another device got further', async () => {
