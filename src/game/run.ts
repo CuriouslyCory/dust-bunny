@@ -18,14 +18,14 @@ import { BASE_BUNNY_STATS, StatBlock, type StatModifier } from '../entities/stat
 import { HazardManager } from '../hazards';
 import { perkRegistry } from '../perks';
 import { PerkDraft } from '../perks/draft';
-import { PickupManager } from '../pickups';
+import { pickupRegistry, PickupManager } from '../pickups';
 import { absorbSystem, growRadius, growthFactorAt, magnetSystem } from '../systems/absorb';
 import { collisionSystem } from '../systems/collision';
 import { growthSystem } from '../systems/growth';
 import { movementSystem } from '../systems/movement';
 import { DebrisSpawner } from '../systems/spawner';
 import type { ViewInfo } from '../systems/camera';
-import { circleVsRect } from '../core/math';
+import { circleVsRect, clamp } from '../core/math';
 import { generateHouse, openExit } from '../world/house';
 import { CITY, generateCity } from '../world/city';
 import { generateNeighborhood, NEIGHBORHOOD } from '../world/neighborhood';
@@ -41,6 +41,7 @@ import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/ty
 import { canonicalX } from '../world/wrap';
 import type { AreaStats, RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
+import { SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
 
 export interface RunConfig {
   seed: string;
@@ -55,6 +56,12 @@ export interface RunConfig {
   perks?: string[];
   /** Keepsakes tucked in for this Run (0–2, the Character's own types). Fixed for the Run. */
   loadout?: Loadout;
+  /**
+   * Resume a saved Run (Save & quit): `createRun` restores it once the gameplay rules are
+   * installed (`Run.restore`). `perks` is ignored, and so is `area` (still read for ranking: the
+   * snapshot's `startArea`).
+   */
+  resume?: RunSnapshot;
 }
 
 /**
@@ -202,6 +209,10 @@ export class Run {
 
     this.spawner.populate(this);
     this.disposables.add(events.on('bunnyDied', () => this.end('died')));
+    if (config.resume) {
+      this.beginArea();
+      return;
+    }
     for (const id of config.perks ?? []) this.applyPerk(id);
     if (!config.area || config.area === 'house') this.beginArea();
     if (config.area && config.area !== 'house') {
@@ -433,6 +444,7 @@ export class Run {
   }
 
   absorbDebris(d: Debris): void {
+    this.spawner.noteAbsorbed(d);
     this.debris.remove(d);
     this.debrisAbsorbed++;
     this.absorbMass(d.size, d.type.mass, d.type.id, { x: d.x, y: d.size * 0.5, z: d.z }, 'debris');
@@ -442,12 +454,152 @@ export class Run {
     return this.perks.get(id) ?? 0;
   }
 
-  applyPerk(id: string): void {
+  /** Applies one stack of a Perk (emits perkApplied unless `silent`: a resumed Run's Perks). */
+  applyPerk(id: string, silent = false): void {
     const def = perkRegistry.require(id);
     const stacks = this.perkStacks(id) + 1;
     this.perks.set(id, stacks);
     def.apply(this, stacks);
-    this.events.emit('perkApplied', { perkId: id, stacks });
+    if (!silent) this.events.emit('perkApplied', { perkId: id, stacks });
+  }
+
+  /** Run second `area` was entered (null before; the house has none). */
+  private areaTime(area: AreaId): number | null {
+    const at: Record<AreaId, number | null> = {
+      house: null,
+      neighborhood: this.neighborhoodAt,
+      city: this.cityAt,
+      region: this.regionAt,
+      continent: this.continentAt,
+      globe: this.globeAt,
+      solar_system: this.solarSystemAt,
+      galaxy: this.galaxyAt,
+      universe: this.universeAt,
+    };
+    return at[area];
+  }
+
+  private setAreaTime(area: AreaId, sec: number): void {
+    if (area === 'neighborhood') this.neighborhoodAt = sec;
+    if (area === 'city') this.cityAt = sec;
+    if (area === 'region') this.regionAt = sec;
+    if (area === 'continent') this.continentAt = sec;
+    if (area === 'globe') this.globeAt = sec;
+    if (area === 'solar_system') this.solarSystemAt = sec;
+    if (area === 'galaxy') this.galaxyAt = sec;
+    if (area === 'universe') this.universeAt = sec;
+  }
+
+  /** What Save & quit keeps of the Run (see ./snapshot.ts). The Run itself is left untouched. */
+  toSnapshot(): RunSnapshot {
+    const b = this.bunny;
+    const areaTimes: Partial<Record<AreaId, number>> = {};
+    for (const a of AREA_ORDER) {
+      const t = this.areaTime(a);
+      if (t !== null) areaTimes[a] = t;
+    }
+    return {
+      version: SNAPSHOT_VERSION,
+      savedAt: Date.now(),
+      seed: this.config.seed,
+      characterId: this.config.characterId,
+      difficulty: this.difficulty.id,
+      modifiers: (this.config.modifiers ?? []).map((m) => ({ ...m })),
+      loadout: this.loadout.map((k) => ({ ...k })),
+      ...(this.config.area ? { startArea: this.config.area } : {}),
+      area: this.area,
+      areaCleared: this.areaCleared,
+      time: this.time,
+      tier: this.tier,
+      tierTimes: { ...this.tierTimes },
+      debrisAbsorbed: this.debrisAbsorbed,
+      hazardsAbsorbed: this.hazardsAbsorbed,
+      areaTimes,
+      areasDone: this.areasDone.map((a) => ({ ...a })),
+      areaStart: this.areaStart ? { ...this.areaStart } : null,
+      bunny: {
+        x: canonicalX(this.house, b.x),
+        z: b.z,
+        realRadius: b.realRadius,
+        maxRealRadius: b.maxRadius * b.unit,
+        health: b.health,
+        shield: b.shield,
+        revives: b.revives,
+        form: b.form,
+        heading: b.heading,
+      },
+      perks: Object.fromEntries(this.perks),
+      perkDraft: { pending: this.perkDraft.pending, rerollsUsed: this.perkDraft.rerollsUsed },
+      pickups: this.pickups.active.map((e) => ({ id: e.def.id, remaining: e.remaining })),
+      placementsGone: this.spawner.placementsGone(),
+      stats: this.getStats(),
+    };
+  }
+
+  /**
+   * Puts a saved Run back (Save & quit → Resume), right after construction (`createRun` calls it
+   * once the gameplay rules are installed): rebuilds the saved Area from the seed (earlier Areas
+   * count as cleared, an absorbed boss leaves the exit open), restores the Bunny's size, position,
+   * health and charges, the Perks (without perkApplied), the timed Pickups, the clock, the counters
+   * and pending Perk drafts, then repopulates the Area (skipping fixed placements already absorbed and
+   * keeping the Bunny's own spot clear). Emits no area or growth events.
+   */
+  restore(s: RunSnapshot): void {
+    this.time = s.time;
+    this.debrisAbsorbed = s.debrisAbsorbed;
+    this.hazardsAbsorbed = s.hazardsAbsorbed;
+    for (const a of AREA_ORDER.slice(0, AREA_ORDER.indexOf(s.area))) this.markCleared(a);
+    this.area = s.area;
+    for (const [a, t] of Object.entries(s.areaTimes) as [AreaId, number][]) this.setAreaTime(a, t);
+    const world = AREA_WORLDS[s.area];
+    this.house = world.generate(this.config.seed);
+    this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
+    this.hazards.clear();
+    this.pickups.clearFloor();
+
+    for (const [id, n] of Object.entries(s.perks)) {
+      if (!perkRegistry.has(id)) continue;
+      for (let i = 0; i < n; i++) this.applyPerk(id, true);
+    }
+    for (const p of s.pickups) {
+      const def = pickupRegistry.get(p.id);
+      if (!def) continue;
+      this.pickups.activate(def);
+      const e = this.pickups.active.find((a) => a.def.id === p.id);
+      if (e) e.remaining = clamp(p.remaining, 0, e.duration);
+    }
+
+    const b = this.bunny;
+    b.rebase(AREAS[s.area].unit);
+    b.radius = b.prevRadius = s.bunny.realRadius / b.unit;
+    b.maxRadius = Math.max(b.radius, s.bunny.maxRealRadius / b.unit);
+    b.form = s.bunny.form;
+    b.heading = s.bunny.heading;
+    // Hits can leave fractions (Amass's guard); a living Bunny never resumes at 0.
+    b.health = s.bunny.health > 0 ? Math.min(s.bunny.health, b.maxHealth) : b.maxHealth;
+    b.shield = Math.max(0, s.bunny.shield);
+    b.revives = Math.max(0, s.bunny.revives);
+    const bd = this.house.bounds;
+    b.teleport(clamp(s.bunny.x, bd.minX, bd.maxX), clamp(s.bunny.z, bd.minZ, bd.maxZ));
+    this.tier = Math.max(s.tier, 1);
+    for (const k of Object.keys(this.tierTimes)) delete this.tierTimes[Number(k)];
+    Object.assign(this.tierTimes, s.tierTimes);
+
+    this.spawner.populate(this, new Set(s.placementsGone));
+    // The Bunny's own spot stays clear: nothing respawns inside it.
+    for (const d of this.debris.query(b.x, b.z, b.radius + this.debris.maxSize, [])) {
+      if ((d.x - b.x) ** 2 + (d.z - b.z) ** 2 < (b.radius + d.size) ** 2) this.debris.remove(d);
+    }
+
+    this.areasDone = s.areasDone.map((a) => ({ ...a }));
+    if (s.areaStart?.area === s.area) this.areaStart = { ...s.areaStart };
+    else this.beginArea();
+    if (s.areaCleared && nextArea(this.area) !== null) {
+      this.markCleared(this.area);
+      openExit(this.house);
+    }
+    this.perkDraft.rerollsUsed = Math.max(0, s.perkDraft.rerollsUsed);
+    this.perkDraft.queue(Math.max(0, Math.round(s.perkDraft.pending)));
   }
 
   getStats(): RunStats {

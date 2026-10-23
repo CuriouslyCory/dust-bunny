@@ -90,23 +90,42 @@ export class DebrisSpawner implements System {
   readonly order = SYSTEM_ORDER.spawner;
   private timer = 0;
   private readonly scratch: Debris[] = [];
+  /** Placement index of each fixed placement populated by the last populate. */
+  private placed = new Map<Debris, number>();
+  /** Indexes of fixed placements absorbed this Run or skipped by the last populate (absorbed before a save). */
+  private absorbed = new Set<number>();
 
   constructor(private readonly rng: Rng) {}
+
+  /** Indexes of the Area's fixed placements that have been absorbed (culled or destroyed ones are not gone). */
+  placementsGone(): number[] {
+    return [...this.absorbed].sort((a, b) => a - b);
+  }
+
+  /** Records `d` as absorbed if it is one of the Area's fixed placements (Run.absorbDebris). */
+  noteAbsorbed(d: Debris): void {
+    const i = this.placed.get(d);
+    if (i !== undefined) this.absorbed.add(i);
+  }
 
   private typeIndex(run: Run, type: DebrisType): number {
     return run.debris.types.indexOf(type);
   }
 
   /** Initial population. Called once by the Run before the first update. */
-  populate(run: Run): void {
+  populate(run: Run, skipPlacements?: ReadonlySet<number>): void {
     const { house, debris } = run;
     const types = debris.types;
     const rng = this.rng;
 
-    for (const p of house.debrisPlacements) {
+    // Fixed placements (`house.debrisPlacements`), by index; a resumed Run skips the ones already absorbed.
+    this.absorbed = new Set(skipPlacements);
+    this.placed = new Map();
+    house.debrisPlacements.forEach((p, n) => {
       const i = types.findIndex((t) => t.id === p.typeId);
-      if (i >= 0) debris.spawn(i, p.x, p.z, rng, { rotY: p.rotY });
-    }
+      const d = i >= 0 && !skipPlacements?.has(n) ? debris.spawn(i, p.x, p.z, rng, { rotY: p.rotY }) : null;
+      if (d) this.placed.set(d, n);
+    });
 
     // Start cluster: dense small Debris around the spawn (under the couch in the house).
     const r0 = run.bunny.radius;

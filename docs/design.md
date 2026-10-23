@@ -267,7 +267,7 @@ A Hazard whose size ≤ radius × absorb ratio becomes Debris: touching it absor
 Decided with the Region (issue #24; story in `docs/story.md`):
 
 1. **Two Tiers and one boss per Act** after the City, with `AREAS[area].growth` tuned so each Act takes 4 to 6 minutes. Adjust later if it plays off.
-2. **Full Runs only.** No chapter checkpoints for now; starting at a later Area is a separate, later feature (`?area=` exists for debugging and is unranked).
+2. **Full Runs only.** No chapter checkpoints for now; starting at a later Area is a separate, later feature (`?area=` exists for debugging and is unranked). Save & quit doesn't change this: a resumed Run is the same Run, carried on (same leaderboard run id, same ranking), not a checkpoint start, and its save is used up when it resumes.
 3. **No Fluff radius cap and no flat per-Area bonus.** Each Act scales its own progression (Fluff, Area score and the server's per-Area bounds) from growth measured in that Act's unit, with plain floating-point maths. Readouts climb the unit ladder (cm, m, km, Earths, AU, ly, Mly; `src/data/units.ts`; a rung is taken only from 0.01 of it, so the Galaxy stays in ly).
 
 **Units.** Each Area declares `AREAS[area].unit` (cm per world unit): 1 for the House, Neighborhood and City, 1,000 for the Region, 1,000,000 for the Continent. Entering an Area re-bases the Bunny (`Bunny.rebase`: radius, max radius, speeds; stuck Debris rescales in the view) so its real size is unchanged; all of the Area's content is authored in its unit.

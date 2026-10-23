@@ -61,7 +61,7 @@ function newRunId(): string {
 
 /** One Run's entries. */
 export class RunPosts {
-  readonly runId = newRunId();
+  readonly runId: string;
   /** The runEnded payload, once the Run is over. */
   result: GameEvents['runEnded'] | null = null;
   private posts = new Map<BoardId, BoardPost & { build: (name: string) => unknown }>();
@@ -77,7 +77,11 @@ export class RunPosts {
     readonly loadout: Loadout = [],
     /** The player's Universes count after the Run (sent with the Run board entry; omitted when absent). */
     private readonly universesFor?: (e: GameEvents['runEnded']) => number,
-  ) {}
+    /** The Run's id (a resumed Run keeps the one it was saved with, so its reposts are idempotent). */
+    runId: string = newRunId(),
+  ) {
+    this.runId = runId;
+  }
 
   /** Initial state of a new entry. */
   private fresh(): Pick<BoardPost, 'state' | 'error'> {
@@ -177,10 +181,11 @@ export interface LeaderboardPosting {
 
 /**
  * Whether a Run counts for the leaderboards (and drops Keepsakes): not with debug tools (`?debug`)
- * and not started past the house (`?area=`, checkpoint starts).
+ * and not started past the house (`?area=`, checkpoint starts). A resumed Run (Save & quit) keeps
+ * the verdict it was saved with.
  */
-export function isRankedRun(debug: boolean, config: Pick<RunConfig, 'area'> | undefined): boolean {
-  return !debug && (!config?.area || config.area === 'house');
+export function isRankedRun(debug: boolean, config: Pick<RunConfig, 'area' | 'resume'> | undefined): boolean {
+  return !debug && !config?.resume?.unranked && (!config?.area || config.area === 'house');
 }
 
 let installed: LeaderboardPosting | null = null;
@@ -223,7 +228,13 @@ export function installLeaderboardPosting(
   game.events.on('runStarted', () => {
     const run = game.run;
     ranked = isRankedRun(game.debug, run?.config);
-    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked, run?.loadout ?? [], universes);
+    current = new RunPosts(client, run?.config.characterId ?? 'lint', run?.difficulty.id, ranked, run?.loadout ?? [], universes, run?.config.resume?.leaderboardRunId);
+  });
+  // Save & quit: the resumed Run posts under the same id and keeps its ranking.
+  game.events.on('runSuspended', (e) => {
+    if (!current) return;
+    e.snapshot.leaderboardRunId = current.runId;
+    if (!current.ranked) e.snapshot.unranked = true;
   });
   game.events.on('areaCompleted', (e) => {
     if (!current) return;

@@ -103,7 +103,8 @@ export class HazardDirector {
     this.despawn(dt, run, mgr, viewR);
 
     const boss = AREA_BOSSES[run.area];
-    if (!this.bossSpawned && b.radius >= bossArrivalRadius(run.area, b.stats.get('absorbRatio')) && hazardRegistry.has(boss.id)) {
+    // A resumed Run whose boss already fell keeps the Area clear of it.
+    if (!this.bossSpawned && !run.isAreaCleared(run.area) && b.radius >= bossArrivalRadius(run.area, b.stats.get('absorbRatio')) && hazardRegistry.has(boss.id)) {
       if (this.bossTimer < 0) this.bossTimer = boss.arrivalDelay;
       this.bossTimer -= dt;
       if (this.bossTimer <= 0) this.spawnBoss(run, mgr);

@@ -4,6 +4,7 @@ import type { Game } from '../../game/game';
 import type { AreaStats, RunStats } from '../../game/runStats';
 import type { AccountClient, AccountState } from '../../net/account';
 import { createLeaderboardClient, LeaderboardError, type LeaderboardClient } from '../../net/leaderboard';
+import type { RunSnapshot } from '../../game/snapshot';
 import { installLeaderboardPosting, isRankedRun, RunPosts } from './posting';
 
 const house: AreaStats = { area: 'house', startSec: 0, timeSec: 400, radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, cleared: true };
@@ -104,6 +105,15 @@ describe('RunPosts', () => {
     expect(isRankedRun(false, { area: 'house' })).toBe(true);
     expect(isRankedRun(true, { area: undefined })).toBe(false);
     expect(isRankedRun(false, { area: 'city' })).toBe(false);
+    // A resumed Run keeps the verdict it was saved with.
+    expect(isRankedRun(false, { area: undefined, resume: { unranked: true } as RunSnapshot })).toBe(false);
+    expect(isRankedRun(false, { area: undefined, resume: {} as RunSnapshot })).toBe(true);
+  });
+
+  it('a resumed Run posts under the id it was saved with', () => {
+    const { client } = offlineClient();
+    expect(new RunPosts(client, 'lint', 'casual', true, [], undefined, 'saved-run-id').runId).toBe('saved-run-id');
+    expect(new RunPosts(client, 'lint', 'casual').runId).not.toBe(new RunPosts(client, 'lint', 'casual').runId);
   });
 
   it('marks entries the server refuses as invalid and network trouble as failed', async () => {
