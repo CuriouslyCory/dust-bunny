@@ -453,7 +453,7 @@ describe('the Ice Sheet', () => {
 
     // Ramming it while stunned lands a hit, and the pieces are icebergs.
     b.teleport(boss.x + 20, boss.z);
-    boss.abilityStun(run, 2, 'hunker');
+    boss.abilityStun(run, 2, 'amass');
     const hits: string[] = [];
     events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     const n0 = icebergs(run).length;

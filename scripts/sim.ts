@@ -18,9 +18,10 @@
  *
  * Abilities: Lint drops a Decoy when a boss telegraph or a Broom sweep targets it, or a vacuum
  * cone or spray lane is about to hit it (--decoy=boss: only the first two, the issue's policy).
- * Tumble hunkers while a telegraphed boss lane crosses it, and for up to 2 s when a Broom sweep or
- * spray lane is about to hit it (--hunker=lane: boss lanes only). Both defaults beat the issue's
- * policies over 60 seeds (Lint 20 → 27 wins, Tumble 5 → 7). Zap discharges at the nearest Hazard
+ * Tumble Amasses while a boss charge lane crosses it (for the crash stun), when a Hazard it can
+ * swallow is close, or when enough absorbable Debris lies around it (--amass=boss: boss lanes
+ * only); it lets go early when a vacuum cone is about to catch it (suction pulls harder while
+ * channelling). Lint's default beats the issue's policy over 60 seeds (20 → 27 wins). Zap discharges at the nearest Hazard
  * in range once the Static meter is full. --no-ability plays without Abilities (for comparison).
  * The summary also counts boss fights and boss kills per Character. --boss plays only the house
  * boss fight: the Run starts just past the Robo-Vac's arrival size (fresh Bunny, four random
@@ -38,14 +39,14 @@
  * start at Tier 5 (--boss) or in a later area (--area) are unranked and not checked.
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
- *                 [--hunker=defend|lane] [--decoy=defend|boss] [--boss] [--no-boss [--shares=0.8,0.85]] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
+ *                 [--amass=feed|boss] [--decoy=defend|boss] [--boss] [--no-boss [--shares=0.8,0.85]] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe]   start in a later area (as after its previous boss)
  *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
  *                 [--difficulty=casual|arcade|hardcore]
  *                 [--loadout=type:rarity,type:rarity | --loadout=max] [--validate]
  *   --seeds=N plays seeds s1 … sN when no seed is given (default: alpha … echo).
  */
-import { getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from '../src/abilities';
+import { getAbilitySystem, type AmassAbility, type DecoyAbility, type DischargeAbility } from '../src/abilities';
 import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
@@ -87,12 +88,17 @@ const minutes = Number(opt('minutes') ?? 15);
 const chars = (opt('chars') ?? 'lint,tumble,zap').split(',');
 const withHazards = !args.includes('--no-hazards');
 const withAbility = !args.includes('--no-ability');
-/** Tumble's Hunker policy: 'defend' (default: boss lanes, plus plants of at most 2 s against Broom sweeps and spray lanes) or 'lane' (boss lanes only, the issue's policy). */
-const hunkerPolicy = opt('hunker') === 'lane' ? 'lane' : 'defend';
+/** Tumble's Amass policy: 'feed' (default: boss lanes, swallowable Hazards and Debris-rich spots) or 'boss' (boss lanes only). */
+const amassPolicy = opt('amass') === 'boss' ? 'boss' : 'feed';
+/** 'feed' Amasses when at least this many absorbable Debris lie within AMASS_FEED_RANGE r. */
+const AMASS_FEED_COUNT = 14;
+const AMASS_FEED_RANGE = 8;
+/** 'feed' Amasses when a swallowable Hazard's edge is within this many r. */
+const AMASS_SWALLOW_RANGE = 3;
 /** Lint's Decoy policy: 'defend' (default: boss telegraphs, Broom aggro, and vacuum cones or spray lanes about to hit) or 'boss' (the first two only, the issue's policy). */
 const decoyPolicy = opt('decoy') === 'boss' ? 'boss' : 'defend';
 const ALL_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['vacuum', 'spray', 'broom']);
-const SHORT_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['spray', 'broom']);
+const VACUUM_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['vacuum']);
 /** Boss fight only: start the house at Tier 5 (the Robo-Vac 9000 arrives 3 s later) and stop when it falls. */
 const bossOnly = args.includes('--boss');
 /**
@@ -124,13 +130,13 @@ const validate = args.includes('--validate') && !bossOnly && !startArea;
  * --loadout=max: the strongest legal pair per Character, at mythic. Chosen by playing every pair
  * of that Character's types (duplicates included, 15 per Character) at grade 4 of the old 1–10 scale (rare) over seeds s1–s30
  * (--minutes=25, default bot policies) and taking the most wins, then the fastest median win:
- * Lint Quick Shed + Reclaim (18/30 wins, base 12/30), Tumble Snowball ×2 (7/30, base 2/30), Zap
+ * Lint Quick Shed + Reclaim (18/30 wins, base 12/30), Tumble (see below), Zap
  * Static Cling + Grounding (26/30 in 14:02, base 21/30 in 14:57). Re-run that search when
  * Keepsake values or the bot change (docs/design.md "Keepsake effects").
  */
 const MAX_LOADOUTS: Record<string, readonly [KeepsakeTypeId, KeepsakeTypeId]> = {
   lint: ['quick_shed', 'reclaim'],
-  tumble: ['snowball', 'snowball'],
+  tumble: ['feast', 'dense_core'],
   zap: ['static_cling', 'grounding'],
 };
 
@@ -563,6 +569,31 @@ class Bot implements InputSource {
     return along > -b.radius && along < a.range + b.radius && side < (a.radius + b.radius) * pad + along * a.spread;
   }
 
+  /** A non-boss Hazard that an Amass would swallow on contact has its edge within AMASS_SWALLOW_RANGE r. */
+  private swallowNear(): boolean {
+    const { bunny, hazards } = this.run;
+    const r = bunny.radius;
+    const ratio = bunny.stats.get('absorbRatio');
+    const swallow = r * (getAbilitySystem(this.run)?.params.amass.absorbRatio ?? 0);
+    return hazards.hazards.some((h) => {
+      if (h.dead || h.intangible || h.def.boss || h.size > swallow || canAbsorb(r, ratio, h.size)) return false;
+      const hr = h.shape.kind === 'circle' ? h.shape.radius : Math.max(h.shape.halfW, h.shape.halfD);
+      return Math.hypot(h.x - bunny.x, h.z - bunny.z) - r - hr < AMASS_SWALLOW_RANGE * r;
+    });
+  }
+
+  /** At least AMASS_FEED_COUNT absorbable Debris lie within AMASS_FEED_RANGE r: worth a gravity well. */
+  private debrisRich(): boolean {
+    const { bunny, debris } = this.run;
+    const r = bunny.radius;
+    const ratio = bunny.stats.get('absorbRatio');
+    let n = 0;
+    for (const d of debris.query(bunny.x, bunny.z, AMASS_FEED_RANGE * r)) {
+      if (canAbsorb(r, ratio, d.size) && !debrisLocked(bunny, d) && ++n >= AMASS_FEED_COUNT) return true;
+    }
+    return false;
+  }
+
   /** A Broom sweep, vacuum / blower cone or spray lane (of the given kinds) is about to hit the Bunny. */
   private imminentHit(kinds: ReadonlySet<'vacuum' | 'spray' | 'broom'> = ALL_HITS): boolean {
     const { bunny, hazards } = this.run;
@@ -606,17 +637,18 @@ class Bot implements InputSource {
       });
       return { ability: bossAim || broomAim || (decoyPolicy === 'defend' && this.imminentHit()), abilityHeld: false };
     }
-    if (sys.data.id === 'hunker') {
-      const ctl = sys.controller as HunkerAbility;
+    if (sys.data.id === 'amass') {
+      const ctl = sys.controller as AmassAbility;
       const lane = bosses.some((b) => (b.state === 'telegraph' || b.state === 'charge') && this.laneCrosses(b));
-      // defend: also short plants against sprays and Broom sweeps (not vacuums: their suction lasts, so walking out is better).
-      const hit = hunkerPolicy === 'defend' && this.imminentHit(SHORT_HITS);
+      const feed = amassPolicy === 'feed' && (this.swallowNear() || this.debrisRich());
+      // Suction pulls harder while channelling: let go (or don't start) when a vacuum cone is about to catch us.
+      const vacuum = this.imminentHit(VACUUM_HITS);
       if (ctl.active) {
-        // Hold until the charge is over (the boss crashed into us, or stopped); against a spray or sweep, at most 2 s.
-        const keep = lane || (hit && ctl.held < 2) || bosses.some((b) => b.state === 'stunned' && Math.hypot(b.x - bunny.x, b.z - bunny.z) < b.cfg.contactRadius * b.scale + bunny.radius * 1.5);
+        // Hold through a boss charge; when feeding, hold to the end unless a vacuum threatens.
+        const keep = lane || (amassPolicy === 'feed' && !vacuum);
         return { ability: false, abilityHeld: keep };
       }
-      const go = (lane || hit) && ctl.canPlant;
+      const go = (lane || (feed && !vacuum)) && ctl.canStart;
       return { ability: go, abilityHeld: go };
     }
     const ctl = sys.controller as DischargeAbility;

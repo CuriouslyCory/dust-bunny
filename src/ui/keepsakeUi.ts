@@ -34,9 +34,11 @@ export function abilityNumbers(ability: AbilityId, loadout: Loadout = []): strin
       const clog = d.bossClogStun === d.clogStun ? `${n1(d.clogStun)} s clog` : `${n1(d.clogStun)} s clog (bosses ${n1(d.bossClogStun)} s)`;
       return [`lasts ${n1(d.duration)} s`, `${n1(d.cooldown)} s cooldown`, clog];
     }
-    case 'hunker': {
-      const h = p.hunker;
-      return [`hold up to ${n1(h.maxHold)} s`, `cooldown ${n1(h.cooldownBase)} s + ${n1(h.cooldownPerSecondHeld)} s per second held`];
+    case 'amass': {
+      const a = p.amass;
+      const parts = [`hold up to ${n1(a.maxHold)} s`, `cooldown ${n1(a.cooldownBase)} s + ${n1(a.cooldownPerSecondHeld)} s per second held`, `${Math.round(a.damageReduction * 100)}% less damage`];
+      if (a.forceMul !== 1) parts.push(`pull ×${n1(a.forceMul)}`);
+      return parts;
     }
     case 'discharge': {
       const z = p.discharge;

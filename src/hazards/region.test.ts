@@ -247,7 +247,7 @@ describe('region Hazards', () => {
     expect(closest).toBeLessThan(d0 - 5);
     expect(boss.dead).toBe(false);
     // Ramming it while stunned lands a hit.
-    boss.abilityStun(run, 2, 'hunker');
+    boss.abilityStun(run, 2, 'amass');
     const hits: string[] = [];
     events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     boss.onContact(run);
@@ -295,7 +295,7 @@ describe('region Hazards', () => {
     expect(run.bunny.health).toBeLessThan(999);
   });
 
-  it('ash aims at the Decoy and pops it, and sheds nothing from a planted Bunny', () => {
+  it('ash aims at the Decoy and pops it', () => {
     const shots: Hazard[] = [];
     let lure: Lure | null = null;
     const { telegraphs, sheds } = ashFight(
@@ -314,18 +314,6 @@ describe('region Hazards', () => {
     expect(shots.length).toBeGreaterThan(0);
     expect(shots[0]!.def.id).toBe('incinerator');
     expect(sheds).toEqual([]);
-
-    const planted = ashFight(
-      'incinerator-hunker',
-      (run, boss) => {
-        run.bunny.hunkered = true;
-        run.bunny.teleport(boss.x + 14, boss.z);
-      },
-      () => false,
-      10,
-    );
-    expect(planted.pellets).toBeGreaterThan(0);
-    expect(planted.sheds).toEqual([]);
   });
 
   it('a hidden Bunny (Dust Cloud) draws no ash', () => {

@@ -1,7 +1,7 @@
 /**
  * The Ability System: one per Run, driving the current Character's Ability (Lint · Decoy,
- * Tumble · Hunker, Zap · Discharge). Order 90, before movement, so a Hunker that starts this tick
- * already stops the Bunny. Reads input from `run.inputState` (`ability` edge, `abilityHeld`).
+ * Tumble · Amass, Zap · Discharge). Order 90, before movement, so an Amass that starts this tick
+ * already slows the Bunny. Reads input from `run.inputState` (`ability` edge, `abilityHeld`).
  *
  * Shared rules owned here:
  *   - every tunable comes from `params` (resolveAbilityParams, see ./params.ts);
@@ -10,8 +10,8 @@
  *   - Grounded: `hazard.groundedFor` (set by Discharge) counts down here.
  *
  * Hooks for later effects (Keepsakes): the params modifiers, the events in ./events.ts
- * (abilityUsed, abilityEnded, hazardClogged, hazardHitPlanted, hazardShorted, staticFull,
- * bossStunned with `cause`), and the `hooks` callbacks below, which get object references.
+ * (abilityUsed, abilityEnded, hazardClogged, hazardSwallowed, bossCrashedIntoAmass,
+ * amassCollapsed, hazardShorted, staticFull, bossStunned with `cause`), and the `hooks` callbacks below, which get object references.
  */
 import type { InputState } from '../core/input';
 import type { Rng } from '../core/rng';
@@ -41,7 +41,7 @@ export interface AbilityHudState {
   icon: string;
   /** Can be used right now (off cooldown / meter full). */
   ready: boolean;
-  /** Currently out / held (Decoy on the floor, planted). */
+  /** Currently out / held (Decoy on the floor, Amass channelling). */
   active: boolean;
   /** Ring fill 0..1: cooldown progress, time left while active, or the Static meter. */
   ring: number;
@@ -66,9 +66,7 @@ export interface AbilityController {
 export interface AbilityHooks {
   /** The Decoy ended at (x, z) (Reclaim). */
   decoyEnded?(run: Run, reason: AbilityEndReason, x: number, z: number): void;
-  /** A Hazard ran into the planted Tumble (Bristle Back). Bosses: `stunned` when it crashed. */
-  plantedTouched?(run: Run, hazard: Hazard, stunned: boolean): void;
-  /** An Ability stunned a boss (Dead Weight). */
+  /** An Ability stunned a boss. */
   bossStunned?(run: Run, boss: RoboVac9000, cause: BossStunCause, seconds: number): void;
   /** A Discharge hit these Hazards (first target first). */
   discharged?(run: Run, targets: readonly Hazard[]): void;
@@ -78,7 +76,7 @@ export type ControllerFactory = (system: AbilitySystem) => AbilityController;
 
 const factories = new Map<AbilityId, ControllerFactory>();
 
-/** Registers the controller for an Ability id (./decoy.ts, ./hunker.ts, ./discharge.ts). */
+/** Registers the controller for an Ability id (./decoy.ts, ./amass.ts, ./discharge.ts). */
 export function registerAbilityController(id: AbilityId, factory: ControllerFactory): void {
   factories.set(id, factory);
 }

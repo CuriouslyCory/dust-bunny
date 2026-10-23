@@ -7,7 +7,7 @@
  * target's bearing soon after the telegraph (`aheadWindow`), it telegraphs: both beams show as red
  * lanes and an amber wedge ahead of each marks the arc they will sweep while they burn. Then the
  * beams burn for `fire` s, still turning: a Bunny in either beam takes one hit per burn, knocked
- * onward and outward (`hitBunny`, so i-frames, Hunker and the Dust Cloud apply), and a Decoy in a
+ * onward and outward (`hitBunny`, so i-frames, Amass's guard and the Dust Cloud apply), and a Decoy in a
  * beam pops. Then `cooldown`. Dodge by leaving its range, or by slipping behind a beam.
  */
 import { AdditiveBlending, BoxGeometry, Group, Mesh, MeshBasicMaterial, type Object3D } from 'three';

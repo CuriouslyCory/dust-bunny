@@ -65,7 +65,7 @@ describe('rarity curve', () => {
   });
 
   it('adds two copies together', () => {
-    expect(loadoutValue([{ type: 'snowball', rarity: 5 }, { type: 'snowball', rarity: 5 }], 'snowball', 'magnet')).toBeCloseTo(5);
+    expect(loadoutValue([{ type: 'feast', rarity: 5 }, { type: 'feast', rarity: 5 }], 'feast', 'growth')).toBeCloseTo(1.2);
   });
 
   it('names five rarities in order', () => {
@@ -176,8 +176,8 @@ describe('stat caps and envelope', () => {
 
   it('lands two mythic copies of a stat type exactly on the cap', () => {
     const two = (type: KeepsakeRef['type']) => [{ type, rarity: 5 }, { type, rarity: 5 }];
-    expect(envelope('tumble', two('thick_undercoat')).knockbackResistance).toBeCloseTo(0.9);
-    expect(envelope('tumble', two('thick_undercoat')).suctionMultiplier).toBeCloseTo(0.6);
+    expect(envelope('tumble', two('unmoved')).knockbackResistance).toBeCloseTo(0.9);
+    expect(envelope('tumble', two('unmoved')).suctionMultiplier).toBeCloseTo(0.6);
     expect(envelope('zap', two('grounding')).suctionMultiplier).toBeCloseTo(1.2);
     expect(envelope('zap', two('static_cling')).magnetRadius).toBeCloseTo(2.05);
   });

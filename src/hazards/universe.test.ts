@@ -400,11 +400,12 @@ describe('the Expansion', () => {
       run.update(STEP);
       expect(ctl.findTarget()).toBeNull();
     }
-    // Tumble: planted inside it, nothing crashes.
+    // Tumble: Amassing inside it, nothing crashes or is swallowed, and it isn't pulled.
     {
       const { run, events, boss } = setup('tumble');
       const planted: unknown[] = [];
-      events.on('hazardHitPlanted', (e) => planted.push(e));
+      events.on('bossCrashedIntoAmass', (e) => planted.push(e));
+      events.on('hazardSwallowed', (e) => planted.push(e));
       input.ability = true;
       input.abilityHeld = true;
       for (let i = 0; i < 30; i++) run.update(STEP);

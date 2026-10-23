@@ -140,7 +140,7 @@ describe('absorbing Hazards', () => {
     events.on('bossDefeated', () => order.push('bossDefeated'));
     events.on('exitOpened', () => order.push('exitOpened'));
     for (let i = 1; i <= 3; i++) {
-      boss.abilityStun(run, 2, 'hunker');
+      boss.abilityStun(run, 2, 'amass');
       boss.onContact(run);
       // One hit per stun.
       boss.onContact(run);
@@ -165,7 +165,7 @@ describe('absorbing Hazards', () => {
     const b = run.bunny;
     b.setRadius(36);
     const boss = run.hazards.spawn('robovac_9000', b.x + 200, b.z) as RoboVac9000;
-    boss.abilityStun(run, 2, 'hunker');
+    boss.abilityStun(run, 2, 'amass');
     expect(boss.hittable).toBe(true);
     boss.onContact(run);
     expect(boss.hittable).toBe(false);

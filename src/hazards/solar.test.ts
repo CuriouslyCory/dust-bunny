@@ -315,7 +315,7 @@ describe('the Sun', () => {
     s.ashTimer = 1e9;
   };
 
-  it('its solar wind pushes the Bunny away while it hunts, but not a hunkered Bunny, nor one that can absorb it', () => {
+  it('its solar wind pushes the Bunny away while it hunts, but not an Amassing Bunny, nor one that can absorb it', () => {
     const { run, boss, b, p } = hunting('wind', 6);
     quiet(boss);
     const away = () => Math.hypot(b.x - boss.x, b.z - boss.z);
@@ -327,13 +327,13 @@ describe('the Sun', () => {
     let x = b.x;
     run.hazards.update(1 / 60, run);
     expect(b.x).toBeCloseTo(x, 6);
-    // Hunkered: planted.
+    // Amassing: can't be displaced.
     b.teleport(p.x, p.z);
-    b.hunkered = true;
+    b.amassing = true;
     x = b.x;
     for (let i = 0; i < 10; i++) run.hazards.update(1 / 60, run);
     expect(b.x).toBeCloseTo(x, 6);
-    b.hunkered = false;
+    b.amassing = false;
     // Big enough to absorb it: no wind.
     b.setRadius(absorbRadiusFor(boss.size, ratio) + 0.05);
     b.teleport(boss.x + THE_SUN.contactRadius + b.radius + 1, p.z);

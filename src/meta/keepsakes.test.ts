@@ -151,15 +151,17 @@ describe('Felting and shedding', () => {
     return meta;
   };
 
-  it('felts three of a rarity into one of the next for 160 × r² Fluff', () => {
+  it('felts three of a rarity into one of the next for the Fluff shedding them would return', () => {
     const meta = setup();
     expect(meta.feltCeiling('lint')).toBe(2);
     const r = meta.felt('lint', ref('thick_clog', 1));
     expect(r).toMatchObject({ ok: true, result: ref('thick_clog', 2), cost: feltCost(2), first: true });
     expect(meta.keepsakeCount('lint', ref('thick_clog', 1))).toBe(1);
     expect(meta.keepsakeCount('lint', ref('thick_clog', 2))).toBe(1);
-    expect(feltCost(2)).toBe(640);
-    expect(meta.fluff).toBe(1000 - 640);
+    expect(feltCost(2)).toBe(120);
+    expect(feltCost(2)).toBe(3 * shedValue(1));
+    expect(feltCost(5)).toBe(1920);
+    expect(meta.fluff).toBe(1000 - 120);
     expect(meta.data.stats.totalFluffEarned).toBe(500);
     expect(meta.data.stats.feltings).toBe(1);
     expect(meta.felt('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'count' });
@@ -170,8 +172,8 @@ describe('Felting and shedding', () => {
     meta.creditKeepsakes('lint', [ref('reclaim', 2), ref('reclaim', 2), ref('reclaim', 2)]);
     expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: false, reason: 'ceiling', ceiling: 2 });
     meta.creditKeepsakes('lint', [], 'street_sweeper');
-    expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: true, cost: 1440, ceiling: 3 });
-    expect(setup(100).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'poor', cost: 640 });
+    expect(meta.feltCheck('lint', ref('reclaim', 2))).toMatchObject({ ok: true, cost: 480, ceiling: 3 });
+    expect(setup(100).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'poor', cost: 120 });
     expect(setup(1000, []).feltCheck('lint', ref('thick_clog', 1))).toMatchObject({ ok: false, reason: 'ceiling', ceiling: 0 });
     expect(meta.feltCheck('lint', ref('reclaim', 5))).toMatchObject({ ok: false, reason: 'max' });
     expect(meta.feltCheck('lint', ref('arc', 1))).toMatchObject({ ok: false, reason: 'unknown' });
@@ -234,7 +236,7 @@ describe('save and cloud shape', () => {
         nobody: { hoard: { 'reclaim:common': 1 }, bossesBeaten: [] },
         zap: 'x',
       },
-      lastLoadout: { lint: [ref('reclaim', 1), ref('reclaim', 2), ref('reclaim', 1)], zap: [ref('arc', 1)], tumble: [ref('snowball', 6)] },
+      lastLoadout: { lint: [ref('reclaim', 1), ref('reclaim', 2), ref('reclaim', 1)], zap: [ref('arc', 1)], tumble: [ref('feast', 6)] },
       stats: { keepsakesEarned: 4 },
     });
     const { data, status } = parseSave(raw);
@@ -246,6 +248,18 @@ describe('save and cloud shape', () => {
     const old = parseSave(JSON.stringify({ version: 1, fluff: 3, stats: { runs: 1 } })).data;
     expect(old.characters).toEqual({});
     expect(old.lastLoadout).toEqual({});
+  });
+
+  it('reads Tumble’s Hunker-era Keepsakes as their Amass replacements, counts added up', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      fluff: 5,
+      characters: { tumble: { hoard: { 'snowball:epic': 2, 'feast:epic': 1, 'thick_undercoat:4': 1, 'loose_roots:mythic': 3 }, bossesBeaten: ['robovac_9000'] } },
+      lastLoadout: { tumble: [{ type: 'snowball', rarity: 3 }, { type: 'loose_roots', rarity: 5 }] },
+    });
+    const { data } = parseSave(raw);
+    expect(data.characters.tumble!.hoard).toEqual({ 'feast:epic': 3, 'unmoved:rare': 1, 'lingering_mass:mythic': 3 });
+    expect(data.lastLoadout.tumble).toEqual([ref('feast', 3), ref('lingering_mass', 5)]);
   });
 
   it('converts a save from before rarities: grades 1–10 become rarities two to one', () => {
@@ -274,14 +288,14 @@ describe('save and cloud shape', () => {
   it('syncs Hoards and bosses (not the Loadout or feltings) through the cloud save', () => {
     const storage = memStorage();
     const meta = new MetaProgress(storage);
-    meta.creditKeepsakes('tumble', [ref('snowball', 1)], 'robovac_9000');
-    meta.setLastLoadout('tumble', [ref('snowball', 1)]);
+    meta.creditKeepsakes('tumble', [ref('feast', 1)], 'robovac_9000');
+    meta.setLastLoadout('tumble', [ref('feast', 1)]);
     const p = progressOf(meta.data);
-    expect(p.characters).toEqual({ tumble: { hoard: { 'snowball:common': 1 }, bossesBeaten: ['robovac_9000'] } });
+    expect(p.characters).toEqual({ tumble: { hoard: { 'feast:common': 1 }, bossesBeaten: ['robovac_9000'] } });
     expect(p.stats.keepsakesEarned).toBe(1);
     expect('lastLoadout' in p).toBe(false);
     expect('feltings' in p.stats).toBe(false);
     expect(validateProgress(p)).toEqual({ ok: true, value: p });
-    expect(JSON.parse(storage.map.get(SAVE_KEY)!).characters.tumble.hoard['snowball:common']).toBe(1);
+    expect(JSON.parse(storage.map.get(SAVE_KEY)!).characters.tumble.hoard['feast:common']).toBe(1);
   });
 });

@@ -134,12 +134,12 @@ export type KeepsakeTypeId =
   | 'thick_clog'
   | 'dinner_bell'
   | 'reclaim'
-  // Tumble · Hunker
-  | 'loose_roots'
-  | 'bristle_back'
-  | 'snowball'
-  | 'dead_weight'
-  | 'thick_undercoat'
+  // Tumble · Amass
+  | 'dense_core'
+  | 'lingering_mass'
+  | 'collapse'
+  | 'feast'
+  | 'unmoved'
   // Zap · Discharge
   | 'live_wire'
   | 'long_reach'
@@ -151,7 +151,7 @@ export type KeepsakeTypeId =
 export interface EffectValue {
   common: number;
   mythic: number;
-  /** Optional per-rarity override (index 0 = common); used by Arc's whole extra targets. */
+  /** Optional per-rarity override (index 0 = common): Arc's whole extra targets, Tumble's hand-set ladders. */
   steps?: readonly number[];
 }
 
@@ -211,47 +211,56 @@ export const KEEPSAKE_TYPES: readonly KeepsakeType[] = [
     effects: { volume: { common: 0.01, mythic: 0.04 } },
     describe: (v) => `A spent Decoy leaves fibre worth ${pct(v('volume'))} of your volume`,
   },
-  // --- Tumble · Hunker ---
+  // --- Tumble · Amass: hand-set per-rarity ladders (`steps`), not the rarity curve. ---
   {
-    id: 'loose_roots',
+    id: 'dense_core',
     characterId: 'tumble',
-    name: 'Loose Roots',
-    icon: '🌿',
-    // Seconds of Hunker cooldown per second held saved (base 1.0 s; one mythic copy brings it to 0.4 s).
-    effects: { perSecondSaved: { common: 0.1, mythic: 0.6 } },
-    describe: (v) => `Hunker cooldown per second held −${n1(v('perSecondSaved'))} s`,
+    name: 'Dense Core',
+    icon: '🌌',
+    effects: {
+      force: { common: 0.15, mythic: 0.65, steps: [0.15, 0.25, 0.35, 0.5, 0.65] },
+      core: { common: 0.8, mythic: 3.5, steps: [0.8, 1.4, 2.1, 2.8, 3.5] },
+    },
+    describe: (v) => `Amass pull +${pct(v('force'))}; full-strength core +${n1(v('core'))} r`,
   },
   {
-    id: 'bristle_back',
+    id: 'lingering_mass',
     characterId: 'tumble',
-    name: 'Bristle Back',
-    icon: '🦔',
-    effects: { knockback: { common: 2, mythic: 5 }, stun: { common: 0.5, mythic: 2 } },
-    describe: (v) => `Hazards touching you while planted: knocked back ${n1(v('knockback'))} r, stunned ${n1(v('stun'))} s`,
+    name: 'Lingering Mass',
+    icon: '⏳',
+    effects: { hold: { common: 0.3, mythic: 1.6, steps: [0.3, 0.6, 0.9, 1.2, 1.6] } },
+    describe: (v) => `Amass channels +${n1(v('hold'))} s longer (at most ${n1(KEEPSAKE_FLOORS.amassMaxHold)} s)`,
   },
   {
-    id: 'snowball',
+    id: 'collapse',
     characterId: 'tumble',
-    name: 'Snowball',
-    icon: '⛄',
-    effects: { magnet: { common: 0.5, mythic: 2.5 } },
-    describe: (v) => `Magnet +${n1(v('magnet'))} while planted`,
+    name: 'Collapse',
+    icon: '💥',
+    effects: {
+      radius: { common: 1.6, mythic: 4.5, steps: [1.6, 2.2, 2.9, 3.6, 4.5] },
+      stun: { common: 0.6, mythic: 1.6, steps: [0.6, 0.8, 1, 1.3, 1.6] },
+    },
+    describe: (v) => `Amass ends in a ${n1(v('radius'))} r implosion: Hazards knocked back and stunned ${n1(v('stun'))} s (bosses half)`,
   },
   {
-    id: 'dead_weight',
+    id: 'feast',
     characterId: 'tumble',
-    name: 'Dead Weight',
-    icon: '⚓',
-    effects: { bossStun: { common: 0.3, mythic: 1.5 }, extraParts: { common: 2, mythic: 6 } },
-    describe: (v) => `Hunker boss stuns +${n1(v('bossStun'))} s; hits knock loose +${Math.round(v('extraParts'))} parts`,
+    name: 'Feast',
+    icon: '🍽️',
+    effects: { growth: { common: 0.12, mythic: 0.6, steps: [0.12, 0.2, 0.3, 0.42, 0.6] } },
+    describe: (v) => `+${pct(v('growth'))} growth from everything absorbed during Amass and 1 s after`,
   },
   {
-    id: 'thick_undercoat',
+    id: 'unmoved',
     characterId: 'tumble',
-    name: 'Thick Undercoat',
-    icon: '🧥',
-    effects: { knockbackResistance: { common: 0.02, mythic: 0.2 }, suction: { common: 0.03, mythic: 0.2 } },
-    describe: (v) => `Always: knockback resistance +${pct(v('knockbackResistance'))}, suction −${pct(v('suction'))}`,
+    name: 'Unmoved',
+    icon: '🛡️',
+    effects: {
+      knockbackResistance: { common: 0.02, mythic: 0.2, steps: [0.02, 0.05, 0.09, 0.14, 0.2] },
+      suction: { common: 0.03, mythic: 0.2, steps: [0.03, 0.06, 0.1, 0.15, 0.2] },
+      guard: { common: 0.15, mythic: 0.15 },
+    },
+    describe: (v) => `Always: knockback resistance +${pct(v('knockbackResistance'))}, suction −${pct(v('suction'))}; Amass damage taken −${pct(v('guard'))} more`,
   },
   // --- Zap · Discharge ---
   {
@@ -300,6 +309,24 @@ export const KEEPSAKE_TYPE_IDS: readonly KeepsakeTypeId[] = KEEPSAKE_TYPES.map((
 
 export function getKeepsakeType(id: string): KeepsakeType | undefined {
   return KEEPSAKE_TYPES.find((t) => t.id === id);
+}
+
+/**
+ * Tumble's Keepsakes from before Amass replaced Hunker, mapped to the type that took their place
+ * (mirrored as LEGACY_KEEPSAKE_TYPES in src/shared/keepsakes.ts). Saves, cloud saves and
+ * leaderboard Loadouts with the old ids are read as the new ones.
+ */
+export const LEGACY_KEEPSAKE_TYPES: Readonly<Record<string, KeepsakeTypeId>> = {
+  loose_roots: 'lingering_mass',
+  bristle_back: 'collapse',
+  snowball: 'feast',
+  dead_weight: 'dense_core',
+  thick_undercoat: 'unmoved',
+};
+
+/** A stored type id as today's id (legacy ids renamed; anything else unchanged). */
+export function currentKeepsakeType(id: string): string {
+  return Object.prototype.hasOwnProperty.call(LEGACY_KEEPSAKE_TYPES, id) ? LEGACY_KEEPSAKE_TYPES[id]! : id;
 }
 
 export function keepsakeTypesFor(characterId: string): readonly KeepsakeType[] {
@@ -356,7 +383,8 @@ export function hoardKey(ref: KeepsakeRef): string {
  * rarity, so callers add their counts together.
  */
 export function parseHoardKey(key: string, legacy = false): KeepsakeRef | null {
-  const [type, r, extra] = key.split(':');
+  const [stored, r, extra] = key.split(':');
+  const type = stored && currentKeepsakeType(stored);
   if (!type || r === undefined || extra !== undefined || !getKeepsakeType(type)) return null;
   const rarity = rarityFromId(r) ?? (legacy && /^\d+$/.test(r) ? rarityFromLegacyGrade(Number(r)) : null);
   return rarity === null ? null : { type: type as KeepsakeTypeId, rarity };
@@ -369,7 +397,7 @@ export function parseHoardKey(key: string, legacy = false): KeepsakeRef | null {
 export function refFromStored(raw: { type?: unknown; rarity?: unknown; grade?: unknown }): KeepsakeRef | null {
   const r = raw.rarity;
   const rarity = r !== undefined ? (typeof r === 'number' && Number.isInteger(r) && r >= 1 && r <= MAX_RARITY ? r : null) : rarityFromLegacyGrade(raw.grade);
-  return rarity === null || typeof raw.type !== 'string' ? null : { type: raw.type as KeepsakeTypeId, rarity };
+  return rarity === null || typeof raw.type !== 'string' ? null : { type: currentKeepsakeType(raw.type) as KeepsakeTypeId, rarity };
 }
 
 /** True if a Loadout is legal for a Character (≤ 2 slots, its own types, rarities 1–5). */
@@ -384,7 +412,8 @@ export function isLoadoutFor(characterId: string, loadout: Loadout): boolean {
 
 /**
  * Limits applied after a Loadout's Keepsakes are added up (src/abilities/keepsakeParams.ts), so
- * two copies at any rarity keep the Ability's numbers sane. Only these two bind; every other
+ * two copies at any rarity keep the Ability's numbers sane (a floor for the Decoy, a ceiling for
+ * Amass). Only these two bind; every other
  * effect stays reasonable at two mythic copies, and the stat effects are bounded by the caps.
  */
 export const KEEPSAKE_FLOORS = {
@@ -395,20 +424,24 @@ export const KEEPSAKE_FLOORS = {
    */
   decoyCooldownPerDuration: 1,
   /**
-   * Hunker cooldown per second held never drops below 0.2 s. Binds for two epic Loose Roots or
-   * better (two mythic copies save 1.2 s of the base 1.0 s), so a long hold always costs something.
+   * Amass never channels longer than 3.6 s (2 s base + one mythic Lingering Mass), so two stacked
+   * copies can't hold the whole-map pull open. Binds for two Lingering Masses adding up past
+   * +1.6 s (two legendary, or a rare beside a mythic).
    */
-  hunkerPerSecondHeld: 0.2,
+  amassMaxHold: 3.6,
 } as const;
 
 // --- Felting ---
 
 /** Keepsakes of one type and rarity felted into one of the next rarity. */
 export const FELT_INPUT = 3;
-/** Fluff to felt into `resultRarity`: 160 × r² (rare 640, epic 1,440, legendary 2,560, mythic 4,000). */
-export const feltCost = (resultRarity: number): number => 160 * resultRarity * resultRarity;
 /** Fluff for shedding (discarding) one Keepsake of `rarity`: 40 × r² (common 40 … mythic 1,000). */
 export const shedValue = (rarity: number): number => 40 * rarity * rarity;
+/**
+ * Fluff to felt into `resultRarity`: what shedding the inputs would return, so shedding three of a
+ * kind pays for felting another three (rare 120, epic 480, legendary 1,080, mythic 1,920).
+ */
+export const feltCost = (resultRarity: number): number => FELT_INPUT * shedValue(resultRarity - 1);
 
 /**
  * Highest rarity Felting may produce for a Character: one above the best peak rarity
@@ -436,7 +469,8 @@ export const DROP_RULES = {
 /**
  * How a Keepsake effect changes a Bunny stat. `add` adds the Loadout total; `reduce` multiplies
  * by (1 − Loadout total). `when` marks effects that only apply in an Ability state; the envelope
- * still counts them (except Snowball, which the caps exempt while planted).
+ * still counts them. Amass's own channel effects (slow, suction, Feast) are timed effects above the
+ * cap and not listed.
  */
 export interface KeepsakeStatEffect {
   type: KeepsakeTypeId;
@@ -447,8 +481,8 @@ export interface KeepsakeStatEffect {
 }
 
 export const KEEPSAKE_STAT_EFFECTS: readonly KeepsakeStatEffect[] = [
-  { type: 'thick_undercoat', key: 'knockbackResistance', stat: 'knockbackResistance', op: 'add', when: 'always' },
-  { type: 'thick_undercoat', key: 'suction', stat: 'suctionMultiplier', op: 'reduce', when: 'always' },
+  { type: 'unmoved', key: 'knockbackResistance', stat: 'knockbackResistance', op: 'add', when: 'always' },
+  { type: 'unmoved', key: 'suction', stat: 'suctionMultiplier', op: 'reduce', when: 'always' },
   { type: 'static_cling', key: 'magnet', stat: 'magnetRadius', op: 'add', when: 'meterHalf' },
   { type: 'grounding', key: 'suction', stat: 'suctionMultiplier', op: 'reduce', when: 'meterFull' },
 ];

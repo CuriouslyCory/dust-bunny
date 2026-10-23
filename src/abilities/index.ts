@@ -1,5 +1,5 @@
 /**
- * Character Abilities (Lint · Decoy, Tumble · Hunker, Zap · Discharge). Headless: installed per
+ * Character Abilities (Lint · Decoy, Tumble · Amass, Zap · Discharge). Headless: installed per
  * Run by the Run assembly (installGameplay → installAbilities), so they run in the browser,
  * `pnpm sim` and Vitest alike. Tunables: src/data/abilities.ts, resolved per Run in ./params.ts.
  *
@@ -12,14 +12,14 @@
 import type { Run } from '../game/run';
 import './decoy';
 import './discharge';
-import './hunker';
+import './amass';
 import { installKeepsakeEffects } from './keepsakeEffects';
 import { AbilitySystem, getAbilitySystem } from './system';
 
 export { abilityHud, AbilitySystem, getAbilitySystem, isBoss, type AbilityController, type AbilityHooks, type AbilityHudState } from './system';
-export { addAbilityParamsModifier, baseAbilityParams, resolveAbilityParams, type AbilityParams, type AbilityParamsModifier } from './params';
+export { addAbilityParamsModifier, baseAbilityParams, resolveAbilityParams, type AbilityParams, type AbilityParamsModifier, type AmassParams } from './params';
 export { Decoy, DecoyAbility } from './decoy';
-export { HunkerAbility } from './hunker';
+export { AmassAbility } from './amass';
 export { DischargeAbility } from './discharge';
 export type { AbilityEndReason } from './events';
 export { applyLoadout, abilityParamsFor, keepsakeTotals, type KeepsakeTotals } from './keepsakeParams';

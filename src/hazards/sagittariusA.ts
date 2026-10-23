@@ -174,7 +174,7 @@ export class SagittariusA extends RoboVac9000 {
   private updatePull(run: Run, radius: number): void {
     const b = run.bunny;
     this.pull = 0;
-    if (this.state !== 'hunt' || b.hiddenFromHazards || b.hunkered || bunnySheltered(run, this.cfg.height) || bunnyCanAbsorb(run, this.size)) return;
+    if (this.state !== 'hunt' || b.hiddenFromHazards || bunnySheltered(run, this.cfg.height) || bunnyCanAbsorb(run, this.size)) return;
     const reach = radius + suctionReachFor(this.cfg.suctionReach, b.stats.get('suctionMultiplier'));
     this.pull = suctionFalloff(Math.hypot(b.x - this.x, b.z - this.z) - b.radius, radius, reach);
   }

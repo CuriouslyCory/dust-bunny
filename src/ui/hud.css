@@ -554,7 +554,7 @@
   stroke: var(--mint);
 }
 
-/* Decoy out / planted: the ring counts down the time left. */
+/* Decoy out / Amass held: the ring counts down the time left. */
 .hud-ability.active .fill,
 .touch-ability.active .fill {
   stroke: #ffd166;

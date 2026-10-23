@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHARACTERS } from '../data/characters';
-import { HOARD_STACK_MAX, KEEPSAKE_TYPE_IDS, keepsakeTypesFor, LOADOUT_SLOTS, MAX_RARITY, RARITIES } from '../data/keepsakes';
-import { KEEPSAKE_LOADOUT_SLOTS, KEEPSAKE_MAX_RARITY, KEEPSAKE_RARITY_IDS, KEEPSAKE_STACK_MAX, parseLoadout, parseSharedHoardKey, SHARED_KEEPSAKE_TYPES, sharedHoardKey } from './keepsakes';
+import { HOARD_STACK_MAX, KEEPSAKE_TYPE_IDS, keepsakeTypesFor, LEGACY_KEEPSAKE_TYPES as DATA_LEGACY, LOADOUT_SLOTS, MAX_RARITY, parseHoardKey, RARITIES, refFromStored } from '../data/keepsakes';
+import { KEEPSAKE_LOADOUT_SLOTS, KEEPSAKE_MAX_RARITY, KEEPSAKE_RARITY_IDS, KEEPSAKE_STACK_MAX, LEGACY_KEEPSAKE_TYPES, parseLoadout, parseSharedHoardKey, SHARED_KEEPSAKE_TYPES, sharedHoardKey } from './keepsakes';
 
 describe('shared Keepsake mirror', () => {
   it('matches src/data/keepsakes.ts', () => {
@@ -12,6 +12,24 @@ describe('shared Keepsake mirror', () => {
     expect(KEEPSAKE_RARITY_IDS).toEqual(RARITIES.map((r) => r.id));
     expect(KEEPSAKE_STACK_MAX).toBe(HOARD_STACK_MAX);
     expect(KEEPSAKE_LOADOUT_SLOTS).toBe(LOADOUT_SLOTS);
+    expect(LEGACY_KEEPSAKE_TYPES).toEqual(DATA_LEGACY);
+  });
+
+  it('reads Tumble’s Hunker-era Keepsakes as their Amass replacements', () => {
+    expect(parseLoadout('tumble', [{ type: 'snowball', rarity: 2 }, { type: 'thick_undercoat', grade: 9 }])).toEqual([
+      { type: 'feast', rarity: 2 },
+      { type: 'unmoved', rarity: 5 },
+    ]);
+    expect(parseSharedHoardKey('tumble', 'loose_roots:epic')).toEqual({ type: 'lingering_mass', rarity: 3 });
+    expect(parseSharedHoardKey('tumble', 'bristle_back:4')).toEqual({ type: 'collapse', rarity: 2 });
+    expect(parseSharedHoardKey('lint', 'dead_weight:epic')).toBeNull();
+    // The client parsers agree.
+    expect(parseHoardKey('dead_weight:mythic')).toEqual({ type: 'dense_core', rarity: 5 });
+    expect(refFromStored({ type: 'snowball', rarity: 1 })).toEqual({ type: 'feast', rarity: 1 });
+    for (const [old, now] of Object.entries(LEGACY_KEEPSAKE_TYPES)) {
+      expect(SHARED_KEEPSAKE_TYPES.tumble).toContain(now);
+      expect(SHARED_KEEPSAKE_TYPES.tumble).not.toContain(old);
+    }
   });
 
   it('parses Loadouts: 0–2 of the Character’s own types, duplicates allowed', () => {

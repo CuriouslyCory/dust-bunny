@@ -171,7 +171,7 @@ export class Mop extends BaseHazard {
 
   /**
    * A burning trail: every `interval` s on it the Bunny sheds `shedFraction` of its volume (the
-   * first time it steps on, then while it stays). Not during i-frames, a hunker or a Dust Cloud.
+   * first time it steps on, then while it stays). Not during i-frames or a Dust Cloud.
    */
   private burn(dt: number, run: Run, burn: { shedFraction: number; interval: number }, onTrail: boolean): void {
     this.burnTimer = Math.max(0, this.burnTimer - dt);

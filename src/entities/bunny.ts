@@ -68,10 +68,15 @@ export class Bunny {
 
   // Ability hooks (set by src/abilities; see docs/architecture.md "Hooks").
   /**
-   * Hunker (Tumble): planted. No movement or Dash, no damage (combat filter), no mass shed,
-   * and knockback, suction, push and sticking do nothing. Debris is still absorbed.
+   * Amass (Tumble): channelling its gravity well. Slowed (a timed speed modifier), no Dash,
+   * immune to knockback and pushes (Hazards it touches are moved instead), takes reduced damage
+   * (combat filter, `amassGuard`); suction pulls harder (a timed suctionMultiplier modifier).
    */
-  hunkered = false;
+  amassing = false;
+  /** Fraction of Hazard damage taken off while `amassing` (set by Amass). */
+  amassGuard = 0;
+  /** Largest non-boss Hazard size Amass swallows on contact right now (0 when not amassing). */
+  amassSwallowSize = 0;
   /** Zap's Static meter, 0..1 (null for Characters without one). Drives Zap's glow. */
   staticCharge: number | null = null;
   /** Its look's form (set by the Run when the Galaxy is cleared; it never goes back). */
@@ -200,7 +205,7 @@ export class Bunny {
 
   /** Knockback away from a point/direction; `strength` is in Bunny radii per second. */
   knockback(dirX: number, dirZ: number, strength: number): void {
-    if (this.hunkered) return;
+    if (this.amassing) return;
     const d = Math.hypot(dirX, dirZ) || 1;
     const k = strength * this.radius * (1 - this.stats.get('knockbackResistance'));
     this.impulseX += (dirX / d) * k;

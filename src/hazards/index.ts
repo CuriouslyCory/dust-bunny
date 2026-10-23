@@ -7,8 +7,8 @@
  * object3d under run.entityRoot, and resolves Bunny contact generically:
  *   - hazard.size <= Bunny radius × absorbRatio → absorbed (growth via run.absorbMass,
  *     hazard.onAbsorbed, hazardRemoved {absorbed: true})
- *   - otherwise, while the Bunny is planted (Hunker) and `manager.plantedContact` is set →
- *     plantedContact(run, hazard) (src/abilities: bosses crash as into a wall, others recoil)
+ *   - otherwise, if `manager.contactOverride` is set and returns true for it, that handled the
+ *     contact (src/abilities: Tumble's Amass swallows small Hazards and stops charging bosses)
  *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call)
  *   An `intangible` Hazard (the Expansion) never touches, so none of these apply to it.
  * Spawning policy is pluggable via `manager.director`.
@@ -51,11 +51,6 @@ export interface Hazard {
   readonly intangible?: boolean;
   /** Bunny touches the Hazard and is too small to absorb it. */
   onContact?(run: Run): void;
-  /**
-   * The Hazard ran into a planted (hunkered) Bunny. Optional: without it a BaseHazard recoils
-   * (`recoilFor`). Bosses are handled by the Ability System.
-   */
-  onPlanted?(run: Run): void;
   onAbsorbed?(run: Run): void;
   dispose?(): void;
 }
@@ -105,19 +100,19 @@ export const hazardRegistry = new Registry<HazardDef>('hazard');
 /** Pluggable spawn policy, called every tick before Hazards update. */
 export type HazardDirector = (dt: number, run: Run, manager: HazardManager) => void;
 
-/** Contact with a planted (hunkered) Bunny, replacing onContact (installed by src/abilities). */
-export type PlantedContact = (run: Run, hazard: Hazard) => void;
+/** Ability contact handler (installed by src/abilities): true if it handled the contact, so onContact is skipped. */
+export type ContactOverride = (run: Run, hazard: Hazard) => boolean;
 
 export class HazardManager implements System {
   readonly id = 'hazards';
   readonly order = SYSTEM_ORDER.hazards;
   readonly hazards: Hazard[] = [];
   director: HazardDirector | null = null;
-  /** Called instead of onContact while the Bunny is hunkered (see file header). */
-  plantedContact: PlantedContact | null = null;
+  /** Asked first on every non-absorbing contact (see file header). */
+  contactOverride: ContactOverride | null = null;
   private nextId = 1;
-  /** Absorbed this tick (removed with `hazardRemoved.absorbed`). */
-  private readonly absorbed = new Set<Hazard>();
+  /** Hazards absorbed this tick (removed with hazardRemoved { absorbed: true }). */
+  private readonly absorbedNow = new Set<Hazard>();
 
   constructor(
     private readonly run: Run,
@@ -154,6 +149,8 @@ export class HazardManager implements System {
   update(dt: number, run: Run): void {
     this.director?.(dt, run, this);
     const b = run.bunny;
+    const absorbed = this.absorbedNow;
+    absorbed.clear();
     for (const h of [...this.hazards]) {
       if (h.dead) continue;
       h.update(dt, run);
@@ -161,9 +158,7 @@ export class HazardManager implements System {
       if (canAbsorb(b.radius, b.stats.get('absorbRatio'), h.size)) {
         this.absorb(h);
         if (run.ended) break;
-      } else if (b.hunkered && this.plantedContact) {
-        this.plantedContact(run, h);
-      } else {
+      } else if (!this.contactOverride?.(run, h)) {
         h.onContact?.(run);
         // A boss's last hit can end the Run (the last Area's boss).
         if (run.ended) break;
@@ -171,23 +166,25 @@ export class HazardManager implements System {
     }
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i]!;
-      if (h.dead) this.removeHazard(h, this.absorbed.has(h));
+      if (h.dead) this.removeHazard(h, absorbed.has(h));
     }
-    this.absorbed.clear();
+    absorbed.clear();
   }
 
   /**
-   * The Bunny absorbs `h` whatever its size: growth from its mass, `hazardAbsorbed`, `onAbsorbed`.
-   * Called when the Bunny is big enough, and by a boss whose last hit breaks it.
+   * Absorbs a Hazard into the Bunny now (growth via run.absorbMass, hazardAbsorbed, onAbsorbed);
+   * it is removed at the end of this tick with hazardRemoved { absorbed: true }. The manager calls
+   * it for Hazards the absorb rule allows; Amass calls it for the bigger ones it swallows, and a
+   * boss calls it when its last hit breaks it.
    */
   absorb(h: Hazard): void {
-    if (h.dead) return;
     const run = this.run;
     const b = run.bunny;
+    if (h.dead) return;
     run.hazardsAbsorbed++;
     run.absorbMass(h.size, h.def.mass, h.def.id, { x: h.x, y: 0, z: h.z }, 'hazard');
     h.dead = true;
-    this.absorbed.add(h);
+    this.absorbedNow.add(h);
     run.events.emit('hazardAbsorbed', { hazardId: h.id, defId: h.def.id, size: h.size, radius: b.radius, boss: !!h.def.boss });
     h.onAbsorbed?.(run);
   }

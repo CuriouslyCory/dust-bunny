@@ -24,7 +24,7 @@ export function stepBunnyMovement(bunny: Bunny, input: InputState, dt: number, o
     mz /= mag;
   }
 
-  if (input.dash && bunny.dashCooldownLeft <= 0 && bunny.rooted <= 0 && !bunny.hunkered) {
+  if (input.dash && bunny.dashCooldownLeft <= 0 && bunny.rooted <= 0 && !bunny.amassing) {
     const m = Math.hypot(mx, mz);
     if (m > 0.1) {
       bunny.dashDirX = mx / m;
@@ -38,12 +38,12 @@ export function stepBunnyMovement(bunny: Bunny, input: InputState, dt: number, o
     onDash?.(stats.dashCooldown);
   }
 
-  if (bunny.hunkered) {
-    // Planted (Hunker): no rolling, Dash or external pushes.
-    bunny.vx = bunny.vz = 0;
+  if (bunny.amassing) {
+    // Amass: no Dash or knockback impulses; the slow is a timed speed modifier.
     bunny.impulseX = bunny.impulseZ = 0;
     bunny.dashTime = 0;
-  } else if (bunny.rooted > 0) {
+  }
+  if (bunny.rooted > 0) {
     bunny.vx = 0;
     bunny.vz = 0;
   } else if (bunny.dashTime > 0) {

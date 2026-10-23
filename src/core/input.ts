@@ -12,7 +12,7 @@ export interface InputState {
   dash: boolean;
   /** True for one read after an Ability press (edge-triggered): E, right mouse button, touch button. */
   ability?: boolean;
-  /** True while the Ability input is held down (Hunker). */
+  /** True while the Ability input is held down (Amass). */
   abilityHeld?: boolean;
 }
 
