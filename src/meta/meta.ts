@@ -239,7 +239,7 @@ export class MetaProgress {
     return repairLoadout(characterId, this.store.data.lastLoadout[characterId], this.store.data.characters[characterId]);
   }
 
-  /** Remembers a Loadout (repaired against the Hoard) for the Character on this device. */
+  /** Remembers a Loadout (repaired against the Hoard) for the Character (synced by the cloud save). */
   setLastLoadout(characterId: string, loadout: Loadout): KeepsakeRef[] {
     const repaired = repairLoadout(characterId, loadout, this.store.data.characters[characterId]);
     if (sameLoadout(repaired, this.store.data.lastLoadout[characterId])) return repaired;

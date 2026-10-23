@@ -304,6 +304,25 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect(bad.status).toBe(400);
   });
 
+  it('syncs Loadouts and keeps them when an older bundle omits the field', async () => {
+    const cookie = await signUp(`Lo${RUN}`);
+    const get = async () => (await (await call(progressApi, '/api/progress', { cookie })).json()) as { progress: Progress | null };
+    const put = async (p: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };
+    const hoards = { lint: { hoard: { 'reclaim:rare': 2 }, bossesBeaten: ['robovac_9000'] } };
+    // A row stored without Loadouts reads back without the field.
+    await put(progress(100, 100, 2, {}, hoards));
+    expect((await get()).progress).not.toHaveProperty('loadouts');
+    const loadouts = { lint: [{ type: 'reclaim', rarity: 2 }, { type: 'reclaim', rarity: 2 }] };
+    // Tucking in changes no counter: a tie, stored like spending.
+    expect(await put({ ...progress(100, 100, 2, {}, hoards), loadouts })).toMatchObject({ accepted: true, progress: { loadouts } });
+    // An older bundle (no loadouts) keeps them.
+    expect((await put(progress(120, 130, 3, {}, hoards))).progress.loadouts).toEqual(loadouts);
+    // Emptied on a device: stored empty.
+    expect((await put({ ...progress(120, 130, 3, {}, hoards), loadouts: {} })).progress.loadouts).toEqual({});
+    const bad = await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify({ ...progress(120, 130, 3), loadouts: { lint: [{ type: 'arc', rarity: 1 }] } }) });
+    expect(bad.status).toBe(400);
+  });
+
   it('never lowers universes, even when an upload is refused or an older bundle omits it', async () => {
     const cookie = await signUp(`Uni${RUN}`);
     const put = async (p: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(p) })).json()) as { accepted: boolean; progress: Progress };

@@ -50,7 +50,7 @@ export interface SaveData {
   stats: SaveStats;
   /** Character id → Keepsake Hoard and bosses beaten (synced by the cloud save). */
   characters: Record<string, CharacterHoard>;
-  /** Character id → the Loadout last tucked in on this device (repaired against the Hoard). */
+  /** Character id → the Loadout last tucked in (repaired against the Hoard; synced by the cloud save). */
   lastLoadout: Record<string, KeepsakeRef[]>;
   /** Universe victories (endings) so far; the title reads "Universe N" with N = universes + 1. */
   universes: number;

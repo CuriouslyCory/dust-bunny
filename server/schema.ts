@@ -15,9 +15,9 @@ export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
   AND to_regclass('public.area_scores_user_idx') IS NOT NULL
-  AND (SELECT count(*) = 5 FROM information_schema.columns
+  AND (SELECT count(*) = 6 FROM information_schema.columns
         WHERE table_schema = 'public'
-          AND ((table_name = 'player_progress' AND column_name IN ('characters', 'universes'))
+          AND ((table_name = 'player_progress' AND column_name IN ('characters', 'loadouts', 'universes'))
             OR (table_name = 'leaderboard_scores' AND column_name IN ('loadout', 'universes'))
             OR (table_name = 'area_scores' AND column_name = 'loadout'))) AS ready`;
 
@@ -128,13 +128,14 @@ export const SCHEMA: readonly string[] = [
   // Universes the player had ended when the Run was posted (a Universe victory counts itself); NULL for older clients.
   `ALTER TABLE leaderboard_scores ADD COLUMN IF NOT EXISTS universes integer`,
 
-  // --- Cloud save (Fluff, Upgrades, Keepsake Hoards, stats) for signed-in players ---
+  // --- Cloud save (Fluff, Upgrades, Keepsake Hoards, Loadouts, stats) for signed-in players ---
   `CREATE TABLE IF NOT EXISTS player_progress (
     user_id text PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
     fluff integer NOT NULL CHECK (fluff >= 0),
     upgrades jsonb NOT NULL,
     stats jsonb NOT NULL,
     characters jsonb NOT NULL DEFAULT '{}',
+    loadouts jsonb,
     universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`,
@@ -142,4 +143,6 @@ export const SCHEMA: readonly string[] = [
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}'`,
   // Tables created before Act 9: Universe victories (only ever goes up).
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0)`,
+  // Tables created before Loadouts synced: each Character's remembered Loadout (NULL until a client sends them).
+  `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS loadouts jsonb`,
 ];
