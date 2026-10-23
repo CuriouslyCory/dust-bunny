@@ -1,7 +1,7 @@
 /**
  * Under the Couch: the Bunny's hoard. One tab per Character; its Hoard as a grid of Keepsake types
  * (rows) by rarity (columns) with counts. Choosing a cell shows the Keepsake with Felt (3 → 1 of the
- * next rarity, for 160 × r² Fluff, up to one rarity above the peak of the best boss that Character
+ * next rarity, for 3× the inputs' shed value, up to one rarity above the peak of the best boss that Character
  * has beaten) and Shed (discard one for 40 × r² Fluff). Compact (phone) layouts show one list per type with
  * the buttons inline. Reachable from Character select and results (key U).
  *
