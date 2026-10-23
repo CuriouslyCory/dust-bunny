@@ -124,6 +124,15 @@ describe('Run snapshot', () => {
     expect(back.toSnapshot().placementsGone).toContain(0);
   });
 
+  it('does not count fixed Debris that was removed without being absorbed as gone', () => {
+    const run = createRun(new EventBus(), config({ area: 'solar_system' }));
+    const first = run.house.debrisPlacements[0]!;
+    const d = run.debris.query(first.x, first.z, 1, []).find((x) => x.type.id === first.typeId)!;
+    expect(d).toBeDefined();
+    run.debris.remove(d);
+    expect(run.toSnapshot().placementsGone).not.toContain(0);
+  });
+
   it('rejects snapshots it cannot resume', () => {
     const good = JSON.parse(JSON.stringify(playedRun().toSnapshot()));
     expect(parseRunSnapshot(good)).not.toBeNull();

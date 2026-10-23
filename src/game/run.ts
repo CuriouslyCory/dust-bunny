@@ -444,6 +444,7 @@ export class Run {
   }
 
   absorbDebris(d: Debris): void {
+    this.spawner.noteAbsorbed(d);
     this.debris.remove(d);
     this.debrisAbsorbed++;
     this.absorbMass(d.size, d.type.mass, d.type.id, { x: d.x, y: d.size * 0.5, z: d.z }, 'debris');

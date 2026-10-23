@@ -90,16 +90,22 @@ export class DebrisSpawner implements System {
   readonly order = SYSTEM_ORDER.spawner;
   private timer = 0;
   private readonly scratch: Debris[] = [];
-  /** The Area's fixed placements as populated (null: unknown type or skipped), by placement index. */
-  private placed: (Debris | null)[] = [];
-  /** Placements skipped by the last populate (absorbed before a save). */
-  private skipped: ReadonlySet<number> = new Set();
+  /** Placement index of each fixed placement populated by the last populate. */
+  private placed = new Map<Debris, number>();
+  /** Indexes of fixed placements absorbed this Run or skipped by the last populate (absorbed before a save). */
+  private absorbed = new Set<number>();
 
   constructor(private readonly rng: Rng) {}
 
-  /** Indexes of the Area's fixed placements that were populated and have since gone (absorbed). */
+  /** Indexes of the Area's fixed placements that have been absorbed (culled or destroyed ones are not gone). */
   placementsGone(): number[] {
-    return this.placed.flatMap((d, i) => ((d && !d.alive) || this.skipped.has(i) ? [i] : []));
+    return [...this.absorbed].sort((a, b) => a - b);
+  }
+
+  /** Records `d` as absorbed if it is one of the Area's fixed placements (Run.absorbDebris). */
+  noteAbsorbed(d: Debris): void {
+    const i = this.placed.get(d);
+    if (i !== undefined) this.absorbed.add(i);
   }
 
   private typeIndex(run: Run, type: DebrisType): number {
@@ -113,10 +119,12 @@ export class DebrisSpawner implements System {
     const rng = this.rng;
 
     // Fixed placements (`house.debrisPlacements`), by index; a resumed Run skips the ones already absorbed.
-    this.skipped = new Set(skipPlacements);
-    this.placed = house.debrisPlacements.map((p, n) => {
+    this.absorbed = new Set(skipPlacements);
+    this.placed = new Map();
+    house.debrisPlacements.forEach((p, n) => {
       const i = types.findIndex((t) => t.id === p.typeId);
-      return i >= 0 && !skipPlacements?.has(n) ? debris.spawn(i, p.x, p.z, rng, { rotY: p.rotY }) : null;
+      const d = i >= 0 && !skipPlacements?.has(n) ? debris.spawn(i, p.x, p.z, rng, { rotY: p.rotY }) : null;
+      if (d) this.placed.set(d, n);
     });
 
     // Start cluster: dense small Debris around the spawn (under the couch in the house).
