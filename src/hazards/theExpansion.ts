@@ -15,13 +15,16 @@
  * - **Hubble flow.** While it expands, every loose Debris within `hubble.reach` × the view radius
  *   moves straight away from the Bunny at H × its distance (H ramping like the drain), capped at
  *   `hubble.cap` × the Bunny's max speed, so near Debris is always catchable and far Debris
- *   recedes (Debris reaching the map's edge stops there). Updated in `hubble.slices` interleaved
- *   slices of the field (Debris id modulo slices), each moved by its slice's share of time.
+ *   recedes (Debris reaching the map's edge stops there). Debris carried out of reach and off
+ *   screen is gone (`receded`), so it never piles up just out of view, counted as food, and keeps
+ *   the spawner from restocking. Updated in `hubble.slices` interleaved slices of the field
+ *   (Debris id modulo slices), each moved by its slice's share of time.
  * - **Filament strands** (no soft-lock): every `strands.interval` s, if fewer than `strands.want`
- *   absorbable Debris of at least `meaningful` × the Bunny's radius are within `range` × the view
- *   radius, or the bar is below `strands.low`, a strand of `count` pieces lands in a line beyond
- *   the view (ahead of the Bunny when it is rolling) and drifts in against the flow until it is
- *   within `stop` × the view radius.
+ *   absorbable Debris of at least `meaningful` × the Bunny's radius (strand pieces included) are
+ *   within `range` × the view radius, or the bar is below `strands.low` and fewer than `lowCap`
+ *   strand pieces are about, a strand of `count` pieces lands in a line beyond the view (ahead of
+ *   the Bunny when it is rolling) and drifts in against the flow until it is within `stop` × the
+ *   view radius, where it waits (following a Bunny that rolls off) until it is eaten.
  * - **Notches.** The bar from `gravity.start` to 1 is cut into `maxHits` (AREA_BOSSES.hits, 7)
  *   equal steps (`expansionNotch`); passing one lands a hit that sticks (`bossHit`), and the last
  *   is the bar full.
@@ -40,7 +43,7 @@ import type { Rng } from '../core/rng';
 import { bossHits, THE_EXPANSION, type ExpansionTuning } from '../data/hazards';
 import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
-import { viewRadiusFor } from '../systems/camera';
+import { floorPointVisible, spawnView, viewRadiusFor } from '../systems/camera';
 import { maxSpeedFor } from '../systems/movement';
 import { isFloorFree } from '../systems/spawner';
 import { BaseHazard } from './base';
@@ -83,6 +86,7 @@ export function hubbleSpeed(hubble: number, dist: number, cap: number): number {
 
 const TUG_INTERVAL = 0.25;
 const _debris: Debris[] = [];
+const _gone: Debris[] = [];
 
 export class TheExpansion extends BaseHazard {
   readonly intangible = true;
@@ -101,10 +105,11 @@ export class TheExpansion extends BaseHazard {
   /** Notches the bar has passed (hits that stick); `maxHits` (AREA_BOSSES.hits) collapse it. */
   hits = 0;
   readonly maxHits: number;
-  /** Big Rips so far, filament strands drifted in, and Debris swallowed in the collapse. */
+  /** Big Rips so far, filament strands drifted in, Debris swallowed in the collapse, and Debris the flow carried off. */
   rips = 0;
   strandsSent = 0;
   crunched = 0;
+  receded = 0;
   private timer: number;
   private ripGrace = 0;
   private strandTimer = 0;
@@ -112,7 +117,7 @@ export class TheExpansion extends BaseHazard {
   private flowTick = 0;
   /** 0..1 flash after a Big Rip (the lattice snaps outward, a red ring runs out). */
   private ripFlash = 0;
-  /** Strand pieces still drifting in (exempt from the flow). */
+  /** Strand pieces drifting in or parked round the Bunny until eaten (exempt from the flow). */
   private readonly strands = new Set<Debris>();
   /** Debris rushing into the Bunny during the collapse. */
   private crunch: Debris[] = [];
@@ -228,6 +233,8 @@ export class TheExpansion extends BaseHazard {
     const H = this.hubble;
     const house = run.house;
     const field = run.debris;
+    const view = spawnView(run);
+    _gone.length = 0;
     field.forEach((d) => {
       if (d.id % h.slices !== slice) return;
       const dx = d.x - b.x;
@@ -238,8 +245,16 @@ export class TheExpansion extends BaseHazard {
       const k = (hubbleSpeed(H, dist, cap) * step) / dist;
       const nx = d.x + dx * k;
       const nz = d.z + dz * k;
-      if (isFloorFree(house, nx, nz, d.size)) field.move(d, nx, nz);
+      if (!isFloorFree(house, nx, nz, d.size)) return;
+      // Carried out of reach and off screen: gone over the horizon, so it no longer counts as food
+      // round the Bunny and the spawner restocks (otherwise the flow piles it just out of view).
+      const ox = nx - b.x;
+      const oz = nz - b.z;
+      if (ox * ox + oz * oz > reach2 && !floorPointVisible(ox, oz, view, d.size)) _gone.push(d);
+      else field.move(d, nx, nz);
     });
+    for (const d of _gone) field.remove(d);
+    this.receded += _gone.length;
   }
 
   /** Strands drift in; a new one lands beyond the view when meaningful food near the Bunny runs low. */
@@ -257,10 +272,8 @@ export class TheExpansion extends BaseHazard {
       const dx = b.x - d.x;
       const dz = b.z - d.z;
       const dist = Math.hypot(dx, dz);
-      if (dist <= stop) {
-        this.strands.delete(d);
-        continue;
-      }
+      // Parked: it waits round the Bunny (out of the flow) until it is eaten.
+      if (dist <= stop) continue;
       const step = Math.min(dist - stop, speed * dt);
       const nx = d.x + (dx / dist) * step;
       const nz = d.z + (dz / dist) * step;
@@ -274,9 +287,9 @@ export class TheExpansion extends BaseHazard {
     _debris.length = 0;
     run.debris.query(b.x, b.z, viewR * s.range, _debris);
     let food = 0;
-    for (const d of _debris) if (d.size <= maxSize && d.size >= b.radius * s.meaningful) food++;
-    // Losing (the bar low): a strand every check, whatever is about.
-    if (food + this.strands.size < s.want || this.gravity < s.low) this.sendStrand(run, viewR);
+    for (const d of _debris) if (!this.strands.has(d) && d.size <= maxSize && d.size >= b.radius * s.meaningful) food++;
+    // Losing (the bar low): a strand every check while fewer than `lowCap` pieces are already on their way or waiting.
+    if (food + this.strands.size < s.want || (this.gravity < s.low && this.strands.size < s.lowCap)) this.sendStrand(run, viewR);
   }
 
   /** A strand of `count` pieces in a line pointing at the Bunny, just beyond the view: ahead of it when it rolls. */

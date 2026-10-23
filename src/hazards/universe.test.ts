@@ -21,7 +21,7 @@ import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
 import { createRun, installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
-import { viewRadiusFor } from '../systems/camera';
+import { onScreen, viewRadiusFor } from '../systems/camera';
 import { maxSpeedFor } from '../systems/movement';
 import { createModel } from '../world/models';
 import { absorbRadiusFor } from './common';
@@ -457,6 +457,47 @@ describe('the Expansion', () => {
     expect(d1).toBeLessThan(20 * Math.exp(T.hubble.rate[0]) * 1.03);
     expect(Math.abs(near.z - p.z)).toBeLessThan(1e-6);
     expect(far.z).toBe(farZ);
+  });
+
+  it('Debris the flow carries out of reach and off screen is gone (it never piles up just out of view)', () => {
+    const { run, boss, p } = fight('expansion-recede', { clear: 400 });
+    noStrands(boss);
+    const viewR = viewRadiusFor(run.bunny.radius, run.tier);
+    const i = universeType(run, 0.5);
+    const ring: Debris[] = [];
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const d = run.debris.spawn(i, p.x + Math.cos(a) * viewR * 0.97, p.z + Math.sin(a) * viewR * 0.97, run.rng);
+      if (d) ring.push(d);
+    }
+    expect(ring.length).toBeGreaterThan(4);
+    for (let k = 0; k < 60 * 4; k++) run.hazards.update(STEP, run);
+    expect(boss.receded).toBeGreaterThan(0);
+    for (const d of ring) {
+      if (!d.alive) continue;
+      // Whatever is left is still within reach, or on screen (the camera looks down at an angle).
+      expect(Math.hypot(d.x - p.x, d.z - p.z) <= viewR * T.hubble.reach + 1e-6 || onScreen(run, d.x, d.z, d.size)).toBe(true);
+    }
+  });
+
+  it('a filament strand waits round the Bunny, out of the flow, until it is eaten', () => {
+    const { run, boss, p } = fight('expansion-strand-wait', { clear: 400 });
+    const viewR = viewRadiusFor(run.bunny.radius, run.tier);
+    run.hazards.update(STEP, run);
+    expect(boss.strandsSent).toBe(1);
+    noStrands(boss);
+    const strand: Debris[] = [];
+    run.debris.forEach((d) => strand.push(d));
+    const stop = viewR * T.strands.stop;
+    const speed = T.strands.speed * maxSpeedFor(run.bunny);
+    const arrive = (viewR * T.strands.distance + 3 * strand[0]!.size * T.strands.count - stop) / speed;
+    for (let k = 0; k < 60 * (arrive + 2); k++) run.hazards.update(STEP, run);
+    // Long after it arrived (the flow at full strength), every piece is still there, parked.
+    for (let k = 0; k < 60 * T.ramp; k++) run.hazards.update(STEP, run);
+    for (const d of strand) {
+      expect(d.alive).toBe(true);
+      expect(Math.hypot(d.x - p.x, d.z - p.z)).toBeLessThanOrEqual(stop + 1e-6);
+    }
   });
 
   it('when food runs low, filament strands land beyond the view and drift in against the flow', () => {

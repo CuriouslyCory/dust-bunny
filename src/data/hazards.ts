@@ -2435,14 +2435,15 @@ export interface ExpansionTuning {
     /** A check counts absorbable Debris of at least `meaningful` × the Bunny's radius within `range` × the view radius. */
     meaningful: number;
     range: number;
-    /** Fewer than `want` of them (or the bar below `low`): a strand of `count` pieces lands `distance` × the view radius away. */
+    /** Fewer than `want` of them (or the bar below `low` and fewer than `lowCap` strand pieces about): a strand of `count` pieces lands `distance` × the view radius away. */
     want: number;
     low: number;
+    lowCap: number;
     count: number;
     /** Piece size range (× the largest size the Bunny can absorb). */
     size: readonly [number, number];
     distance: number;
-    /** The strand drifts in at `speed` × the Bunny's max speed until it is within `stop` × the view radius. */
+    /** The strand drifts in at `speed` × the Bunny's max speed until it is within `stop` × the view radius, then waits there until eaten. */
     speed: number;
     stop: number;
     /** Debris types used (the first one this Run has); otherwise the shed ladder's closest size. */
@@ -2470,8 +2471,9 @@ export const THE_EXPANSION: ExpansionTuning = {
     range: 0.6,
     want: 10,
     low: 0.5,
+    lowCap: 20,
     count: 5,
-    size: [0.45, 0.8],
+    size: [0.55, 0.9],
     distance: 1.05,
     speed: 0.45,
     stop: 0.3,

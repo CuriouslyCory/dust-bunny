@@ -39,6 +39,7 @@
  * start at Tier 5 (--boss) or in a later area (--area) are unranked and not checked.
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
+ *                 [--eat=near] [--sight=S]   head for the nearest absorbable Debris instead of the best, seen within S × the view radius (a casual player)
  *                 [--amass=feed|boss] [--decoy=defend|boss] [--boss] [--no-boss [--shares=0.8,0.85]] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe]   start in a later area (as after its previous boss)
  *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
@@ -111,6 +112,10 @@ const noBoss = args.includes('--no-boss');
 const GROWTH_SHARES: readonly number[] = [...(opt('shares')?.split(',').map(Number) ?? [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9]), 1];
 const quiet = args.includes('--quiet');
 const stalls = args.includes('--stalls');
+/** --eat=near: head for the nearest absorbable Debris, whatever its size (a casual player), instead of the best. */
+const eatNear = opt('eat') === 'near';
+/** --sight=S: the bot only looks for Debris within S × the view radius (default 1; a casual player watches round the Bunny). */
+const sight = Number(opt('sight') ?? 1);
 /** Hazards hit as usual (knockback, shedding) but can't kill: measures pacing, not survival. */
 const god = args.includes('--god');
 const traceAt = opt('trace') === undefined ? undefined : Number(opt('trace'));
@@ -499,7 +504,7 @@ class Bot implements InputSource {
     const ratio = bunny.stats.get('absorbRatio');
     this.planner.ensure();
     this.planner.flood();
-    const near = debris.query(bunny.x, bunny.z, viewRadiusFor(r, this.run.tier));
+    const near = debris.query(bunny.x, bunny.z, viewRadiusFor(r, this.run.tier) * sight);
     // Against Sagittarius A*, leave star clusters for it to choke on (two quickly stun it).
     const sgr = this.run.hazards.hazards.find((h): h is SagittariusA => h instanceof SagittariusA && !h.dead && !canAbsorb(r, ratio, h.size));
     let best: Debris | null = null;
@@ -507,11 +512,12 @@ class Bot implements InputSource {
     for (const d of near) {
       if (!canAbsorb(r, ratio, d.size) || debrisLocked(bunny, d) || (sgr && sgr.sgr.clusters.meals[d.type.id] !== undefined) || (this.blacklist.get(d.id) ?? 0) > this.run.time || !reachableBy(house, d.x, d.z, d.size, r)) continue;
       const crow = Math.hypot(d.x - bunny.x, d.z - bunny.z);
-      const quick = ((d.size / r) ** 3 * d.type.mass) / (crow + r);
+      const worth = eatNear ? 1 : (d.size / r) ** 3 * d.type.mass;
+      const quick = worth / (crow + r);
       if (quick <= bestScore) continue; // path length >= straight line, so it can't win
       const path = this.planner.pathTo(d.x, d.z, r + d.size);
       if (path < 0) continue;
-      const score = ((d.size / r) ** 3 * d.type.mass) / (path + r);
+      const score = worth / (path + r);
       if (score > bestScore) {
         bestScore = score;
         best = d;
