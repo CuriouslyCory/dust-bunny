@@ -58,11 +58,11 @@ export function installHazardHud(game: Game): void {
     // The last hit breaks it: the cleared banner says so.
     const left = e.maxHits - e.hits;
     if (left <= 0) return;
-    if (currentBoss() instanceof TheExpansion) announce(`Notch ${e.hits}/${e.maxHits}`, 'Gravity holds it. Keep absorbing!', 1.8);
+    if (currentBoss() instanceof TheExpansion) announce(`Notch ${e.hits}/${e.maxHits}`, 'Gravity holds it. Eat big!', 1.8);
     else announce(`Hit! ${e.hits}/${e.maxHits}`, left === 1 ? 'One more breaks it!' : `${left} more to break it`, 1.8);
   });
   // The Expansion: the bar bottomed out, or it collapses.
-  game.events.on('bossRip', () => announce('Big Rip!', 'Space tore. Absorb to pull it back!', 1.8));
+  game.events.on('bossRip', () => announce('Big Rip!', 'Space tore. Eat the big strands to pull it back!', 1.8));
   game.events.on('bossCollapse', () => announce('Collapse!', 'Everything falls into one place.', 2.2));
   // The boss is gone: drop the fight news and stale captions still queued, so the cleared banner
   // (and the Keepsake reveal behind it) come at once.

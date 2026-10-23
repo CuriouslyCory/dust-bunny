@@ -49,7 +49,7 @@ export const BOSS_INTROS: Readonly<Record<string, BossIntro>> = {
     color: '#b57cff',
   },
   the_expansion: {
-    description: 'Not a thing but a rule: everything drifts apart. Eat fast to pull it back together. If the bar runs empty, the universe tears.',
+    description: 'Not a thing but a rule: everything drifts apart. Eat big things to pull it together; specks barely count. Let the bar empty and space tears.',
     color: '#7f8cff',
   },
 };
