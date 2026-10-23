@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
-import { AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
+import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
@@ -9,7 +9,7 @@ import type { AreaId } from '../world/types';
 import { NEIGHBORHOOD } from '../world/neighborhood';
 import { absorbRadiusFor, hazardFloorFree } from './common';
 import { spawnWeights } from './director';
-import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
+import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
 
@@ -58,14 +58,6 @@ describe('outdoor Hazards', () => {
     expect(absorbRadiusFor(STREET_SWEEPER.size, 0.7)).toBeGreaterThan(tier7);
   });
 
-  it('keeps the Street Sweeper out of reach at Tier 7 entry, but reachable after two stun hits', () => {
-    const ratio = 0.7;
-    const tier7 = getTier(7).minRadius;
-    const { size, chipFactor } = STREET_SWEEPER;
-    expect(absorbRadiusFor(size, ratio)).toBeGreaterThan(tier7);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), ratio)).toBeGreaterThan(tier7);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), ratio)).toBeLessThan(tier7);
-  });
 
   it('outdoor spawn tables only list outdoor Hazards, and bosses / summons are never random picks', () => {
     for (let t = NEIGHBORHOOD_DIRECTOR.firstTier; t <= 7; t++) {
@@ -78,7 +70,7 @@ describe('outdoor Hazards', () => {
     for (const t of DIRECTOR.tiers) for (const id of OUTDOOR) expect(Object.keys(t.types)).not.toContain(id);
   });
 
-  it('the director spawns outdoor Hazards (never house ones) and brings the Street Sweeper at Tier 7', () => {
+  it('the director spawns outdoor Hazards (never house ones) and brings the Street Sweeper at its arrival size', () => {
     const { run, events } = makeRun('outdoor-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -91,14 +83,13 @@ describe('outdoor Hazards', () => {
     };
     step(40);
     expect(run.tier).toBe(5);
-    run.bunny.setRadius(getTier(6).minRadius * 1.1);
+    run.bunny.setRadius(bossArrivalRadius('neighborhood', run.bunny.stats.get('absorbRatio')) * 0.95);
     step(30);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
 
-    run.bunny.setRadius(getTier(7).minRadius * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('neighborhood', run.bunny.stats.get('absorbRatio')) * 1.02);
     step(AREA_BOSSES.neighborhood.arrivalDelay + 1);
-    expect(run.tier).toBe(7);
     expect(bosses).toEqual(['Street Sweeper']);
     expect(run.hazards.count('street_sweeper')).toBe(1);
     for (const id of spawned) expect(HOUSE).not.toContain(id);

@@ -24,8 +24,8 @@
  * channelling). Lint's default beats the issue's policy over 60 seeds (20 → 27 wins). Zap discharges at the nearest Hazard
  * in range once the Static meter is full. --no-ability plays without Abilities (for comparison).
  * The summary also counts boss fights and boss kills per Character. --boss plays only the house
- * boss fight: the Run starts at Tier 5 (fresh Bunny, four random Perks) and stops when the
- * Robo-Vac 9000 is absorbed, so `wins` there is the boss win rate.
+ * boss fight: the Run starts just past the Robo-Vac's arrival size (fresh Bunny, four random
+ * Perks) and stops when the Robo-Vac 9000 is beaten, so `wins` there is the boss win rate.
  *
  * Keepsakes: --loadout=<type>:<rarity>,<type>:<rarity> tucks those Keepsakes in for the Character
  * they belong to (the other Characters play without); --loadout=max gives every Character its
@@ -39,7 +39,7 @@
  * start at Tier 5 (--boss) or in a later area (--area) are unranked and not checked.
  *
  * Usage: pnpm sim [seed ...] [--seeds=N] [--minutes=15] [--chars=lint,tumble,zap] [--no-hazards] [--no-ability]
- *                 [--amass=feed|boss] [--decoy=defend|boss] [--boss] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
+ *                 [--amass=feed|boss] [--decoy=defend|boss] [--boss] [--no-boss [--shares=0.8,0.85]] [--quiet] [--stalls] [--god] [--perks=id,id] [--upgrades=id:level,...]
  *                 [--area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe]   start in a later area (as after its previous boss)
  *                 [--radius=R]   start the Bunny at radius R in the start Area's units (unranked)
  *                 [--difficulty=casual|arcade|hardcore]
@@ -51,7 +51,7 @@ import { EventBus } from '../src/core/events';
 import type { InputSource, InputState } from '../src/core/input';
 import { Rng } from '../src/core/rng';
 import { AREAS } from '../src/data/areas';
-import { getTier, TIERS } from '../src/data/tiers';
+import { TIERS } from '../src/data/tiers';
 import { formatLength } from '../src/data/units';
 import { AREA_ORDER, nextArea, type AreaId } from '../src/world/types';
 import { TUNING } from '../src/data/tuning';
@@ -68,7 +68,8 @@ import { Broom as BroomClass, type Broom } from '../src/hazards/broom';
 import { inBeam, Pulsar } from '../src/hazards/pulsar';
 import { SagittariusA } from '../src/hazards/sagittariusA';
 import { getDifficulty } from '../src/data/difficulty';
-import { AREA_BOSSES, BROOM, tierValue } from '../src/data/hazards';
+import { AREA_BOSSES, bossAbsorbRadius, bossArrivalRadius, BROOM, tierValue } from '../src/data/hazards';
+import { getHazardDirector } from '../src/game/assembly';
 import { getKeepsakeType, isLoadoutFor, MAX_RARITY, rarityFromId, type KeepsakeRef, type KeepsakeTypeId, type Loadout } from '../src/data/keepsakes';
 import { areaSubmission, submissionFromRun } from '../src/net/leaderboard';
 import { areaRadiusAllowed, runRadiusAllowed, validateAreaSubmission, validateSubmission } from '../src/shared/leaderboard';
@@ -100,6 +101,14 @@ const ALL_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['vacuum', '
 const VACUUM_HITS: ReadonlySet<'vacuum' | 'spray' | 'broom'> = new Set(['vacuum']);
 /** Boss fight only: start the house at Tier 5 (the Robo-Vac 9000 arrives 3 s later) and stop when it falls. */
 const bossOnly = args.includes('--boss');
+/**
+ * --no-boss: bosses never arrive (Hazards and Pickups still do); an Area is cleared once the Bunny
+ * could absorb its boss, and the summary shows how long growing to that radius took from each
+ * share of it (for tuning `AreaBoss.lead`).
+ */
+const noBoss = args.includes('--no-boss');
+/** Shares of the absorb radius timed by --no-boss (--shares=0.8,0.85,… to override; 1 is always added). */
+const GROWTH_SHARES: readonly number[] = [...(opt('shares')?.split(',').map(Number) ?? [0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9]), 1];
 const quiet = args.includes('--quiet');
 const stalls = args.includes('--stalls');
 /** Hazards hit as usual (knockback, shedding) but can't kill: measures pacing, not survival. */
@@ -384,7 +393,8 @@ class Bot implements InputSource {
       const d = Math.hypot(dx, dz) || 1;
       const boss = h instanceof RoboVac9000 ? h : null;
       const reach = (h.shape.kind === 'circle' ? h.shape.radius : Math.max(h.shape.halfW, h.shape.halfD)) + r;
-      if (canAbsorb(r, ratio, h.size) || boss?.state === 'stunned') {
+      // A stunned boss takes one hit per stun: once it has landed, back off before it recovers.
+      if (canAbsorb(r, ratio, h.size) || boss?.hittable) {
         if (d < chaseD && d < chaseRange) {
           chase = h;
           chaseD = d;
@@ -744,7 +754,7 @@ interface Validation {
 }
 const summary: Record<
   string,
-  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; stuns: Record<string, number>; loadout: Loadout; v: Validation; acts: Record<string, number[]>; expansion: number[]; rips: number; expansionDeaths: number }
+  { tiers: number[][]; ends: number[]; fluff: number[]; wins: number; deaths: number; n: number; fights: Record<string, number>; kills: Record<string, number>; abilityUses: number; stuns: Record<string, number>; loadout: Loadout; v: Validation; acts: Record<string, number[]>; expansion: number[]; rips: number; expansionDeaths: number; growth: Record<string, number[][]> }
 > = {};
 const BOSS_IDS = AREA_ORDER.map((a) => AREA_BOSSES[a].id);
 const modifiers = upgradeModifiers(upgrades);
@@ -789,6 +799,8 @@ for (const characterId of chars) {
     expansion: [] as number[],
     rips: 0,
     expansionDeaths: 0,
+    /** --no-boss: per Area, per GROWTH_SHARES entry, seconds from that share of the boss's absorb radius to all of it. */
+    growth: {} as Record<string, number[][]>,
   });
   for (const seed of seeds) {
     const events = new EventBus();
@@ -836,7 +848,7 @@ for (const characterId of chars) {
     let bossWon = false;
     if (bossOnly) {
       events.on('bossDefeated', () => (bossWon = true));
-      run.bunny.setRadius(getTier(5).minRadius * 1.02);
+      run.bunny.setRadius(bossArrivalRadius('house', run.bunny.stats.get('absorbRatio')) * 1.02);
     }
     const log: string[] = [];
     const perkRng = new Rng(`${seed}:perks`);
@@ -856,10 +868,11 @@ for (const characterId of chars) {
       });
       events.on('bunnyDamaged', (e) => {
         hits++;
-        log.push(`${fmt(run.time)} T${run.tier} r=${run.bunny.radius.toFixed(1)} hit by ${e.source} hp=${e.health}/${e.maxHealth}`);
+        const boss = run.hazards.hazards.find((h): h is RoboVac9000 => h instanceof RoboVac9000 && h.def.id === e.source);
+        log.push(`${fmt(run.time)} T${run.tier} r=${run.bunny.radius.toFixed(1)} hit by ${e.source}${boss ? ` (${boss.state}${boss.ashState !== 'idle' ? `, ${boss.ashState}` : ''})` : ''} hp=${e.health}/${e.maxHealth}`);
       });
       events.on('bossSpawned', (e) => log.push(`${fmt(run.time)} boss spawned, ${Number.isFinite(e.absorbRadius) ? `absorb at r=${e.absorbRadius.toFixed(1)}` : 'not absorbable by size'} (r=${run.bunny.radius.toFixed(1)})`));
-      events.on('bossHit', (e) => log.push(`${fmt(run.time)} boss chipped → absorb at r=${e.absorbRadius.toFixed(1)} (r=${run.bunny.radius.toFixed(1)})`));
+      events.on('bossHit', (e) => log.push(`${fmt(run.time)} boss hit ${e.hits}/${e.maxHits} (r=${run.bunny.radius.toFixed(1)})`));
       events.on('bossStunned', (e) => log.push(`${fmt(run.time)} boss stunned (${e.cause ?? 'spiky'})`));
       events.on('bossSwallowed', (e) => log.push(`${fmt(run.time)} boss swallowed ${e.typeId} (${e.fullness}/${e.threshold})`));
       events.on('pickupCollected', (e) => log.push(`${fmt(run.time)} pickup ${e.defId}`));
@@ -870,8 +883,33 @@ for (const characterId of chars) {
     const dt = 1 / 60;
     const steps = minutes * 60 * 60;
     const t0 = performance.now();
-    for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || nextArea(run.area) === null || run.tier < AREA_BOSSES[run.area].tier); i++) {
+    /** --no-boss: when the Bunny first reached each share of the current Area's boss absorb radius. */
+    let crossed: (number | undefined)[] = [];
+    let crossedArea: AreaId | null = null;
+    const arrivalOf = (r: Run) => bossArrivalRadius(r.area, r.bunny.stats.get('absorbRatio'));
+    for (let i = 0; i < steps && !run.ended && !bossWon && (withHazards || nextArea(run.area) === null || run.bunny.radius < arrivalOf(run)); i++) {
       run.update(dt);
+      if (noBoss && !run.ended) {
+        const director = getHazardDirector(run);
+        if (director) director.bossSpawned = true;
+        if (crossedArea !== run.area) {
+          crossedArea = run.area;
+          crossed = [];
+        }
+        const need = bossAbsorbRadius(run.area, run.bunny.stats.get('absorbRatio'));
+        GROWTH_SHARES.forEach((f, k) => {
+          if (crossed[k] === undefined && run.bunny.radius >= f * need) crossed[k] = run.time;
+        });
+        if (Number.isFinite(need) && run.bunny.radius >= need && !run.isAreaCleared(run.area)) {
+          const done = run.time;
+          const rows = (sum.growth[run.area] ??= GROWTH_SHARES.map((): number[] => []));
+          GROWTH_SHARES.forEach((_, k) => {
+            if (crossed[k] !== undefined) rows[k]!.push(done - crossed[k]!);
+          });
+          log.push(`${fmt(run.time)} ${run.area}: could absorb its boss at r=${run.bunny.radius.toFixed(2)}`);
+          run.clearArea();
+        }
+      }
       // Skip the walk, unless the Bunny already rolled through the exit this tick.
       if (leaveArea) {
         if (run.area === leaveArea) run.enterNextArea();
@@ -928,6 +966,11 @@ for (const [id, s] of Object.entries(summary)) {
   if (s.fights.the_expansion) {
     const xs = [...s.expansion].sort((a, b) => a - b);
     console.log(`          the Expansion (spawn → collapse): median ${fmt(med(xs))}, range ${fmt(xs[0])}–${fmt(xs[xs.length - 1])} (${xs.length} collapses / ${s.fights.the_expansion} fights), Big Rips ${s.rips}, deaths during the fight ${s.expansionDeaths}`);
+  }
+  const grown = AREA_ORDER.filter((a) => s.growth[a]);
+  if (grown.length) {
+    console.log(`          growth to the boss's absorb radius (median s from ${GROWTH_SHARES.map((f) => `${Math.round(f * 100)}%`).join(' / ')}):`);
+    for (const a of grown) console.log(`            ${a.padEnd(13)} ${s.growth[a]!.map((xs) => String(Math.round(med(xs) ?? NaN)).padStart(4)).join(' ')}  (${s.growth[a]![0]!.length} runs)`);
   }
   if (s.loadout.length) console.log(`          loadout ${s.loadout.map((k) => `${k.type}:${k.rarity}`).join(', ')}`);
   if (validate) {

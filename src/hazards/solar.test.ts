@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { AREAS } from '../data/areas';
 import {
+  bossAbsorbRadius,
+  bossArrivalRadius,
   AREA_BOSSES,
   AREA_DIRECTORS,
   COMET,
@@ -29,7 +31,7 @@ import { spawnWeights } from './director';
 import { hazardRegistry, type Hazard } from './index';
 import { ringPath, type LintRoller } from './lintRoller';
 import type { Mop } from './mop';
-import { bossSizeAfterHits, type BossState } from './robovac';
+import { type BossState } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import { TheSun, isBlockingGiant } from './theSun';
 import type { UprightVacuum } from './uprightVacuum';
@@ -81,6 +83,15 @@ function clearGiants(run: Run): void {
 }
 
 describe('solar system Hazards', () => {
+  it('arrives short of its absorb radius (about a minute of growth) and 3 hits break it', () => {
+    expect(absorbRadiusFor(THE_SUN.size, ratio)).toBeCloseTo(4, 1);
+    expect(bossArrivalRadius('solar_system', ratio)).toBeLessThan(bossAbsorbRadius('solar_system', ratio));
+    expect(bossAbsorbRadius('solar_system', ratio)).toBeCloseTo(absorbRadiusFor(THE_SUN.size, ratio));
+    expect(AREA_BOSSES.solar_system).toMatchObject({ id: 'the_sun', hits: 3 });
+    expect(hazardRegistry.require('the_sun').boss).toBe(true);
+    expect(THE_SUN.miniId).toBeUndefined();
+  });
+
   it('run in Solar System units (1 = 0.01 AU) with their own models', () => {
     const { run } = makeRun();
     expect(run.unit).toBe(1.496e11);
@@ -109,16 +120,6 @@ describe('solar system Hazards', () => {
     }
   });
 
-  it('keeps the Sun out of reach at Tier 17 entry, but reachable after two chips', () => {
-    const tier17 = tierRadius(makeRun().run, 17);
-    const { size, chipFactor } = THE_SUN;
-    expect(absorbRadiusFor(size, ratio)).toBeCloseTo(4, 1);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), ratio)).toBeGreaterThan(tier17);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), ratio)).toBeLessThan(tier17);
-    expect(hazardRegistry.require('the_sun').boss).toBe(true);
-    expect(THE_SUN.miniId).toBeUndefined();
-    expect(AREA_BOSSES.solar_system).toEqual({ id: 'the_sun', tier: 17, arrivalDelay: 4 });
-  });
 
   it('solar system spawn tables list only solar system Hazards, Solar Flares from Tier 17, never the Sun', () => {
     for (let t = SOLAR_DIRECTOR.firstTier; t <= 17; t++) {
@@ -135,7 +136,7 @@ describe('solar system Hazards', () => {
     expect(tierValue(ROGUE_ASTEROID.speed, 17)).toBe(ROGUE_ASTEROID.speed[16]);
   });
 
-  it('the director spawns solar system Hazards and brings the Sun at Tier 17', () => {
+  it('the director spawns solar system Hazards and brings the Sun at its arrival size', () => {
     const { run, events } = makeRun('solar-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -144,13 +145,12 @@ describe('solar system Hazards', () => {
     events.on('bossSpawned', (e) => bosses.push(e.name));
     run.bunny.health = 999;
     for (let i = 0; i < 60 * 30 && !run.ended; i++) run.update(1 / 60);
-    run.bunny.setRadius(tierRadius(run, 16) * 2.6);
+    run.bunny.setRadius(bossArrivalRadius('solar_system', run.bunny.stats.get('absorbRatio')) * 0.95);
     for (let i = 0; i < 60 * 60 && !run.ended; i++) run.update(1 / 60);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
-    run.bunny.setRadius(tierRadius(run, 17) * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('solar_system', run.bunny.stats.get('absorbRatio')) * 1.02);
     for (let i = 0; i < 60 * (AREA_BOSSES.solar_system.arrivalDelay + 1) && !run.ended; i++) run.update(1 / 60);
-    expect(run.tier).toBe(17);
     expect(bosses).toEqual(['The Sun']);
     expect(run.hazards.count('the_sun')).toBe(1);
     for (const id of spawned) expect([...SOLAR_HAZARDS, 'the_sun']).toContain(id);
@@ -441,18 +441,20 @@ describe('the Sun', () => {
     expect(ofType(run, [HOT_JUPITER_ID]).length).toBe(0);
   });
 
-  it('ramming it in an eclipse chips it: prominences scatter and one prominence arc hides', () => {
+  it('ramming it in an eclipse lands a hit: prominences scatter and one prominence arc hides', () => {
     const { run, events, boss, b } = hunting('prominences', 12);
     quiet(boss);
     boss.abilityStun(run, 3, 'decoy');
-    const hits: number[] = [];
-    events.on('bossHit', (e) => hits.push(e.size));
+    const hits: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     const before = ofType(run, [PROMINENCE_ID]).length;
     b.teleport(boss.x + THE_SUN.contactRadius + b.radius * 0.9, boss.z);
     boss.onContact(run);
-    expect(hits).toEqual([bossSizeAfterHits(1, THE_SUN.size, THE_SUN.chipFactor)]);
+    expect(hits).toEqual(['1/3']);
+    // A hit no longer shrinks it.
+    expect(boss.size).toBe(THE_SUN.size);
     const pieces = ofType(run, [PROMINENCE_ID]).length - before;
-    expect(pieces).toBeGreaterThan(THE_SUN.chipPieces / 2);
+    expect(pieces).toBeGreaterThan(THE_SUN.hitPieces / 2);
     expect(boss.model.getObjectByName('prominence_l')!.visible).toBe(false);
     expect(boss.model.getObjectByName('prominence_r')!.visible).toBe(true);
     expect(boss.regrow[0]).toBeCloseTo(THE_SUN.prominenceRegrow);

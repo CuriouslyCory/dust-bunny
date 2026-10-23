@@ -1,6 +1,6 @@
 /**
- * The Ice Sheet (continent boss, Tier 13; ICE_SHEET in src/data/hazards.ts): the bosses' state
- * machine (RoboVac9000: intro, hunt, telegraphed charge, stun, chip, absorb) reskinned as a slab of
+ * The Ice Sheet (continent boss; ICE_SHEET in src/data/hazards.ts): the bosses' state
+ * machine (RoboVac9000: intro, hunt, telegraphed charge, stun, hit, absorb) reskinned as a slab of
  * continental ice. Slow, enormous, and:
  *
  * - **It pushes everything in front of it.** No suction: while it moves (hunting or charging), a
@@ -11,9 +11,9 @@
  *   stuns it like a wall crash in the other Areas; the coast, the map edge and any other obstacle
  *   just stop it (no stun). Abilities (a Decoy clog, an Amass crash, a Discharge) and Spiky Dash
  *   still stun it: they are the Characters' own tools, not the terrain.
- * - **Chips calve off as icebergs.** Every `summonInterval` s while it hunts, an iceberg breaks off a
+ * - **Hits calve off icebergs.** Every `summonInterval` s while it hunts, an iceberg breaks off a
  *   front corner (`calving_l` / `calving_r`, hidden until it regrows); a mountain crash calves both
- *   corners; ramming it while stunned scatters `chipPieces` icebergs. They are `calved_iceberg`
+ *   corners; ramming it while stunned scatters `hitPieces` icebergs. They are `calved_iceberg`
  *   Debris (src/data/iceSheetDebris.ts), absorbable by the Bunny that knocked them off.
  *
  * Mountain ranges, for the map: an Obstacle counts when it is furniture whose def is one of the
@@ -74,7 +74,7 @@ export class IceSheet extends RoboVac9000 {
   private readonly ice: IceSheetTuning;
   /** Seconds until each front corner (`calving_l`, `calving_r`) has a chunk to calve again. */
   readonly regrow: [number, number] = [0, 0];
-  /** Icebergs calved so far (corner calvings and chip pieces). */
+  /** Icebergs calved so far (corner calvings and hit pieces). */
   calved = 0;
   private nextCorner = 0;
 
@@ -83,7 +83,7 @@ export class IceSheet extends RoboVac9000 {
     this.ice = cfg;
   }
 
-  /** Model-unit lengths (BulldozeTuning, CalveTuning) to world units: full-size model scale × chips. */
+  /** Model-unit lengths (BulldozeTuning, CalveTuning) to world units: full-size model scale × `scale` (1: hits don't shrink it). */
   private get k(): number {
     return (this.cfg.size / this.cfg.modelSize) * this.scale;
   }
@@ -153,11 +153,11 @@ export class IceSheet extends RoboVac9000 {
     }
   }
 
-  /** Chip pieces are icebergs. */
-  protected override scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
+  /** Hit pieces are icebergs. */
+  protected override scatterParts(run: Run, count: number, size: number, inner: number, outer: number): void {
     const type = run.debris.types.find((t) => t.id === CALVED_ICEBERG_ID);
     if (!type) {
-      super.scatterChips(run, count, size, inner, outer);
+      super.scatterParts(run, count, size, inner, outer);
       return;
     }
     this.calved += scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer, type);
@@ -208,7 +208,7 @@ export const iceSheetDef = hazardRegistry.register({
   id: 'ice_sheet',
   name: 'Ice Sheet',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius (hits never shrink it).
   footprint: { radius: ICE_SHEET.contactRadius, height: ICE_SHEET.height },
   mass: ICE_SHEET.mass,
   modelId: ICE_SHEET.modelId,

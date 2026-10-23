@@ -22,9 +22,13 @@
  *   radius, or the bar is below `strands.low`, a strand of `count` pieces lands in a line beyond
  *   the view (ahead of the Bunny when it is rolling) and drifts in against the flow until it is
  *   within `stop` × the view radius.
- * - **The Big Rip.** At 0 the bar bottoms out: 1 damage (`bunny.damage`), the Bunny sheds
- *   `rip.shedFraction`, the bar restarts at `ripReset` with `ripGrace` s of no drain (`bossRip`).
- *   Ignoring the fight eventually kills.
+ * - **Notches.** The bar from `gravity.start` to 1 is cut into `maxHits` (AREA_BOSSES.hits, 7)
+ *   equal steps (`expansionNotch`); passing one lands a hit that sticks (`bossHit`), and the last
+ *   is the bar full.
+ * - **The Big Rip.** At its floor (`ripFloor`: 0 before the first notch, then `gravity.start`
+ *   below the last notch passed) the bar bottoms out: 1 damage (`bunny.damage`), the Bunny sheds
+ *   `rip.shedFraction`, the bar restarts `ripReset` above the floor with `ripGrace` s of no drain
+ *   (`bossRip`). Ignoring the fight eventually kills.
  * - **Collapse.** At 1 it collapses (`bossCollapse`): the other Hazards are pulled in, every
  *   Debris within `collapse.reach` × the view radius rushes into the Bunny over
  *   `collapse.duration` s (the ending's first shot: the last galaxy filament is absorbed), then
@@ -33,7 +37,7 @@
 import { AdditiveBlending, Mesh, type Material, type Object3D } from 'three';
 import type { GameEvents } from '../core/events';
 import type { Rng } from '../core/rng';
-import { THE_EXPANSION, type ExpansionTuning } from '../data/hazards';
+import { bossHits, THE_EXPANSION, type ExpansionTuning } from '../data/hazards';
 import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { viewRadiusFor } from '../systems/camera';
@@ -53,6 +57,15 @@ export type ExpansionState = 'intro' | 'expanding' | 'collapse';
  */
 export function tugGain(cfg: ExpansionTuning, size: number, radius: number): number {
   return cfg.gravity.gain * (size / Math.max(1e-6, radius)) ** 3;
+}
+
+/**
+ * Gravity at notch `k` of `notches` (k = notches is 1, the collapse): the bar from `gravity.start`
+ * to 1 in equal steps.
+ */
+export function expansionNotch(cfg: ExpansionTuning, k: number, notches: number): number {
+  const start = cfg.gravity.start;
+  return k >= notches ? 1 : start + ((1 - start) * k) / notches;
 }
 
 /** H (1/s) and the drain (per s) `fightTime` s after the intro, ramping over `ramp` s. */
@@ -85,6 +98,9 @@ export class TheExpansion extends BaseHazard {
   readonly arrivalRadius: number;
   hubble = 0;
   drain = 0;
+  /** Notches the bar has passed (hits that stick); `maxHits` (AREA_BOSSES.hits) collapse it. */
+  hits = 0;
+  readonly maxHits: number;
   /** Big Rips so far, filament strands drifted in, and Debris swallowed in the collapse. */
   rips = 0;
   strandsSent = 0;
@@ -117,6 +133,7 @@ export class TheExpansion extends BaseHazard {
     super(id, def, x, z, Infinity, cfg.modelId);
     this.shape = { kind: 'circle', radius: cfg.footprint };
     this.gravity = cfg.gravity.start;
+    this.maxHits = bossHits(def.id);
     this.arrivalRadius = run.bunny.radius;
     this.timer = cfg.introTime;
     this.grid = this.model.getObjectByName('grid') ?? null;
@@ -127,6 +144,14 @@ export class TheExpansion extends BaseHazard {
     this.offAbsorbed = run.events.on('debrisAbsorbed', (e) => this.absorbed(e));
     this.x = run.bunny.x;
     this.z = run.bunny.z;
+  }
+
+  /**
+   * The Big Rip's floor: `gravity.start` below the last notch passed (0 before the first), so a
+   * Rip never takes a hit back and restarts the bar `ripReset` above it.
+   */
+  get ripFloor(): number {
+    return this.hits > 0 ? Math.max(0, expansionNotch(this.cfg, this.hits, this.maxHits) - this.cfg.gravity.start) : 0;
   }
 
   /** Pull towards gravity from anything absorbed while it expands. */
@@ -168,18 +193,24 @@ export class TheExpansion extends BaseHazard {
     const rise = Math.min(this.pending, g.maxRise * dt);
     this.pending -= rise;
     this.gravity = Math.min(1, this.gravity + rise);
+    // Each notch the bar passes is a hit that sticks; the last one (the bar full) collapses it.
+    while (this.hits < this.maxHits && this.gravity >= expansionNotch(c, this.hits + 1, this.maxHits)) {
+      this.hits++;
+      run.events.emit('bossHit', { hazardId: this.id, hits: this.hits, maxHits: this.maxHits });
+    }
     if (this.gravity >= 1) {
       this.startCollapse(run);
       return;
     }
+    const floor = this.ripFloor;
     if (this.ripGrace > 0) this.ripGrace -= dt;
-    else this.gravity = Math.max(0, this.gravity - this.drain * dt);
+    else this.gravity = Math.max(floor, this.gravity - this.drain * dt);
     this.tugTimer -= dt;
     if (this.tugTimer <= 0) {
       this.tugTimer = TUG_INTERVAL;
       run.events.emit('bossTug', { hazardId: this.id, gravity: this.gravity, pending: this.pending, drain: this.drain, hubble: this.hubble });
     }
-    if (this.gravity <= 0) this.rip(run);
+    if (this.gravity <= floor) this.rip(run);
     this.flow(dt, run);
     this.feedStrands(dt, run);
     this.spinRing(dt, 0.2 + this.hubble * 3);
@@ -290,7 +321,7 @@ export class TheExpansion extends BaseHazard {
     const damaged = run.bunny.damage(c.rip.damage, this.def.id);
     // Like every Hazard hit, only a hit that lands sheds (i-frames, Bubble Wrap, a revive).
     const volume = damaged && run.bunny.alive ? shedMass(run, this.rng, c.rip.shedFraction, this.def.id).volume : 0;
-    this.gravity = c.gravity.ripReset;
+    this.gravity = this.ripFloor + c.gravity.ripReset;
     this.ripGrace = c.gravity.ripGrace;
     this.ripFlash = 1;
     this.rips++;

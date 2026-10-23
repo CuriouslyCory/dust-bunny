@@ -11,7 +11,7 @@ import {
   validateSubmission,
   type ScoreSubmission,
 } from './leaderboard';
-import { computeAreaScore, computeScore } from './score';
+import { AREA_CLEAR_RADIUS, AREA_EXIT_RADIUS, computeAreaScore, computeScore } from './score';
 
 function submission(over: Partial<ScoreSubmission> = {}): ScoreSubmission {
   const s = { name: 'Fluffy', character: 'lint', maxRadius: 12.5, debrisAbsorbed: 340, tierReached: 3, durationMs: 240_000, victory: false, score: 0, ...over };
@@ -193,20 +193,23 @@ describe('validateAreaSubmission', () => {
     expect(areaErr({ ...area(), runId: 'a b c d e f g h' })).toBe('runId');
   });
 
-  it('needs the boss Tier and plausible growth', () => {
-    expect(areaErr(area({ maxRadius: 30 }))).toBe('maxRadius'); // Tier 4: the Robo-Vac 9000 never came
-    expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 150 }))).toBe('maxRadius');
+  it("needs the boss's arrival size and plausible growth", () => {
+    expect(areaErr(area({ maxRadius: AREA_CLEAR_RADIUS.house - 1 }))).toBe('maxRadius'); // the Robo-Vac 9000 never came
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: AREA_CLEAR_RADIUS.neighborhood - 5 }))).toBe('maxRadius');
     expect(areaErr(area({ radiusIn: 30 }))).toBe('radiusIn'); // a Run starts small
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 0.2, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBe('radiusIn'); // arrived before the Robo-Vac fell
-    expect(areaErr(area({ area: 'city', radiusIn: 100, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBe('radiusIn');
+    // Beating the Robo-Vac means absorbing it: no Bunny leaves the house at its bare arrival size.
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: AREA_CLEAR_RADIUS.house + 1, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBe('radiusIn');
+    expect(areaErr(area({ area: 'neighborhood', radiusIn: AREA_EXIT_RADIUS.house * 0.92, maxRadius: 190, debrisAbsorbed: 2000, durationMs: 500_000 }))).toBeNull();
+    expect(areaErr(area({ area: 'city', radiusIn: AREA_CLEAR_RADIUS.neighborhood - 10, maxRadius: 840, debrisAbsorbed: 4000, durationMs: 800_000 }))).toBe('radiusIn');
     expect(areaErr(area({ maxRadius: 600, durationMs: 1_000_000 }))).toBe('maxRadius'); // far beyond anything the house offers
     expect(areaErr(area({ area: 'neighborhood', radiusIn: 56, maxRadius: 900, debrisAbsorbed: 2000, durationMs: 1_000_000 }))).toBe('maxRadius');
     expect(areaErr(area({ maxRadius: 0.5 }))).toBe('maxRadius'); // below radiusIn
     expect(areaErr(area({ durationMs: 10_000 }))).toBe('maxRadius'); // too fast
     expect(areaErr(area({ debrisAbsorbed: 100_000 }))).toBe('debrisAbsorbed');
-    // Continent: a real-size re-base (≈0.004 units) never arrives; the Ice Sheet comes at Tier 13 (3 units).
+    // Continent: a real-size re-base (≈0.004 units) never arrives; the Ice Sheet comes at its arrival size.
     expect(areaErr(area({ area: 'continent', radiusIn: 0.0042, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBe('radiusIn');
-    expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: 2.5, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBe('maxRadius');
+    expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: AREA_CLEAR_RADIUS.continent - 0.2, debrisAbsorbed: 1500, durationMs: 290_000 }))).toBe('maxRadius');
     expect(areaErr(area({ area: 'continent', radiusIn: 0.85, maxRadius: 4.2, debrisAbsorbed: 1500, durationMs: 30_000 }))).toBe('maxRadius');
   });
 

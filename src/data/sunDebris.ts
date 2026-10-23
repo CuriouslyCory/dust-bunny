@@ -4,8 +4,8 @@
  * 0.01 AU). Neither comes from the spawner (no room weights) or from shedding (`pickShedType` skips
  * types without room weights): the boss places them with an explicit size.
  *
- * - `prominence`: the Sun's chip pieces, scattered when the Bunny rams it while it is stunned
- *   (sized like any boss chip: 0.45 × the Bunny's radius). Renders the `prominence` Blender prop.
+ * - `prominence`: the Sun's hit pieces, scattered when the Bunny rams it while it is stunned
+ *   (sized like any boss's hit pieces: 0.45 × the Bunny's radius). Renders the `prominence` Blender prop.
  * - `hot_jupiter`: a giant the Sun swings round near the Bunny when no giant planet it can't absorb
  *   is near (THE_SUN.giants), so its charges have something to crash into once Jupiter is eaten.
  *   Sized max(its size, margin × the Bunny's absorb limit). Renders the `jupiter` prop.

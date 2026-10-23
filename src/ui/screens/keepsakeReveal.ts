@@ -1,8 +1,8 @@
 /**
  * Keepsake reveal (Run paused): shows what a boss left in the Bunny's fur. Opened by the HUD's
- * reward moment (src/ui/keepsakeHud.ts) once the area-cleared banner has had its time. Each drop
- * gets a chip with its effect; a first kill gets the choose-1-of-3 card (keys 1–3). The highlighted
- * type is already in the Hoard; Enter / Space / Esc or the button lock it in (tracker.lock) and
+ * reward moment (src/ui/keepsakeHud.ts) a few seconds after the kill, holding the area-cleared
+ * banner until it closes. Each drop gets a chip with its effect; a first kill gets the choose-1-of-3
+ * card (keys 1–3). The highlighted type is already in the Hoard; Enter / Space / Esc or the button lock it in (tracker.lock) and
  * resume play (or the waiting Perk draft).
  */
 import { getAudio } from '../../audio';
@@ -112,6 +112,8 @@ export function registerKeepsakeRevealScreen(): void {
         },
         exit() {
           params = null;
+          // The area-cleared banner held while the reveal was up picks up where it was.
+          game.hud.releaseBanner();
         },
         update(dt) {
           if (armed <= 0) return;

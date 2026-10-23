@@ -32,7 +32,7 @@ import type { LintRoller } from './lintRoller';
 import { HAZARD_MODEL_SIZES } from './models';
 import type { Mop } from './mop';
 import type { Roomba } from './roomba';
-import { expansionRates, hubbleSpeed, tugGain, type TheExpansion } from './theExpansion';
+import { expansionNotch, expansionRates, hubbleSpeed, tugGain, type TheExpansion } from './theExpansion';
 import type { UprightVacuum } from './uprightVacuum';
 
 const UNIVERSE_HAZARDS = ['quasar', 'colliding_galaxy', 'gamma_ray_burst', 'cosmic_void', 'dark_energy_gust'];
@@ -124,7 +124,7 @@ describe('universe Hazards', () => {
     expect(DIRECTOR_EXCLUDE).toContain('the_expansion');
     for (const t of GALAXY_DIRECTOR.tiers) for (const id of UNIVERSE_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
     expect(tierValue(GAMMA_RAY_BURST.range, 21)).toBe(GAMMA_RAY_BURST.range[20]);
-    expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', tier: 21, arrivalDelay: 4 });
+    expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', hits: 7, paceTier: 21, size: Infinity, tier: 21, arrivalDelay: 4 });
     expect(peakRarityForBoss('the_expansion')).toBe(5);
   });
 
@@ -495,6 +495,33 @@ describe('the Expansion', () => {
     expect(b.radius).toBeLessThan(r0);
     expect(boss.gravity).toBeCloseTo(T.gravity.ripReset, 5);
     expect(boss.rips).toBe(1);
+  });
+
+  it('notches: passing each of the 7 is a hit that sticks; a Big Rip comes gravity.start below the last one', () => {
+    const { run, events, boss, b } = fight('expansion-notches', { clear: 60 });
+    noStrands(boss);
+    expect(boss.maxHits).toBe(7);
+    const hits: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
+    const notch = (k: number) => expansionNotch(T, k, 7);
+    expect(notch(0)).toBeCloseTo(T.gravity.start);
+    expect(notch(7)).toBe(1);
+    boss.gravity = notch(3) + 0.001;
+    run.hazards.update(STEP, run);
+    expect(hits).toEqual(['1/7', '2/7', '3/7']);
+    expect(boss.hits).toBe(3);
+    expect(boss.ripFloor).toBeCloseTo(notch(3) - T.gravity.start, 5);
+    // Draining back below a notch never takes the hit back; the floor is the Big Rip.
+    const hp = b.health;
+    const rips: number[] = [];
+    events.on('bossRip', () => rips.push(boss.gravity));
+    boss.gravity = boss.ripFloor + 0.0001;
+    for (let i = 0; i < 30; i++) run.hazards.update(STEP, run);
+    expect(boss.hits).toBe(3);
+    expect(b.health).toBe(hp - T.rip.damage);
+    expect(rips).toHaveLength(1);
+    expect(boss.gravity).toBeCloseTo(boss.ripFloor + T.gravity.ripReset, 5);
+    expect(hits).toHaveLength(3);
   });
 
   it('a Big Rip that does not land (i-frames) sheds nothing', () => {

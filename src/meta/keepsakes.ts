@@ -15,7 +15,7 @@
  *   Leaving without choosing keeps the first offer.
  * - Credited on `bossDefeated`, so a Run that later ends in death or a quit keeps them.
  * - Unranked Runs (`?debug`, `?area=` starts) drop nothing and don't count the boss as beaten.
- * - Chips don't matter: how a boss is beaten never changes the reward.
+ * - Hits don't matter: how a boss is beaten never changes the reward.
  *
  *   const tracker = new KeepsakeTracker(meta, (e) => events.emit('keepsakesDropped', e));
  *   tracker.start({ seed, characterId, difficulty, ranked });   // runStarted

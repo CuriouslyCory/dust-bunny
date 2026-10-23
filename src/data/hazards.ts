@@ -6,15 +6,15 @@
  *
  * A Hazard is absorbable once size ≤ Bunny radius × absorbRatio (0.7 by default), so with
  * the default ratio: Lint Roller at r ≈ 10, Spray Bottle ≈ 11.4, Mop ≈ 21.4, Roomba ≈ 24.3,
- * Broom ≈ 37, Upright Vacuum ≈ 43, Robo-Vac 9000 ≈ 51 (lower after stun hits). Outdoors:
- * Sprinkler and Leaf Blower ≈ 64, Robotic Mower ≈ 79, Lawn Mower ≈ 93, Street Sweeper ≈ 214
- * (≈ 182 after one chip, ≈ 155 after two). City: Mini Scrubber ≈ 200, Pressure Washer ≈ 243,
- * Floor Scrubber ≈ 271, Litter Vacuum ≈ 314, Street Flusher ≈ 429, Garbage Truck ≈ 800 (≈ 680
- * after one chip, ≈ 578 after two). Region (in its unit, 1 = 10 m): Mini Compactor ≈ 1.07, Landfill
- * Compactor ≈ 1.5, Crop Duster ≈ 1.79, River Barge ≈ 2.14, Snowplow ≈ 2.43, Water Bomber ≈ 3.29,
- * Freight Train ≈ 3.5, Incinerator ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two). Continent (in its
- * unit, 1 = 10 km): Tornado ≈ 1.57, Volcano ≈ 1.86, River Surge ≈ 2.14, Glacier Tongue ≈ 2.71,
- * Hurricane ≈ 3.43, Ice Sheet ≈ 4 (≈ 3.4 after one chip, ≈ 2.89 after two).
+ * Broom ≈ 37, Upright Vacuum ≈ 43, Robo-Vac 9000 ≈ 51. Outdoors: Sprinkler and Leaf Blower ≈ 64,
+ * Robotic Mower ≈ 79, Lawn Mower ≈ 93, Street Sweeper ≈ 214. City: Mini Scrubber ≈ 200, Pressure
+ * Washer ≈ 243, Floor Scrubber ≈ 271, Litter Vacuum ≈ 314, Street Flusher ≈ 429, Garbage Truck ≈ 800.
+ * Region (in its unit, 1 = 10 m): Mini Compactor ≈ 1.07, Landfill Compactor ≈ 1.5, Crop Duster
+ * ≈ 1.79, River Barge ≈ 2.14, Snowplow ≈ 2.43, Water Bomber ≈ 3.29, Freight Train ≈ 3.5,
+ * Incinerator ≈ 4. Continent (in its unit, 1 = 10 km): Tornado ≈ 1.57, Volcano ≈ 1.86, River Surge
+ * ≈ 2.14, Glacier Tongue ≈ 2.71, Hurricane ≈ 3.43, Ice Sheet ≈ 4. Hits never shrink a boss: it
+ * stays at full size until its last hit (`AREA_BOSSES[area].hits`) breaks it, or the Bunny grows
+ * to its absorb radius (`bossAbsorbRadius`).
  *
  * `mass` is the growth multiplier when absorbed (Debris are ~1), so Hazards are a big gain.
  *
@@ -27,7 +27,9 @@
  * stays escapable at every Tier; it is multiplied by the Bunny's suctionMultiplier stat.
  */
 import type { HazardModelId } from '../hazards/models';
-import type { AreaId } from '../world/types';
+import { nextArea, type AreaId } from '../world/types';
+import { areaUnit } from './areas';
+import { getTier } from './tiers';
 
 /** Seconds a Roomba / Mop / Upright Vacuum holds still after landing a hit (no pinning against walls). */
 export const HAZARD_RECOIL = 1.4;
@@ -462,7 +464,7 @@ export const UPRIGHT_VACUUM: AirConeTuning = {
   modelSize: 30,
 };
 
-/** Area boss (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet): hunt, telegraphed charges, stun + chip, summons. */
+/** Area boss (Robo-Vac 9000, Street Sweeper, Garbage Truck, Incinerator, Ice Sheet): hunt, telegraphed charges, stun + hit, summons. */
 export interface BossTuning {
   /** Absorb size at spawn. */
   size: number;
@@ -484,12 +486,11 @@ export interface BossTuning {
   telegraph: number;
   chargeSpeed: number;
   chargeDistance: number;
-  /** Stunned after a charge crashes into something; ram it while stunned to chip it. */
+  /** Stunned after a charge crashes into something; ram it while stunned to land a hit (AREA_BOSSES.hits break it). */
   stunTime: number;
   recover: number;
-  /** Each chip multiplies size by this (and sheds absorbable parts). */
-  chipFactor: number;
-  chipPieces: number;
+  /** Absorbable parts each hit knocks loose. */
+  hitPieces: number;
   suctionReach: number;
   suctionStrength: number;
   summonInterval: number;
@@ -541,8 +542,8 @@ export interface AshTuning {
   laneColor?: string;
 }
 
-export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
-  /** Absorb size at spawn. Needs Bunny radius ≈ 51 at absorbRatio 0.7. */
+export const ROBOVAC_9000: BossTuning = {
+  /** Absorb size (hits never shrink it). Needs Bunny radius ≈ 51 at absorbRatio 0.7; otherwise 3 hits (`AREA_BOSSES`) break it. */
   size: 36,
   /** Contact radius at full size (model footprint ~35). */
   contactRadius: 34,
@@ -563,8 +564,7 @@ export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
   chargeDistance: 700,
   stunTime: 2.6,
   recover: 0.9,
-  chipFactor: 0.88,
-  chipPieces: 6,
+  hitPieces: 6,
   suctionReach: 50,
   suctionStrength: 0.25,
   summonInterval: 13,
@@ -575,8 +575,6 @@ export const ROBOVAC_9000: BossTuning & { arrivalDelay: number } = {
   onDefeat: 'openExit',
   modelId: 'robovac_9000',
   modelSize: 36,
-  /** Seconds after reaching Tier 5 before the boss arrives. */
-  arrivalDelay: 3,
 };
 
 // ── Neighborhood Hazards (Tiers 5–7, Bunny radius ≈ 50–250 cm) ──
@@ -684,9 +682,8 @@ export const SPRINKLER: TurretTuning = {
 };
 
 /**
- * Street Sweeper (neighborhood boss, Tier 7). Needs Bunny radius ≈ 214 at absorbRatio 0.7,
- * ≈ 182 after one chip and ≈ 155 after two (Tier 7 starts at 160). Absorbing it opens the road
- * to the city.
+ * Street Sweeper (neighborhood boss). Needs Bunny radius ≈ 214 at absorbRatio 0.7 to absorb it on
+ * contact; otherwise 3 hits (`AREA_BOSSES`) break it. Absorbing it opens the road to the city.
  */
 export const STREET_SWEEPER: BossTuning = {
   size: 150,
@@ -708,8 +705,7 @@ export const STREET_SWEEPER: BossTuning = {
   chargeDistance: 2600,
   stunTime: 2.8,
   recover: 1,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   suctionReach: 180,
   suctionStrength: 0.25,
   summonInterval: 14,
@@ -836,9 +832,8 @@ export const STREET_FLUSHER: MopTuning = {
 };
 
 /**
- * Garbage Truck (city boss, Tier 9). Needs Bunny radius ≈ 800 at absorbRatio 0.7, ≈ 680 after
- * one chip and ≈ 578 after two (Tier 9 starts at 600). Its compactor sucks the Bunny in while it
- * hunts; buildings and the concrete barrier stun its charges. Absorbing it opens the highway
+ * Garbage Truck (city boss). Needs Bunny radius ≈ 800 at absorbRatio 0.7 to absorb it on contact;
+ * otherwise 3 hits (`AREA_BOSSES`) break it. Its compactor sucks the Bunny in while it hunts; buildings and the concrete barrier stun its charges. Absorbing it opens the highway
  * on-ramp to the region.
  */
 export const GARBAGE_TRUCK: BossTuning = {
@@ -861,8 +856,7 @@ export const GARBAGE_TRUCK: BossTuning = {
   chargeDistance: 9000,
   stunTime: 3,
   recover: 1,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   suctionReach: 700,
   suctionStrength: 0.3,
   summonInterval: 14,
@@ -1040,8 +1034,8 @@ export const WATER_BOMBER: AirConeTuning = {
 };
 
 /**
- * The Incinerator (region boss, Tier 11): rail-mounted waste plant. Needs Bunny radius ≈ 4 units
- * at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 11 starts at 3). Its feed
+ * The Incinerator (region boss): rail-mounted waste plant. Needs Bunny radius ≈ 4 units at
+ * absorbRatio 0.7 to absorb it on contact; otherwise 3 hits (`AREA_BOSSES`) break it. Its feed
  * conveyor sucks the Bunny in while it hunts, its chimney fires ash volleys that shed mass, towns
  * and the map edge stun its charges, and it summons mini compactors. Absorbing it clears the
  * Region: the motorway west to the Continent opens.
@@ -1067,8 +1061,7 @@ export const INCINERATOR: BossTuning = {
   chargeDistance: 45,
   stunTime: 3,
   recover: 1,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   suctionReach: 4,
   suctionStrength: 0.35,
   summonInterval: 14,
@@ -1246,8 +1239,7 @@ export const HURRICANE: AirConeTuning = {
  * is within `reach` of the front cliff, and whose centre is within `halfWidth` (+ half its radius)
  * of the centre line, is pushed away at `strength` × its max speed (`applyPush`); loose Debris up
  * to `debrisSize` (world units) in that band is shoved ahead of the cliff. `front`, `halfWidth` and
- * `reach` are model units at full size (Continent units at model scale 1), scaled with the model
- * and its chips.
+ * `reach` are model units at full size (Continent units at model scale 1), scaled with the model.
  */
 export interface BulldozeTuning {
   /** Front cliff distance ahead of the centre (the model is 4.02 deep). */
@@ -1262,8 +1254,8 @@ export interface BulldozeTuning {
 /**
  * Icebergs calving off the Ice Sheet (Debris type `calved_iceberg`, src/data/iceSheetDebris.ts):
  * every `summonInterval` s while it hunts, `summonCount` break off a front corner (the `calving_l`
- * / `calving_r` node hides for `regrow` s); a mountain crash calves both corners; a chip scatters
- * `chipPieces` icebergs. A calved iceberg is `sizeRadii` × the Bunny's radius, within
+ * / `calving_r` node hides for `regrow` s); a mountain crash calves both corners; a hit scatters
+ * `hitPieces` icebergs. A calved iceberg is `sizeRadii` × the Bunny's radius, within
  * [minSize, maxSize].
  */
 export interface CalveTuning {
@@ -1282,11 +1274,11 @@ export interface IceSheetTuning extends BossTuning {
 }
 
 /**
- * The Ice Sheet (continent boss, Tier 13): slow, enormous, and it pushes everything in front of it.
+ * The Ice Sheet (continent boss): slow, enormous, and it pushes everything in front of it.
  * Same state machine as the other bosses (src/hazards/iceSheet.ts), but only a charge into a
  * mountain range stuns it (the coast and other obstacles just stop it), it calves absorbable
  * icebergs instead of summoning, and it has no suction: its front bulldozes. Needs Bunny radius ≈ 4
- * units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 13 starts at 3).
+ * units at absorbRatio 0.7 to absorb it on contact; otherwise 3 hits (`AREA_BOSSES`) break it.
  * Absorbing it clears the Continent (the last built Area, so the Run is won).
  */
 export const ICE_SHEET: IceSheetTuning = {
@@ -1312,8 +1304,7 @@ export const ICE_SHEET: IceSheetTuning = {
   chargeDistance: 36,
   stunTime: 3.5,
   recover: 1.4,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   suctionReach: 0,
   suctionStrength: 0,
   /** Calving interval and icebergs per calving (no minis). */
@@ -1508,7 +1499,7 @@ export const MINI_SWEEPER: RoombaTuning = {
  * The Orbital Sweeper's capture net: while it hunts, a Bunny within `reach` of the net tip
  * (`front` ahead of its centre) and within `halfAngle` of its facing is pulled towards the tip at
  * `strength` × its max speed (fading with distance). `front` and `reach` are model units at full
- * size (Globe units at model scale 1), scaled with the model and its chips.
+ * size (Globe units at model scale 1), scaled with the model.
  */
 export interface NetTuning {
   front: number;
@@ -1540,12 +1531,12 @@ export interface OrbitalSweeperTuning extends BossTuning {
 }
 
 /**
- * The Orbital Sweeper (globe boss, Tier 15): a net-and-laser cleanup satellite. Same state machine
+ * The Orbital Sweeper (globe boss): a net-and-laser cleanup satellite. Same state machine
  * as the other bosses (src/hazards/orbitalSweeper.ts): it hunts with its capture net (a pull at
  * the front only), telegraphs charges with a red lane, fires twin laser volleys (`ash`: red bolts
  * that shed mass), and summons a Kessler swarm of mini sweepers. Only a charge into the Moon stuns
- * it. Needs Bunny radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two
- * (Tier 15 starts at 3). Absorbing it clears the Globe (the last built Area, so the Run is won).
+ * it. Needs Bunny radius ≈ 4 units at absorbRatio 0.7 to absorb it on contact; otherwise 3 hits
+ * (`AREA_BOSSES`) break it. Absorbing it clears the Globe (the last built Area, so the Run is won).
  */
 export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
   size: 2.8,
@@ -1570,8 +1561,7 @@ export const ORBITAL_SWEEPER: OrbitalSweeperTuning = {
   chargeDistance: 40,
   stunTime: 3.5,
   recover: 1.2,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   /** No radial suction: the net pulls at the front only (`net`). */
   suctionReach: 0,
   suctionStrength: 0,
@@ -1771,7 +1761,7 @@ export const SOLAR_FLARE: AirConeTuning = {
  * its surface is pushed straight away from it at up to `strength` × its max speed (fading to 0 at
  * `reach`; `applyPush`, so an Amassing or hidden Bunny is not pushed), unless the Bunny can absorb
  * it. Loose Debris up to `debrisSize` in that ring is blown outward at up to `debrisSpeed`. World
- * units at full size, scaled with its chips.
+ * units at full size, scaled with the model.
  */
 export interface SolarWindTuning {
   reach: number;
@@ -1803,20 +1793,20 @@ export interface SunTuning extends BossTuning {
   giants: GiantTuning;
   /** Glow (emissive intensity) multiplier during a stun: the eclipse. */
   eclipseGlow: number;
-  /** Seconds before a chipped prominence (`prominence_l` / `prominence_r`) shows again. */
+  /** Seconds before a prominence (`prominence_l` / `prominence_r`) hidden by a hit shows again. */
   prominenceRegrow: number;
-  /** Debris type its chips knock loose (default: the Sun's `prominence`, src/data/sunDebris.ts). */
-  chipTypeId?: string;
+  /** Debris type its hits knock loose (default: the Sun's `prominence`, src/data/sunDebris.ts). */
+  partTypeId?: string;
 }
 
 /**
- * The Sun (solar system boss, Tier 17): the bosses' state machine (src/hazards/theSun.ts). It
+ * The Sun (solar system boss): the bosses' state machine (src/hazards/theSun.ts). It
  * hunts inside its solar wind (a push away from it, not when the Bunny can absorb it), telegraphs
  * coronal mass ejections as charges with a red lane, and throws flare volleys (`ash`, orange). Only
  * a charge into a giant planet the Bunny can't absorb yet stuns it (an eclipse: the glow dims and
- * the wind stops); chips are prominences (`prominence` Debris, src/data/sunDebris.ts). Needs Bunny
- * radius ≈ 4 units at absorbRatio 0.7, ≈ 3.4 after one chip and ≈ 2.89 after two (Tier 17 starts
- * at 3). Absorbing it clears the Solar System: the heliopause opens onto the Galaxy.
+ * the wind stops); a hit knocks prominences loose (`prominence` Debris, src/data/sunDebris.ts). Needs
+ * Bunny radius ≈ 4 units at absorbRatio 0.7 to absorb it on contact; otherwise 3 hits
+ * (`AREA_BOSSES`) break it. Absorbing it clears the Solar System: the heliopause opens onto the Galaxy.
  */
 export const THE_SUN: SunTuning = {
   size: 2.8,
@@ -1841,8 +1831,7 @@ export const THE_SUN: SunTuning = {
   chargeDistance: 42,
   stunTime: 3.8,
   recover: 1.2,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   /** No suction: the solar wind pushes instead (`wind`). */
   suctionReach: 0,
   suctionStrength: 0,
@@ -2102,9 +2091,9 @@ export interface IndigestionTuning {
 export interface SagittariusTuning extends BossTuning {
   feed: FeedTuning;
   clusters: IndigestionTuning;
-  /** Debris type its chips knock loose (`relativistic_jet`, src/data/galaxyDebris.ts). */
-  chipTypeId: string;
-  /** Seconds before a chipped `jet_n` shows again. */
+  /** Debris type its hits knock loose (`relativistic_jet`, src/data/galaxyDebris.ts). */
+  partTypeId: string;
+  /** Seconds before `jet_n`, hidden by a hit, shows again. */
   jetRegrow: number;
   /**
    * The camera bend (src/fx/lensing.ts): lensing strength while it isn't pulling the Bunny
@@ -2115,13 +2104,14 @@ export interface SagittariusTuning extends BossTuning {
 }
 
 /**
- * Sagittarius A* (galaxy boss, Tier 19; src/hazards/sagittariusA.ts): the bosses' state machine
+ * Sagittarius A* (galaxy boss; src/hazards/sagittariusA.ts): the bosses' state machine
  * reskinned as the biggest vacuum there is. It hunts inside a pull strong enough to bend the
  * camera, its suction drags loose Debris in and swallows it (`feed`), and two star clusters
  * swallowed within a few seconds give it indigestion: it is stunned and can be rammed
  * (`clusters`). Its charges are lunges (the map edge ends one without a stun); its volley is a
- * relativistic jet (`ash`); chips are `relativistic_jet` Debris. Needs Bunny radius 4 units at
- * absorbRatio 0.7, 3.4 after one chip and 2.89 after two (Tier 19 starts at 3). Absorbing it
+ * relativistic jet (`ash`); a hit knocks `relativistic_jet` Debris loose. Needs Bunny radius 4
+ * units at absorbRatio 0.7 to absorb it on contact; otherwise 5 hits (`AREA_BOSSES`) break it.
+ * Absorbing it
  * clears the Galaxy: the intergalactic gate opens onto the Universe.
  */
 export const SAGITTARIUS_A: SagittariusTuning = {
@@ -2146,8 +2136,7 @@ export const SAGITTARIUS_A: SagittariusTuning = {
   chargeDistance: 28,
   stunTime: 4.2,
   recover: 1.2,
-  chipFactor: 0.85,
-  chipPieces: 8,
+  hitPieces: 8,
   /** The strongest pull of any boss: half the Bunny's speed at the disc's edge, out to 12 units. */
   suctionReach: 12,
   suctionStrength: 0.5,
@@ -2195,7 +2184,7 @@ export const SAGITTARIUS_A: SagittariusTuning = {
     margin: 1.2,
     gap: 2.5,
   },
-  chipTypeId: 'relativistic_jet',
+  partTypeId: 'relativistic_jet',
   jetRegrow: 6,
   lens: { idle: 0.4, full: 1, lean: 0.22, roll: 0.1 },
 };
@@ -2404,9 +2393,11 @@ export const DARK_ENERGY_GUST: AirConeTuning = {
  * is a tug-of-war bar, `gravity` in [0, 1]: absorbing anything pulls it up by
  * `gain` × (size / r₀)³ (r₀: the Bunny's radius when it arrived), the expansion drains it at a rate ramping from `drain[0]` to
  * `drain[1]` over `ramp` s. At 1 it collapses (`collapse`: every Debris in view rushes into the
- * Bunny, then `bossDefeated` and `run.clearArea()`, the Universe's `victory`); at 0 the Big Rip
- * (`rip`) deals 1 damage, sheds 6 %, and the bar restarts at `ripReset` after `ripGrace` s
- * without drain.
+ * Bunny, then `bossDefeated` and `run.clearArea()`, the Universe's `victory`). The bar from
+ * `gravity.start` to 1 is cut into 7 notches (`AREA_BOSSES.universe.hits`); passing one is a hit
+ * that sticks (`bossHit`). At its floor (0 before the first notch, then `gravity.start` below the
+ * last notch passed) the Big Rip (`rip`) deals 1 damage, sheds 6 %, and the bar restarts
+ * `ripReset` above the floor after `ripGrace` s without drain.
  *
  * While it is alive the Hubble flow (`hubble`) pushes every loose Debris within `reach` × the view
  * radius straight away from the Bunny at H × distance, H ramping from `rate[0]` to `rate[1]` over
@@ -2431,8 +2422,8 @@ export interface ExpansionTuning {
   /**
    * The bar: `start`; absorbing adds `gain` × (size / r₀)³ to a pending pool (at most
    * `maxPending`) that flows into the bar at up to `maxRise` per s; the drain ramps from
-   * `drain[0]` to `drain[1]` per s; after a Big Rip it restarts at `ripReset` with `ripGrace` s of
-   * no drain.
+   * `drain[0]` to `drain[1]` per s; after a Big Rip it restarts `ripReset` above its floor
+   * (`ripFloor`) with `ripGrace` s of no drain.
    */
   gravity: { start: number; gain: number; maxRise: number; maxPending: number; drain: readonly [number, number]; ripReset: number; ripGrace: number };
   hubble: { rate: readonly [number, number]; reach: number; cap: number; slices: number };
@@ -2560,7 +2551,7 @@ export const NEIGHBORHOOD_DIRECTOR = {
       interval: [7, 5],
       types: { robo_mower: { weight: 1, max: 2 }, lawn_mower: { weight: 1, max: 2 }, leaf_blower: { weight: 0.9, max: 2 }, sprinkler: { weight: 0.7, max: 2 } },
     },
-    // Tier 7 (r ≥ 160): the Street Sweeper arrives; everything else is absorbable by now.
+    // Tier 7 (r ≥ 160): everything else is absorbable by now (the Street Sweeper arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2590,7 +2581,7 @@ export const CITY_DIRECTOR = {
       interval: [7, 5],
       types: { floor_scrubber: { weight: 1, max: 2 }, street_flusher: { weight: 1, max: 2 }, litter_vacuum: { weight: 0.9, max: 2 }, pressure_washer: { weight: 0.7, max: 2 } },
     },
-    // Tier 9 (r ≥ 600): the Garbage Truck arrives; everything else is absorbable by now.
+    // Tier 9 (r ≥ 600): everything else is absorbable by now (the Garbage Truck arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2623,7 +2614,7 @@ export const REGION_DIRECTOR = {
       interval: [8, 6],
       types: { landfill_compactor: { weight: 1, max: 2 }, crop_duster: { weight: 1, max: 2 }, snowplow: { weight: 0.8, max: 1 }, river_barge: { weight: 0.7, max: 1 } },
     },
-    // Tier 11 (r ≥ 3): Freight Trains and Water Bombers join, and the Incinerator arrives.
+    // Tier 11 (r ≥ 3): Freight Trains and Water Bombers join (the Incinerator arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2655,7 +2646,7 @@ export const CONTINENT_DIRECTOR = {
       interval: [8, 6],
       types: { tornado: { weight: 1, max: 2 }, volcano: { weight: 1, max: 2 }, glacier_tongue: { weight: 0.8, max: 1 }, river_surge: { weight: 0.7, max: 1 } },
     },
-    // Tier 13 (r ≥ 3): hurricanes join, and the Ice Sheet arrives.
+    // Tier 13 (r ≥ 3): hurricanes join (the Ice Sheet arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2686,7 +2677,7 @@ export const GLOBE_DIRECTOR = {
       interval: [8, 6],
       types: { debris_satellite: { weight: 1, max: 2 }, asat_laser: { weight: 1, max: 2 }, space_station: { weight: 0.8, max: 1 }, reentry_burn: { weight: 0.7, max: 1 } },
     },
-    // Tier 15 (r ≥ 3): hurricanes join, and the Orbital Sweeper arrives.
+    // Tier 15 (r ≥ 3): hurricanes join (the Orbital Sweeper arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2717,7 +2708,7 @@ export const SOLAR_DIRECTOR = {
       interval: [8, 6],
       types: { rogue_asteroid: { weight: 1, max: 2 }, sunspot: { weight: 0.8, max: 2 }, comet: { weight: 0.9, max: 1 }, sungrazer: { weight: 0.7, max: 1 } },
     },
-    // Tier 17 (r ≥ 3): solar flares join, and the Sun arrives.
+    // Tier 17 (r ≥ 3): solar flares join (the Sun arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2748,7 +2739,7 @@ export const GALAXY_DIRECTOR = {
       interval: [8, 6],
       types: { black_hole: { weight: 1, max: 2 }, pulsar: { weight: 0.8, max: 2 }, globular_cluster: { weight: 0.9, max: 1 }, supernova_remnant: { weight: 0.7, max: 1 } },
     },
-    // Tier 19 (r ≥ 3): supernovae join, and Sagittarius A* arrives.
+    // Tier 19 (r ≥ 3): supernovae join (Sagittarius A* arrives by size: `bossArrivalRadius`).
     {
       budget: [4, 5],
       interval: [6, 5],
@@ -2807,18 +2798,99 @@ export const AREA_DIRECTORS: Record<AreaId, AreaDirector> = {
   universe: UNIVERSE_DIRECTOR,
 };
 
-/** Each area's boss: def id, the Bunny Tier it arrives at, and the delay after reaching it. */
-export const AREA_BOSSES: Readonly<Record<AreaId, { readonly id: string; readonly tier: number; readonly arrivalDelay: number }>> = {
-  house: { id: 'robovac_9000', tier: 5, arrivalDelay: 3 },
-  neighborhood: { id: 'street_sweeper', tier: 7, arrivalDelay: 4 },
-  city: { id: 'garbage_truck', tier: 9, arrivalDelay: 4 },
-  region: { id: 'incinerator', tier: 11, arrivalDelay: 4 },
-  continent: { id: 'ice_sheet', tier: 13, arrivalDelay: 4 },
-  globe: { id: 'orbital_sweeper', tier: 15, arrivalDelay: 4 },
-  solar_system: { id: 'the_sun', tier: 17, arrivalDelay: 4 },
-  galaxy: { id: 'sagittarius_a', tier: 19, arrivalDelay: 4 },
-  universe: { id: 'the_expansion', tier: 21, arrivalDelay: 4 },
+/**
+ * Each area's boss. `hits`: rams while it is stunned that break it (its health; the HUD shows the
+ * pips). `size`: its absorb size in the Area's unit, so a Bunny that grows to `size / absorbRatio`
+ * absorbs it without a fight (Infinity: never, the Expansion). It arrives `arrivalDelay` s after
+ * the Bunny reaches `lead` × that absorb radius (about a minute of gathering short of it, so the
+ * player chooses between growing and fighting), or, for a boss never absorbed by size, after
+ * reaching `tier`.
+ */
+export interface AreaBoss {
+  readonly id: string;
+  readonly hits: number;
+  /**
+   * The Tier its speeds are tuned for (where it used to arrive). The Bunny's speed grows with its
+   * radius, so below that Tier's size the boss moves (and fires) proportionally slower (`bossPace`).
+   */
+  readonly paceTier: number;
+  readonly size: number;
+  readonly lead?: number;
+  readonly tier?: number;
+  readonly arrivalDelay: number;
+}
+
+/**
+ * `lead` per Area, tuned with `pnpm sim --no-boss --shares=…` (bosses held back; median over the
+ * three Characters): the bot needs about 55–75 s of growth from `lead` × the absorb radius to all
+ * of it everywhere. Growth is uneven, so the shares differ: the House's 0.69 (≈ 35 cm, Tier 4)
+ * sits before the slow stretch below Tier 5, the Neighborhood and City grow slowly near the end,
+ * and from the Region on growth speeds up through each Act's first Tier, so their bosses come
+ * at about half the absorb radius.
+ */
+export const AREA_BOSSES: Readonly<Record<AreaId, AreaBoss>> = {
+  house: { id: 'robovac_9000', hits: 3, paceTier: 5, size: ROBOVAC_9000.size, lead: 0.69, arrivalDelay: 3 },
+  neighborhood: { id: 'street_sweeper', hits: 3, paceTier: 7, size: STREET_SWEEPER.size, lead: 0.87, arrivalDelay: 4 },
+  city: { id: 'garbage_truck', hits: 3, paceTier: 9, size: GARBAGE_TRUCK.size, lead: 0.88, arrivalDelay: 4 },
+  region: { id: 'incinerator', hits: 3, paceTier: 11, size: INCINERATOR.size, lead: 0.55, arrivalDelay: 4 },
+  continent: { id: 'ice_sheet', hits: 3, paceTier: 13, size: ICE_SHEET.size, lead: 0.5, arrivalDelay: 4 },
+  globe: { id: 'orbital_sweeper', hits: 3, paceTier: 15, size: ORBITAL_SWEEPER.size, lead: 0.58, arrivalDelay: 4 },
+  solar_system: { id: 'the_sun', hits: 3, paceTier: 17, size: THE_SUN.size, lead: 0.57, arrivalDelay: 4 },
+  galaxy: { id: 'sagittarius_a', hits: 5, paceTier: 19, size: SAGITTARIUS_A.size, lead: 0.57, arrivalDelay: 4 },
+  universe: { id: 'the_expansion', hits: 7, paceTier: 21, size: Infinity, tier: 21, arrivalDelay: 4 },
 };
+
+/**
+ * Share of the next Area's boss arrival size (real radius) at which an Area goes quiet: no more
+ * Debris tops up and the director spawns no more Hazards (boss summons still come). A Bunny that
+ * lingers after its boss can catch up a little, but can't arrive already on top of the next boss.
+ */
+export const QUIET_SHARE = 0.85;
+
+/** Hits that break the boss with def id `defId` (`AreaBoss.hits`; 3 for an id no Area lists). */
+export function bossHits(defId: string): number {
+  for (const b of Object.values(AREA_BOSSES)) if (b.id === defId) return b.hits;
+  return 3;
+}
+
+/**
+ * Speed factor for boss `defId` against a Bunny of real radius `realRadius` (cm): its share of the
+ * size the boss is tuned for (`AreaBoss.paceTier`), at most 1, so a boss that arrives early is no
+ * faster against the smaller, slower Bunny than it was tuned to be.
+ */
+export function bossPace(defId: string, realRadius: number): number {
+  const boss = Object.values(AREA_BOSSES).find((b) => b.id === defId);
+  return boss ? Math.min(1, realRadius / getTier(boss.paceTier).minRadius) : 1;
+}
+
+/** Bunny radius (Area units) at which the Area's boss can be absorbed (Infinity: never). */
+export function bossAbsorbRadius(area: AreaId, absorbRatio: number): number {
+  return AREA_BOSSES[area].size / absorbRatio;
+}
+
+/** Bunny radius (Area units) at which the Area's boss starts its arrival (`AreaBoss.lead` or `tier`). */
+export function bossArrivalRadius(area: AreaId, absorbRatio: number): number {
+  const boss = AREA_BOSSES[area];
+  if (boss.lead !== undefined && Number.isFinite(boss.size)) return boss.lead * bossAbsorbRadius(area, absorbRatio);
+  return getTier(boss.tier ?? Infinity).minRadius / areaUnit(area);
+}
+
+/**
+ * Real radius (cm) at which `area` goes quiet (QUIET_SHARE of the next Area's boss arrival size);
+ * Infinity in the last Area.
+ */
+export function quietRadius(area: AreaId, absorbRatio: number): number {
+  const next = nextArea(area);
+  return next ? QUIET_SHARE * bossArrivalRadius(next, absorbRatio) * areaUnit(next) : Infinity;
+}
+
+/**
+ * True once the Bunny has reached `quietRadius` in `area`: judged on the largest radius reached
+ * (`maxRadius`, the Area's unit), so shedding mass below it never turns spawning back on.
+ */
+export function areaQuietFor(area: AreaId, bunny: { maxRadius: number; unit: number; stats: { get(stat: 'absorbRatio'): number } }): boolean {
+  return bunny.maxRadius * bunny.unit >= quietRadius(area, bunny.stats.get('absorbRatio'));
+}
 
 /** Hazards the director never picks at random (bosses and their summons). */
 export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a', 'the_expansion'];

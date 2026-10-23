@@ -1,26 +1,26 @@
 /**
- * Sagittarius A* (galaxy boss, Tier 19; SAGITTARIUS_A in src/data/hazards.ts): the bosses' state
- * machine (RoboVac9000: intro, hunt, telegraphed charge, stun, chip, absorb) reskinned as the
+ * Sagittarius A* (galaxy boss; SAGITTARIUS_A in src/data/hazards.ts): the bosses' state
+ * machine (RoboVac9000: intro, hunt, telegraphed charge, stun, hit, absorb) reskinned as the
  * biggest vacuum there is.
  *
  * - **The pull bends the camera.** While it hunts, its suction (the bosses' radial suction, the
  *   strongest of any boss) pulls the Bunny in; `lens` tells the renderer how hard (src/fx/lensing.ts:
  *   a gravitational-lensing warp round it, and the camera leaning and rolling towards it).
  * - **It eats.** While it hunts, telegraphs, charges or recovers, loose Debris within `feed.reach`
- *   of its edge spirals in and is swallowed at its horizon (not its own chips).
+ *   of its edge spirals in and is swallowed at its horizon (not the jets its hits knock loose).
  * - **Indigestion.** Each star cluster it swallows (`clusters.meals`: a `star_cluster` counts 1, an
  *   `open_cluster` ½, any cluster `bigSize` or more a whole `threshold`) adds to its fullness, the
  *   meals of the last `clusters.window` s, shown as a ring filling round it (`bossSwallowed`). At
  *   `threshold` (two star clusters within a few seconds) it is stunned (`bossStunned`, cause
  *   'indigestion'): an amber ring circles the disc, the glow sputters, its jets cough, and ramming it
- *   chips it. No crash stuns it: the map edge just ends a charge. Abilities and Spiky Dash still
+ *   lands a hit. No crash stuns it: the map edge just ends a charge. Abilities and Spiky Dash still
  *   stun it as usual.
  * - **Clusters drift in.** When it starts hunting, and every `clusters.interval` s of hunting, if
  *   less than `clusters.count` meals' worth of clusters is within `clusters.range` of it, that many
  *   star clusters land side by side between it and the Bunny (within its Debris pull), too big for
  *   the Bunny to eat (`keepClusters`): the fight can't run out of clusters.
  * - **Jets.** Its volley (`ash`) is a relativistic jet: a violet lane, then a train of bolts; the
- *   north jet (`jet_n`) swells while it aims. Chips are `relativistic_jet` Debris, and each chip
+ *   north jet (`jet_n`) swells while it aims. Each hit knocks `relativistic_jet` Debris loose and
  *   hides `jet_n` for `jetRegrow` s.
  *
  * Absorbing it clears the Galaxy (`run.clearArea()`): the intergalactic gate opens onto the Universe.
@@ -63,7 +63,7 @@ export class SagittariusA extends RoboVac9000 {
   fallbacks = 0;
   private clusterTimer = 0;
   private clusterPlaced = false;
-  /** Seconds until the chipped north jet shows again. */
+  /** Seconds until the north jet, hidden by a hit, shows again. */
   jetRegrow = 0;
   /** Glow level (1: full; sputtering while stunned) and a flash after each cluster. */
   glow = 1;
@@ -132,7 +132,7 @@ export class SagittariusA extends RoboVac9000 {
     _debris.length = 0;
     run.debris.query(this.x, this.z, radius + f.reach + f.maxSize, _debris);
     for (const d of _debris) {
-      if (!d.alive || d.size > f.maxSize || d.type.id === this.sgr.chipTypeId) continue;
+      if (!d.alive || d.size > f.maxSize || d.type.id === this.sgr.partTypeId) continue;
       const dx = this.x - d.x;
       const dz = this.z - d.z;
       const dist = Math.hypot(dx, dz) || 1e-6;
@@ -253,13 +253,13 @@ export class SagittariusA extends RoboVac9000 {
     return false;
   }
 
-  /** Chip pieces are relativistic jets (`chipTypeId`); each chip hides the north jet for a while. */
-  protected override scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
+  /** Hit pieces are relativistic jets (`partTypeId`); each hit hides the north jet for a while. */
+  protected override scatterParts(run: Run, count: number, size: number, inner: number, outer: number): void {
     this.jetRegrow = this.sgr.jetRegrow;
     if (this.jetN) this.jetN.visible = false;
-    const type = run.debris.types.find((t) => t.id === this.sgr.chipTypeId);
+    const type = run.debris.types.find((t) => t.id === this.sgr.partTypeId);
     if (!type) {
-      super.scatterChips(run, count, size, inner, outer);
+      super.scatterParts(run, count, size, inner, outer);
       return;
     }
     scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer, type);
@@ -316,7 +316,7 @@ export const sagittariusADef = hazardRegistry.register({
   id: 'sagittarius_a',
   name: 'Sagittarius A*',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius (hits never shrink it).
   footprint: { radius: SAGITTARIUS_A.contactRadius, height: SAGITTARIUS_A.height },
   mass: SAGITTARIUS_A.mass,
   modelId: SAGITTARIUS_A.modelId,

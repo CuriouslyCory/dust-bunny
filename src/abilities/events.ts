@@ -19,7 +19,7 @@ declare module '../core/events' {
     hazardClogged: { hazardId: number; defId: string; boss: boolean; seconds: number };
     /** Amass swallowed a Hazard that touched Tumble (after hazardAbsorbed); `stunned` Hazards caught in its shockwave. */
     hazardSwallowed: { hazardId: number; defId: string; x: number; z: number; stunned: number };
-    /** A charging boss crashed into an Amassing Tumble and was stunned (the chip lands at once). */
+    /** A charging boss crashed into an Amassing Tumble and was stunned (the hit lands at once). */
     bossCrashedIntoAmass: { hazardId: number };
     /** Collapse: the field imploded at (x, z), reaching `radius` world units; `hit` Hazards stunned. */
     amassCollapsed: { x: number; z: number; radius: number; hit: number };

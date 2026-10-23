@@ -60,8 +60,8 @@ export interface AmassParams {
   /** Swallow shockwave: reach from the Bunny's surface (r) and stun (s). */
   shockwaveRadius: number;
   shockwaveStun: number;
-  /** Extra chip parts a boss sheds when it crashes into the channel. */
-  bossChipParts: number;
+  /** Extra parts a boss sheds (with the hit) when it crashes into the channel. */
+  bossHitParts: number;
   /** Collapse detonation on release: radius from the Bunny's surface (r) and stun (s); 0 = off. */
   collapseRadius: number;
   collapseStun: number;
@@ -145,7 +145,7 @@ export function baseAbilityParams(): AbilityParams {
       scrapSize: AMASS.scrapSize,
       shockwaveRadius: AMASS.shockwaveRadius,
       shockwaveStun: AMASS.shockwaveStun,
-      bossChipParts: AMASS.bossChipParts,
+      bossHitParts: AMASS.bossHitParts,
       collapseRadius: 0,
       collapseStun: 0,
       collapseKnockback: AMASS.collapseKnockback,

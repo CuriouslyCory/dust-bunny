@@ -19,7 +19,7 @@
  *   registerHudIcon('pickup', 'sugar_rush', { glyph: '🍬', color: '#ff8fb1' })
  */
 import { getDebrisType } from '../data/debris';
-import { AREA_BOSSES } from '../data/hazards';
+import { AREA_BOSSES, bossArrivalRadius } from '../data/hazards';
 import { getTier, MAX_TIER, tierProgress } from '../data/tiers';
 import { AREAS, pastNextArrival } from '../data/areas';
 import { EVERYTHING_TIER, formatAmount, lengthUnitFor } from '../data/units';
@@ -31,6 +31,7 @@ import { captionDuration, narrate, storyCaption } from '../story';
 import { abilityWidget } from './abilityHud';
 import { COMPACT_QUERY } from './components';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
+import { showBossIntro } from './screens/bossIntro';
 import { h } from './screens';
 import { settings } from './settings';
 import { ToastBatcher } from './toasts';
@@ -162,6 +163,10 @@ export class Hud {
    */
   private bannerSkip = h('button', { type: 'button', className: 'hud-icon-btn hud-banner-skip', title: 'Dismiss (Enter)', tabIndex: -1, disabled: true });
   private bannerTimer: number | undefined;
+  /** The banner's next step (next caption part, or hide) and when it is due (performance.now()). */
+  private bannerStep: { fn: () => void; due: number } | null = null;
+  /** Set while the banner is held (`holdBanner`): when, and how long its step still had to run. */
+  private bannerHeld: { at: number; left: number } | null = null;
   /** performance.now() when the current banner is due to hide (0: none showing). */
   private bannerUntil = 0;
   /** True while the current banner is playing a narrator caption (later banners queue). */
@@ -308,7 +313,46 @@ export class Hud {
    */
   get bannerLeft(): number {
     const queued = this.bannerQueue.reduce((sum, q) => sum + bannerSeconds(q.opts), 0);
-    return Math.max(0, (this.bannerUntil - performance.now()) / 1000) + queued;
+    // A held banner's clock is stopped.
+    const now = this.bannerHeld?.at ?? performance.now();
+    return Math.max(0, (this.bannerUntil - now) / 1000) + queued;
+  }
+
+  /** Runs the banner's next step after `ms`; one at a time, so clear / skip cancel the rest. */
+  private schedule(fn: () => void, ms: number): void {
+    clearTimeout(this.bannerTimer);
+    this.bannerStep = { fn, due: performance.now() + ms };
+    this.bannerTimer = window.setTimeout(() => {
+      this.bannerStep = null;
+      fn();
+    }, ms);
+  }
+
+  /**
+   * Holds the banner on screen, caption and all, and hides it until `releaseBanner` (the Keepsake
+   * reveal holds the area-cleared line so it can open at once; the line resumes where it was).
+   */
+  holdBanner(): void {
+    if (this.bannerHeld || !this.bannerStep) return;
+    clearTimeout(this.bannerTimer);
+    const now = performance.now();
+    this.bannerHeld = { at: now, left: Math.max(0, this.bannerStep.due - now) };
+    this.bannerEl.classList.add('held');
+  }
+
+  /** Resumes a held banner (no-op when none is held). */
+  releaseBanner(): void {
+    const held = this.bannerHeld;
+    const step = this.bannerStep;
+    this.unhold();
+    if (!held || !step) return;
+    this.bannerUntil += performance.now() - held.at;
+    this.schedule(step.fn, held.left);
+  }
+
+  private unhold(): void {
+    this.bannerHeld = null;
+    this.bannerEl.classList.remove('held');
   }
 
   /** True while a narrator caption is on the banner or a banner is queued behind one. */
@@ -317,6 +361,8 @@ export class Hud {
   }
 
   clearBanner(): void {
+    this.unhold();
+    this.bannerStep = null;
     this.bannerUntil = 0;
     this.narrating = false;
     this.bannerQueue = [];
@@ -337,6 +383,8 @@ export class Hud {
   skipBanner(): boolean {
     if (!this.bannerEl.classList.contains('show')) return false;
     clearTimeout(this.bannerTimer);
+    this.unhold();
+    this.bannerStep = null;
     this.nextBanner();
     return true;
   }
@@ -360,6 +408,7 @@ export class Hud {
   }
 
   private showBanner(title: string, opts: BannerOptions): void {
+    this.unhold();
     const b = this.bannerEl;
     const parts = opts.caption?.parts ?? [];
     const holds = opts.caption?.holds ?? [];
@@ -389,7 +438,7 @@ export class Hud {
       // A timer that fired late (throttled tab) pushes the deadline out, so bannerLeft still covers the rest.
       this.bannerUntil = Math.max(this.bannerUntil, performance.now() + left * 1000);
       if (shown >= parts.length) {
-        if (left > 0.05) this.bannerTimer = window.setTimeout(hide, left * 1000);
+        if (left > 0.05) this.schedule(hide, left * 1000);
         else hide();
         return;
       }
@@ -397,10 +446,10 @@ export class Hud {
       caption.classList.remove('next');
       void caption.offsetWidth;
       caption.classList.add('next');
-      this.bannerTimer = window.setTimeout(next, (holds[shown] ?? 0) * 1000);
+      this.schedule(next, (holds[shown] ?? 0) * 1000);
     };
-    if (parts.length) this.bannerTimer = window.setTimeout(next, (holds[0] ?? 0) * 1000);
-    else this.bannerTimer = window.setTimeout(hide, total * 1000);
+    if (parts.length) this.schedule(next, (holds[0] ?? 0) * 1000);
+    else this.schedule(hide, total * 1000);
   }
 
   /** Replays the highlight animation on a widget (e.g. 'tier' on Tier-up). */
@@ -547,7 +596,8 @@ function tierWidget(hud: Hud, game: Game): void {
     const area = game.run?.area ?? 'house';
     const boss = AREA_BOSSES[area];
     const cleared = game.run?.isAreaCleared(area) ?? false;
-    const bossDue = e.tier >= boss.tier && !cleared;
+    const b = game.run?.bunny;
+    const bossDue = !!b && b.radius >= bossArrivalRadius(area, b.stats.get('absorbRatio')) && !cleared;
     const hunt = bossDue ? ` · hunt the ${hazardRegistry.get(boss.id)?.name ?? 'boss'}` : '';
     // The narrator's Tier beat goes in the Perk draft header; with no draft waiting, here.
     const line = game.run && !game.run.perkDraft.active ? narrate(game.run, { kind: 'tier', tier: e.tier }) : null;
@@ -749,30 +799,26 @@ function absorbToasts(hud: Hud, game: Game): void {
   });
 }
 
-function bossBanner(hud: Hud, game: Game): void {
+/**
+ * The boss's arrival opens the boss intro card (src/ui/screens/bossIntro.ts: model, name,
+ * description, the narrator's boss line, hits; the Run pauses while it is up, and the boss-alert
+ * vignette pulses once it closes).
+ */
+function bossIntroCard(game: Game): void {
   let shownFor = -1;
-  const warn = (name?: unknown): void => {
-    // With the narrator on, the boss is introduced by name with its line (docs/story.md).
-    const run = game.run;
-    const line = typeof name === 'string' && run ? narrate(run, { kind: 'boss', area: run.area }) : null;
-    if (line) {
-      const caption = storyCaption(line);
-      hud.banner(name as string, { subtitle: '⚠ Boss incoming!', variant: 'boss', duration: Math.max(3.2, captionDuration(caption)), caption });
-    } else {
-      hud.banner('⚠ Boss incoming!', { subtitle: typeof name === 'string' ? name : 'Area boss', variant: 'boss', duration: 3.2 });
-    }
-    hud.el.classList.add('boss-alert');
-    setTimeout(() => hud.el.classList.remove('boss-alert'), Math.max(3.2, hud.bannerLeft) * 1000);
-  };
   onLoose(game.events, 'bossSpawned', (p) => {
     shownFor = typeof p.hazardId === 'number' ? p.hazardId : -2;
-    warn(p.name);
+    showBossIntro(game, { hazardId: typeof p.hazardId === 'number' ? p.hazardId : undefined, name: typeof p.name === 'string' ? p.name : undefined });
   });
+  // A boss spawned without bossSpawned. The director emits hazardSpawned first and bossSpawned
+  // right after, so check once that event chain is done.
   game.events.on('hazardSpawned', (e) => {
-    if (isBossHazard(e.defId) && shownFor !== e.hazardId && shownFor !== -2) {
+    if (!isBossHazard(e.defId)) return;
+    queueMicrotask(() => {
+      if (shownFor === e.hazardId || shownFor === -2) return;
       shownFor = e.hazardId;
-      warn();
-    }
+      showBossIntro(game, { hazardId: e.hazardId, defId: e.defId });
+    });
   });
   game.events.on('runStarted', () => (shownFor = -1));
 }
@@ -789,5 +835,5 @@ export function addDefaultHudWidgets(hud: Hud, game: Game): void {
   abilityWidget(hud, game);
   dashWidget(hud);
   absorbToasts(hud, game);
-  bossBanner(hud, game);
+  bossIntroCard(game);
 }

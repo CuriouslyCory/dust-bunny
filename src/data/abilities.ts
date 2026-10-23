@@ -93,8 +93,8 @@ export const AMASS = {
   /** The swallow's micro-shockwave: non-boss Hazards within this many r of the Bunny's surface are stunned. */
   shockwaveRadius: 2,
   shockwaveStun: 0.4,
-  /** Chip parts a boss sheds on top of its usual chip when it crashes into an Amassing Tumble. */
-  bossChipParts: 2,
+  /** Parts a boss sheds on top of its usual hit when it crashes into an Amassing Tumble. */
+  bossHitParts: 2,
   /** Knockback of Collapse's detonation on non-boss Hazards, in Bunny radii. */
   collapseKnockback: 2.5,
   /** Fraction of Collapse's stun a boss receives. */
@@ -115,7 +115,7 @@ export const DISCHARGE = {
   drainPerSec: 0.1,
   /** Target range from the Bunny's surface, in Bunny radii. */
   range: 4,
-  /** Boss stun from a Discharge (no chip), then Grounded: immune to Discharge for groundedFor seconds. */
+  /** Boss stun from a Discharge (no hit), then Grounded: immune to Discharge for groundedFor seconds. */
   bossStun: 1.5,
   groundedFor: 10,
   /** A shorted-out non-boss Hazard bursts into this many absorbable scrap pieces of scrapSize × r. */

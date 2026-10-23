@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import {
+  bossArrivalRadius,
   AREA_BOSSES,
   AREA_DIRECTORS,
   ASAT_LASER,
@@ -293,6 +294,8 @@ describe('Hazard placement knowledge', () => {
         run.bunny.setRadius((getTier(t).minRadius * 1.05) / run.unit);
         step(25);
       }
+      // The boss arrives by size (some past the last spawn table's Tier).
+      run.bunny.setRadius(Math.max(run.bunny.radius, bossArrivalRadius(area, run.bunny.stats.get('absorbRatio')) * 1.02));
       step(AREA_BOSSES[area].arrivalDelay + 20);
       expect(placements.filter((p) => !p.clear)).toEqual([]);
       const ids = new Set(placements.map((p) => p.id));

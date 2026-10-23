@@ -11,6 +11,7 @@ import { accountChip } from '../account/screen';
 import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
+import { registerBossIntroScreen } from './bossIntro';
 import { registerMenuScreens } from './menus';
 import { registerResultsScreen } from './results';
 import '../screens.css';
@@ -182,4 +183,5 @@ export function registerBuiltinScreens(): void {
 
   registerResultsScreen();
   registerMenuScreens();
+  registerBossIntroScreen();
 }

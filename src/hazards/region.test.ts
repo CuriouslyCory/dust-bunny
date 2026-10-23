@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { rect } from '../core/math';
-import { AREA_BOSSES, AREA_DIRECTORS, CITY_DIRECTOR, CROP_DUSTER, DIRECTOR, DIRECTOR_EXCLUDE, FREIGHT_TRAIN, INCINERATOR, MINI_COMPACTOR, NEIGHBORHOOD_DIRECTOR, REGION_DIRECTOR, RIVER_BARGE, tierValue } from '../data/hazards';
+import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, CITY_DIRECTOR, CROP_DUSTER, DIRECTOR, DIRECTOR_EXCLUDE, FREIGHT_TRAIN, INCINERATOR, MINI_COMPACTOR, NEIGHBORHOOD_DIRECTOR, REGION_DIRECTOR, RIVER_BARGE, tierValue } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { getHazardDirector, installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
@@ -11,7 +11,7 @@ import { absorbRadiusFor, setLure, type Lure } from './common';
 import { spawnWeights } from './director';
 import { hazardRegistry, type Hazard } from './index';
 import type { Mop } from './mop';
-import { bossSizeAfterHits, type RoboVac9000 } from './robovac';
+import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
 
@@ -72,13 +72,6 @@ describe('region Hazards', () => {
     expect(hazardRegistry.require('incinerator').boss).toBe(true);
   });
 
-  it('keeps the Incinerator out of reach at Tier 11 entry, but reachable after two stun hits', () => {
-    const tier11 = getTier(11).minRadius / 1000;
-    const { size, chipFactor } = INCINERATOR;
-    expect(absorbRadiusFor(size, 0.7)).toBeCloseTo(4, 1);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), 0.7)).toBeGreaterThan(tier11);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), 0.7)).toBeLessThan(tier11);
-  });
 
   it('region spawn tables only list region Hazards, trains and water bombers from Tier 11, and never the boss or its minis', () => {
     for (let t = REGION_DIRECTOR.firstTier; t <= 11; t++) {
@@ -98,7 +91,7 @@ describe('region Hazards', () => {
     expect(tierValue(FREIGHT_TRAIN.speed, 11)).toBe(FREIGHT_TRAIN.speed[10]);
   });
 
-  it('the director spawns region Hazards (never earlier areas’ ones) and brings the Incinerator at Tier 11', () => {
+  it('the director spawns region Hazards (never earlier areas’ ones) and brings the Incinerator at its arrival size', () => {
     const { run, events } = makeRun('region-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -109,14 +102,13 @@ describe('region Hazards', () => {
     step(run, 30);
     expect(spawned.length).toBeGreaterThan(0);
     // Late in Tier 10 the alive budget is up to 4 (2 at its start).
-    run.bunny.setRadius(tierRadius(run, 10) * 2.6);
+    run.bunny.setRadius(bossArrivalRadius('region', run.bunny.stats.get('absorbRatio')) * 0.95);
     step(run, 60);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
 
-    run.bunny.setRadius(tierRadius(run, 11) * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('region', run.bunny.stats.get('absorbRatio')) * 1.02);
     step(run, AREA_BOSSES.region.arrivalDelay + 1);
-    expect(run.tier).toBe(11);
     expect(bosses).toEqual(['Incinerator']);
     expect(run.hazards.count('incinerator')).toBe(1);
     for (const id of spawned) expect([...REGION_HAZARDS, ...BOSS_IDS]).toContain(id);
@@ -228,11 +220,11 @@ describe('region Hazards', () => {
     expect(h.ranged).toBe(true);
   });
 
-  it('the Incinerator hunts, summons mini compactors, is stunned when a charge hits the map edge and chips', () => {
+  it('the Incinerator hunts, summons mini compactors, is stunned when a charge hits the map edge and takes a hit', () => {
     const { run, events } = makeRun('incinerator-hunt');
     const b = run.bunny;
     b.health = 999;
-    // Mid Tier 10: too small to absorb it even after a few contact chips.
+    // Mid Tier 10: too small to absorb it by size.
     b.setRadius(tierRadius(run, 10) * 2);
     // Close to the east edge, so a charge at the Bunny ends in the ridge.
     const home = { x: run.house.bounds.maxX - 10, z: 75 };
@@ -254,13 +246,14 @@ describe('region Hazards', () => {
     expect(stuns).toBeGreaterThan(0);
     expect(closest).toBeLessThan(d0 - 5);
     expect(boss.dead).toBe(false);
-    // Ramming it while stunned chips it.
+    // Ramming it while stunned lands a hit.
     boss.abilityStun(run, 2, 'amass');
-    const before = boss.size;
-    const hits: number[] = [];
-    events.on('bossHit', (e) => hits.push(e.size));
+    const hits: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     boss.onContact(run);
-    expect(hits).toEqual([before * INCINERATOR.chipFactor]);
+    expect(hits).toEqual(['1/3']);
+    // A hit no longer shrinks it.
+    expect(boss.size).toBe(INCINERATOR.size);
   });
 
   /**

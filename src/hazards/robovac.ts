@@ -1,9 +1,10 @@
 /**
  * Area bosses. Robo-Vac 9000 (house, Tier 5): arrives with an intro, hunts the Bunny with mild
  * suction, telegraphs charges with a red lane on the floor, and summons mini Roombas. A charge
- * that ends in a wall stuns it: ramming it while stunned chips it smaller (and knocks absorbable
- * parts loose). Once size ≤ Bunny radius × absorbRatio it can be absorbed, which clears the
- * house: the front door opens and the Run continues in the neighborhood.
+ * that ends in a wall stuns it: ramming it while stunned lands a hit (and knocks absorbable parts
+ * loose); its last hit (`maxHits`, AREA_BOSSES.hits) breaks it and the Bunny absorbs it. A Bunny
+ * that grows to size / absorbRatio absorbs it on contact instead. Either clears the house: the
+ * front door opens and the Run continues in the neighborhood.
  *
  * Street Sweeper (neighborhood, Tier 7): the same state machine with STREET_SWEEPER tuning. Its
  * charges are stunned by houses, trees and the hedge, it summons mini mowers, and absorbing it
@@ -23,7 +24,7 @@
  *
  * The Ice Sheet (continent, Tier 13, ICE_SHEET) is a subclass in iceSheet.ts: only a charge into a
  * mountain range stuns it (`crashStuns`), it bulldozes instead of sucking, and it calves icebergs
- * (`summon`, `scatterChips`, `onCrashStun`) instead of summoning minis.
+ * (`summon`, `scatterParts`, `onCrashStun`) instead of summoning minis.
  *
  * The Orbital Sweeper (globe, Tier 15, ORBITAL_SWEEPER) is a subclass in orbitalSweeper.ts: only a
  * charge into the Moon stuns it (`chargeBlocked`, `crashStuns`), its capture net pulls at the front
@@ -32,11 +33,11 @@
  *
  * The Sun (solar system, Tier 17, THE_SUN) is a subclass in theSun.ts: only a charge into a giant
  * planet the Bunny can't absorb yet stuns it (an eclipse), its solar wind pushes instead of
- * sucking, its flare volleys are the `ash` volley in orange, and its chips are prominences.
+ * sucking, its flare volleys are the `ash` volley in orange, and its hits knock prominences loose.
  *
  * Sagittarius A* (galaxy, Tier 19, SAGITTARIUS_A) is a subclass in sagittariusA.ts: no crash stuns
  * it; its pull swallows Debris, and two star clusters swallowed within a few seconds stun it
- * (indigestion, `crashStun`). Its volley is a relativistic jet, its chips are jets, and its pull
+ * (indigestion, `crashStun`). Its volley is a relativistic jet, its hits knock jets loose, and its pull
  * bends the camera.
  *
  * Every boss with onDefeat 'openExit' calls `run.clearArea()`: the exit opens, or in the last
@@ -45,10 +46,10 @@
  * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
  * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun
  * (a clog, a charge into an Amassing Tumble, a Discharge): it enters the same `stunned` state as a
- * wall crash, so one chip lands on contact.
+ * wall crash, so one hit lands on contact.
  */
 import type { Rng } from '../core/rng';
-import { GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
+import { bossHits, bossPace, GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
 import type { Run } from '../game/run';
 import { onScreen } from '../systems/camera';
 import { BaseHazard } from './base';
@@ -70,10 +71,11 @@ export type BossStunCause = 'wall' | 'indigestion' | 'spiky' | 'decoy' | 'amass'
 /** Stuns an Ability deals (src/abilities). */
 export type AbilityStunCause = Exclude<BossStunCause, 'wall' | 'indigestion' | 'spiky'>;
 
-/** Size after `hits` chips. */
-export function bossSizeAfterHits(hits: number, size = ROBOVAC_9000.size, chipFactor = ROBOVAC_9000.chipFactor): number {
-  return size * chipFactor ** hits;
-}
+/**
+ * Seconds after a landed hit during which the boss deals no contact damage (it stays stunned 0.6 s,
+ * then recovers next to a Bunny that is still bouncing off it).
+ */
+export const BOSS_HIT_GRACE = 1.6;
 
 export class RoboVac9000 extends BaseHazard {
   state: BossState = 'intro';
@@ -82,19 +84,23 @@ export class RoboVac9000 extends BaseHazard {
   private chargeDirZ = 1;
   private charged = 0;
   private summonTimer: number;
-  /** Chip already taken during the current stun. */
+  /** Hit already landed during the current stun. */
   private hitThisStun = false;
+  /** Hits landed so far; `maxHits` break it (AREA_BOSSES.hits). */
   hits = 0;
+  readonly maxHits: number;
+  /** Seconds after a hit during which touching it does no damage (BOSS_HIT_GRACE). */
+  hitGrace = 0;
   /** Cause of the current / last stun. */
   stunCause: BossStunCause | null = null;
   /** Grounded: seconds after a Discharge during which it can't be Discharged again (counted down by the Ability System). */
   groundedFor = 0;
   /**
-   * Extra effect of the chip taken during the current stun (Amass sets it when a charge crashes
-   * into its core): the stun lasts `hold` more seconds after the chip and `pieces` more parts fall
+   * Extra effect of the hit landed during the current stun (Amass sets it when a charge crashes
+   * into its core): the stun lasts `hold` more seconds after the hit and `pieces` more parts fall
    * off. Cleared whenever a new stun starts.
    */
-  chipBonus: { hold: number; pieces: number } | null = null;
+  hitBonus: { hold: number; pieces: number } | null = null;
   readonly minis = new Set<number>();
   private readonly lane;
   private readonly stunRing;
@@ -118,7 +124,8 @@ export class RoboVac9000 extends BaseHazard {
     readonly cfg: BossTuning = ROBOVAC_9000,
   ) {
     super(id, def, x, z, cfg.size, cfg.modelId);
-    // Full-size model scale; chips shrink `body` on top of it (see sync).
+    this.maxHits = bossHits(def.id);
+    // Full-size model scale; `body` carries any change of `size` on top of it (see sync).
     this.model.scale.setScalar(cfg.size / cfg.modelSize);
     this.timer = cfg.introTime;
     this.summonTimer = cfg.summonInterval * 0.6;
@@ -141,6 +148,11 @@ export class RoboVac9000 extends BaseHazard {
     return this.ashVolley?.items ?? [];
   }
 
+  /** Movement and volley speeds also scale with the Bunny's size below the boss's `paceTier` (bossPace). */
+  protected override speed(run: Run, cmPerSec: number): number {
+    return super.speed(run, cmPerSec) * bossPace(this.def.id, run.bunny.realRadius);
+  }
+
   /** Visual + contact scale relative to full size. */
   get scale(): number {
     return this.size / this.cfg.size;
@@ -158,6 +170,7 @@ export class RoboVac9000 extends BaseHazard {
     const dz = b.z - this.z;
     const dist = Math.hypot(dx, dz);
     this.timer -= dt;
+    this.hitGrace = Math.max(0, this.hitGrace - dt);
     this.spin('brush_l', dt * c.brushSpin);
     this.spin('brush_r', -dt * c.brushSpin);
 
@@ -317,38 +330,43 @@ export class RoboVac9000 extends BaseHazard {
 
   /**
    * Stuns it for `stunTime` as a crash does (a charge into a wall, or Sagittarius A*'s
-   * indigestion): cancels a telegraph or charge, and one chip lands on contact.
+   * indigestion): cancels a telegraph or charge, and one hit lands on contact.
    */
   protected crashStun(run: Run, cause: 'wall' | 'indigestion'): void {
     this.lane.visible = false;
     this.hitThisStun = false;
-    this.chipBonus = null;
+    this.hitBonus = null;
     this.stunCause = cause;
     this.enter('stunned', this.cfg.stunTime);
     if (cause === 'wall') this.onCrashStun(run);
     run.events.emit('bossStunned', { hazardId: this.id, cause });
   }
 
-  /** Spiky Dash stun: it can be chipped once during it, like a wall crash. */
+  /** Spiky Dash stun: one hit can land during it, like a wall crash. */
   override stun(_seconds: number): void {
     this.hitThisStun = false;
-    this.chipBonus = null;
+    this.hitBonus = null;
     this.stunCause = 'spiky';
   }
 
   /**
    * External stun from an Ability (Decoy clog, Amass crash, Discharge): cancels any telegraph or
-   * charge and enters the `stunned` state for `seconds`, so one chip lands on contact. The Ability
+   * charge and enters the `stunned` state for `seconds`, so one hit lands on contact. The Ability
    * System enforces the 6 s boss limit before calling this.
    */
   abilityStun(run: Run, seconds: number, cause: AbilityStunCause): void {
     this.lane.visible = false;
     this.hitThisStun = false;
-    this.chipBonus = null;
+    this.hitBonus = null;
     this.stunCause = cause;
     // Never cut short a stun that is already running.
     this.enter('stunned', this.state === 'stunned' ? Math.max(this.timer, seconds) : seconds);
     run.events.emit('bossStunned', { hazardId: this.id, cause });
+  }
+
+  /** True while ramming it lands a hit: stunned, and no hit landed in this stun yet. */
+  get hittable(): boolean {
+    return (this.state === 'stunned' || this.stunned) && !this.hitThisStun;
   }
 
   /** True mid-charge: running into an Amassing Tumble then stuns it like a wall. */
@@ -375,8 +393,8 @@ export class RoboVac9000 extends BaseHazard {
   /** Called right after a crash stun (the Ice Sheet calves icebergs). */
   protected onCrashStun(_run: Run): void {}
 
-  /** Scatters the absorbable parts a chip knocks loose (the closest-sized Debris valid at the Bunny's Tier). */
-  protected scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
+  /** Scatters the absorbable parts a hit knocks loose (the closest-sized Debris valid at the Bunny's Tier). */
+  protected scatterParts(run: Run, count: number, size: number, inner: number, outer: number): void {
     scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer);
   }
 
@@ -427,14 +445,24 @@ export class RoboVac9000 extends BaseHazard {
       if (!this.hitThisStun) {
         this.hitThisStun = true;
         this.hits++;
-        this.size = bossSizeAfterHits(this.hits, c.size, c.chipFactor);
         // Parts knocked loose: absorbable Debris around the boss.
-        const bonus = this.chipBonus;
-        this.scatterChips(run, c.chipPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
-        run.events.emit('bossHit', { hazardId: this.id, size: this.size, absorbRadius: this.absorbRadius(run) });
+        const bonus = this.hitBonus;
+        this.scatterParts(run, c.hitPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
+        run.events.emit('bossHit', { hazardId: this.id, hits: this.hits, maxHits: this.maxHits });
+        if (this.hits >= this.maxHits) {
+          // Broken: the Bunny absorbs what is left of it, whatever its size.
+          run.hazards.absorb(this);
+          return;
+        }
         if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6 + (bonus?.hold ?? 0));
+        // The Bunny that landed it gets away: no contact damage while it recovers.
+        this.hitGrace = BOSS_HIT_GRACE + (bonus?.hold ?? 0);
       }
       knockbackCm(b, b.x - this.x, b.z - this.z, b.radius * 2);
+      separateFromBunny(run, this, radius, c.height);
+      return;
+    }
+    if (this.hitGrace > 0) {
       separateFromBunny(run, this, radius, c.height);
       return;
     }
@@ -468,7 +496,7 @@ export const robovacDef = hazardRegistry.register({
   id: 'robovac_9000',
   name: 'Robo-Vac 9000',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius.
   footprint: { radius: ROBOVAC_9000.contactRadius, height: ROBOVAC_9000.height },
   mass: ROBOVAC_9000.mass,
   modelId: 'robovac_9000',
@@ -481,7 +509,7 @@ export const streetSweeperDef = hazardRegistry.register({
   id: 'street_sweeper',
   name: 'Street Sweeper',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius.
   footprint: { radius: STREET_SWEEPER.contactRadius, height: STREET_SWEEPER.height },
   mass: STREET_SWEEPER.mass,
   modelId: STREET_SWEEPER.modelId,
@@ -494,7 +522,7 @@ export const garbageTruckDef = hazardRegistry.register({
   id: 'garbage_truck',
   name: 'Garbage Truck',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius.
   footprint: { radius: GARBAGE_TRUCK.contactRadius, height: GARBAGE_TRUCK.height },
   mass: GARBAGE_TRUCK.mass,
   modelId: GARBAGE_TRUCK.modelId,
@@ -507,7 +535,7 @@ export const incineratorDef = hazardRegistry.register({
   id: 'incinerator',
   name: 'Incinerator',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius.
   footprint: { radius: INCINERATOR.contactRadius, height: INCINERATOR.height },
   mass: INCINERATOR.mass,
   modelId: INCINERATOR.modelId,

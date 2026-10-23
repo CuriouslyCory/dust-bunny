@@ -740,6 +740,11 @@
     transform 0.5s var(--ease-bounce);
 }
 
+/* Held while the Keepsake reveal is up (Hud.holdBanner): out of sight, its caption clock stopped. */
+.hud-banner.show.held {
+  visibility: hidden;
+}
+
 .hud-banner-title {
   font-family: var(--font-display);
   font-weight: 700;

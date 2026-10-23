@@ -140,3 +140,151 @@
     top: calc(var(--safe-top) + 74px + 84px);
   }
 }
+
+/* Boss health card (src/hazards/hud.ts): top centre, one pip per hit the boss can still take. */
+.boss-health {
+  min-width: 220px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 6px 14px 8px;
+  background: rgba(26, 10, 10, 0.68);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 120, 90, 0.35);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 16px rgba(12, 3, 3, 0.35);
+  color: #fff1e8;
+  font-family: var(--font-body);
+  text-align: center;
+  pointer-events: none;
+}
+
+.boss-health[hidden] {
+  display: none;
+}
+
+.boss-health-name {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffb39a;
+}
+
+.boss-health-absorb {
+  margin-top: 4px;
+  font-size: var(--fs-xs);
+  opacity: 0.85;
+}
+
+.boss-health.absorbable {
+  border-color: rgba(140, 230, 140, 0.8);
+}
+
+.boss-health.absorbable .boss-health-absorb {
+  color: #b8f5b0;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.boss-pips {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.boss-pip {
+  width: 26px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ff9a6a, #e0482a);
+  box-shadow:
+    inset 0 0 0 2px rgba(0, 0, 0, 0.3),
+    0 0 8px rgba(255, 110, 70, 0.55);
+  transition:
+    background 0.25s,
+    box-shadow 0.25s,
+    transform 0.25s;
+}
+
+.boss-pip.empty {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+  transform: scale(0.85);
+}
+
+.boss-health.hit,
+.boss-tug.hit {
+  animation: boss-health-hit 0.5s var(--ease-out);
+}
+
+@keyframes boss-health-hit {
+  25% {
+    transform: scale(1.06);
+    border-color: #fff1e0;
+    box-shadow: 0 0 22px rgba(255, 200, 150, 0.8);
+  }
+}
+
+/* The Expansion's notches: pips beside its title, ticks across the bar. */
+.boss-tug-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.boss-tug-pips {
+  margin-top: 0;
+  gap: 4px;
+}
+
+.boss-tug-pips .boss-pip {
+  width: 14px;
+  height: 8px;
+  background: linear-gradient(180deg, #ffd0a8, #ff8a4a);
+}
+
+.boss-tug-pips .boss-pip.empty {
+  background: linear-gradient(180deg, #cfe9ff, #4f7dff);
+  box-shadow: 0 0 6px rgba(160, 200, 255, 0.7);
+  transform: none;
+}
+
+.boss-tug-ticks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boss-tug-tick {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(20, 10, 30, 0.7);
+}
+
+.boss-tug-tick.passed {
+  background: #fff4e6;
+  box-shadow: 0 0 6px rgba(207, 233, 255, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boss-health.hit,
+  .boss-tug.hit {
+    animation: none;
+  }
+}
+
+.hud-compact .boss-health {
+  min-width: 0;
+  padding: 4px 10px 6px;
+}
+
+.hud-compact .boss-pip {
+  width: 18px;
+  height: 8px;
+}

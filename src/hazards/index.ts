@@ -160,6 +160,8 @@ export class HazardManager implements System {
         if (run.ended) break;
       } else if (!this.contactOverride?.(run, h)) {
         h.onContact?.(run);
+        // A boss's last hit can end the Run (the last Area's boss).
+        if (run.ended) break;
       }
     }
     for (let i = this.hazards.length - 1; i >= 0; i--) {
@@ -172,7 +174,8 @@ export class HazardManager implements System {
   /**
    * Absorbs a Hazard into the Bunny now (growth via run.absorbMass, hazardAbsorbed, onAbsorbed);
    * it is removed at the end of this tick with hazardRemoved { absorbed: true }. The manager calls
-   * it for Hazards the absorb rule allows; Amass calls it for the bigger ones it swallows.
+   * it for Hazards the absorb rule allows; Amass calls it for the bigger ones it swallows, and a
+   * boss calls it when its last hit breaks it.
    */
   absorb(h: Hazard): void {
     const run = this.run;

@@ -1,6 +1,6 @@
 /**
- * The Orbital Sweeper (globe boss, Tier 15; ORBITAL_SWEEPER in src/data/hazards.ts): the bosses'
- * state machine (RoboVac9000: intro, hunt, telegraphed charge, stun, chip, absorb) reskinned as a
+ * The Orbital Sweeper (globe boss; ORBITAL_SWEEPER in src/data/hazards.ts): the bosses'
+ * state machine (RoboVac9000: intro, hunt, telegraphed charge, stun, hit, absorb) reskinned as a
  * net-and-laser cleanup satellite, humanity's final appliance.
  *
  * - **The net.** No radial suction: while it hunts, a Bunny ahead of it (within `net.halfAngle` of
@@ -62,7 +62,7 @@ export class OrbitalSweeper extends RoboVac9000 {
     this.sweep = cfg;
   }
 
-  /** Model-unit lengths (NetTuning) to world units: full-size model scale × chips. */
+  /** Model-unit lengths (NetTuning) to world units: full-size model scale × `scale` (1: hits don't shrink it). */
   private get k(): number {
     return (this.cfg.size / this.cfg.modelSize) * this.scale;
   }
@@ -169,7 +169,7 @@ export const orbitalSweeperDef = hazardRegistry.register({
   id: 'orbital_sweeper',
   name: 'Orbital Sweeper',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius (hits never shrink it).
   footprint: { radius: ORBITAL_SWEEPER.contactRadius, height: ORBITAL_SWEEPER.height },
   mass: ORBITAL_SWEEPER.mass,
   modelId: ORBITAL_SWEEPER.modelId,

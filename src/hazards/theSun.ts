@@ -1,6 +1,6 @@
 /**
- * The Sun (solar system boss, Tier 17; THE_SUN in src/data/hazards.ts): the bosses' state machine
- * (RoboVac9000: intro, hunt, telegraphed charge, stun, chip, absorb) reskinned as a very large leaf
+ * The Sun (solar system boss; THE_SUN in src/data/hazards.ts): the bosses' state machine
+ * (RoboVac9000: intro, hunt, telegraphed charge, stun, hit, absorb) reskinned as a very large leaf
  * blower.
  *
  * - **Solar wind.** No suction: while it hunts, telegraphs or recovers, a Bunny within `wind.reach`
@@ -19,8 +19,8 @@
  *   hunting, if no blocking giant is within `giants.range` of the Bunny, a `hot_jupiter` lands near
  *   the Bunny (between the Bunny and the Sun the first time), at least the type's size and
  *   `giants.margin` × the largest size the Bunny can absorb: once the Bunny has eaten Jupiter (it
- *   unlocks at Tier 17, and the Sun arrives 4 s later) its charges still have something to hit.
- * - **Chips are prominences** (`prominence` Debris, src/data/sunDebris.ts); each chip hides one of
+ *   unlocks at Tier 17) its charges still have something to hit.
+ * - **Hits knock prominences loose** (`prominence` Debris, src/data/sunDebris.ts); each hit hides one of
  *   its `prominence_l` / `prominence_r` arcs for `prominenceRegrow` s. Its `corona` turns.
  *
  * Absorbing it clears the Solar System (`run.clearArea()`): the heliopause gate opens onto the Galaxy.
@@ -92,7 +92,7 @@ export class TheSun extends RoboVac9000 {
   /** Hot Jupiters it has swung round so far, and charges a giant planet has stopped (eclipses). */
   giants = 0;
   eclipses = 0;
-  /** Seconds until each prominence (`prominence_l`, `prominence_r`) shows again after a chip. */
+  /** Seconds until each prominence (`prominence_l`, `prominence_r`) shows again after a hit. */
   readonly regrow: [number, number] = [0, 0];
   private nextProminence = 0;
   /** Glow level (1: full, `eclipseGlow` in an eclipse) and the model's own emissive materials. */
@@ -190,16 +190,16 @@ export class TheSun extends RoboVac9000 {
     this.eclipses++;
   }
 
-  /** Chip pieces are prominences (`chipTypeId`); each chip hides one of its prominence arcs for a while. */
-  protected override scatterChips(run: Run, count: number, size: number, inner: number, outer: number): void {
+  /** Hit pieces are prominences (`partTypeId`); each hit hides one of its prominence arcs for a while. */
+  protected override scatterParts(run: Run, count: number, size: number, inner: number, outer: number): void {
     const i = this.nextProminence;
     this.nextProminence = 1 - i;
     this.regrow[i] = this.sun.prominenceRegrow;
     this.setProminenceVisible(i, false);
-    const chipId = this.sun.chipTypeId ?? PROMINENCE_ID;
-    const type = run.debris.types.find((t) => t.id === chipId);
+    const partId = this.sun.partTypeId ?? PROMINENCE_ID;
+    const type = run.debris.types.find((t) => t.id === partId);
     if (!type) {
-      super.scatterChips(run, count, size, inner, outer);
+      super.scatterParts(run, count, size, inner, outer);
       return;
     }
     scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer, type);
@@ -246,7 +246,7 @@ export const theSunDef = hazardRegistry.register({
   id: 'the_sun',
   name: 'The Sun',
   boss: true,
-  // Full-size contact radius: room for the boss before it is chipped.
+  // Full-size contact radius (hits never shrink it).
   footprint: { radius: THE_SUN.contactRadius, height: THE_SUN.height },
   mass: THE_SUN.mass,
   modelId: THE_SUN.modelId,

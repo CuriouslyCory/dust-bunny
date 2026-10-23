@@ -166,7 +166,7 @@ describe('Lint · Decoy', () => {
     expect(ended).toMatchObject([{ ability: 'decoy', reason: 'shot' }]);
   });
 
-  it('clogs a boss (chippable while clogged), at most once per 6 s', () => {
+  it('clogs a boss (hittable while clogged), at most once per 6 s', () => {
     const { run, input, sys, events } = setup('lint');
     const b = run.bunny;
     b.setRadius(30);
@@ -181,7 +181,7 @@ describe('Lint · Decoy', () => {
     run.update(1 / 60);
     expect(boss.state).toBe('stunned');
     expect(boss.stunCause).toBe('decoy');
-    // Ram it while it is clogged: one chip.
+    // Ram it while it is clogged: one hit.
     b.teleport(boss.x, boss.z + ROBOVAC_9000.contactRadius + b.radius - 4);
     run.update(1 / 60);
     expect(hits).toHaveLength(1);
@@ -310,7 +310,7 @@ describe('Tumble · Amass', () => {
     expect([boss.x, boss.z]).toEqual([bossX, bossZ]);
   });
 
-  it('a charging boss crashes into the core: stunned and chipped at once with 2 more parts; inside 6 s it hits as usual', () => {
+  it('a charging boss crashes into the core: stunned and hit at once with 2 more parts; inside 6 s it hits as usual', () => {
     const { run, input, sys, events } = setup('tumble');
     const b = run.bunny;
     b.setRadius(30);
@@ -322,13 +322,14 @@ describe('Tumble · Amass', () => {
     const [bx, bz] = [b.x, b.z];
     run.update(1 / 60);
     expect(boss.stunCause).toBe('amass');
-    expect(boss.chipBonus).toMatchObject({ pieces: AMASS.bossChipParts });
+    expect(boss.hitBonus).toMatchObject({ pieces: AMASS.bossHitParts });
     expect(hits).toHaveLength(1);
     expect(crashes).toHaveLength(1);
     expect(Math.hypot(b.x - bx, b.z - bz)).toBeLessThan(0.5);
     expect(b.health).toBe(b.maxHealth);
-    // Again inside the 6 s limit: a normal hit, 30% lighter.
+    // Again inside the 6 s limit (and past the post-hit grace): a normal hit, 30% lighter.
     step(run, 0.5);
+    boss.hitGrace = 0;
     boss.state = 'charge';
     boss.x = b.x + ROBOVAC_9000.contactRadius * boss.scale + b.radius - 3;
     boss.z = b.z;
@@ -404,7 +405,7 @@ describe('Zap · Discharge', () => {
     expect(ctl.charge).toBe(0);
   });
 
-  it('stuns a boss without chipping it, then Grounds it for 10 s', () => {
+  it('stuns a boss without a hit, then Grounds it for 10 s', () => {
     const { run, input, sys, events } = setup('zap');
     const ctl = sys.controller as DischargeAbility;
     const b = run.bunny;

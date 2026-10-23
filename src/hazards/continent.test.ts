@@ -4,6 +4,8 @@ import { rect } from '../core/math';
 import { AREAS } from '../data/areas';
 import { getDebrisType } from '../data/debris';
 import {
+  bossAbsorbRadius,
+  bossArrivalRadius,
   AREA_BOSSES,
   AREA_DIRECTORS,
   CITY_DIRECTOR,
@@ -33,7 +35,6 @@ import { IceSheet, isMountainRange, touchesMountainRange } from './iceSheet';
 import { hazardRegistry } from './index';
 import { GLACIER_ZONES } from './lintRoller';
 import type { Mop } from './mop';
-import { bossSizeAfterHits } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
 
@@ -93,6 +94,16 @@ function icebergs(run: Run): Debris[] {
 }
 
 describe('continent Hazards', () => {
+  it('arrives short of its absorb radius (about a minute of growth) and 3 hits break it', () => {
+    expect(absorbRadiusFor(ICE_SHEET.size, ratio)).toBeCloseTo(4, 1);
+    expect(bossArrivalRadius('continent', ratio)).toBeLessThan(bossAbsorbRadius('continent', ratio));
+    expect(bossAbsorbRadius('continent', ratio)).toBeCloseTo(absorbRadiusFor(ICE_SHEET.size, ratio));
+    expect(AREA_BOSSES.continent).toMatchObject({ id: 'ice_sheet', hits: 3 });
+    expect(hazardRegistry.require('ice_sheet').boss).toBe(true);
+    // It summons nothing: it calves icebergs.
+    expect(ICE_SHEET.miniId).toBeUndefined();
+  });
+
   it('run in Continent units (1 = 10 km) with their own Blender models', () => {
     const { run } = makeRun();
     expect(run.unit).toBe(1e6);
@@ -121,16 +132,6 @@ describe('continent Hazards', () => {
     }
   });
 
-  it('keeps the Ice Sheet out of reach at Tier 13 entry, but reachable after two chips', () => {
-    const tier13 = tierRadius(makeRun().run, 13);
-    const { size, chipFactor } = ICE_SHEET;
-    expect(absorbRadiusFor(size, ratio)).toBeCloseTo(4, 1);
-    expect(absorbRadiusFor(bossSizeAfterHits(1, size, chipFactor), ratio)).toBeGreaterThan(tier13);
-    expect(absorbRadiusFor(bossSizeAfterHits(2, size, chipFactor), ratio)).toBeLessThan(tier13);
-    expect(hazardRegistry.require('ice_sheet').boss).toBe(true);
-    // It summons nothing: it calves icebergs.
-    expect(ICE_SHEET.miniId).toBeUndefined();
-  });
 
   it('continent spawn tables list only continent Hazards, Hurricanes from Tier 13, never the Ice Sheet', () => {
     for (let t = CONTINENT_DIRECTOR.firstTier; t <= 13; t++) {
@@ -147,7 +148,7 @@ describe('continent Hazards', () => {
     expect(tierValue(TORNADO.speed, 13)).toBe(TORNADO.speed[12]);
   });
 
-  it('the director spawns continent Hazards and brings the Ice Sheet at Tier 13, named without a doubled article', () => {
+  it('the director spawns continent Hazards and brings the Ice Sheet at its arrival size, named without a doubled article', () => {
     const { run, events } = makeRun('continent-director');
     installGameplay(run);
     const spawned: string[] = [];
@@ -156,13 +157,12 @@ describe('continent Hazards', () => {
     events.on('bossSpawned', (e) => bosses.push(e.name));
     run.bunny.health = 999;
     step(run, 30);
-    run.bunny.setRadius(tierRadius(run, 12) * 2.6);
+    run.bunny.setRadius(bossArrivalRadius('continent', run.bunny.stats.get('absorbRatio')) * 0.95);
     step(run, 60);
     expect(spawned.length).toBeGreaterThan(2);
     expect(bosses).toEqual([]);
-    run.bunny.setRadius(tierRadius(run, 13) * 1.02);
+    run.bunny.setRadius(bossArrivalRadius('continent', run.bunny.stats.get('absorbRatio')) * 1.02);
     step(run, AREA_BOSSES.continent.arrivalDelay + 1);
-    expect(run.tier).toBe(13);
     expect(bosses).toEqual(['Ice Sheet']);
     // HUD copy reads "the Ice Sheet" (areaHud, Tier-up banner): the def name has no article.
     expect(`hunt the ${bosses[0]}`).toBe('hunt the Ice Sheet');
@@ -421,7 +421,7 @@ describe('the Ice Sheet', () => {
     expect(stuns).toBe(0);
   });
 
-  it('calves absorbable icebergs while it hunts, and its chips are icebergs', () => {
+  it('calves absorbable icebergs while it hunts, and its hits knock icebergs loose', () => {
     const { run, events, boss, b } = hunting('ice-calve', 14);
     expect(getDebrisType(CALVED_ICEBERG_ID)?.area).toBe('continent');
     const before = icebergs(run).length;
@@ -451,14 +451,16 @@ describe('the Ice Sheet', () => {
     expect(run.debrisAbsorbed).toBeGreaterThan(absorbed);
     expect(b.radius).toBeGreaterThan(r0);
 
-    // Ramming it while stunned chips it, and the pieces are icebergs.
+    // Ramming it while stunned lands a hit, and the pieces are icebergs.
     b.teleport(boss.x + 20, boss.z);
     boss.abilityStun(run, 2, 'amass');
-    const hits: number[] = [];
-    events.on('bossHit', (e) => hits.push(e.size));
+    const hits: string[] = [];
+    events.on('bossHit', (e) => hits.push(`${e.hits}/${e.maxHits}`));
     const n0 = icebergs(run).length;
     boss.onContact(run);
-    expect(hits).toEqual([ICE_SHEET.size * ICE_SHEET.chipFactor]);
+    expect(hits).toEqual(['1/3']);
+    // A hit no longer shrinks it.
+    expect(boss.size).toBe(ICE_SHEET.size);
     expect(icebergs(run).length).toBeGreaterThan(n0 + 3);
   });
 

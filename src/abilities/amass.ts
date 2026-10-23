@@ -17,7 +17,7 @@
  *   - Contact (HazardManager.contactOverride): a non-boss Hazard up to absorbRatio × r is
  *     swallowed (absorbed as usual, plus scrap and a shockwave that stuns small Hazards nearby);
  *     a charging boss crashes as into a wall: stunned for its stunTime if the 6 s limit allows,
- *     and the chip that follows sheds bossChipParts more parts. Everything else is a normal hit.
+ *     and the hit that follows sheds bossHitParts more parts. Everything else is a normal hit.
  *
  * Keepsakes act through the params (Dense Core, Lingering Mass, Unmoved's guard) and here:
  * Collapse (release or max hold: Hazards within collapseRadius r of Tumble's surface are stunned,
@@ -294,8 +294,8 @@ export class AmassAbility implements AbilityController {
       // Inside the 6 s Ability-stun limit it hits Tumble as usual.
       if (!this.system.stunBoss(h, h.cfg.stunTime, 'amass')) return false;
       run.events.emit('bossCrashedIntoAmass', { hazardId: h.id });
-      h.chipBonus = { hold: 0, pieces: this.p.bossChipParts };
-      // Stunned now, so this contact lands the chip.
+      h.hitBonus = { hold: 0, pieces: this.p.bossHitParts };
+      // Stunned now, so this contact lands the hit.
       h.onContact(run);
       return true;
     }

@@ -8,7 +8,7 @@
  * the Area's cleared line and arriving plays the chapter card before the arrival banner.
  */
 import { AREAS } from '../data/areas';
-import { AREA_BOSSES } from '../data/hazards';
+import { AREA_BOSSES, bossArrivalRadius } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { formatLength } from '../data/units';
 import { wrapDeltaX } from '../world/wrap';
@@ -126,7 +126,10 @@ export function installAreaHud(game: Game): void {
     const bossName = hazardRegistry.get(boss.id)?.name;
     // "The Sun" keeps its own article; proper names (Sagittarius A*) take none.
     const named = bossName && (/^The /.test(bossName) ? `the ${bossName.slice(4)}` : /^Sagittarius/.test(bossName) ? bossName : `the ${bossName}`);
-    const sub = named ? `Keep growing · ${named} comes at ${getTier(boss.tier).name}` : 'Keep growing';
+    // The boss arrives at a size (`bossArrivalRadius`), or a Tier for one never absorbed (the Expansion).
+    const ratio = game.run?.bunny.stats.get('absorbRatio') ?? 0.7;
+    const at = boss.tier !== undefined ? getTier(boss.tier).name : formatLength(bossArrivalRadius(e.area, ratio) * AREAS[e.area].unit, AREAS[e.area].readout);
+    const sub = named ? `Keep growing · ${named} comes at ${at}` : 'Keep growing';
     const arrive = (delay: number) => setTimeout(() => game.hud.banner(AREAS[e.area].name, { subtitle: sub, variant: 'tier', duration: 3.4 }), delay);
     // Chapter card first (the Run waits behind it), then the dark card lifts off the new Area.
     const card = showChapterCard(game, e.area, () => {

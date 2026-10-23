@@ -12,7 +12,7 @@
  *   - non-boss (minis included): destroyed, bursting into scrapPieces absorbable scrap of
  *     scrapSize × r (scatterDebris), none of its own mass; plus up to extraTargets more non-boss
  *     Hazards within arcRange r of the first (Arc);
- *   - boss: stunned for bossStun (no chip: Zap still has to touch it), then Grounded for
+ *   - boss: stunned for bossStun (no hit: Zap still has to touch it), then Grounded for
  *     groundedFor seconds.
  */
 import type { InputState } from '../core/input';
