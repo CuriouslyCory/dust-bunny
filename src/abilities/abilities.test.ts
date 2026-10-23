@@ -249,7 +249,7 @@ describe('Tumble · Amass', () => {
     const t = freeType(run);
     const r = b.radius;
     const far = run.debris.spawn(t, b.x + 40 * r, b.z, rng, { size: r * 0.3 })!;
-    const near = run.debris.spawn(t, b.x, b.z + 4 * r, rng, { size: r * 0.3 })!;
+    const near = run.debris.spawn(t, b.x, b.z + 2.5 * r, rng, { size: r * 0.3 })!;
     const big = run.debris.spawn(t, b.x - 3 * r, b.z, rng, { size: r * 1.6 })!;
     const [bigX, bigZ] = [big.x, big.z];
     const [farD0, nearZ0] = [far.x - b.x, near.z - b.z];
@@ -260,7 +260,8 @@ describe('Tumble · Amass', () => {
     // The swirl leans the pull off straight inward.
     expect(Math.abs(near.x - b.x)).toBeGreaterThan(0.01 * r);
     expect(near.z - b.z).toBeLessThan(nearZ0);
-    step(run, 0.5);
+    // 2.5 r out, it reaches the fur (r + 0.3 r) after 1.2 r of pull at full strength (plus the ramp).
+    step(run, 1.2 / AMASS.pullSpeed + AMASS.rampTime);
     expect(near.alive).toBe(false); // pulled into the fur and absorbed
     input.abilityHeld = false;
     run.update(1 / 60);
@@ -303,8 +304,9 @@ describe('Tumble · Amass', () => {
     const d0 = Math.hypot(small.x - b.x, small.z - b.z);
     amass(run, input);
     small.stunnedFor = 5; // hold it still so only the pull moves it
-    step(run, 0.3);
-    expect(Math.hypot(small.x - b.x, small.z - b.z)).toBeLessThan(d0 - b.radius * 0.5);
+    step(run, 0.6);
+    // Just past the core: almost full strength after the ramp, so about pullSpeed × (0.6 − ramp / 2) r.
+    expect(Math.hypot(small.x - b.x, small.z - b.z)).toBeLessThan(d0 - b.radius * AMASS.pullSpeed * 0.4);
     expect([boss.x, boss.z]).toEqual([bossX, bossZ]);
   });
 

@@ -510,12 +510,11 @@ The stat effects (Unmoved, Static Cling, Grounding) are bounded by the caps inst
 - Zap still has the fastest Tier 4. Tumble does **not** have the fewest deaths: the bot dies to Upright Vacuums and Spray Bottles at Tiers 3–4, and Tumble is too slow to leave a vacuum cone. This was already true before Keepsakes and Abilities (no Ability: Lint 38, Tumble 39, Zap 27 deaths).
 - Every Loadout with Thick Undercoat cost the bot deaths (17–21 against 15 per 30 seeds). The likely cause is that with less knockback the bot stays in contact with Hazards longer. Worth watching in real play.
 
-## Screens
+**Amass check** (October 2026, after Amass replaced Hunker; `pnpm sim --chars=tumble --seeds=12 --minutes=25 --validate`, the default `feed` policy: Amass for boss charge lanes, a swallowable Hazard within 3 r, or 14+ absorbable Debris within 8 r). The pull speed was tuned on 6 seeds over 10 minutes (Tier 4 median: 8 r/s 1:40, 4 r/s 2:54, 2.5 r/s 4:17, 1.5 r/s 5:05; Lint 5:10, Zap 3:43, Hunker Tumble 7:20) and set to 2 r/s, between Zap and Lint.
 
-Title → Character select (Difficulty, Ability card and Loadout) → Run (HUD) → Perk draft (modal on Tier-up) / Keepsake reveal (modal after a boss drop) → Pause → Results (death or victory: time, max radius, Debris absorbed, Tier, Fluff earned, Keepsakes kept, leaderboard name entry) → Shop / Under the Couch → back to Character select. Plus Settings (master/music/SFX volume, quality, reduced motion, story captions) and a How-to-Play panel.
+| Tumble | Tier 4 | House clears | Deaths | Furthest boss beaten |
+|---|---|---|---|---|
+| Hunker (before) | 6:57 | 7 / 12 | 5 | Garbage Truck (4 / 4) |
+| Amass, no Keepsakes | 4:37 | 10 / 12 | 3 | Orbital Sweeper (4 / 5) |
 
-HUD: hearts, radius readout, progress bar to next Tier with Tier name, Dash cooldown, active Pickup icons with timers, Perk icons, small Tier-up/absorb toasts ("+ Sock!").
-
-## Art direction
-
-Cozy, warm, toy-like low poly with soft shadows. Wooden plank floor (procedural canvas texture), rugs, tiles in kitchen/bathroom, baseboards on walls. The Bunny is a grey fuzzy ball (shell-texture fur or noisy displaced sphere) with two cute eyes; absorbed Debris visibly sticks to its surface (cap the count rendered for performance). Hazards read clearly as dangerous: warning colours, telegraph indicators on the floor before attacks.
+All 64 leaderboard submissions passed; the closest came to 57% of the growth limit (city board). The Hunker-era max Loadout search is out of date: `--loadout=max` gives Tumble Feast + Dense Core until it is re-run.
