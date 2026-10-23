@@ -14,9 +14,9 @@ declare module '../core/events' {
     /**
      * The boss is stunned and can be rammed: it crashed into a wall (`cause` 'wall'), Sagittarius A*
      * swallowed star clusters too fast ('indigestion'), or an Ability stunned it ('decoy' clog,
-     * 'hunker' crash into a planted Tumble, 'discharge').
+     * 'amass': a charge into an Amassing Tumble or a Collapse, 'discharge').
      */
-    bossStunned: { hazardId: number; cause?: 'wall' | 'indigestion' | 'decoy' | 'hunker' | 'discharge' };
+    bossStunned: { hazardId: number; cause?: 'wall' | 'indigestion' | 'decoy' | 'amass' | 'discharge' };
     /**
      * Sagittarius A* swallowed a star cluster (Debris `typeId`): its `fullness` (meals of the last
      * few seconds) out of the `threshold` that stuns it.

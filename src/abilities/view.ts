@@ -1,6 +1,6 @@
 /**
- * Ability visuals: the Decoy lint ball, the planted-Tumble ring, the Discharge spark marker and
- * zap bolt. Plain three.js objects parented under run.entityRoot (like Hazard models), updated
+ * Ability visuals: the Decoy lint ball, Tumble's Amass well (accretion disc, core ring, inward
+ * ripples, Collapse burst), the Discharge spark marker and zap bolt. Plain three.js objects parented under run.entityRoot (like Hazard models), updated
  * from the Ability System in sim time. No DOM, so they are harmless headless.
  */
 import {
@@ -18,12 +18,13 @@ import {
 } from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Rng } from '../core/rng';
-import { ringDecal, type Decal } from '../hazards/decals';
+import { ringDecal, sectorDecal, type Decal } from '../hazards/decals';
 
 export const ABILITY_COLORS = {
   decoy: '#c9ccd1',
   lure: '#ffd166',
-  planted: '#f3c27a',
+  amass: '#b48cff',
+  accretion: '#f3c27a',
   spark: '#9ad8ff',
   bolt: '#e6f4ff',
 } as const;
@@ -111,34 +112,96 @@ export class DecoyView {
   }
 }
 
-/** The ring under a planted (hunkered) Tumble. */
-export class PlantedView {
+/** Spiral arms of the accretion disc. */
+const ARMS = 3;
+/** Inward ripples (each shrinks from the core ring to the fur, staggered). */
+const RIPPLES = 2;
+/** Seconds a Collapse burst takes to expand and fade. */
+const BURST_TIME = 0.45;
+
+/**
+ * Tumble's Amass well: a pulsing ring at the full-strength core, an accretion disc of spiral arms
+ * turning faster as the channel runs on, ripples sliding inward, and a Collapse burst.
+ */
+export class AmassView {
   readonly root = new Group();
-  private readonly ring: Decal;
-  private readonly inner: Decal;
+  private readonly well = new Group();
+  private readonly core: Decal;
+  private readonly arms: Decal[] = [];
+  private readonly ripples: Decal[] = [];
+  private readonly burst: Decal;
+  private spin = 0;
+  private burstT = -1;
+  private burstR = 1;
 
   constructor() {
-    this.ring = ringDecal(1.18, 1.42, ABILITY_COLORS.planted, 0.85);
-    this.inner = ringDecal(1.48, 1.58, '#fff3e0', 0.6);
-    this.root.add(this.ring.root, this.inner.root);
-    this.root.visible = false;
+    this.core = ringDecal(0.97, 1, ABILITY_COLORS.amass, 0.55, 64);
+    this.well.add(this.core.root);
+    for (let i = 0; i < ARMS; i++) {
+      const arm = sectorDecal(1.15, 2.1, Math.PI * 0.42, ABILITY_COLORS.accretion, 0.4);
+      this.arms.push(arm);
+      this.well.add(arm.root);
+    }
+    for (let i = 0; i < RIPPLES; i++) {
+      const ripple = ringDecal(0.94, 1, ABILITY_COLORS.amass, 0.4, 48);
+      this.ripples.push(ripple);
+      this.well.add(ripple.root);
+    }
+    this.burst = ringDecal(0.9, 1, '#fff3e0', 0.8, 64);
+    this.burst.root.visible = false;
+    this.well.visible = false;
+    this.root.add(this.well, this.burst.root);
   }
 
-  /** `hold` 0..1 of the max hold used. */
-  update(time: number, visible: boolean, x: number, z: number, radius: number, hold: number): void {
-    this.root.visible = visible;
-    if (!visible) return;
-    this.root.position.set(x, 0, z);
-    this.ring.root.scale.set(radius, 1, radius);
-    this.inner.root.scale.set(radius, 1, radius);
-    this.ring.setOpacity(0.7 + 0.15 * Math.sin(time * 3));
-    this.inner.pulse(time, hold);
+  /** `hold` 0..1 of the max channel used; `coreRadius` in Bunny radii. */
+  update(dt: number, time: number, visible: boolean, x: number, z: number, radius: number, hold: number, coreRadius: number): void {
+    this.well.visible = visible;
+    if (visible) {
+      this.well.position.set(x, 0, z);
+      const core = Math.max(1.3, coreRadius) * radius;
+      this.core.root.scale.set(core, 1, core);
+      this.core.setOpacity(0.35 + 0.2 * Math.sin(time * 9));
+      this.spin += dt * (2.5 + 5 * hold);
+      for (let i = 0; i < ARMS; i++) {
+        const arm = this.arms[i]!;
+        arm.root.scale.set(radius, 1, radius);
+        arm.root.rotation.y = this.spin + (i * Math.PI * 2) / ARMS;
+        arm.setOpacity(0.25 + 0.25 * hold);
+      }
+      for (let i = 0; i < RIPPLES; i++) {
+        const k = (time * 1.6 + i / RIPPLES) % 1;
+        const r = radius + (core - radius) * (1 - k);
+        const ripple = this.ripples[i]!;
+        ripple.root.scale.set(r, 1, r);
+        ripple.setOpacity(0.45 * k);
+      }
+    }
+    if (this.burstT >= 0) {
+      this.burstT += dt;
+      const k = Math.min(1, this.burstT / BURST_TIME);
+      const r = this.burstR * (0.3 + 0.7 * (1 - (1 - k) ** 3));
+      this.burst.root.scale.set(r, 1, r);
+      this.burst.setOpacity(0.8 * (1 - k));
+      if (k >= 1) {
+        this.burstT = -1;
+        this.burst.root.visible = false;
+      }
+    }
+  }
+
+  /** The Collapse implosion's shockwave at (x, z), reaching `radius` world units. */
+  collapse(x: number, z: number, radius: number): void {
+    this.burst.root.position.set(x, 0, z);
+    this.burst.root.visible = true;
+    this.burstR = radius;
+    this.burstT = 0;
   }
 
   dispose(): void {
     this.root.removeFromParent();
-    this.ring.dispose();
-    this.inner.dispose();
+    this.core.dispose();
+    for (const d of [...this.arms, ...this.ripples]) d.dispose();
+    this.burst.dispose();
   }
 }
 

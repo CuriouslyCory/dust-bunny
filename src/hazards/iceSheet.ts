@@ -9,7 +9,7 @@
  *   so it still rams (damage, knockback, shed mass). A Bunny big enough to absorb it is not pushed.
  * - **Only mountain ranges stun it.** A charge that crashes into a mountain range (`isMountainRange`)
  *   stuns it like a wall crash in the other Areas; the coast, the map edge and any other obstacle
- *   just stop it (no stun). Abilities (a Decoy clog, a Hunker crash, a Discharge) and Spiky Dash
+ *   just stop it (no stun). Abilities (a Decoy clog, an Amass crash, a Discharge) and Spiky Dash
  *   still stun it: they are the Characters' own tools, not the terrain.
  * - **Chips calve off as icebergs.** Every `summonInterval` s while it hunts, an iceberg breaks off a
  *   front corner (`calving_l` / `calving_r`, hidden until it regrows); a mountain crash calves both

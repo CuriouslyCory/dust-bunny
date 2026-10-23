@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { CompositeInput, NO_INPUT, type InputState } from '../core/input';
 import { EventBus } from '../core/events';
-import { DECOY, DISCHARGE, HUNKER } from '../data/abilities';
+import { AMASS, DECOY, DISCHARGE } from '../data/abilities';
 import { ROBOVAC_9000 } from '../data/hazards';
 import { createRun } from '../game/assembly';
 import type { Run } from '../game/run';
-import { aimTarget, applySuction, hazardFloorFree } from '../hazards/common';
+import { aimTarget, hazardFloorFree } from '../hazards/common';
 import type { RoboVac9000 } from '../hazards/robovac';
-import { shedMass } from '../hazards/shed';
 import type { SprayBottle } from '../hazards/sprayBottle';
 import { maxSpeedFor } from '../systems/movement';
-import { addAbilityParamsModifier, baseAbilityParams, getAbilitySystem, type DecoyAbility, type DischargeAbility, type HunkerAbility } from './index';
+import { Rng } from '../core/rng';
+import { addAbilityParamsModifier, baseAbilityParams, getAbilitySystem, type AmassAbility, type DecoyAbility, type DischargeAbility } from './index';
 
 /** A Run with no spawning (only the Hazards a test places) and a scriptable input. */
 function setup(characterId: string, seed = `abilities-${characterId}`) {
@@ -77,7 +77,7 @@ describe('Ability params', () => {
   it('start from src/data/abilities.ts and take registered modifiers', () => {
     const base = baseAbilityParams();
     expect(base.decoy.duration).toBe(DECOY.duration);
-    expect(base.hunker.cooldownPerSecondHeld).toBe(HUNKER.cooldownPerSecondHeld);
+    expect(base.amass.cooldownPerSecondHeld).toBe(AMASS.cooldownPerSecondHeld);
     expect(base.discharge.range).toBe(DISCHARGE.range);
     const off = addAbilityParamsModifier((p, run) => {
       if (run.config.seed === 'long-strand') p.decoy.duration += 3;
@@ -191,87 +191,162 @@ describe('Lint · Decoy', () => {
   });
 });
 
-describe('Tumble · Hunker', () => {
-  it('plants while held: no movement, damage, shedding, knockback or suction', () => {
+describe('Tumble · Amass', () => {
+  /** Starts an Amass (held) this tick. */
+  function amass(run: Run, input: InputState) {
+    input.ability = true;
+    input.abilityHeld = true;
+    run.update(1 / 60);
+  }
+
+  /** A Debris type that is never locked (Obstacle). */
+  const freeType = (run: Run) => run.debris.types.findIndex((t) => t.lockedUntilTier === undefined);
+
+  it('channels while held: slowed to 25%, no Dash or knockback, 30% less damage, suction 1.2×; cooldown 5 s + 3.5 s per second', () => {
     const { run, input, sys } = setup('tumble');
     const b = run.bunny;
-    input.ability = true;
-    input.abilityHeld = true;
-    input.moveX = 1;
+    const [speed0, suction0] = [maxSpeedFor(b), b.stats.get('suctionMultiplier')];
+    amass(run, input);
+    expect(b.amassing).toBe(true);
+    expect(maxSpeedFor(b)).toBeCloseTo(speed0 * AMASS.moveSpeedMul);
+    expect(b.stats.get('suctionMultiplier')).toBeCloseTo(suction0 * AMASS.suctionMul);
+    input.dash = true;
     run.update(1 / 60);
-    expect(b.hunkered).toBe(true);
-    const [x0, z0, r0, hp] = [b.x, b.z, b.radius, b.health];
-    step(run, 0.5);
-    expect([b.x, b.z]).toEqual([x0, z0]);
-    expect(b.damage(1, 'test')).toBe(false);
-    expect(b.health).toBe(hp);
-    shedMass(run, sys.rng, 0.3, 'test');
-    expect(b.radius).toBe(r0);
+    expect(b.dashing).toBe(false);
     b.knockback(1, 0, 50);
     expect(b.impulseX).toBe(0);
-    expect(applySuction(run, b.x + 50, b.z, 1, 1, 1 / 60)).toBe(0);
+    const hp = b.health;
+    expect(b.damage(1, 'test')).toBe(true);
+    expect(b.health).toBeCloseTo(hp - (1 - AMASS.damageReduction));
+    step(run, 0.5);
     input.abilityHeld = false;
     run.update(1 / 60);
-    expect(b.hunkered).toBe(false);
-    const ctl = sys.controller as HunkerAbility;
-    expect(ctl.cooldownTotal).toBeCloseTo(HUNKER.cooldownBase + HUNKER.cooldownPerSecondHeld * ctl.held, 5);
+    expect(b.amassing).toBe(false);
+    expect(maxSpeedFor(b)).toBeCloseTo(speed0);
+    expect(b.stats.get('suctionMultiplier')).toBeCloseTo(suction0);
+    const ctl = sys.controller as AmassAbility;
+    expect(ctl.cooldownTotal).toBeCloseTo(AMASS.cooldownBase + AMASS.cooldownPerSecondHeld * ctl.held, 5);
   });
 
-  it('auto-releases at the max hold with the long cooldown, and cannot start while stuck', () => {
+  it('auto-releases at the 2 s max hold with a 12 s cooldown, and cannot start while stuck', () => {
     const { run, input, sys, events } = setup('tumble');
     const ended = collect(events, 'abilityEnded');
-    input.ability = true;
-    input.abilityHeld = true;
-    step(run, HUNKER.maxHold + 0.1);
-    expect(run.bunny.hunkered).toBe(false);
-    expect(ended).toMatchObject([{ reason: 'maxHold' }]);
-    expect((sys.controller as HunkerAbility).cooldownTotal).toBeCloseTo(HUNKER.cooldownBase + HUNKER.maxHold * HUNKER.cooldownPerSecondHeld, 1);
-    step(run, 15);
+    amass(run, input);
+    step(run, AMASS.maxHold + 0.1);
+    expect(run.bunny.amassing).toBe(false);
+    expect(ended).toMatchObject([{ ability: 'amass', reason: 'maxHold' }]);
+    expect((sys.controller as AmassAbility).cooldownTotal).toBeCloseTo(12, 1);
+    step(run, 12.1);
     run.bunny.rooted = 1;
-    input.ability = true;
-    run.update(1 / 60);
-    expect(run.bunny.hunkered).toBe(false);
+    amass(run, input);
+    expect(run.bunny.amassing).toBe(false);
   });
 
-  it('a charging boss crashes into a planted Tumble: stunned, chipped at once, then bounces within 6 s', () => {
+  it('pulls Debris from across the map with a swirl; oversized Debris only shakes and is left where it was', () => {
+    const { run, input } = setup('tumble');
+    const b = run.bunny;
+    const rng = new Rng('amass-debris');
+    const t = freeType(run);
+    const r = b.radius;
+    const far = run.debris.spawn(t, b.x + 40 * r, b.z, rng, { size: r * 0.3 })!;
+    const near = run.debris.spawn(t, b.x, b.z + 2.5 * r, rng, { size: r * 0.3 })!;
+    const big = run.debris.spawn(t, b.x - 3 * r, b.z, rng, { size: r * 1.6 })!;
+    const [bigX, bigZ] = [big.x, big.z];
+    const [farD0, nearZ0] = [far.x - b.x, near.z - b.z];
+    amass(run, input);
+    step(run, 0.3);
+    expect(big.x !== bigX || big.z !== bigZ).toBe(true); // shaking
+    expect(far.x - b.x).toBeLessThan(farD0);
+    // The swirl leans the pull off straight inward.
+    expect(Math.abs(near.x - b.x)).toBeGreaterThan(0.01 * r);
+    expect(near.z - b.z).toBeLessThan(nearZ0);
+    // 2.5 r out, it reaches the fur (r + 0.3 r) after 1.2 r of pull at full strength (plus the ramp).
+    step(run, 1.2 / AMASS.pullSpeed + AMASS.rampTime);
+    expect(near.alive).toBe(false); // pulled into the fur and absorbed
+    input.abilityHeld = false;
+    run.update(1 / 60);
+    expect([big.x, big.z]).toEqual([bigX, bigZ]);
+  });
+
+  it('swallows a small Hazard too big to absorb normally: scrap, and a shockwave stuns its neighbours', () => {
+    const { run, input, events } = setup('tumble');
+    const b = run.bunny;
+    const swallowed = collect(events, 'hazardSwallowed');
+    const removed = collect(events, 'hazardRemoved');
+    const h = run.hazards.spawn('roomba', b.x, b.z + 200);
+    b.setRadius(h.size / 1);
+    expect(h.size).toBeGreaterThan(b.radius * b.stats.get('absorbRatio'));
+    amass(run, input);
+    const other = run.hazards.spawn('roomba', b.x + b.radius * 2 + h.size, b.z);
+    const r0 = b.radius;
+    const debris0 = run.debris.count;
+    h.x = b.x;
+    h.z = b.z - b.radius - h.size + 2;
+    run.update(1 / 60);
+    expect(swallowed).toMatchObject([{ hazardId: h.id, defId: 'roomba' }]);
+    expect(removed).toMatchObject([{ hazardId: h.id, absorbed: true }]);
+    expect(b.radius).toBeGreaterThan(r0);
+    expect(run.debris.count - debris0).toBeGreaterThan(0);
+    expect(other.stunnedFor).toBeGreaterThan(AMASS.shockwaveStun - 0.05);
+    expect(b.health).toBe(b.maxHealth);
+  });
+
+  it('pulls small non-boss Hazards, never bosses or Hazards over 1.25 r', () => {
+    const { run, input } = setup('tumble');
+    const b = run.bunny;
+    const small = run.hazards.spawn('roomba', b.x + 300, b.z);
+    b.setRadius(small.size / 1.2);
+    small.x = b.x + b.radius * 6;
+    small.z = b.z;
+    const boss = run.hazards.spawn('robovac_9000', b.x - b.radius * 4 - ROBOVAC_9000.contactRadius, b.z) as RoboVac9000;
+    boss.state = 'stunned';
+    const [bossX, bossZ] = [boss.x, boss.z];
+    const d0 = Math.hypot(small.x - b.x, small.z - b.z);
+    amass(run, input);
+    small.stunnedFor = 5; // hold it still so only the pull moves it
+    step(run, 0.6);
+    // Just past the core: almost full strength after the ramp, so about pullSpeed × (0.6 − ramp / 2) r.
+    expect(Math.hypot(small.x - b.x, small.z - b.z)).toBeLessThan(d0 - b.radius * AMASS.pullSpeed * 0.4);
+    expect([boss.x, boss.z]).toEqual([bossX, bossZ]);
+  });
+
+  it('a charging boss crashes into the core: stunned and chipped at once with 2 more parts; inside 6 s it hits as usual', () => {
     const { run, input, sys, events } = setup('tumble');
     const b = run.bunny;
     b.setRadius(30);
     const hits = collect(events, 'bossHit');
-    const planted = collect(events, 'hazardHitPlanted');
-    input.ability = true;
-    input.abilityHeld = true;
-    run.update(1 / 60);
+    const crashes = collect(events, 'bossCrashedIntoAmass');
+    amass(run, input);
     const boss = run.hazards.spawn('robovac_9000', b.x + ROBOVAC_9000.contactRadius + b.radius - 3, b.z) as RoboVac9000;
     boss.state = 'charge';
     const [bx, bz] = [b.x, b.z];
     run.update(1 / 60);
-    expect(boss.stunCause).toBe('hunker');
+    expect(boss.stunCause).toBe('amass');
+    expect(boss.chipBonus).toMatchObject({ pieces: AMASS.bossChipParts });
     expect(hits).toHaveLength(1);
-    expect(planted).toMatchObject([{ boss: true, stunned: true }]);
-    expect([b.x, b.z]).toEqual([bx, bz]);
-    // Later crash inside the 6 s limit: no stun, it bounces off.
-    step(run, 2);
+    expect(crashes).toHaveLength(1);
+    expect(Math.hypot(b.x - bx, b.z - bz)).toBeLessThan(0.5);
+    expect(b.health).toBe(b.maxHealth);
+    // Again inside the 6 s limit: a normal hit, 30% lighter.
+    step(run, 0.5);
     boss.state = 'charge';
     boss.x = b.x + ROBOVAC_9000.contactRadius * boss.scale + b.radius - 3;
     boss.z = b.z;
     run.update(1 / 60);
-    expect(boss.state).toBe('recover');
     expect(hits).toHaveLength(1);
     expect(sys.canStunBoss(boss)).toBe(false);
+    expect(b.health).toBeCloseTo(b.maxHealth - ROBOVAC_9000.damage * (1 - AMASS.damageReduction));
   });
 
-  it('other Hazards recoil off a planted Tumble without hurting it', () => {
+  it('a hunting boss that touches the core is not stunned', () => {
     const { run, input } = setup('tumble');
     const b = run.bunny;
-    b.setRadius(5);
-    input.ability = true;
-    input.abilityHeld = true;
+    b.setRadius(30);
+    amass(run, input);
+    const boss = run.hazards.spawn('robovac_9000', b.x + ROBOVAC_9000.contactRadius + b.radius - 3, b.z) as RoboVac9000;
+    boss.state = 'hunt';
     run.update(1 / 60);
-    const h = run.hazards.spawn('roomba', b.x + b.radius + 9, b.z);
-    run.update(1 / 60);
-    expect(b.health).toBe(b.maxHealth);
-    expect((h as unknown as { recoilFor: number }).recoilFor).toBeGreaterThan(0);
+    expect(boss.stunCause).toBeNull();
   });
 });
 

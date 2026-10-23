@@ -245,8 +245,11 @@ describe('loadout', () => {
   it('is checked on Area boards too', () => {
     const f = { area: 'house', radiusIn: 1, maxRadius: 52, debrisAbsorbed: 900, durationMs: 400_000, difficulty: 'casual' } as const;
     const body = { name: 'Lint', character: 'tumble', ...f, score: computeAreaScore(f) };
-    const ok = validateAreaSubmission({ ...body, loadout: [{ type: 'snowball', rarity: 1 }] });
-    expect(ok.ok && ok.value.loadout).toEqual([{ type: 'snowball', rarity: 1 }]);
+    const ok = validateAreaSubmission({ ...body, loadout: [{ type: 'feast', rarity: 1 }] });
+    expect(ok.ok && ok.value.loadout).toEqual([{ type: 'feast', rarity: 1 }]);
+    // A cached client still sending a Hunker-era type gets it renamed.
+    const old = validateAreaSubmission({ ...body, loadout: [{ type: 'snowball', rarity: 1 }] });
+    expect(old.ok && old.value.loadout).toEqual([{ type: 'feast', rarity: 1 }]);
     const bad = validateAreaSubmission({ ...body, loadout: [{ type: 'reclaim', rarity: 1 }] });
     expect(bad.ok ? null : bad.field).toBe('loadout');
   });

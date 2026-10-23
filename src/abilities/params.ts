@@ -7,7 +7,7 @@
  *
  * Ranges and sizes are in Bunny radii (r) unless noted.
  */
-import { ABILITY_RULES, DECOY, DISCHARGE, HUNKER } from '../data/abilities';
+import { ABILITY_RULES, AMASS, DECOY, DISCHARGE } from '../data/abilities';
 import type { Run } from '../game/run';
 
 export interface DecoyParams {
@@ -27,16 +27,50 @@ export interface DecoyParams {
   wandererLureRange: number;
 }
 
-export interface HunkerParams {
-  /** Longest hold (s). */
+export interface AmassParams {
+  /** Longest channel (s) (Lingering Mass). */
   maxHold: number;
-  /** Cooldown after release: cooldownBase + cooldownPerSecondHeld × seconds held. */
+  /** Cooldown after release: cooldownBase + cooldownPerSecondHeld × seconds channelled. */
   cooldownBase: number;
   cooldownPerSecondHeld: number;
-  /** Extra seconds a boss stays stunned after crashing into a planted Tumble (Dead Weight). */
-  bossStunBonus: number;
-  /** Magnet radius added while planted, after the cap stage (Snowball; 0 = off). */
-  plantedMagnetBonus: number;
+  /** Max speed multiplier while channelling. */
+  moveSpeedMul: number;
+  /** Fraction of Hazard damage taken off while channelling (Unmoved: +0.15 per copy). */
+  damageReduction: number;
+  /** Suction multiplier while channelling. */
+  suctionMul: number;
+  /** Debris and non-boss Hazards up to pullRatio × r are pulled. */
+  pullRatio: number;
+  /** Non-boss Hazards up to absorbRatio × r that touch Tumble while channelling are swallowed. */
+  absorbRatio: number;
+  /** Pull speed at full strength (r/s) × forceMul (Dense Core). */
+  pullSpeed: number;
+  forceMul: number;
+  /** Full-strength core radius (r from the Bunny's centre) (Dense Core adds to it). */
+  coreRadius: number;
+  /** Pull strength at the map's edge. */
+  edgeFalloff: number;
+  /** Swirl off straight inward (degrees). */
+  swirlDeg: number;
+  /** Seconds to full pull strength. */
+  rampTime: number;
+  /** Scrap a swallowed Hazard bursts into: count and size (r). */
+  scrapPieces: number;
+  scrapSize: number;
+  /** Swallow shockwave: reach from the Bunny's surface (r) and stun (s). */
+  shockwaveRadius: number;
+  shockwaveStun: number;
+  /** Extra chip parts a boss sheds when it crashes into the channel. */
+  bossChipParts: number;
+  /** Collapse detonation on release: radius from the Bunny's surface (r) and stun (s); 0 = off. */
+  collapseRadius: number;
+  collapseStun: number;
+  /** Collapse knockback on non-boss Hazards (r) and the bosses' share of the stun. */
+  collapseKnockback: number;
+  collapseBossStun: number;
+  /** Feast: growth multiplier bonus during the channel and feastLinger s after it (0 = off). */
+  feastBonus: number;
+  feastLinger: number;
 }
 
 export interface DischargeParams {
@@ -75,7 +109,7 @@ export interface AbilityParams {
   /** A boss can be stunned by an Ability at most once per this many seconds. */
   bossStunInterval: number;
   decoy: DecoyParams;
-  hunker: HunkerParams;
+  amass: AmassParams;
   discharge: DischargeParams;
 }
 
@@ -92,12 +126,32 @@ export function baseAbilityParams(): AbilityParams {
       lureRangeMul: 1,
       wandererLureRange: 0,
     },
-    hunker: {
-      maxHold: HUNKER.maxHold,
-      cooldownBase: HUNKER.cooldownBase,
-      cooldownPerSecondHeld: HUNKER.cooldownPerSecondHeld,
-      bossStunBonus: 0,
-      plantedMagnetBonus: 0,
+    amass: {
+      maxHold: AMASS.maxHold,
+      cooldownBase: AMASS.cooldownBase,
+      cooldownPerSecondHeld: AMASS.cooldownPerSecondHeld,
+      moveSpeedMul: AMASS.moveSpeedMul,
+      damageReduction: AMASS.damageReduction,
+      suctionMul: AMASS.suctionMul,
+      pullRatio: AMASS.pullRatio,
+      absorbRatio: AMASS.absorbRatio,
+      pullSpeed: AMASS.pullSpeed,
+      forceMul: 1,
+      coreRadius: AMASS.coreRadius,
+      edgeFalloff: AMASS.edgeFalloff,
+      swirlDeg: AMASS.swirlDeg,
+      rampTime: AMASS.rampTime,
+      scrapPieces: AMASS.scrapPieces,
+      scrapSize: AMASS.scrapSize,
+      shockwaveRadius: AMASS.shockwaveRadius,
+      shockwaveStun: AMASS.shockwaveStun,
+      bossChipParts: AMASS.bossChipParts,
+      collapseRadius: 0,
+      collapseStun: 0,
+      collapseKnockback: AMASS.collapseKnockback,
+      collapseBossStun: AMASS.collapseBossStun,
+      feastBonus: 0,
+      feastLinger: AMASS.feastLinger,
     },
     discharge: {
       fillDistance: DISCHARGE.fillDistance,

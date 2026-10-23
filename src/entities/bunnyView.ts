@@ -231,7 +231,7 @@ export class BunnyView {
   private readonly stretch = new Spring(90, 9);
   private readonly squash = new Spring(110, 8);
   private squeezeView = 1;
-  /** 0..1 eased Hunker plant (flattens the ball onto the floor). */
+  /** 0..1 eased Amass channel (compacts the ball and makes it shiver). */
   private plantView = 0;
   private wasDashing = false;
   /**
@@ -610,12 +610,12 @@ export class BunnyView {
     const sq = Math.max(-0.3, Math.min(0.35, this.squash.step(dt) + Math.sin(this.time * 2.4) * 0.012));
     // Squeezing through a doorway: narrower across, longer along the heading (volume kept).
     this.squeezeView = lerp(this.squeezeView, b.squeeze, Math.min(1, dt * 12));
-    // Hunker: settle low and wide, like a rock.
-    this.plantView = lerp(this.plantView, b.hunkered ? 1 : 0, Math.min(1, dt * 14));
-    const plantWide = 1 + this.plantView * 0.12;
+    // Amass: compact into a dense core that shivers with the strain.
+    this.plantView = lerp(this.plantView, b.amassing ? 1 : 0, Math.min(1, dt * 14));
+    const plantWide = (1 - this.plantView * 0.1) * (1 + this.plantView * 0.025 * Math.sin(this.time * 47));
     const sz = (((1 + st) * (1 + sq * 0.5)) / this.squeezeView) * plantWide;
     const sxy = 1 / Math.sqrt(1 + st);
-    const sy = sxy * (1 - sq) * (1 - this.plantView * 0.24);
+    const sy = sxy * (1 - sq) * plantWide;
     const sx = sxy * (1 + sq * 0.5) * this.squeezeView * plantWide;
     this.body.scale.set(sx, sy, sz);
     this.body.rotation.y = this.heading;

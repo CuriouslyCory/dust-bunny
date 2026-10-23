@@ -80,11 +80,10 @@ export function scatterDebris(run: Run, rng: Rng, x: number, z: number, count: n
   return placed;
 }
 
-/** Sheds `fraction` of the Bunny's volume onto the floor around it and emits bunnyShed. A planted (hunkered) Bunny sheds nothing. */
+/** Sheds `fraction` of the Bunny's volume onto the floor around it and emits bunnyShed. */
 export function shedMass(run: Run, rng: Rng, fraction: number, source: string): ShedPlan {
   const b = run.bunny;
   const ratio = b.stats.get('absorbRatio');
-  if (b.hunkered) return planShed(b.radius, 0, ratio);
   const approx = planShed(b.radius, fraction, ratio);
   if (approx.volume <= 0) return approx;
   const type = pickShedType(run.debris.types, approx.pieceSize, run.tier, run.area);

@@ -337,7 +337,7 @@ describe('Sagittarius A*', () => {
   const feedCluster = (run: Run, boss: SagittariusA, id = 'star_cluster', size?: number) =>
     run.debris.spawn(typeIndex(run, id), boss.x + 0.1, boss.z, run.rng, size === undefined ? {} : { size })!;
 
-  it('its pull drags the Bunny in and bends the camera (lens pull and strength rise), but not a hunkered Bunny', () => {
+  it('its pull drags the Bunny in and bends the camera (lens pull and strength rise), but not a hidden Bunny', () => {
     const { run, boss, b, p } = hunting('pull', 13);
     quiet(boss);
     const strength0 = boss.lens.strength;
@@ -350,7 +350,7 @@ describe('Sagittarius A*', () => {
     expect(boss.lens.x).toBe(boss.x);
     expect(boss.lens.horizon).toBeCloseTo((SAGITTARIUS_A.size / SAGITTARIUS_A.modelSize) * 1, 5);
     b.teleport(p.x, p.z);
-    b.hunkered = true;
+    b.hiddenFromHazards = true;
     const x = b.x;
     for (let i = 0; i < 10; i++) run.hazards.update(STEP, run);
     expect(b.x).toBeCloseTo(x, 6);

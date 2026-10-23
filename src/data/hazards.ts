@@ -1769,7 +1769,7 @@ export const SOLAR_FLARE: AirConeTuning = {
 /**
  * The solar wind: while the Sun hunts (or recovers), a Bunny whose near edge is within `reach` of
  * its surface is pushed straight away from it at up to `strength` × its max speed (fading to 0 at
- * `reach`; `applyPush`, so a hunkered or hidden Bunny is not pushed), unless the Bunny can absorb
+ * `reach`; `applyPush`, so an Amassing or hidden Bunny is not pushed), unless the Bunny can absorb
  * it. Loose Debris up to `debrisSize` in that ring is blown outward at up to `debrisSpeed`. World
  * units at full size, scaled with its chips.
  */

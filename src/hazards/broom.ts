@@ -2,8 +2,7 @@
  * Broom: stands at a fixed spot. It telegraphs a sweep with a red arc on the floor (aimed at
  * the Bunny when it is near), then sweeps the bristle head through the arc. Getting hit
  * during the sweep: 1 damage + a big knockback along the sweep. The head is solid otherwise.
- * It aims at Lint's Decoy instead while the Decoy is within its aggro range, and a sweep that
- * runs into a planted (hunkered) Tumble stops there (onPlanted).
+ * It aims at Lint's Decoy instead while the Decoy is within its aggro range.
  */
 import { Box3, Vector3 } from 'three';
 import type { Rng } from '../core/rng';
@@ -141,19 +140,6 @@ export class Broom extends BaseHazard {
       });
     }
     separateFromBunny(run, this, BROOM.headRadius, HEAD_HEIGHT);
-  }
-
-  /** A sweep that hits a planted Tumble stops against it, as against a wall. */
-  onPlanted(run: Run): void {
-    if (this.state === 'sweep') {
-      // Step the head back out of contact and end the sweep here.
-      const b = run.bunny;
-      const back = (BROOM.headRadius + b.radius) / BROOM.sweepRadius;
-      this.angle -= Math.sign(this.to - this.from) * Math.min(back, Math.abs(this.to - this.from));
-      this.to = this.angle;
-      this.timer = 0;
-      this.placeHead();
-    }
   }
 }
 

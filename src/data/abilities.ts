@@ -1,10 +1,10 @@
 /**
- * Character Abilities (unlocked from the first Run): Lint's Decoy, Tumble's Hunker, Zap's
+ * Character Abilities (unlocked from the first Run): Lint's Decoy, Tumble's Amass, Zap's
  * Discharge. Tunable numbers only; the behaviour lives in src/abilities/. Ranges and sizes
  * are in Bunny radii (r), so each Ability plays the same at every Tier.
  */
 
-export type AbilityId = 'decoy' | 'hunker' | 'discharge';
+export type AbilityId = 'decoy' | 'amass' | 'discharge';
 
 export interface AbilityData {
   id: AbilityId;
@@ -24,11 +24,11 @@ export const ABILITIES: Record<AbilityId, AbilityData> = {
     description: 'Shed a lint ball. Hazards aim at it, and anything that touches it clogs.',
     trigger: 'tap',
   },
-  hunker: {
-    id: 'hunker',
-    name: 'Hunker',
-    icon: '🪨',
-    description: 'Hold to plant. Nothing moves or hurts you, and bosses crash into you.',
+  amass: {
+    id: 'amass',
+    name: 'Amass',
+    icon: '🪐',
+    description: 'Hold to compact your core. Gravity drags Debris and small Hazards in, and small Hazards that touch you are swallowed.',
     trigger: 'hold',
   },
   discharge: {
@@ -61,12 +61,46 @@ export const DECOY = {
   clogStun: 1.5,
 } as const;
 
-export const HUNKER = {
-  /** Longest hold, in seconds. */
-  maxHold: 10,
-  /** Cooldown after release: base + perSecondHeld × seconds held. */
-  cooldownBase: 4,
-  cooldownPerSecondHeld: 1,
+export const AMASS = {
+  /** Longest channel, in seconds (Lingering Mass adds to it, up to KEEPSAKE_FLOORS.amassMaxHold). */
+  maxHold: 2,
+  /** Cooldown after release: base + perSecondHeld × seconds channelled (tap 5 s, full 2 s hold 12 s). */
+  cooldownBase: 5,
+  cooldownPerSecondHeld: 3.5,
+  /** Max speed multiplier while channelling (applied after the caps). */
+  moveSpeedMul: 0.25,
+  /** Fraction of Hazard damage taken off while channelling (Unmoved adds to it). */
+  damageReduction: 0.3,
+  /** Suction multiplier while channelling (denser core, harder pull; applied after the caps). */
+  suctionMul: 1.2,
+  /** Debris and non-boss Hazards up to this × r are pulled; bigger ones only shake. */
+  pullRatio: 1.25,
+  /** Non-boss Hazards up to this × r that touch Tumble while channelling are swallowed. */
+  absorbRatio: 1.15,
+  /** Pull speed at full strength, in Bunny radii per second (Dense Core multiplies it). */
+  pullSpeed: 2,
+  /** Full-strength core, in Bunny radii from the Bunny's centre (Dense Core adds to it). */
+  coreRadius: 3,
+  /** Pull strength at the map's edge (1 inside the core, falling off linearly to this). */
+  edgeFalloff: 0.35,
+  /** Angular swirl: the pull leans this many degrees off straight inward (an accretion disc). */
+  swirlDeg: 15,
+  /** Seconds the pull takes to reach full strength after the channel starts. */
+  rampTime: 0.25,
+  /** A swallowed Hazard bursts into this many scrap pieces of scrapSize × r. */
+  scrapPieces: 3,
+  scrapSize: 0.35,
+  /** The swallow's micro-shockwave: non-boss Hazards within this many r of the Bunny's surface are stunned. */
+  shockwaveRadius: 2,
+  shockwaveStun: 0.4,
+  /** Chip parts a boss sheds on top of its usual chip when it crashes into an Amassing Tumble. */
+  bossChipParts: 2,
+  /** Knockback of Collapse's detonation on non-boss Hazards, in Bunny radii. */
+  collapseKnockback: 2.5,
+  /** Fraction of Collapse's stun a boss receives. */
+  collapseBossStun: 0.5,
+  /** Feast's growth bonus also covers absorbs this many seconds after the channel ends. */
+  feastLinger: 1,
 } as const;
 
 export const DISCHARGE = {

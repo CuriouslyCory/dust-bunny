@@ -19,8 +19,7 @@
  * web filament nearest its spawn (`filamentLane`), its two galaxies turning opposite ways
  * (`swirlNodes`).
  *
- * A planted (hunkered) Tumble can't be stuck: the roller bounces off it and rolls back the other
- * way (onPlanted). Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
+ * Stunned while carrying the Bunny (a clog, a Discharge), it lets go.
  */
 import type { Rng } from '../core/rng';
 import { areaUnit } from '../data/areas';
@@ -326,18 +325,6 @@ export class LintRoller extends BaseHazard {
       this.release(run);
     }
     super.update(dt, run);
-  }
-
-  /** Bounces off a planted Tumble: turns back along the lane (only if heading into it) and pauses. */
-  onPlanted(run: Run): void {
-    const a = this.axis();
-    if (!a) return;
-    const b = run.bunny;
-    const towards = (a.x * (b.x - this.x) + a.z * (b.z - this.z)) * this.dir > 0;
-    if (towards) {
-      this.dir = this.dir === 1 ? -1 : 1;
-      this.pause = Math.max(this.pause, this.cfg.endPause);
-    }
   }
 
   /** The course's direction here (towards b on a lane, increasing arc length on a ring); null without one. */

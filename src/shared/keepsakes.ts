@@ -7,9 +7,27 @@
 /** Keepsake type ids per Character, mirrored from KEEPSAKE_TYPES (test-synced). */
 export const SHARED_KEEPSAKE_TYPES: Readonly<Record<string, readonly string[]>> = {
   lint: ['long_strand', 'quick_shed', 'thick_clog', 'dinner_bell', 'reclaim'],
-  tumble: ['loose_roots', 'bristle_back', 'snowball', 'dead_weight', 'thick_undercoat'],
+  tumble: ['dense_core', 'lingering_mass', 'collapse', 'feast', 'unmoved'],
   zap: ['live_wire', 'long_reach', 'arc', 'static_cling', 'grounding'],
 };
+
+/**
+ * Tumble's type ids from before Amass replaced Hunker, mapped to their replacements (mirrors
+ * LEGACY_KEEPSAKE_TYPES, test-synced). Old cloud saves, leaderboard rows and cached clients still
+ * send them; they are read as the new ids.
+ */
+export const LEGACY_KEEPSAKE_TYPES: Readonly<Record<string, string>> = {
+  loose_roots: 'lingering_mass',
+  bristle_back: 'collapse',
+  snowball: 'feast',
+  dead_weight: 'dense_core',
+  thick_undercoat: 'unmoved',
+};
+
+/** A stored type id as today's id (legacy ids renamed; anything else, including non-strings, unchanged). */
+export function currentKeepsakeTypeId<T>(type: T): T | string {
+  return typeof type === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_KEEPSAKE_TYPES, type) ? LEGACY_KEEPSAKE_TYPES[type]! : type;
+}
 
 /** Rarities 1..KEEPSAKE_MAX_RARITY (mirrors MAX_RARITY). */
 export const KEEPSAKE_MAX_RARITY = 5;
@@ -52,16 +70,18 @@ export function rarityFromGrade(grade: unknown): number | null {
 /**
  * Validates an untrusted Loadout for a Character: an array of 0–2 `{ type, rarity }` with the
  * Character's own types (duplicates allowed) and rarities 1–5. A slot from an older client,
- * `{ type, grade }` (1–10), is converted. Returns a clean copy or null.
+ * `{ type, grade }` (1–10) or a legacy Tumble type, is converted. Returns a clean copy or null.
  */
 export function parseLoadout(characterId: string, raw: unknown): SharedKeepsakeRef[] | null {
   if (!Array.isArray(raw) || raw.length > KEEPSAKE_LOADOUT_SLOTS) return null;
   const out: SharedKeepsakeRef[] = [];
   for (const k of raw) {
-    if (!isObj(k) || !isKeepsakeTypeFor(characterId, k.type)) return null;
+    if (!isObj(k)) return null;
+    const type = currentKeepsakeTypeId(k.type);
+    if (!isKeepsakeTypeFor(characterId, type)) return null;
     const rarity = k.rarity !== undefined ? (isKeepsakeRarity(k.rarity) ? k.rarity : null) : rarityFromGrade(k.grade);
     if (rarity === null) return null;
-    out.push({ type: k.type, rarity });
+    out.push({ type, rarity });
   }
   return out;
 }
@@ -73,12 +93,13 @@ export function sharedHoardKey(ref: SharedKeepsakeRef): string {
 
 /**
  * Parses a Hoard key ("thick_clog:epic") for a Character, or null. A key from before rarities
- * ("thick_clog:6") is converted; callers re-key with `sharedHoardKey` and add counts together.
+ * ("thick_clog:6") or with a legacy Tumble type ("snowball:epic") is converted; callers re-key with
+ * `sharedHoardKey` and add counts together.
  */
 export function parseSharedHoardKey(characterId: string, key: string): SharedKeepsakeRef | null {
   const i = key.lastIndexOf(':');
   if (i <= 0) return null;
-  const type = key.slice(0, i);
+  const type = currentKeepsakeTypeId(key.slice(0, i));
   const r = key.slice(i + 1);
   if (!isKeepsakeTypeFor(characterId, type)) return null;
   const id = KEEPSAKE_RARITY_IDS.indexOf(r);

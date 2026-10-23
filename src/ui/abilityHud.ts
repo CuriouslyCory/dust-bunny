@@ -1,7 +1,7 @@
 /**
  * Ability HUD: a ring widget next to Dash for the Character's Ability, drawn from
- * abilityHud(run) (src/abilities). Decoy and Hunker show a cooldown ring (Hunker a hold timer
- * while planted, Decoy its time left while out); Discharge shows the Static meter as a charge ring.
+ * abilityHud(run) (src/abilities). Decoy and Amass show a cooldown ring (Amass a channel timer
+ * while held, Decoy its time left while out); Discharge shows the Static meter as a charge ring.
  * The touch button (src/input/touch.ts) reuses `AbilityRing` with its own ring.
  */
 import { abilityHud, type AbilityHudState } from '../abilities';
@@ -56,12 +56,14 @@ export class AbilityRing {
   }
 }
 
-/** Toasts for Ability moments (clogs, crashes into a planted Tumble, short-outs). */
+/** Toasts for Ability moments (clogs, swallows and crashes into an Amassing Tumble, short-outs). */
 function abilityToasts(hud: Hud, game: Game): void {
   const ev = game.events;
   ev.on('hazardClogged', (e) => hud.toast(e.boss ? (e.seconds > 0 ? '🧶 Boss clogged! Ram it!' : '🧶 Pop!') : '🧶 Clogged!', { key: 'ability:clog', tone: 'good' }));
-  ev.on('hazardHitPlanted', (e) => {
-    if (e.boss && e.stunned) hud.toast('🪨 Boss crashed into you!', { key: 'ability:planted', tone: 'good' });
+  ev.on('bossCrashedIntoAmass', () => hud.toast('🪐 Boss crashed into your core! Ram it!', { key: 'ability:amass', tone: 'good' }));
+  ev.on('hazardSwallowed', () => hud.toast('🪐 Swallowed!', { key: 'ability:swallow', tone: 'good' }));
+  ev.on('amassCollapsed', (e) => {
+    if (e.hit > 0) hud.toast('💥 Collapse!', { key: 'ability:collapse', tone: 'good' });
   });
   ev.on('hazardShorted', (e) => hud.toast(e.boss ? '⚡ Boss shorted out! Ram it!' : '⚡ Shorted out!', { key: 'ability:short', tone: 'good' }));
 }
