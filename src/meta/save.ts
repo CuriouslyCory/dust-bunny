@@ -158,17 +158,28 @@ export function migrate(o: Record<string, unknown>): { data: SaveData; migrated:
   return { data: sanitizeV1(o), migrated: version !== SAVE_VERSION };
 }
 
-export function parseSave(raw: string | null | undefined): { data: SaveData; status: SaveStatus } {
-  if (raw == null || raw === '') return { data: defaultSave(), status: 'empty' };
+export interface ParsedSave {
+  data: SaveData;
+  status: SaveStatus;
+  /**
+   * A readable save that has no `creditedRuns` field at all: a build from before the ledger wrote
+   * it last (its sanitiser drops the field), or it is from before the ledger. `MetaProgress` tells
+   * the two apart by its mirror (docs/adr/0003). False for an empty or corrupt value.
+   */
+  lostCreditedRuns: boolean;
+}
+
+export function parseSave(raw: string | null | undefined): ParsedSave {
+  if (raw == null || raw === '') return { data: defaultSave(), status: 'empty', lostCreditedRuns: false };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { data: defaultSave(), status: 'corrupt' };
+    return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
   }
-  if (!isObj(parsed)) return { data: defaultSave(), status: 'corrupt' };
+  if (!isObj(parsed)) return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
   const { data, migrated } = migrate(parsed);
-  return { data, status: migrated ? 'migrated' : 'ok' };
+  return { data, status: migrated ? 'migrated' : 'ok', lostCreditedRuns: !Array.isArray(parsed.creditedRuns) };
 }
 
 export function serializeSave(data: SaveData): string {
@@ -225,13 +236,14 @@ export class SaveStore {
   /**
    * `repair`: run on every value read from storage (at load and when another tab wrote), before it
    * becomes `data`: puts back what a write by another build may have dropped (MetaProgress uses it
-   * for `creditedRuns`). It changes `data` in memory; the next write persists it.
+   * for `creditedRuns`, told by `lostCreditedRuns` whether the stored value had the field). It
+   * changes `data` in memory; the next write persists it.
    */
   constructor(
     private readonly storage: KeyValueStorage | null,
     readonly key = SAVE_KEY,
     events: StorageEventSource | null = null,
-    private readonly repair: ((data: SaveData) => void) | null = null,
+    private readonly repair: ((data: SaveData, read: Pick<ParsedSave, 'status' | 'lostCreditedRuns'>) => void) | null = null,
   ) {
     const raw = this.readRaw();
     const { data, status } = raw === undefined ? parseSave(null) : this.load(raw);
@@ -268,7 +280,7 @@ export class SaveStore {
         /* ignore */
       }
     }
-    this.repair?.(parsed.data);
+    this.repair?.(parsed.data, parsed);
     return parsed;
   }
 

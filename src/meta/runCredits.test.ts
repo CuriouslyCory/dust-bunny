@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RunCredit } from '../shared/runCredit';
 import { SavedRunAuthError, SavedRunNetError } from './accountHttp';
 import { MetaProgress } from './meta';
+import { SAVE_KEY } from './save';
 import { RUN_CREDITS_KEY, RUN_CREDITS_VERSION, RunCreditQueue, type ClaimResult, type CreditOutcome, type PendingClaim, type RunCreditApi } from './runCredits';
 
 const memStorage = () => {
@@ -141,7 +142,7 @@ describe('RunCreditQueue', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(calls.filter((c) => c.startsWith('claim'))).toHaveLength(1);
     expect(claimsIn(storage)).toEqual([]);
-    expect(outcomes).toEqual([]);
+    expect(outcomes).toEqual([{ runKey: 'bad', reason: 'died', fluff: 0, award: null, refused: 'rejected' }]); // a definite answer: the results screen settles
   });
 
   it('stops on a lost session until the Account signs in again', async () => {
@@ -272,7 +273,7 @@ describe('RunCreditQueue: answers across an Account switch, and the server contr
     await q.idle();
     expect(calls).toEqual(['claim:old']);
     expect(claimsIn(storage)).toEqual([]);
-    expect(outcomes).toEqual([{ runKey: 'old', reason: 'died', award: null, refused: 'elsewhere' }]);
+    expect(outcomes).toEqual([{ runKey: 'old', reason: 'died', fluff: 0, award: null, refused: 'elsewhere' }]);
     expect(meta.data).toMatchObject({ fluff: 0, creditedRuns: [], stats: { runs: 0 } });
   });
 
@@ -285,7 +286,7 @@ describe('RunCreditQueue: answers across an Account switch, and the server contr
     q.claim({ userId: 'u1', runKey: 'r', lease: 'stale', reason: 'died', stats });
     await q.idle();
     expect(claimsIn(storage)).toEqual([]);
-    expect(outcomes).toEqual([{ runKey: 'r', reason: 'died', award: null, refused: 'carriedOn' }]);
+    expect(outcomes).toEqual([{ runKey: 'r', reason: 'died', fluff: 0, award: null, refused: 'carriedOn' }]);
     expect(meta.data.creditedRuns).toEqual([]);
     // The holder ends it: the ledger has the row, and the sweep applies it here, once.
     state.refuse = false;
@@ -311,7 +312,7 @@ describe('RunCreditQueue: answers across an Account switch, and the server contr
       await q.idle();
       expect(errors).toHaveLength(1);
       expect(String(errors[0])).toContain('bad');
-      expect(outcomes).toEqual([]);
+      expect(outcomes).toEqual([{ runKey: 'bad', reason: 'died', fluff: 0, award: null, refused: 'rejected' }]); // settled, so the results screen and the leaderboard post don't wait forever
       expect(meta.data).toMatchObject({ fluff: 0, creditedRuns: [], stats: { runs: 0 } });
     } finally {
       console.error = orig;
@@ -345,5 +346,132 @@ describe('RunCreditQueue: answers across an Account switch, and the server contr
     expect(meta.data).toMatchObject({ creditedRuns: ['v'], universes: 1 });
     await q.sweep();
     expect(meta.data.universes).toBe(1);
+  });
+});
+
+describe('RunCreditQueue: the second review round (docs/adr/0003)', () => {
+  const events = () => {
+    const listeners = new Set<(e: { key: string | null }) => void>();
+    return {
+      addEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.add(fn),
+      removeEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.delete(fn),
+      fire: (key: string | null = RUN_CREDITS_KEY) => listeners.forEach((fn) => fn({ key })),
+    };
+  };
+  /** Two tabs of one device: one storage, one progress copy, one event bus; `a` can't reach the server. */
+  const tabs = (api: RunCreditApi) => {
+    const storage = memStorage();
+    const bus = events();
+    const metaA = new MetaProgress(storage);
+    const metaB = new MetaProgress(storage);
+    const offline: RunCreditApi = { ...api, claim: async () => Promise.reject(new SavedRunNetError('offline')) };
+    const a = new RunCreditQueue({ api: offline, storage, events: bus, meta: metaA, retryMs: 1000, maxRetryMs: 1000 });
+    const b = new RunCreditQueue({ api, storage, events: bus, meta: metaB, retryMs: 1, maxRetryMs: 4 });
+    const heardA: CreditOutcome[] = [];
+    a.onCredit((o) => void heardA.push(o));
+    return { storage, bus, a, b, metaA, metaB, heardA };
+  };
+
+  it('a claim settled in another tab is announced here as already credited, once, with the Fluff it was worth', async () => {
+    const { api } = fakeApi();
+    const { bus, a, b, metaA, metaB, heardA } = tabs(api);
+    a.setUser('u1');
+    a.claim({ userId: 'u1', runKey: 'r', lease: 'l', reason: 'victory', stats });
+    await a.idle();
+    expect(a.has('r')).toBe(true); // waiting, with a backoff
+    expect(heardA).toEqual([]);
+    b.setUser('u1'); // the other tab replays it and applies the answer to the shared copy
+    await b.idle();
+    expect(metaB.data.creditedRuns).toEqual(['r']);
+    bus.fire();
+    expect(a.has('r')).toBe(false);
+    expect(heardA).toEqual([{ runKey: 'r', reason: 'victory', fluff: expect.any(Number), award: null, already: true }]);
+    expect(heardA[0]!.fluff).toBeGreaterThan(0);
+    metaA.store.refresh(); // (the browser's `storage` event for the save does this)
+    expect(metaA.data.creditedRuns).toEqual(['r']); // the shared copy holds it once
+    bus.fire();
+    bus.fire(null);
+    expect(heardA).toHaveLength(1); // announced once
+  });
+
+  it('a refusal in another tab reaches here too; a key alone (no record) is read from the copy', async () => {
+    const { api } = fakeApi();
+    const refusing: RunCreditApi = { ...api, claim: async () => ({ ok: false, reason: 'carriedOn' }) };
+    const { bus, a, b, heardA, storage, metaA, metaB } = tabs(refusing);
+    a.setUser('u1');
+    a.claim({ userId: 'u1', runKey: 'gone', lease: 'l', reason: 'died', stats });
+    a.claim({ userId: 'u1', runKey: 'applied', lease: 'l', reason: 'quit', stats });
+    await a.idle();
+    b.setUser('u1');
+    await b.idle();
+    bus.fire();
+    expect(heardA).toEqual([
+      { runKey: 'gone', reason: 'died', fluff: 0, award: null, refused: 'carriedOn' },
+      { runKey: 'applied', reason: 'quit', fluff: 0, award: null, refused: 'carriedOn' },
+    ]);
+    // A tab of another build settled a claim without leaving a record: the claim is gone and the copy holds the key, so it landed.
+    a.claim({ userId: 'u1', runKey: 'silent', lease: 'l', reason: 'died', stats });
+    await a.idle();
+    metaB.awardRun({ runKey: 'silent', reason: 'died', stats });
+    const file = JSON.parse(storage.map.get(RUN_CREDITS_KEY)!) as { claims: PendingClaim[]; settled: unknown[] };
+    storage.setItem(RUN_CREDITS_KEY, JSON.stringify({ ...file, claims: file.claims.filter((c) => c.runKey !== 'silent') }));
+    metaA.store.refresh(); // the save's own `storage` event lands first in the browser
+    bus.fire();
+    expect(heardA.at(-1)).toEqual({ runKey: 'silent', reason: 'died', fluff: 0, award: null, already: true });
+  });
+
+  it('a claim marked local (credited before it went out) counts no second Universe from its answer', async () => {
+    const storage = memStorage();
+    const { api } = fakeApi();
+    const { q, meta } = queue(storage, api);
+    q.setUser('u1');
+    const win = { runKey: 'w', reason: 'victory' as const, stats: { ...stats, area: 'universe' } };
+    expect(meta.awardRun(win)).toMatchObject({ universes: 1 });
+    meta.store.update((d) => meta.adoptCreditedRuns(d, [], false)); // an adopt dropped the key; the count was max-merged
+    q.claim({ userId: 'u1', ...win, lease: 'l', local: true });
+    await q.idle();
+    expect(meta.data.creditedRuns).toEqual(['w']);
+    expect(meta.data.stats.wins).toBe(2); // the row's stats and Fluff are applied again (the adopted copy lacked them)...
+    expect(meta.universes).toBe(1); // ...the Universe is not
+  });
+
+  it('while the copy’s set is unknown (an old build rewrote the save) the sweep holds off, and only a row created by this claim is applied', async () => {
+    const storage = memStorage();
+    const { api, ledger, calls } = fakeApi();
+    const first = new MetaProgress(storage);
+    first.awardRun({ runKey: 'mine', reason: 'died', stats }); // this device's own credit (the mirror knows it)
+    ledger.push({ id: 1, runKey: 'mine', reason: 'died', stats, creditedAt: '' }, { id: 2, runKey: 'K2', reason: 'died', stats, creditedAt: '' });
+    // An old-build tab adopted a cloud copy holding K2's Fluff and rewrote the save without `creditedRuns`.
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = 66;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    const { q, meta } = queue(storage, api, new MetaProgress(storage));
+    q.setUser('u1');
+    expect(meta.creditedRunsKnown()).toBe(false);
+    expect(meta.data.creditedRuns).toEqual(['mine']); // repaired from the mirror; K2 is what it can't know
+    await q.sweep();
+    expect(calls).toEqual([]); // not even fetched
+    expect(meta.data.fluff).toBe(66);
+    // A claim for a Run already in the ledger is answered from its row: not applied while the set is unknown, but settled.
+    const outcomes: CreditOutcome[] = [];
+    q.onCredit((o) => void outcomes.push(o));
+    q.claim({ userId: 'u1', runKey: 'K2', lease: 'l', reason: 'died', stats });
+    await q.idle();
+    expect(meta.data.fluff).toBe(66);
+    expect(outcomes).toEqual([expect.objectContaining({ runKey: 'K2', award: null, already: true })]);
+    // One the server creates for this claim is this copy's to apply.
+    q.claim({ userId: 'u1', runKey: 'fresh', lease: 'l', reason: 'died', stats });
+    await q.idle();
+    expect(meta.data.creditedRuns).toEqual(['mine', 'fresh']);
+    expect(meta.data.fluff).toBeGreaterThan(66);
+    // A cloud adopt of a copy that carries the set restores a known one: the sweep runs again and applies what the copy lacks.
+    meta.store.update((d) => meta.adoptCreditedRuns(d, ['mine', 'fresh'], false));
+    expect(meta.creditedRunsKnown()).toBe(true);
+    const before = meta.data.fluff;
+    await q.sweep();
+    expect(calls.filter((c) => c === 'list')).toEqual(['list']);
+    expect(meta.data.creditedRuns).toEqual(['mine', 'fresh', 'K2']);
+    expect(meta.data.fluff).toBeGreaterThan(before);
   });
 });

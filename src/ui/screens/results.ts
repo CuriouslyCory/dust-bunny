@@ -126,7 +126,9 @@ function registerDefaultSections(): void {
           credit.state === 'refused'
             ? credit.why === 'elsewhere'
               ? 'Already added on another device.'
-              : 'Not added: this Run carried on on another device.'
+              : credit.why === 'rejected'
+                ? 'Not added: something went wrong on this side.'
+                : 'Not added: this Run carried on on another device.'
             : credit.state === 'pending'
               ? offline
                 ? 'Added when you’re back online'

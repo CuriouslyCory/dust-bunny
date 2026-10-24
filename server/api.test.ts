@@ -23,6 +23,7 @@ import { CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_MAX, type Ru
 import { MAX_SAVED_RUN_BYTES, SNAPSHOT_VERSION } from '../src/shared/savedRun';
 import { authOptions, resetAuthForTests } from './auth';
 import { ensureSchema, query, resetDbForTests } from './db';
+import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './runCredits';
 import { SCHEMA_PROBE } from './schema';
 
 const DB = process.env.TEST_DATABASE_URL;
@@ -553,6 +554,49 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       // The stored Run is left alone; the never-uploaded one can't be stored late.
       expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: { runKey: string } }).savedRun).toMatchObject({ runKey: 'kept', lease: 'k1' });
       expect((await savedRun(cookie, 'PUT', { runKey: 'never-uploaded', lease: 'n1', snapshot: snap('never-uploaded') })).status).toBe(409);
+    });
+
+    it('bounds new ledger rows per Account: past the window’s limit a fresh claim is 429 and writes nothing; a Run already in the ledger still answers', async () => {
+      const cookie = await signUp(`Rrate${RUN}`);
+      for (let i = 0; i < CREDIT_RATE_LIMIT.max; i++) expect((await claimed(cookie, { runKey: `burst-${i}`, lease: `b${i}` })).status).toBe(200);
+      const res = await send(cookie, 'POST', { runKey: 'one-too-many', lease: 'x', reason: 'died', stats });
+      expect(res.status).toBe(429);
+      expect(((await res.json()) as { error: string }).error).toBe('rate_limited');
+      expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0);
+      expect(await query(`SELECT 1 FROM run_holders WHERE run_key = 'one-too-many'`)).toEqual([]);
+      expect(await listed(cookie, RUN_CREDIT_LIST_MAX)).toHaveLength(CREDIT_RATE_LIMIT.max);
+      // A retry (a lost answer) for a credited Run is answered from its row, whatever the rate.
+      const again = await claimed(cookie, { runKey: 'burst-0', lease: 'zzz' });
+      expect(again.status).toBe(200);
+      expect(again.body.created).toBe(false);
+    });
+
+    it('a claim prunes the Account’s stale holder rows, as a store does (a player who never pauses only ever claims)', async () => {
+      const cookie = await signUp(`Rh${RUN}`);
+      expect((await claimed(cookie, { runKey: 'h1', lease: 'l1' })).status).toBe(200);
+      const [{ user_id: userId }] = await query<{ user_id: string }>(`SELECT user_id FROM run_credits WHERE run_key = 'h1'`);
+      await query(`INSERT INTO run_holders (user_id, run_key, lease, ended_at, updated_at) VALUES ($1, 'stale', 's', now() - make_interval(days => $2), now() - make_interval(days => $2))`, [userId, HOLDER_RETENTION_DAYS + 10]);
+      expect((await claimed(cookie, { runKey: 'h2', lease: 'l2' })).status).toBe(200);
+      const left = await query<{ run_key: string }>(`SELECT run_key FROM run_holders WHERE user_id = $1 ORDER BY run_key`, [userId]);
+      expect(left.map((r) => r.run_key)).toEqual(['h1', 'h2']);
+    });
+
+    it('keeps the newest CREDIT_KEEP ledger rows per Account', async () => {
+      const cookie = await signUp(`Rk${RUN}`);
+      expect((await claimed(cookie, { runKey: 'first', lease: 'f1' })).status).toBe(200);
+      const [{ user_id: userId }] = await query<{ user_id: string }>(`SELECT user_id FROM run_credits WHERE run_key = 'first'`);
+      await query(
+        `INSERT INTO run_credits (user_id, run_key, lease, reason, stats, credited_at)
+         SELECT $1, 'seed-' || g, NULL, 'died', '{"maxRadius":1,"debrisAbsorbed":1,"tierReached":1}'::jsonb, now() - interval '1 day' FROM generate_series(1, $2) AS g`,
+        [userId, CREDIT_KEEP],
+      );
+      expect((await claimed(cookie, { runKey: 'newest', lease: 'n1' })).status).toBe(200);
+      const [{ n }] = await query<{ n: string }>(`SELECT count(*) AS n FROM run_credits WHERE user_id = $1`, [userId]);
+      expect(Number(n)).toBe(CREDIT_KEEP);
+      const keys = (await query<{ run_key: string }>(`SELECT run_key FROM run_credits WHERE user_id = $1 ORDER BY id`, [userId])).map((r) => r.run_key);
+      expect(keys[0]).toBe('seed-2'); // `first` and `seed-1`, the two oldest, went
+      expect(keys.at(-1)).toBe('newest');
+      expect((await listed(cookie)).map((c) => c.runKey)[0]).toBe('newest');
     });
 
     it('refuses to credit a Run an older client ended and credited itself', async () => {

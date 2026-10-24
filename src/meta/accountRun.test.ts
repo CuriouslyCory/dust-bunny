@@ -13,7 +13,7 @@ import { pickCreditStats, RUN_CREDIT_LIST_LIMIT, type CreditStats, type RunCredi
 import type { ServerSavedRun } from '../shared/savedRun';
 import { AccountRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress, type RunCreditInput } from './meta';
-import { RunCreditQueue, type ClaimResult, type CreditOutcome, type RunCreditApi } from './runCredits';
+import { RUN_CREDITS_KEY, RunCreditQueue, type ClaimResult, type CreditOutcome, type RunCreditApi } from './runCredits';
 import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
 
 const memStorage = () => {
@@ -137,13 +137,23 @@ class FakeServer {
   }
 }
 
-/** A device: its own storage, slot and progress copy, signed in as `user`. */
-const device = (server: FakeServer, user: string | null = 'u1') => {
-  const storage = memStorage();
+/** The browser's `storage` events between tabs that share one storage (fired by hand: `fire`). */
+const fakeEvents = () => {
+  const listeners = new Set<(e: { key: string | null }) => void>();
+  return {
+    addEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.add(fn),
+    removeEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.delete(fn),
+    fire: (key: string) => listeners.forEach((fn) => fn({ key })),
+  };
+};
+
+/** A device: its own storage, slot and progress copy, signed in as `user`. `tab`: another tab of a device (shares its storage and hears its `storage` events). */
+const device = (server: FakeServer, user: string | null = 'u1', tab?: { storage: ReturnType<typeof memStorage>; events: ReturnType<typeof fakeEvents> }) => {
+  const storage = tab?.storage ?? memStorage();
   const store = new SuspendedRunStore(storage);
   const meta = new MetaProgress(storage);
   const link = { offline: false };
-  const credits = new RunCreditQueue({ api: server.creditApi(link), storage, meta, retryMs: 1, maxRetryMs: 4 });
+  const credits = new RunCreditQueue({ api: server.creditApi(link), storage, events: tab?.events ?? null, meta, retryMs: 1, maxRetryMs: 4 });
   const runs = new AccountRuns({ api: server.api(link), store, meta, credits, storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
   const outcomes: CreditOutcome[] = [];
   credits.onCredit((o) => void outcomes.push(o));
@@ -420,7 +430,9 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(server.ledger.map((c) => [c.runKey, c.reason])).toEqual([[s.runKey, 'victory']]);
     expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
     expect(a.meta.data.stats.runs).toBe(1); // the answer (created: false... or true: either way) adds nothing
-    expect(a.outcomes).toEqual([]); // nothing landed later: it was credited up front
+    // The answer settles the claim without adding anything: it was credited up front (and the results screen keeps that award).
+    expect(a.outcomes).toEqual([expect.objectContaining({ runKey: s.runKey, award: null, already: true })]);
+    expect(a.runs.creditOf(s.runKey)).toMatchObject({ state: 'credited', award: { fluff: award!.fluff } });
     // A late upload of it is refused.
     a.handoff.store(structuredClone(s), 'pause');
     await settle(a.runs);
@@ -1114,7 +1126,7 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
     a.handoff.store(r, 'pause'); // uploaded: the server knows R from A
     await settle(a.runs);
     expect(a.runs.knows(r.runKey)).toBe(true);
-    expect(JSON.parse(a.storage.map.get(KNOWN_RUNS_KEY)!)).toEqual({ version: KNOWN_RUNS_VERSION, known: [r.runKey] });
+    expect(JSON.parse(a.storage.map.get(KNOWN_RUNS_KEY)!)).toEqual({ version: KNOWN_RUNS_VERSION, known: [{ runKey: r.runKey, leases: [server.row!.lease] }] });
     expect((await resumeOn(b)).res).toBe('mine'); // B takes R
     a.link.offline = true;
     expect(await a.handoff.takeBack()).toBe(true); // A, offline, unpauses and plays on...
@@ -1192,5 +1204,117 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
     expect(a.credited()).toEqual([]);
     expect(a.credits.pending).toBe(0);
     expect(server.ledger).toEqual([]);
+  });
+});
+
+describe('AccountRuns: the second review round (docs/adr/0003)', () => {
+  it('a known Run ended after a sign-out and back in mid-Run claims under the lease the server holds, so it is credited once', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const r = snapshot('r');
+    a.handoff.store(r, 'pause'); // uploaded under lease L1
+    await settle(a.runs);
+    expect(await a.handoff.takeBack()).toBe(true); // unpaused: the take moves the server's lease to L2
+    await settle(a.runs);
+    const held = server.row!.lease;
+    expect(JSON.parse(a.storage.map.get(KNOWN_RUNS_KEY)!).known).toEqual([{ runKey: r.runKey, leases: [held] }]); // the durable record follows the lease
+    a.runs.setUser(null); // signs out mid-Run...
+    a.runs.setUser('u1'); // ...and back in: `live` is gone
+    expect(a.end(r)).toBeNull(); // known: deferred to the server
+    await settle(a.runs);
+    expect(server.calls.filter((c) => c === 'claim')).toHaveLength(1);
+    expect(server.ledger.map((c) => c.runKey)).toEqual([r.runKey]); // not 409 carried_on
+    expect(a.runs.creditOf(r.runKey)).toMatchObject({ state: 'credited', award: { fluff: expect.any(Number) } });
+    expect(a.credited()).toEqual([r.runKey]);
+    expect(a.meta.data.stats.runs).toBe(1);
+  });
+
+  it('the remembered leases survive a reload; a record without them falls back to the device slot’s tag', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const r = snapshot('r');
+    a.handoff.store(r, 'pause');
+    await settle(a.runs);
+    expect(await a.handoff.takeBack()).toBe(true);
+    await settle(a.runs);
+    // A reload: a fresh page, the same storage and queue.
+    const again = new AccountRuns({ api: server.api(), store: a.store, meta: a.meta, credits: a.credits, storage: a.storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    again.setUser('u1');
+    expect(again.ended({ runKey: r.runKey, reason: 'died', stats: r.stats })).toBeNull();
+    await settle(again);
+    expect(server.ledger.map((c) => c.runKey)).toEqual([r.runKey]);
+    expect(again.creditOf(r.runKey)).toMatchObject({ state: 'credited' });
+
+    // A paused Run whose known record is a key alone (an earlier shape of the file): the slot's tag names the lease.
+    const server2 = new FakeServer();
+    const b = device(server2);
+    const p = snapshot('p');
+    b.handoff.store(p, 'pause');
+    await settle(b.runs);
+    b.storage.setItem(KNOWN_RUNS_KEY, JSON.stringify({ version: KNOWN_RUNS_VERSION, known: [p.runKey] }));
+    const page = new AccountRuns({ api: server2.api(), store: b.store, meta: b.meta, credits: b.credits, storage: b.storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    page.setUser('u1');
+    expect(b.store.peek()?.account?.lease).toBe(server2.row!.lease);
+    expect(page.ended({ runKey: p.runKey, reason: 'quit', stats: p.stats })).toBeNull();
+    await settle(page);
+    expect(server2.ledger.map((c) => c.runKey)).toEqual([p.runKey]);
+  });
+
+  it('a never-seen Universe victory counts once: credited locally, and its claim’s answer adds no second Universe even after an adopt dropped the key', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const r = snapshot('r');
+    let release!: () => void;
+    server.hold.claim = new Promise<void>((res) => (release = res)); // the claim is slow
+    const win = { runKey: r.runKey, reason: 'victory' as const, stats: { ...r.stats, area: 'universe' } };
+    expect(a.runs.ended(win)).toMatchObject({ universes: 1 }); // credited at once: the server never saw it
+    expect(a.meta.universes).toBe(1);
+    // Meanwhile the cloud save adopts a copy that got further: its set lacks the key, the Universes count is max-merged and stays.
+    a.meta.store.update((d) => {
+      d.fluff = 5000;
+      d.stats.totalFluffEarned = 9000;
+      a.meta.adoptCreditedRuns(d, [], false);
+    });
+    expect(a.meta.data.creditedRuns).toEqual([]);
+    release();
+    await settle(a.runs);
+    expect(server.ledger.map((c) => c.runKey)).toEqual([r.runKey]);
+    expect(a.credited()).toEqual([r.runKey]); // the row's Fluff is applied again (the adopted copy lacks it)...
+    expect(a.meta.universes).toBe(1); // ...but the Universe is not counted twice
+  });
+
+  it('a claim answered in another tab settles this one: the results screen reads credited, the leaderboard’s wait ends', async () => {
+    const server = new FakeServer();
+    const shared = { storage: memStorage(), events: fakeEvents() };
+    const a = device(server, 'u1', shared);
+    const r = snapshot('r');
+    a.handoff.store(r, 'pause');
+    await settle(a.runs);
+    expect(await a.handoff.takeBack()).toBe(true);
+    await settle(a.runs);
+    a.link.offline = true;
+    expect(a.end(r)).toBeNull();
+    await settle(a.runs);
+    expect(a.runs.deferred(r.runKey)).toBe(true);
+    expect(a.runs.creditOf(r.runKey)).toEqual({ state: 'pending' });
+    // Another tab of the same device (online) replays the durable claim and applies the answer to the shared copy.
+    const b = device(server, 'u1', shared);
+    b.credits.replay();
+    await settle(b.runs);
+    expect(server.ledger.map((c) => c.runKey)).toEqual([r.runKey]);
+    expect(b.credited()).toEqual([r.runKey]);
+    a.meta.store.refresh(); // the save's own `storage` event lands first in the browser
+    shared.events.fire(RUN_CREDITS_KEY);
+    expect(a.runs.deferred(r.runKey)).toBe(false);
+    expect(a.runs.creditOf(r.runKey)).toEqual({ state: 'credited', award: null });
+    expect(a.outcomes).toEqual([expect.objectContaining({ runKey: r.runKey, award: null, already: true, fluff: expect.any(Number) })]);
+    expect(a.outcomes[0]!.fluff).toBeGreaterThan(0);
+    // A's own answer, when it is back online, is not announced a second time, and the copy still holds the credit once.
+    a.link.offline = false;
+    a.credits.replay();
+    await settle(a.runs);
+    expect(a.outcomes).toHaveLength(1);
+    expect(a.credited()).toEqual([r.runKey]);
+    expect(a.meta.data.stats.runs).toBe(1);
   });
 });

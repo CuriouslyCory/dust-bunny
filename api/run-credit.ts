@@ -20,13 +20,17 @@
  * to play, so it is credited, and left as the ended Run on an empty slot so a late upload is
  * refused. A refused claim never writes.
  *
+ * A claim that would create a row is bounded per Account (`CREDIT_RATE_LIMIT`, server/runCredits.ts):
+ * past it, 429 rate_limited with `Retry-After` (the client's queue retries later). The ledger keeps
+ * the newest `CREDIT_KEEP` rows per Account, and a claim prunes the Account's holder rows as a store does.
+ *
  * Errors are JSON `{ error: code, message, field? }`: 401 unauthorized (no session), 400 invalid /
- * bad_json, 405, 409, 413 too_large, 503 unavailable.
+ * bad_json, 405, 409, 413 too_large, 429 rate_limited, 503 unavailable.
  */
 import { sessionUser } from '../server/auth.js';
 import { ensureSchema, query, transaction } from '../server/db.js';
 import { errorResponse, HttpError, json, readJson } from '../server/http.js';
-import { checkHolder, creditOf, CREDIT_COLUMNS, lockAccountRuns, recordCredit, setHolder, toRunCredit, type CreditRow } from '../server/runCredits.js';
+import { checkCreditRate, checkHolder, creditOf, CREDIT_COLUMNS, lockAccountRuns, pruneHolders, recordCredit, setHolder, toRunCredit, type CreditRow } from '../server/runCredits.js';
 import { MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_LIMIT, RUN_CREDIT_LIST_MAX, validateRunCreditClaim } from '../src/shared/runCredit.js';
 
 interface SavedRunRow {
@@ -64,6 +68,8 @@ async function claim(request: Request): Promise<Response> {
     // The Run's own holder record: ended by a client from before the ledger (credited there, so
     // `run_ended`: nothing here applies it), or another device's now (`carried_on`).
     await checkHolder(q, userId, runKey, lease, prevLease);
+    // A new row: bounded per Account (server/runCredits.ts). Nothing is written before this.
+    await checkCreditRate(q, userId);
     const [row] = await q<SavedRunRow>(`SELECT run_key, lease, ended_at FROM saved_runs WHERE user_id = $1 FOR UPDATE`, [userId]);
     if (row && row.run_key === runKey) {
       // Rows from before run_holders: the slot itself says whether the Run ended or moved.
@@ -82,6 +88,7 @@ async function claim(request: Request): Promise<Response> {
       );
     }
     await setHolder(q, userId, runKey, lease, true);
+    await pruneHolders(q, userId); // a player who never pauses only ever claims: holders are pruned here too
     const res = await recordCredit(q, { userId, runKey, lease, reason, stats });
     return json(200, res);
   });

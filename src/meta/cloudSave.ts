@@ -46,7 +46,12 @@ export interface CloudSaveOptions {
   retryMs?: number;
 }
 
-export function progressOf(d: SaveData): Progress {
+/**
+ * The synced copy of a save. `creditedRunsKnown: false` leaves `creditedRuns` out (the device can't
+ * say which credits the Fluff accounts for, docs/adr/0003): the server then keeps its stored set,
+ * and `sameProgress` reads a missing set as the same.
+ */
+export function progressOf(d: SaveData, creditedRunsKnown = true): Progress {
   const { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } = d.stats;
   const characters: Progress['characters'] = {};
   for (const [id, c] of Object.entries(d.characters)) characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
@@ -59,7 +64,7 @@ export function progressOf(d: SaveData): Progress {
     loadouts,
     stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned },
     universes: d.universes,
-    creditedRuns: [...d.creditedRuns],
+    ...(creditedRunsKnown ? { creditedRuns: [...d.creditedRuns] } : {}),
   };
 }
 
@@ -82,6 +87,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   const storage = opts.storage === undefined ? browserStorage() : opts.storage;
   const debounceMs = opts.debounceMs ?? 1500;
   const retryMs = opts.retryMs ?? 30_000;
+  /** This device's copy as the server should see it (without `creditedRuns` while the set is unknown). */
+  const current = (d: SaveData = meta.data): Progress => progressOf(d, meta.creditedRunsKnown());
 
   let status: CloudSaveStatus = 'off';
   const listeners = new Set<(s: CloudSaveStatus) => void>();
@@ -146,12 +153,19 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   function adopt(p: Progress, replace = false): boolean {
     lastSynced = p;
     // What the caller compared against (it calls in the same synchronous step).
-    const seen = progressOf(meta.data);
+    const seen = current();
     let kept = false;
     meta.store.updateIf((d) => {
-      const fresh = progressOf(d);
+      const fresh = current(d);
       const universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
-      if (sameProgress(fresh, { ...p, universes })) return false;
+      if (sameProgress(fresh, { ...p, universes })) {
+        // The same copy. If this device can't say which credits it holds, the server's set is its set.
+        if (!fresh.creditedRuns && p.creditedRuns) {
+          meta.adoptCreditedRuns(d, p.creditedRuns, replace);
+          return true;
+        }
+        return false;
+      }
       const order = compareProgress(fresh, p);
       if (!replace && (order > 0 || (order === 0 && !sameProgress(fresh, seen)))) {
         kept = true;
@@ -189,9 +203,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       // The server keeps the larger Universes count (another device may have ended more).
       const { universes } = res.progress;
       if (universes > meta.data.universes) meta.store.update((d) => void (d.universes = Math.max(d.universes, universes)));
-      if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
+      if (sameProgress(current(), res.progress)) setDirty(false);
       else schedule(debounceMs);
-    } else if (compareProgress(progressOf(meta.data), res.progress) > 0) {
+    } else if (compareProgress(current(), res.progress) > 0) {
       // A Run ended while the refused request was in flight: local is ahead again, so send it.
       lastSynced = res.progress;
       schedule(debounceMs);
@@ -223,7 +237,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   async function connect(id: string): Promise<void> {
     const remote = (await call()).progress;
     if (userId !== id) return;
-    const local = progressOf(meta.data);
+    const local = current();
     const previous = storageGet(CLOUD_USER_KEY);
     if (previous && previous !== id) {
       // This device's save belongs to another account: start from this account's copy.
@@ -242,12 +256,12 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     if (userId !== id) return;
     connected = true;
     // Changes made while connecting were not scheduled (see onChange): pick them up now.
-    if (lastSynced && !sameProgress(progressOf(meta.data), lastSynced)) schedule(debounceMs);
+    if (lastSynced && !sameProgress(current(), lastSynced)) schedule(debounceMs);
   }
 
   function pushIfChanged(): Promise<void> {
     return enqueue(async () => {
-      const p = progressOf(meta.data);
+      const p = current();
       if (lastSynced && sameProgress(p, lastSynced)) return;
       await upload(p);
     });
@@ -280,16 +294,16 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
 
   const offStore = meta.store.onChange(() => {
     if (!userId) return;
-    if (lastSynced && sameProgress(progressOf(meta.data), lastSynced)) return;
+    if (lastSynced && sameProgress(current(), lastSynced)) return;
     setDirty(true);
     if (connected) schedule(debounceMs); // not connected yet: connect() reconciles everything
   });
   const offAccount = account.subscribe(onAccount);
 
   const onPageHide = () => {
-    if (!userId || !connected || !lastSynced || sameProgress(progressOf(meta.data), lastSynced)) return;
+    if (!userId || !connected || !lastSynced || sameProgress(current(), lastSynced)) return;
     // keepalive lets the upload finish after the tab closes.
-    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(progressOf(meta.data)) }).catch(() => undefined);
+    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(current()) }).catch(() => undefined);
   };
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('pagehide', onPageHide);
 
@@ -311,7 +325,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       if (timer) clearTimeout(timer);
       timer = null;
       await (connected ? pushIfChanged() : enqueue(() => connect(userId!)));
-      return connected && status === 'synced' && lastSynced !== null && sameProgress(progressOf(meta.data), lastSynced);
+      return connected && status === 'synced' && lastSynced !== null && sameProgress(current(), lastSynced);
     },
     dispose(): void {
       offStore();

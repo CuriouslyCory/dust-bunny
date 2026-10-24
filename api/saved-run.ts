@@ -202,6 +202,7 @@ async function end(request: Request): Promise<Response> {
     const held = row !== undefined || (holder !== null && !holder.ended && (holder.lease === lease || holder.lease === prevLease));
     if (held) {
       await setHolder(q, userId, runKey, lease, true);
+      await pruneHolders(q, userId);
       return json(200, { deleted: true, snapshot: row ? readSnapshot(row.snapshot) : null });
     }
     // Not held here. A Run the Account doesn't have (never stored, or its upload is still on the way)
@@ -212,7 +213,10 @@ async function end(request: Request): Promise<Response> {
         WHERE saved_runs.ended_at IS NOT NULL AND saved_runs.run_key <> EXCLUDED.run_key`,
       [userId, runKey, lease],
     );
-    if (!holder) await setHolder(q, userId, runKey, lease, true);
+    if (!holder) {
+      await setHolder(q, userId, runKey, lease, true);
+      await pruneHolders(q, userId);
+    }
     return json(200, { deleted: false, snapshot: null });
   });
 }

@@ -274,13 +274,14 @@ export function installLeaderboardPosting(
     if (runs?.deferred(e.runKey)) awaitingCredit.set(e.runKey, current);
     else void autoPost(current);
   });
+  // Every definite answer resolves the wait (an answer another tab got arrives here through the
+  // queue's storage listener): the Run posts, unless another device plays it on.
   runs?.credits.onCredit((o) => {
     const posts = awaitingCredit.get(o.runKey);
     if (!posts) return;
     awaitingCredit.delete(o.runKey);
-    if (o.award) void autoPost(posts);
-    else if (o.refused === 'carriedOn') posts.unrank('this Run carried on on another device.');
-    else void autoPost(posts); // already credited by a client from before the ledger: it ended here all the same
+    if (o.refused === 'carriedOn') posts.unrank('this Run carried on on another device.');
+    else void autoPost(posts); // credited (here or in another tab), already credited by an older client, or refused as malformed: it ended here all the same
   });
   // Signing in (say from the results screen's inline buttons) posts what is still waiting.
   account.subscribe((s) => {

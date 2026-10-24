@@ -17,9 +17,18 @@ import { HttpError } from './http.js';
 
 export type Query = <R>(text: string, params?: unknown[]) => Promise<R[]>;
 
-/** Holder rows older than this, or past the newest `HOLDER_KEEP` per Account, are pruned on a store. */
+/** Holder rows older than this, or past the newest `HOLDER_KEEP` per Account, are pruned on a store, a claim and an end. */
 export const HOLDER_RETENTION_DAYS = 90;
 export const HOLDER_KEEP = 200;
+/**
+ * New ledger rows an Account may create per window (a claim for a Run not yet in the ledger). The
+ * leaderboard's Run board allows the same per Account (`RATE_LIMIT.account.run`): a Run credits once
+ * and posts once. Checked against the table, so it holds across instances; a claim for a Run already
+ * in the ledger is answered from the row and never counts.
+ */
+export const CREDIT_RATE_LIMIT = { max: 30, windowSec: 600 };
+/** Ledger rows kept per Account (the newest); older ones are pruned when a row is created. */
+export const CREDIT_KEEP = 1000;
 
 export interface CreditRow {
   id: number | string;
@@ -85,6 +94,27 @@ export async function pruneHolders(q: Query, userId: string): Promise<void> {
   );
 }
 
+/**
+ * Refuses (429, with `Retry-After`) a claim that would create a ledger row once the Account made
+ * `CREDIT_RATE_LIMIT.max` in the window. Run after `creditOf` found no row: a retry for a Run in the
+ * ledger is answered from its row whatever the rate.
+ */
+export async function checkCreditRate(q: Query, userId: string): Promise<void> {
+  const [recent] = await q<{ n: string | number; oldest: Date | string | null }>(
+    `SELECT count(*) AS n, min(credited_at) AS oldest FROM run_credits WHERE user_id = $1 AND credited_at > now() - make_interval(secs => $2)`,
+    [userId, CREDIT_RATE_LIMIT.windowSec],
+  );
+  if (Number(recent?.n ?? 0) < CREDIT_RATE_LIMIT.max) return;
+  const oldest = recent?.oldest ? new Date(recent.oldest).getTime() : Date.now();
+  const retry = Math.max(1, Math.ceil((oldest + CREDIT_RATE_LIMIT.windowSec * 1000 - Date.now()) / 1000));
+  throw new HttpError(429, 'rate_limited', 'Too many Runs credited recently; try again later.', { retryAfterSec: retry }, { 'Retry-After': String(retry) });
+}
+
+/** Drops this Account's ledger rows past the newest `CREDIT_KEEP`. */
+export async function pruneCredits(q: Query, userId: string): Promise<void> {
+  await q(`DELETE FROM run_credits WHERE user_id = $1 AND id IN (SELECT id FROM run_credits WHERE user_id = $1 ORDER BY id DESC OFFSET $2)`, [userId, CREDIT_KEEP]);
+}
+
 /** The ledger row for `runKey`, if the Run is credited. */
 export async function creditOf(q: Query, userId: string, runKey: string): Promise<CreditRow | null> {
   const [row] = await q<CreditRow>(`SELECT ${CREDIT_COLUMNS} FROM run_credits WHERE user_id = $1 AND run_key = $2`, [userId, runKey]);
@@ -106,7 +136,10 @@ export async function recordCredit(
      ON CONFLICT (user_id, run_key) DO NOTHING RETURNING ${CREDIT_COLUMNS}`,
     [credit.userId, credit.runKey, credit.lease, credit.reason, JSON.stringify(credit.stats)],
   );
-  if (inserted) return { credit: toRunCredit(inserted), created: true };
+  if (inserted) {
+    await pruneCredits(q, credit.userId);
+    return { credit: toRunCredit(inserted), created: true };
+  }
   const existing = await creditOf(q, credit.userId, credit.runKey);
   if (!existing) throw new Error('run_credits: insert did nothing and no row found');
   return { credit: toRunCredit(existing), created: false };

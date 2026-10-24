@@ -134,7 +134,11 @@ export class Game {
    * it back. Another tab picking it up meanwhile makes this page step aside.
    */
   /** The Account's copy of the saved Run for a signed-in player (src/meta/accountRun.ts). */
-  readonly accountRuns = getAccountRuns({ awardRun: (e, opts) => getMeta().awardRun(e, opts) });
+  readonly accountRuns = getAccountRuns({
+    awardRun: (e, opts) => getMeta().awardRun(e, opts),
+    credited: (runKey) => getMeta().credited(runKey),
+    creditedRunsKnown: () => getMeta().creditedRunsKnown(),
+  });
   readonly handoff = new RunHandoff({
     store: getSuspendedRuns(),
     credit: this.accountRuns,

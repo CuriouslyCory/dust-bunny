@@ -134,7 +134,7 @@ describe('upgrade cost curve', () => {
 
 describe('save data', () => {
   it('returns defaults for empty storage', () => {
-    expect(parseSave(null)).toEqual({ data: defaultSave(), status: 'empty' });
+    expect(parseSave(null)).toEqual({ data: defaultSave(), status: 'empty', lostCreditedRuns: false });
   });
 
   it('round-trips through SaveStore', () => {
@@ -448,5 +448,55 @@ describe('creditedRuns on a device shared with a build from before the ledger (d
     expect(meta.awardRun(died('now'))).not.toBeNull();
     expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ version: CREDITED_RUNS_MIRROR_VERSION + 1, keys: ['future'], later: true });
     expect(meta.awardRun(died('now'))).toBeNull(); // this page still remembers, in memory
+  });
+});
+
+describe('creditedRuns lost to a build from before the ledger: the set is unknown until a cloud adopt restores it (docs/adr/0003)', () => {
+  const died = (runKey: string) => ({ runKey, reason: 'died' as const, stats: stats() });
+
+  it('a save without the field on a device that has used the ledger marks the set unknown; the mirror still repairs what it knows', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    expect(meta.awardRun(died('mine'))).not.toBeNull();
+    // An old-build tab adopts a cloud copy that holds another device's credit K2 (Fluff 66, key unknown to the mirror) and rewrites the save without the field.
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = 66;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    const next = new MetaProgress(storage);
+    expect(next.creditedRunsKnown()).toBe(false);
+    expect(next.data.creditedRuns).toEqual(['mine']);
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ keys: ['mine'], unknown: true });
+    expect(next.awardRun(died('mine'))).toBeNull();
+    // Credits still land meanwhile (the set is "at least these"), and the flag outlives a reload and this build's own writes.
+    expect(next.awardRun(died('new'))).not.toBeNull();
+    expect(new MetaProgress(storage).creditedRunsKnown()).toBe(false);
+    // A cloud adopt of a copy that carries `creditedRuns` restores a known set.
+    next.store.update((d) => next.adoptCreditedRuns(d, ['mine', 'K2', 'new'], false));
+    expect(next.creditedRunsKnown()).toBe(true);
+    expect(next.awardRun(died('K2'))).toBeNull();
+    // An adopt of a row from before the ledger (no set) leaves it as it is; another Account's save starts known and empty.
+    next.store.update((d) => next.adoptCreditedRuns(d, undefined, false));
+    expect(next.creditedRunsKnown()).toBe(true);
+    const flagged = new MetaProgress(storage);
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    flagged.store.refresh();
+    expect(flagged.creditedRunsKnown()).toBe(false);
+    flagged.store.update((d) => flagged.adoptCreditedRuns(d, undefined, true));
+    expect(flagged.creditedRunsKnown()).toBe(true);
+    expect(flagged.data.creditedRuns).toEqual([]);
+  });
+
+  it('a save from before the ledger on a device without a mirror is simply an older save: the set is known (and empty)', () => {
+    const storage = memStorage();
+    const old = new MetaProgress(storage);
+    old.store.update((d) => void (d.fluff = 40));
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    storage.map.delete(CREDITED_RUNS_MIRROR_KEY);
+    const meta = new MetaProgress(storage);
+    expect(meta.creditedRunsKnown()).toBe(true);
+    expect(meta.data).toMatchObject({ fluff: 40, creditedRuns: [] });
   });
 });

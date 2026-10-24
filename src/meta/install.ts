@@ -92,8 +92,9 @@ export function installRoguelike(game: Game): void {
     const amount = award?.fluff ?? fluffForRun(e.reason, creditStatsOf(e.stats)); // pending: what the claim sends
     game.events.emit('fluffAwarded', { runKey: e.runKey, amount, total: award?.total ?? meta.fluff, reason: e.reason, pending: !award });
   });
+  // Every definite answer settles the pending "+X Fluff": applied here, already held (another tab applied it), or refused (0).
   game.accountRuns.credits.onCredit((o) => {
-    game.events.emit('fluffAwarded', { runKey: o.runKey, amount: o.award?.fluff ?? 0, total: o.award?.total ?? meta.fluff, reason: o.reason, pending: false });
+    game.events.emit('fluffAwarded', { runKey: o.runKey, amount: o.award?.fluff ?? o.fluff, total: o.award?.total ?? meta.fluff, reason: o.reason, pending: false });
   });
 
   installRoguelikeHud(game);

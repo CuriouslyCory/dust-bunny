@@ -95,7 +95,8 @@ function fakeAccount() {
 }
 
 function setup(local: Progress | null, storageInit: Record<string, string> = {}) {
-  const meta = new MetaProgress(memStorage());
+  const metaStorage = memStorage();
+  const meta = new MetaProgress(metaStorage);
   if (local) meta.store.update((d) => Object.assign(d, { fluff: local.fluff, upgrades: local.upgrades, stats: local.stats, universes: local.universes }));
   const server = fakeServer();
   const acct = fakeAccount();
@@ -106,7 +107,7 @@ function setup(local: Progress | null, storageInit: Record<string, string> = {})
     acct.signIn(id);
     await vi.runAllTimersAsync();
   };
-  return { meta, server, acct, storage, cloud, signIn };
+  return { meta, metaStorage, server, acct, storage, cloud, signIn };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -545,5 +546,58 @@ describe('Universe credits across the merge (docs/adr/0003)', () => {
     const swept = s.meta.awardRun({ runKey: 'V', reason: 'victory', stats }, { countUniverse: false })!;
     expect(swept.fluff).toBe(win.fluff);
     expect(s.meta.data).toMatchObject({ fluff: 9000 + win.fluff, universes: 1, creditedRuns: ['other', 'V'] });
+  });
+});
+
+describe('creditedRuns unknown on the device (an old build rewrote the save, docs/adr/0003)', () => {
+  it('uploads without the field, so the server keeps its stored set; an adopt of a copy that carries one makes it known again', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'mine', reason: 'died', stats });
+    await s.signIn('u1');
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['mine']);
+    // An old-build tab rewrites the save without the field (and with a purchase).
+    const raw = JSON.parse(s.metaStorage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = (raw.fluff as number) - 10;
+    s.metaStorage.setItem(SAVE_KEY, JSON.stringify(raw));
+    s.meta.store.update((d) => {
+      d.fluff += 30;
+      d.stats.totalFluffEarned += 30;
+    });
+    expect(s.meta.creditedRunsKnown()).toBe(false);
+    await vi.advanceTimersByTimeAsync(150);
+    const sent = s.server.puts.at(-1)!;
+    expect(sent.creditedRuns).toBeUndefined();
+    expect(sent.fluff).toBe(s.meta.data.fluff);
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['mine']); // kept by the server (`keepCredited`)
+    expect(s.cloud.status).toBe('synced'); // the answer's set is read as the same: no upload loop
+    // Another device gets further: its copy, keys and all, is adopted and the set is known again.
+    s.server.rows.set('u1', prog(999, 2000, 40, {}, 0, ['mine', 'K2']));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 999, creditedRuns: ['mine', 'K2'] });
+    expect(s.meta.creditedRunsKnown()).toBe(true);
+    expect(s.meta.awardRun({ runKey: 'K2', reason: 'died', stats })).toBeNull();
+  });
+
+  it('a server copy equal to this one in everything else lends it its set', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'mine', reason: 'died', stats });
+    await s.signIn('u1');
+    const raw = JSON.parse(s.metaStorage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    s.metaStorage.setItem(SAVE_KEY, JSON.stringify(raw));
+    s.meta.store.refresh();
+    expect(s.meta.creditedRunsKnown()).toBe(false);
+    s.acct.signOut();
+    await vi.runAllTimersAsync();
+    await s.signIn('u1'); // the title's connect: the same copy on both sides
+    expect(s.meta.data.creditedRuns).toEqual(['mine']);
+    expect(s.meta.creditedRunsKnown()).toBe(true);
   });
 });

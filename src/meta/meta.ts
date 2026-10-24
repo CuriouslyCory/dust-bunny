@@ -118,17 +118,32 @@ export class MetaProgress {
   /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
   constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
     this.mirror = new CreditedRunsMirrorStore(storage);
-    this.store = new SaveStore(storage, undefined, events, (d) => this.repairCreditedRuns(d));
+    this.store = new SaveStore(storage, undefined, events, (d, read) => this.repairCreditedRuns(d, read));
   }
 
   /**
    * A save read from storage that lacks keys the mirror says this copy's set held (a tab from before
    * the ledger rewrote it) gets them back, oldest first. Its Fluff is left as it is: a key without
-   * its Fluff can only under-credit, never double credit.
+   * its Fluff can only under-credit, never double credit. A save with no `creditedRuns` field at all
+   * on a device that has used the ledger (its mirror exists) may also have lost keys the mirror
+   * never knew (another device's, adopted from the cloud): the set is marked unknown until a cloud
+   * adopt restores one (`creditedRunsKnown`).
    */
-  private repairCreditedRuns(d: SaveData): void {
-    const missing = this.mirror.missingFrom(d.creditedRuns);
+  private repairCreditedRuns(d: SaveData, read: { lostCreditedRuns: boolean }): void {
+    const mirror = this.mirror.read();
+    if (read.lostCreditedRuns && !mirror.unknown && this.mirror.exists()) this.mirror.write({ ...mirror, unknown: true });
+    const missing = mirror.keys.filter((k) => !d.creditedRuns.includes(k));
     if (missing.length) d.creditedRuns = [...missing, ...d.creditedRuns].slice(-CREDITED_RUNS_MAX);
+  }
+
+  /**
+   * Whether `creditedRuns` is known to be the whole set this copy's Fluff accounts for. False after a
+   * build from before the ledger rewrote the save (above): the sweep holds off, uploads omit the
+   * field (the server keeps its stored set) and a claim's answer for a row that already existed is
+   * not applied, since losing the field must never create Fluff (docs/adr/0003).
+   */
+  creditedRunsKnown(): boolean {
+    return !this.mirror.read().unknown;
   }
 
   get data() {
@@ -217,12 +232,13 @@ export class MetaProgress {
    * this one's, in the same write as its Fluff. Unknown on a row from before the ledger: this
    * copy's set stays (missing means unknown), or starts empty when another Account's save is being
    * loaded (`replace`). The device's mirror follows, so the keys the adopted copy lacks are what
-   * the sweep may bring back.
+   * the sweep may bring back; an adopted set (or another Account's fresh start) is known again.
    */
   adoptCreditedRuns(d: SaveData, keys: readonly string[] | undefined, replace: boolean): void {
     if (keys) d.creditedRuns = [...keys];
     else if (replace) d.creditedRuns = [];
-    this.mirror.write({ ...this.mirror.read(), keys: [...d.creditedRuns] });
+    const mirror = this.mirror.read();
+    this.mirror.write({ ...mirror, keys: [...d.creditedRuns], unknown: keys || replace ? false : mirror.unknown });
   }
 
   /** The Universes count once `e` is credited: as it is now, plus one for a Universe victory still to land. */
