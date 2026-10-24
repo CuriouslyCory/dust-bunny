@@ -76,6 +76,8 @@ export interface GameEvents {
   areaCompleted: { stats: AreaStats; characterId: string; difficulty: DifficultyId };
   /** The Bunny left for another area; the Run has swapped `run.house` and repopulated Debris. */
   areaEntered: { area: AreaId; timeSec: number };
+  /** The cheat code was entered (src/cheats): the Run stops counting for leaderboards and Keepsakes. Once per Run. */
+  cheatsUnlocked: { timeSec: number };
 }
 
 export type GameEventName = keyof GameEvents;

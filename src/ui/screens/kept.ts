@@ -77,8 +77,9 @@ export function registerKeptSection(): void {
         }
         el.hidden = false;
         const name = getCharacter(run.characterId).name;
-        if (!run.ranked) {
-          el.replaceChildren(h('p', { className: 'kept-none', textContent: 'No Keepsakes: Runs with debug tools or started past the house drop none.' }));
+        // A Run that turned cheats on after a drop keeps (and shows) the drops it had.
+        if (!run.ranked && !run.drops.length) {
+          el.replaceChildren(h('p', { className: 'kept-none', textContent: 'No Keepsakes: Runs with debug tools or cheats, or started past the house, drop none.' }));
           return;
         }
         const items = run.drops.map((d, i) =>

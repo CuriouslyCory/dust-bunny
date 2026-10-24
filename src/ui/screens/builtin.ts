@@ -1,5 +1,6 @@
 /**
  * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
+ * The pause menu has a secret code field that opens the cheats panel (src/cheats).
  * With a Run saved (pause → Save & quit) the title leads with Resume run and Play becomes New run,
  * which asks once before abandoning the saved Run.
  * Replace one by re-registering the same id before it is first shown. The title menu shows
@@ -7,6 +8,7 @@
  * 'characterSelect' when that screen is registered. (A first Run opens on the story's 'intro'
  * screen instead of 'playing': Game.runOpening, src/story/install.ts.)
  */
+import { cheatCodeEntry } from '../../cheats/screen';
 import type { Game } from '../../game/game';
 import { getMeta } from '../../meta/meta';
 import { accountChip } from '../account/screen';
@@ -218,11 +220,14 @@ export function registerBuiltinScreens(): void {
         (mute.querySelector('.btn-label') as HTMLElement).textContent = s.muted ? 'Unmute' : 'Mute';
         (mute.querySelector('.btn-icon') as HTMLElement).textContent = s.muted ? '🔇' : '🔊';
       });
-      const el = panel({ title: 'Paused', className: 'pause-panel' }, menu(resume, save, h('div', { className: 'menu-grid' }, set, howTo, mute, end), quit));
+      // The secret code field: the right code opens the cheats panel (src/cheats).
+      const code = cheatCodeEntry(game);
+      const el = panel({ title: 'Paused', className: 'pause-panel' }, menu(resume, save, h('div', { className: 'menu-grid' }, set, howTo, mute, end), quit), code.el);
       return {
         el,
         enter: () => {
           save.hidden = !game.canSaveRun;
+          code.reset();
           focusFirst(el, resume);
         },
         onKey(e) {

@@ -69,6 +69,7 @@ export function installRoguelike(game: Game): void {
     const kept = tracker.suspend();
     if (kept) e.snapshot.keepsakes = kept;
   });
+  game.events.on('cheatsUnlocked', () => tracker.unrank());
   game.events.on('bossDefeated', (e) => tracker.bossDefeated(e.defId));
   // A Keepsake tucked in mid-Run (the Keepsake reveal) stays in the remembered Loadout for the next Run.
   game.events.on('keepsakeTuckedIn', (e) => meta.setLastLoadout(e.characterId, e.loadout));
