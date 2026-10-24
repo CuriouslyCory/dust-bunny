@@ -20,6 +20,8 @@ export interface PerkDef {
   maxStacks?: number;
   /** Relative draft weight. */
   weight?: number;
+  /** Character id: only Runs with that Character may take it (a Character Perk). */
+  character?: string;
   /**
    * Stats this Perk only raises (or lowers, for floors). The draft hides it once every one is at
    * the Character's cap. Omit for Perks with any other effect (Thick Fur also heals).
@@ -31,9 +33,15 @@ export interface PerkDef {
 
 export const perkRegistry = new Registry<PerkDef>('perk');
 
-/** Perks that may still be offered in this Run. */
+/** True if the Perk is for this Run's Character (shared Perks are for everyone). */
+export function perkForRun(run: Run, perk: PerkDef): boolean {
+  return !perk.character || perk.character === run.config.characterId;
+}
+
+/** Perks that may still be offered in this Run (another Character's Perks never are). */
 export function availablePerks(run: Run): PerkDef[] {
   return perkRegistry.all().filter((p) => {
+    if (!perkForRun(run, p)) return false;
     const stacks = run.perkStacks(p.id);
     if (p.unique && stacks > 0) return false;
     return p.maxStacks === undefined || stacks < p.maxStacks;

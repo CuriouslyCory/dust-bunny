@@ -14,7 +14,7 @@ import { getTier } from '../data/tiers';
 import { formatLength } from '../data/units';
 import type { Game } from '../game/game';
 import type { Run } from '../game/run';
-import { perkRegistry } from '../perks';
+import { perkForRun, perkRegistry } from '../perks';
 import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../ui/components';
 import { h, registerScreen, screenRegistry } from '../ui/screens';
 import { AREA_ORDER, type AreaId } from '../world/types';
@@ -334,6 +334,8 @@ export function registerCheatsScreen(): void {
         massRangeText.textContent = `${AREAS[r.area].name}: ${massLabel(r, range.min)} to ${massLabel(r, range.max)}`;
         tierText.textContent = `Tier ${r.tier} · ${getTier(r.tier).name}`;
         for (const p of perkButtons) {
+          // Another Character's Perks are hidden.
+          p.b.hidden = !perkForRun(r, p.def);
           const stacks = r.perkStacks(p.def.id);
           const max = p.def.unique ? 1 : (p.def.maxStacks ?? Infinity);
           p.count.textContent = max === Infinity ? `×${stacks}` : `${stacks}/${max}`;

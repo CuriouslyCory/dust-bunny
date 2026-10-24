@@ -2,8 +2,9 @@
  * Combat hooks shared by Pickups and Perks, installed once per Run (installCombatHooks):
  *
  * 1. One Bunny damage filter, evaluated in a fixed order:
- *      hiddenFromHazards (Dust Cloud) → amassing (Amass: × (1 − amassGuard)) → Spiky Dash while dashing → shield (Bubble Wrap)
- *      → dodgeChance (Slippery) → revives (Second Wind, lethal hits only).
+ *      hiddenFromHazards (Dust Cloud) → amassing (Amass: × (1 − amassGuard)) → Spiky Dash while dashing
+ *      → guards (Character Perks, in the order added) → shield (Bubble Wrap) → dodgeChance (Slippery)
+ *      → revives (Second Wind, lethal hits only).
  *    Blocked hits grant i-frames so continuous contact does not burn every charge at once.
  * 2. The `combat` System (order 290, before Hazards): Regrowth heals, Spiky Dash stuns
  *    (sets `hazard.stunnedFor`, calls `hazard.stun?.(s)`, emits hazardStunned) and counts
@@ -42,6 +43,12 @@ declare module '../core/events' {
 }
 
 export const COMBAT_SYSTEM_ID = 'combat';
+
+/**
+ * A hit blocker in the combat filter (Character Perks): return true to negate the hit. It runs
+ * after Spiky Dash and before Bubble Wrap, and owns its own i-frames and events.
+ */
+export type CombatGuard = (amount: number, source: string) => boolean;
 const REVIVE_IFRAMES = 2.5;
 const SPIKY_IFRAMES = 0.5;
 
@@ -50,6 +57,8 @@ export class CombatSystem implements System {
   readonly order = 290;
   /** Seconds accumulated towards the next Regrowth heal. */
   regrowthTimer = 0;
+  /** Character Perk hit blockers (see CombatGuard), asked in order. */
+  readonly guards: CombatGuard[] = [];
   private readonly dodgeRng: Rng;
 
   constructor(private readonly run: Run) {
@@ -90,6 +99,7 @@ export class CombatSystem implements System {
       b.invulnerable = Math.max(b.invulnerable, SPIKY_IFRAMES);
       return 0;
     }
+    for (const guard of this.guards) if (guard(amount, source)) return 0;
     if (b.shield > 0) {
       b.shield--;
       b.invulnerable = TUNING.invulnerability;

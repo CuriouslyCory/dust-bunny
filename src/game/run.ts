@@ -500,6 +500,13 @@ export class Run {
     this.absorbMass(d.size, d.type.mass, d.type.id, { x: d.x, y: d.size * 0.5, z: d.z }, 'debris');
   }
 
+  /** Perk stacks taken so far (resumed ones included); changes whenever a Perk is applied. */
+  get perkVersion(): number {
+    let n = 0;
+    for (const v of this.perks.values()) n += v;
+    return n;
+  }
+
   perkStacks(id: string): number {
     return this.perks.get(id) ?? 0;
   }

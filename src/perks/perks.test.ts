@@ -17,8 +17,30 @@ const makeRun = (upgrades: Record<string, number> = {}, characterId = 'lint') =>
 };
 
 describe('Perk draft', () => {
-  it('registers all 12 design Perks', () => {
-    expect(perkRegistry.all()).toHaveLength(12);
+  it('registers the 12 shared Perks and five Character Perks per Character', () => {
+    const all = perkRegistry.all();
+    expect(all.filter((p) => !p.character)).toHaveLength(12);
+    for (const c of ['lint', 'tumble', 'zap']) {
+      const mine = all.filter((p) => p.character === c);
+      expect(mine).toHaveLength(5);
+      // Every non-unique Character Perk has three stacks.
+      for (const p of mine) expect(p.unique ? 1 : p.maxStacks).toBe(p.unique ? 1 : 3);
+    }
+  });
+
+  it("only offers a Run its own Character's Perks", () => {
+    for (const c of ['lint', 'tumble', 'zap']) {
+      const run = createRun(new EventBus(), { seed: `own-${c}`, characterId: c });
+      const own = availablePerks(run).filter((p) => p.character);
+      expect(own).toHaveLength(5);
+      expect(own.every((p) => p.character === c)).toBe(true);
+      run.perkDraft.queue(40);
+      while (run.perkDraft.active) {
+        const offer = run.perkDraft.offer.perks;
+        expect(offer.every((p) => !p.character || p.character === c)).toBe(true);
+        run.perkDraft.choose(offer[0]!.id);
+      }
+    }
   });
 
   it('offers 3 distinct Perks, or 4 with Wide Choice', () => {
