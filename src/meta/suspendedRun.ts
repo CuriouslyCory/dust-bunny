@@ -91,6 +91,25 @@ export class SuspendedRunStore {
     this.emit({ external: true });
   }
 
+  /**
+   * The last write didn't reach storage: this page is serving its own copy, and storage may still
+   * hold something else (another tab's Run).
+   */
+  get unsaved(): boolean {
+    return this.stale;
+  }
+
+  /**
+   * After a failed write: drops this page's in-memory copy and reads storage again, without
+   * touching storage (whatever it holds was never replaced). No-op when the last write stuck.
+   */
+  dropUnsaved(): void {
+    if (!this.stale) return;
+    this.stale = false;
+    this.memory = null;
+    this.emit({ external: false });
+  }
+
   /** The saved Run, or null (none, or one that can't be resumed). */
   peek(): RunSnapshot | null {
     const raw = this.read();
@@ -248,11 +267,16 @@ export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, 
  * Run (`handoffId`, `runKey`) and returns `mine`: the page is its only owner again and may play on
  * (or end and credit it). Otherwise it touches nothing and returns why (`pausedRunState`): the Run
  * is someone else's now, and this page must neither play nor credit it. Run it inside
- * `withSavedRunLock`.
+ * `withSavedRunLock`. If the pause's write never reached storage, only this page's in-memory copy
+ * is dropped: storage still holds whatever was there (another tab's Run, not replaced nor
+ * credited), and it must not be deleted.
  */
 export function takeBackPausedRun(store: SuspendedRunStore, handoffId: string, runKey: string): PausedRunState {
   const state = pausedRunState(store, handoffId, runKey);
-  if (state === 'mine') store.clear();
+  if (state === 'mine') {
+    if (store.unsaved) store.dropUnsaved();
+    else store.clear();
+  }
   return state;
 }
 

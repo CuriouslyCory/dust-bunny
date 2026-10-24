@@ -145,8 +145,10 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     const storage = memStorage();
     const store = new SuspendedRunStore(storage);
     const meta = awards();
-    store.save(snapshot());
+    const other = snapshot();
+    store.save(other);
     const s = snapshot();
+    const setItem = storage.setItem;
     storage.setItem = () => {
       throw new Error('QuotaExceededError');
     };
@@ -154,6 +156,17 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     // The Run already in storage is still there: not credited.
     expect(meta.calls).toEqual([]);
     expect(takeBackPausedRun(store, 'h1', s.runKey)).toBe('mine');
+    // Taking it back drops only this page's copy: the other Run, never replaced, is still stored
+    // (removeItem would have worked even though setItem didn't) and this page sees it again.
+    expect(parseRunSnapshot(JSON.parse(storage.getItem(SUSPENDED_RUN_KEY)!))?.runKey).toBe(other.runKey);
+    expect(store.unsaved).toBe(false);
+    expect(store.peek()?.runKey).toBe(other.runKey);
+    expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(other.runKey);
+    // A pause write that sticks is taken back from storage as before.
+    storage.setItem = setItem;
+    expect(storePausedRun(store, structuredClone(s), 'h2', meta)).toBe(true);
+    expect(takeBackPausedRun(store, 'h2', s.runKey)).toBe('mine');
+    expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
   });
 
   it('a Perk draft pending when the Run was stored opens again where it is picked up', () => {
