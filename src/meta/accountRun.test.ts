@@ -1,7 +1,7 @@
 /**
  * The Account's saved Run (src/meta/accountRun.ts) and its credit (src/meta/runCredits.ts,
- * docs/adr/0003): two devices (each its own storage, slot and progress copy), one fake server that
- * follows api/saved-run.ts's and api/run-credit.ts's rules (server/api.test.ts checks the real ones).
+ * docs/adr/0003): two devices (each its own storage, slot and progress copy), one server: the real
+ * rules (server/accountRuns.ts) over the in-memory store, behind a simulated network (`TestServer`).
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
@@ -9,9 +9,11 @@ import { createRun } from '../game/assembly';
 import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
-import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT, type CreditStats, type RunCredit, type RunCreditReason } from '../shared/runCredit';
-import type { ServerSavedRun } from '../shared/savedRun';
-import { AccountRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
+import { createAccountRuns } from '../../server/accountRuns';
+import { MemoryAccountRunStore } from '../../server/accountRunsMemory';
+import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT, validateRunCreditClaim, type RunCredit } from '../shared/runCredit';
+import { validateSavedRunClaim, validateSavedRunUpload } from '../shared/savedRun';
+import { AccountRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION, SavedRunAuthError, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress, type RunCreditInput } from './meta';
 import { RUN_CREDITS_KEY, RunCreditQueue, type ClaimResult, type CreditOutcome, type RunCreditApi } from './runCredits';
 import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
@@ -27,23 +29,31 @@ const snapshot = (seed = 'acct'): RunSnapshot => {
   return run.toSnapshot();
 };
 
-interface Row {
-  runKey: string;
-  lease: string;
-  snapshot: Record<string, unknown> | null;
-  version: number | null;
-  /** The Run ended (or was abandoned): the row stays so a late upload of it is refused. */
-  ended?: boolean;
+/** The Account the test devices sign in as unless a test says otherwise. */
+const USER = 'u1';
+
+/** A JSON round trip: what goes over the wire. */
+const wire = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T));
+
+/** A device's connection: whether it is offline, and who it is signed in as (`undefined`: u1). */
+interface Link {
+  offline: boolean;
+  user?: string | null;
 }
 
 /**
- * One Account's saved Run row and credit ledger, with the server's rules. `offline`: every request
- * fails. `loseAnswer[what]`: the next such request is carried out but its answer is lost (a
- * network error after the server wrote). `calls`: what was asked.
+ * The real server rules (server/accountRuns.ts) over the in-memory store, behind the client's
+ * `SavedRunApi` / `RunCreditApi`: each request is validated as api/saved-run.ts and
+ * api/run-credit.ts validate it, and the module's answer is mapped as those handlers and the
+ * client's HTTP callers map it. The network is simulated here: `offline`: every request fails.
+ * `loseAnswer[what]`: the next such request is carried out but its answer is lost (a network error
+ * after the server wrote). `calls`: what was asked. `row` and `ledger`: u1's slot and ledger as stored.
  */
-class FakeServer {
-  row: Row | null = null;
-  ledger: RunCredit[] = [];
+class TestServer {
+  /** The server's clock (ms). A 429 moves it past the wait it asks for: the client's backoff stands for that time. */
+  now = Date.now();
+  readonly store = new MemoryAccountRunStore({ now: () => this.now });
+  readonly runs = createAccountRuns(this.store, { now: () => this.now });
   offline = false;
   /** While set, every answer waits for it (a slow network). */
   gate: Promise<void> | null = null;
@@ -52,20 +62,26 @@ class FakeServer {
   loseAnswer: Partial<Record<string, boolean>> = {};
   calls: string[] = [];
 
-  /** The ledger's rule: one row per Run key; a second writer gets the first row back. */
-  record(runKey: string, reason: RunCreditReason, stats: CreditStats): { credit: RunCredit; created: boolean } {
-    const existing = this.ledger.find((c) => c.runKey === runKey);
-    if (existing) return { credit: existing, created: false };
-    const credit: RunCredit = { id: this.ledger.length + 1, runKey, reason, stats, creditedAt: new Date(0).toISOString() };
-    this.ledger.push(credit);
-    return { credit, created: true };
+  /** u1's saved Run slot as stored (`ended` once the Run is over), or null. */
+  get row(): { runKey: string; lease: string; snapshot: Record<string, unknown> | null; version: number | null; ended: boolean } | null {
+    const s = this.store.slotOf(USER);
+    return s ? { runKey: s.runKey, lease: s.lease, snapshot: s.snapshot, version: s.version, ended: s.ended } : null;
   }
 
-  private async net(what: string, link: { offline: boolean }): Promise<void> {
+  /** u1's ledger, oldest first. */
+  get ledger(): RunCredit[] {
+    return this.store.creditsOf(USER);
+  }
+
+  private async net(what: string, link: Link): Promise<string> {
+    // The session is the one signed in when the request leaves.
+    const user = link.user === undefined ? USER : link.user;
     this.calls.push(what);
     if (this.gate) await this.gate;
     if (this.hold[what]) await this.hold[what];
     if (this.offline || link.offline) throw new SavedRunNetError('offline');
+    if (user === null) throw new SavedRunAuthError('unauthorized');
+    return user;
   }
 
   private answer<T>(what: string, value: T): T {
@@ -73,65 +89,54 @@ class FakeServer {
       this.loseAnswer[what] = false;
       throw new SavedRunNetError('answer lost');
     }
-    return value;
+    return wire(value);
   }
 
-  /** `link.offline`: this device alone can't reach the server. */
-  api(link: { offline: boolean } = { offline: false }): SavedRunApi {
-    const view = ({ ended: _ended, ...r }: Row): ServerSavedRun => ({ ...structuredClone(r), updatedAt: new Date(0).toISOString() });
+  /** `link.offline`: this device alone can't reach the server. `link.user`: who it is signed in as (default u1). */
+  api(link: Link = { offline: false }): SavedRunApi {
     return {
       get: async () => {
         // Read as the request arrives; a slow answer (`gate`, `hold`) reports the row as it was then.
-        const row = this.row && !this.row.ended ? view(this.row) : null;
+        const row = this.runs.savedRun(link.user ?? USER);
         await this.net('get', link);
-        return row;
+        return wire(await row);
       },
-      put: async (b): Promise<PutResult> => {
-        await this.net('put', link);
-        const snap = structuredClone(b.snapshot) as Record<string, unknown>;
-        const version = snap.version as number;
-        const old = this.row;
-        if (this.ledger.some((c) => c.runKey === b.runKey)) return { ok: false, reason: 'carriedOn' }; // 409 run_ended, whatever the row holds
-        if (old?.ended && old.runKey === b.runKey) return { ok: false, reason: 'carriedOn' }; // 409 run_ended
-        if (old && old.runKey === b.runKey && old.lease !== b.lease && old.lease !== b.prevLease) return { ok: false, reason: 'carriedOn' };
-        if (old && old.runKey !== b.runKey && old.snapshot && (old.version ?? 0) > version) return { ok: false, reason: 'newer' };
-        this.row = { runKey: b.runKey, lease: b.lease, snapshot: snap, version };
-        const credits: RunCredit[] = [];
-        if (b.ledger && old && old.runKey !== b.runKey && old.snapshot) {
-          credits.push(this.record(old.runKey, 'quit', pickCreditStats((old.snapshot as { stats?: unknown }).stats) ?? { maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 }).credit);
-        }
-        return this.answer('put', { ok: true, credits });
+      put: async (body): Promise<PutResult> => {
+        const sent = wire(body);
+        const user = await this.net('put', link);
+        const v = validateSavedRunUpload(sent);
+        if (!v.ok) return { ok: false, reason: 'rejected' };
+        const res = await this.runs.store(user, v.value);
+        return this.answer('put', res.ok ? { ok: true, credits: res.credits } : { ok: false, reason: res.reason === 'newer_saved_run' ? 'newer' : 'carriedOn' });
       },
-      take: async (b): Promise<TakeResult> => {
-        await this.net('take', link);
-        const r = this.row;
-        if (!r || r.ended || r.runKey !== b.runKey || (r.lease !== b.lease && r.lease !== b.newLease)) return { taken: false, savedRun: r ? view(r) : null };
-        const snap = r.snapshot;
-        this.row = { ...r, lease: b.newLease, snapshot: null, version: null };
-        return { taken: true, snapshot: snap };
+      take: async (body): Promise<TakeResult> => {
+        const sent = wire(body);
+        const user = await this.net('take', link);
+        const v = validateSavedRunClaim(sent, true);
+        if (!v.ok || v.value.newLease === undefined) throw new SavedRunNetError('saved-run 400');
+        const res = await this.runs.take(user, { runKey: v.value.runKey, lease: v.value.lease, newLease: v.value.newLease });
+        return this.answer('take', res.ok ? { taken: true, snapshot: res.snapshot } : { taken: false, savedRun: res.savedRun });
       },
     };
   }
 
-  creditApi(link: { offline: boolean } = { offline: false }): RunCreditApi {
+  creditApi(link: Link = { offline: false }): RunCreditApi {
     return {
-      claim: async (b): Promise<ClaimResult> => {
-        await this.net('claim', link);
-        const existing = this.ledger.find((c) => c.runKey === b.runKey);
-        if (existing) return this.answer('claim', { ok: true, credit: existing, created: false });
-        const r = this.row;
-        if (r && r.runKey === b.runKey) {
-          if (r.ended) return { ok: false, reason: 'runEnded' };
-          if (r.lease !== b.lease && r.lease !== b.prevLease) return { ok: false, reason: 'carriedOn' };
-          this.row = { ...r, snapshot: null, version: null, ended: true };
-        } else if (!r || (r.ended && r.runKey !== b.runKey)) {
-          this.row = { runKey: b.runKey, lease: b.lease, snapshot: null, version: null, ended: true };
+      claim: async (body): Promise<ClaimResult> => {
+        const sent = wire(body);
+        const user = await this.net('claim', link);
+        const v = validateRunCreditClaim(sent);
+        if (!v.ok) return { ok: false, reason: 'rejected' };
+        const res = await this.runs.claim(user, v.value);
+        if (!res.ok && res.reason === 'rate_limited') {
+          this.now += res.retryAfterSec * 1000;
+          throw new SavedRunNetError('run-credit 429');
         }
-        return this.answer('claim', { ok: true, ...this.record(b.runKey, b.reason, b.stats) });
+        return this.answer('claim', res.ok ? { ok: true, credit: res.credit, created: res.created } : { ok: false, reason: res.reason === 'run_ended' ? 'runEnded' : 'carriedOn' });
       },
       list: async (limit = RUN_CREDIT_LIST_LIMIT) => {
-        await this.net('list', link);
-        return [...this.ledger].reverse().slice(0, limit);
+        const user = await this.net('list', link);
+        return this.answer('list', await this.runs.credits(user, limit));
       },
     };
   }
@@ -148,15 +153,16 @@ const fakeEvents = () => {
 };
 
 /** A device: its own storage, slot and progress copy, signed in as `user`. `tab`: another tab of a device (shares its storage and hears its `storage` events). */
-const device = (server: FakeServer, user: string | null = 'u1', tab?: { storage: ReturnType<typeof memStorage>; events: ReturnType<typeof fakeEvents> }) => {
+const device = (server: TestServer, user: string | null = 'u1', tab?: { storage: ReturnType<typeof memStorage>; events: ReturnType<typeof fakeEvents> }) => {
   const storage = tab?.storage ?? memStorage();
   const store = new SuspendedRunStore(storage);
   const meta = new MetaProgress(storage);
-  const link = { offline: false };
+  const link: Link = { offline: false, user };
   const credits = new RunCreditQueue({ api: server.creditApi(link), storage, events: tab?.events ?? null, meta, retryMs: 1, maxRetryMs: 4 });
   const runs = new AccountRuns({ api: server.api(link), store, meta, credits, storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
   const outcomes: CreditOutcome[] = [];
   credits.onCredit((o) => void outcomes.push(o));
+  runs.onUser((u) => void (link.user = u)); // the session cookie follows the Account
   runs.setUser(user);
   const lostRuns: string[] = [];
   runs.onLost((k) => void lostRuns.push(k));
@@ -193,7 +199,7 @@ async function resumeOn(d: ReturnType<typeof device>) {
 
 describe('Account saved Run (two devices, one server)', () => {
   it('pause on A uploads it; B offers it from another device and takes it', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const s = snapshot();
@@ -213,7 +219,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('unpausing on A is not delayed by the server; told B has the Run, A steps aside uncredited', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const s = snapshot();
@@ -239,7 +245,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('offline, A plays on and keeps retrying; once back, it learns B took the Run, and only B ends (and credits) it', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const s = snapshot();
@@ -266,7 +272,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a later pause with a 409 (A fell behind) also makes A step aside', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     a.handoff.store(s, 'pause');
@@ -275,7 +281,7 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(await a.handoff.takeBack()).toBe(true);
     server.offline = false;
     // B takes it before A's take gets through; A's take was superseded by its next pause's upload.
-    server.row = { ...server.row!, lease: 'b-lease', snapshot: null, version: null };
+    expect(await server.runs.take(USER, { runKey: s.runKey, lease: server.row!.lease, newLease: 'b-lease' })).toMatchObject({ ok: true });
     a.handoff.store(structuredClone(s), 'pause');
     await settle(a.runs);
     expect(a.lostRuns).toEqual([s.runKey]);
@@ -283,7 +289,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('two devices racing to resume the same Run: exactly one gets it', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     a.handoff.store(snapshot(), 'pause');
     await settle(a.runs);
@@ -297,10 +303,10 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a newer build’s saved Run is left on the server and on the device, and the title says so', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const newer = { ...snapshot(), version: SNAPSHOT_VERSION + 1, somethingNew: true };
-    server.row = { runKey: newer.runKey, lease: 'other', snapshot: newer as unknown as Record<string, unknown>, version: SNAPSHOT_VERSION + 1 };
+    expect(await server.runs.store(USER, { runKey: newer.runKey, lease: 'other', snapshot: newer as unknown as Record<string, unknown>, version: SNAPSHOT_VERSION + 1, ledger: true })).toMatchObject({ ok: true });
     const view = await a.runs.syncTitle();
     expect(view.newerOnAccount).toBe(true);
     await settle(a.runs);
@@ -325,10 +331,10 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('the server copy wins on the title; a different Run only this device had counts as quit, at once, and the claim records it', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const remote = snapshot('remote');
-    server.row = { runKey: remote.runKey, lease: 'l1', snapshot: remote as unknown as Record<string, unknown>, version: SNAPSHOT_VERSION };
+    expect(await server.runs.store(USER, { runKey: remote.runKey, lease: 'l1', snapshot: remote as unknown as Record<string, unknown>, version: SNAPSHOT_VERSION, ledger: true })).toMatchObject({ ok: true });
     const local = snapshot('local');
     a.store.save(local); // saved before signing in: untagged, so the Account never saw it
     await a.runs.syncTitle();
@@ -344,7 +350,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a Run only on this device is uploaded on the title; once confirmed and gone from the server, it is dropped uncredited', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const local = snapshot('only-here');
     a.store.save(local);
@@ -352,7 +358,9 @@ describe('Account saved Run (two devices, one server)', () => {
     await settle(a.runs);
     expect(server.row?.runKey).toBe(local.runKey);
     expect(a.store.peek()?.account?.synced).toBe(true);
-    server.row = null; // resumed and ended elsewhere
+    // Resumed and ended elsewhere (by a client from before the ledger: no row, so nothing for the sweep).
+    expect(await server.runs.take(USER, { runKey: local.runKey, lease: server.row!.lease, newLease: 'b-lease' })).toMatchObject({ ok: true });
+    expect(await server.runs.end(USER, { runKey: local.runKey, lease: 'b-lease' })).toMatchObject({ deleted: true });
     await a.runs.syncTitle();
     await settle(a.runs);
     expect(a.store.peek()).toBeNull();
@@ -360,7 +368,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a Run that replaces another on the server credits the replaced one once, from the ledger row the upload returns', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const first = snapshot('first');
     a.handoff.store(first, 'pause');
@@ -384,13 +392,12 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('another Account’s saved Run is never offered, taken or credited', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server, 'u1');
     a.handoff.store(snapshot(), 'pause');
     await settle(a.runs);
     a.handoff.forget();
     a.runs.setUser('u2');
-    server.row = null; // u2's Account has none
     expect(a.store.peek()).toBeNull();
     await a.runs.syncTitle();
     expect(a.store.peekAny()?.account?.userId).toBe('u1'); // still there for u1
@@ -402,7 +409,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('not signed in: nothing goes to the server, and the Run is credited on the device at once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server, null);
     const s = snapshot();
     a.handoff.store(s, 'pause');
@@ -419,7 +426,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a Run never uploaded from here is credited at once; the claim records it as ended on the server', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     const award = a.end(s, 'victory');
@@ -440,7 +447,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a Run the Account knows is credited from the server’s answer: pending until then, then once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     a.handoff.store(s, 'pause');
@@ -463,7 +470,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('unpausing while the pause upload is still on its way still takes the Run back on the server', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const s = snapshot();
@@ -480,7 +487,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('New run on the title waits for the Save & quit upload, so the abandoned Run isn’t stored again; the claim credits it', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     let open!: () => void;
@@ -504,7 +511,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('Resume on the title waits for the Save & quit upload, so the Run isn’t left resumable elsewhere', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     let open!: () => void;
@@ -526,11 +533,12 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('after an Account switch, the new Account’s upload goes out once the old one’s request settles', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server, 'u1');
     let open!: () => void;
     server.hold.put = new Promise((r) => (open = r));
-    a.handoff.store(snapshot('u1-run'), 'pause'); // u1's upload is on its way...
+    const theirs = snapshot('u1-run');
+    a.handoff.store(theirs, 'pause'); // u1's upload is on its way...
     a.handoff.forget();
     a.runs.setUser('u2'); // ...when u2 signs in and pauses a Run
     a.runs.newRun();
@@ -540,11 +548,12 @@ describe('Account saved Run (two devices, one server)', () => {
     await settle(a.runs);
     expect(a.runs.pending).toBe(0);
     expect(server.calls).toEqual(['put', 'put']);
-    expect(server.row?.runKey).toBe(mine.runKey);
+    expect(server.row?.runKey).toBe(theirs.runKey); // u1's upload landed in u1's Account...
+    expect(server.store.slotOf('u2')?.runKey).toBe(mine.runKey); // ...and u2's in u2's
   });
 
   it('the title syncs after this page’s own upload lands, so a Run it is storing is neither credited nor replaced', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const other = device(server);
     const there = snapshot('there');
     other.handoff.store(there, 'pause'); // another device's Run is the Account's saved Run
@@ -570,7 +579,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('an upload that can’t settle leaves the title as it is, as offline', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     a.link.offline = true;
     const mine = snapshot('mine');
@@ -582,14 +591,14 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   describe('an answer that arrives after an Account switch touches nothing', () => {
-    const held = (server: FakeServer, what: string) => {
+    const held = (server: TestServer, what: string) => {
       let open!: () => void;
       server.hold[what] = new Promise((r) => (open = r));
       return () => open();
     };
 
     it('an upload: a Run it replaced isn’t credited to the new Account', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const other = device(server);
       const there = snapshot('there');
       other.handoff.store(there, 'pause');
@@ -607,12 +616,12 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('a background take: a refusal doesn’t make the new Account’s page step aside', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server, 'u1');
       const s = snapshot();
       a.handoff.store(s, 'pause');
       await settle(a.runs);
-      server.row = { ...server.row!, lease: 'b-lease', snapshot: null, version: null }; // another device took it
+      expect(await server.runs.take(USER, { runKey: s.runKey, lease: server.row!.lease, newLease: 'b-lease' })).toMatchObject({ ok: true }); // another device took it
       const open = held(server, 'take');
       expect(await a.handoff.takeBack()).toBe(true);
       a.runs.setUser('u2');
@@ -624,7 +633,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('a failed request isn’t retried for the Account signed in now', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server, 'u1');
       const open = held(server, 'put');
       a.link.offline = true;
@@ -638,7 +647,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('a claim: its answer is applied to its own Account’s copy, not the one signed in now', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server, 'u1');
       const s = snapshot();
       const open = held(server, 'claim');
@@ -660,7 +669,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('the title sync: another Account’s row isn’t mirrored into the slot', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const other = device(server);
       other.handoff.store(snapshot('u1-run'), 'pause');
       await settle(other.runs);
@@ -678,7 +687,7 @@ describe('Account saved Run (two devices, one server)', () => {
 
     it('Resume: not started, online or offline', async () => {
       for (const offline of [false, true]) {
-        const server = new FakeServer();
+        const server = new TestServer();
         const a = device(server, 'u1');
         a.handoff.store(snapshot(), 'pause');
         await settle(a.runs);
@@ -699,7 +708,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('New run: not abandoned (nor credited) on the device when the Account changes while its upload is waited out', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server, 'u1');
       const open = held(server, 'put');
       a.handoff.store(snapshot(), 'pause');
@@ -717,7 +726,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a device that fell behind can’t store a Run that ended elsewhere again', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const s = snapshot();
@@ -741,7 +750,7 @@ describe('Account saved Run (two devices, one server)', () => {
 
   describe('a title read that overlaps Resume or New run is read again, not mirrored', () => {
     it('New run: the abandoned (and credited) Run is not restored into the slot and credited again', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       b.handoff.store(snapshot(), 'pause');
@@ -768,7 +777,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('Resume: the Run this page now plays is not mirrored back into the slot', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const s = snapshot();
       a.handoff.store(s, 'pause');
@@ -788,7 +797,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('a title read waits for a Resume still on its way', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const s = snapshot();
       a.handoff.store(s, 'pause');
@@ -810,7 +819,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a mirrored Account copy replaced on pause is claimed, so a Run taken elsewhere is refused here and credited once, by its holder', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const r = snapshot('r');
@@ -847,7 +856,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('a mirrored Account copy nobody took is credited once when Save & quit replaces it: the claim and the upload’s row agree', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const r = snapshot('r');
@@ -868,7 +877,7 @@ describe('Account saved Run (two devices, one server)', () => {
 
   describe('a new Run start abandoning a mirrored Account copy claims it: the server credits it unless another device holds it', () => {
     const mirrored = async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -910,7 +919,7 @@ describe('Account saved Run (two devices, one server)', () => {
 
   describe('the four races (docs/adr/0003)', () => {
     it('1. a lost answer: the replace wrote the ledger row; the durable claim gets the same row, and the credit lands once', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -929,7 +938,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('1b. a lost answer with no claim of its own: the sweep from the title brings the row in', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -949,7 +958,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('2. an offline End run past any timeout: the claim waits for the server, which refuses a Run another device took', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -978,7 +987,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('2b. the same, when the holder also credits the Run before the offline device reconnects: refused, not credited twice', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -1001,7 +1010,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('3. the ledger remembers every ended Run: a late upload of an older Run is refused, whatever the row holds', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const r1 = snapshot('r1');
       a.handoff.store(r1, 'pause');
@@ -1027,7 +1036,7 @@ describe('Account saved Run (two devices, one server)', () => {
     });
 
     it('4. an offline unpause vs another device’s new Run: A’s take is refused, and A’s Run is credited once, by the sweep', async () => {
-      const server = new FakeServer();
+      const server = new TestServer();
       const a = device(server);
       const b = device(server);
       const r = snapshot('r');
@@ -1056,7 +1065,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('retry after a lost claim answer credits once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const s = snapshot();
     a.handoff.store(s, 'pause');
@@ -1075,7 +1084,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('two devices sweeping the same row credit one progress copy once (two tabs, one save)', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const other = device(server);
     const r = snapshot('r');
     other.end(r); // a row in the ledger from elsewhere
@@ -1104,8 +1113,8 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 
   it('the sweep applies at most the newest rows, which the copy remembers far longer than that', async () => {
-    const server = new FakeServer();
-    for (let i = 0; i < RUN_CREDIT_LIST_LIMIT + 3; i++) server.record(`old-${i}`, 'died', { maxRadius: 1, debrisAbsorbed: 1, tierReached: 1 });
+    const server = new TestServer();
+    for (let i = 0; i < RUN_CREDIT_LIST_LIMIT + 3; i++) await server.runs.claim(USER, { runKey: `old-${i}`, lease: 'l', reason: 'died', stats: { maxRadius: 1, debrisAbsorbed: 1, tierReached: 1 } });
     const a = device(server);
     await a.runs.syncTitle();
     await settle(a.runs);
@@ -1119,7 +1128,7 @@ describe('Account saved Run (two devices, one server)', () => {
 
 describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 review)', () => {
   it('a known Run stays known through a sign-out and back in mid-Run: its credit waits for the server, which refuses a Run another device took', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const r = snapshot('r');
@@ -1146,7 +1155,7 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
   });
 
   it('known Runs survive a reload; a Run the server never saw is still credited at once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const r = snapshot('r');
     a.handoff.store(r, 'pause');
@@ -1160,7 +1169,7 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
   });
 
   it('a Universe victory counts on the device that ended it (from its claim’s answer); another device’s sweep adds its Fluff only', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const b = device(server);
     const r = snapshot('r');
@@ -1190,14 +1199,14 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
   });
 
   it('409 run_ended from a Run an old client ended: nothing applied, the claim dropped, the results screen told it was added elsewhere', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const r = snapshot('r');
     a.handoff.store(r, 'pause');
     await settle(a.runs);
     expect(await a.handoff.takeBack()).toBe(true);
     await settle(a.runs);
-    server.row = { ...server.row!, snapshot: null, version: null, ended: true }; // an old-build tab ended R and credited it itself
+    expect(await server.runs.end(USER, { runKey: r.runKey, lease: server.row!.lease })).toMatchObject({ deleted: true }); // an old-build tab ended R and credited it itself
     expect(a.end(r)).toBeNull();
     await settle(a.runs);
     expect(a.runs.creditOf(r.runKey)).toEqual({ state: 'refused', why: 'elsewhere' });
@@ -1207,9 +1216,33 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
   });
 });
 
+describe('AccountRuns: the stale claim (docs/adr/0003, run_holders)', () => {
+  it('a claim for a Run another device holds is refused with carriedOn after a new Run replaced it in the slot', async () => {
+    const server = new TestServer();
+    const a = device(server);
+    const b = device(server);
+    const c = device(server);
+    const r = snapshot('r');
+    a.handoff.store(r, 'pause');
+    await settle(a.runs);
+    a.link.offline = true;
+    expect(await a.handoff.takeBack()).toBe(true); // A plays on offline: its take hasn't reached the server
+    expect((await resumeOn(b)).resumed.map((s) => s.runKey)).toEqual([r.runKey]); // B takes R and plays it
+    c.handoff.store(snapshot('y'), 'pause'); // C's new Run replaces R in the Account's slot while B holds R
+    await settle(c.runs);
+    expect(server.row?.runKey).not.toBe(r.runKey);
+    expect(a.end(r)).toBeNull(); // R is known to the server: its credit waits for the claim
+    a.link.offline = false;
+    await settle(a.runs);
+    expect(a.runs.creditOf(r.runKey)).toEqual({ state: 'refused', why: 'carriedOn' });
+    expect(server.ledger).toEqual([]); // B credits R when it ends it there
+    expect(a.credited()).toEqual([]);
+  });
+});
+
 describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   it('a known Run ended after a sign-out and back in mid-Run claims under the lease the server holds, so it is credited once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const r = snapshot('r');
     a.handoff.store(r, 'pause'); // uploaded under lease L1
@@ -1230,7 +1263,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   });
 
   it('the remembered leases survive a reload; a record without them falls back to the device slot’s tag', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const r = snapshot('r');
     a.handoff.store(r, 'pause');
@@ -1246,7 +1279,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
     expect(again.creditOf(r.runKey)).toMatchObject({ state: 'credited' });
 
     // A paused Run whose known record is a key alone (an earlier shape of the file): the slot's tag names the lease.
-    const server2 = new FakeServer();
+    const server2 = new TestServer();
     const b = device(server2);
     const p = snapshot('p');
     b.handoff.store(p, 'pause');
@@ -1261,7 +1294,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   });
 
   it('a never-seen Universe victory counts once: credited locally, and its claim’s answer adds no second Universe even after an adopt dropped the key', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const r = snapshot('r');
     let release!: () => void;
@@ -1284,7 +1317,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   });
 
   it('more than CREDITED_RUNS_MAX never-seen Runs ended offline are credited once each: a key whose claim is still out is never evicted, so the replay adds nothing', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const stats = snapshot('s').stats;
     const n = CREDITED_RUNS_MAX + 1;
@@ -1316,7 +1349,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   });
 
   it('…and when a cloud adopt replaced the copy with one lacking those Runs’ keys and Fluff, their replayed claims restore each credit once', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const a = device(server);
     const stats = snapshot('s').stats;
     const n = CREDITED_RUNS_MAX + 1;
@@ -1342,7 +1375,7 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
   });
 
   it('a claim answered in another tab settles this one: the results screen reads credited, the leaderboard’s wait ends', async () => {
-    const server = new FakeServer();
+    const server = new TestServer();
     const shared = { storage: memStorage(), events: fakeEvents() };
     const a = device(server, 'u1', shared);
     const r = snapshot('r');
