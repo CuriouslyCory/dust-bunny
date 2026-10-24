@@ -9,7 +9,7 @@ import { createRun } from '../game/assembly';
 import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
-import { pickCreditStats, RUN_CREDIT_LIST_LIMIT, type CreditStats, type RunCredit, type RunCreditReason } from '../shared/runCredit';
+import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT, type CreditStats, type RunCredit, type RunCreditReason } from '../shared/runCredit';
 import type { ServerSavedRun } from '../shared/savedRun';
 import { AccountRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress, type RunCreditInput } from './meta';
@@ -1281,6 +1281,64 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
     expect(server.ledger.map((c) => c.runKey)).toEqual([r.runKey]);
     expect(a.credited()).toEqual([r.runKey]); // the row's Fluff is applied again (the adopted copy lacks it)...
     expect(a.meta.universes).toBe(1); // ...but the Universe is not counted twice
+  });
+
+  it('more than CREDITED_RUNS_MAX never-seen Runs ended offline are credited once each: a key whose claim is still out is never evicted, so the replay adds nothing', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const stats = snapshot('s').stats;
+    const n = CREDITED_RUNS_MAX + 1;
+    a.link.offline = true;
+    let fluff = 0;
+    for (let i = 0; i < n; i++) {
+      const award = a.runs.ended({ runKey: `off-${i}`, reason: 'died', stats });
+      expect(award).not.toBeNull(); // the server never saw it: credited at once, its claim queued
+      fluff += award!.fluff;
+    }
+    expect(a.meta.data.stats.runs).toBe(n);
+    expect(a.credits.pending).toBe(n);
+    expect(a.credited()).toHaveLength(n); // the oldest key is kept beyond the cap: its claim is still out
+    expect(new MetaProgress(a.storage).data.creditedRuns).toHaveLength(n); // and so a reload reads it
+    a.link.offline = false;
+    a.credits.replay();
+    await settle(a.runs);
+    expect(server.ledger).toHaveLength(n);
+    expect(a.credits.pending).toBe(0);
+    expect(a.meta.data.stats.runs).toBe(n); // not 2n
+    expect(a.meta.fluff).toBe(fluff);
+    expect(a.outcomes.filter((o) => o.award)).toHaveLength(0); // every answer found its credit held already
+    // With the claims landed, the next credit trims the set back to the cap: the oldest key goes like any other.
+    expect(a.runs.ended({ runKey: 'after', reason: 'died', stats })).not.toBeNull();
+    await settle(a.runs);
+    expect(a.credited()).toHaveLength(CREDITED_RUNS_MAX);
+    expect(a.credited()[0]).toBe('off-2');
+    expect(a.meta.data.stats.runs).toBe(n + 1);
+  });
+
+  it('…and when a cloud adopt replaced the copy with one lacking those Runs’ keys and Fluff, their replayed claims restore each credit once', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const stats = snapshot('s').stats;
+    const n = CREDITED_RUNS_MAX + 1;
+    a.link.offline = true;
+    for (let i = 0; i < n; i++) expect(a.runs.ended({ runKey: `off-${i}`, reason: 'died', stats })).not.toBeNull();
+    const earned = a.meta.data.stats.totalFluffEarned;
+    // The cloud save adopts a copy that got further on another device: its Fluff, stats and set replace this one's, none of these Runs among them.
+    a.meta.store.update((d) => {
+      d.fluff = 5000;
+      d.stats = { ...d.stats, runs: 40, totalFluffEarned: 9000 };
+      a.meta.adoptCreditedRuns(d, ['other-1'], false);
+    });
+    expect(a.credited()).toEqual(['other-1']);
+    a.link.offline = false;
+    a.credits.replay();
+    await settle(a.runs);
+    expect(a.outcomes.filter((o) => o.award)).toHaveLength(n); // each answer applied its row: the adopted copy lacked it
+    expect(a.meta.data.stats.runs).toBe(40 + n);
+    expect(a.meta.fluff).toBe(5000 + earned);
+    expect(a.meta.data.stats.totalFluffEarned).toBe(9000 + earned);
+    expect(a.credited()).toHaveLength(CREDITED_RUNS_MAX); // the last answer's write trimmed the set: 'other-1' and 'off-0' aged out
+    expect(a.credited()[0]).toBe('off-1');
   });
 
   it('a claim answered in another tab settles this one: the results screen reads credited, the leaderboard’s wait ends', async () => {

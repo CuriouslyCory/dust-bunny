@@ -15,7 +15,7 @@
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
-import { CREDITED_RUNS_MAX, isRunKey } from '../shared/runCredit';
+import { isRunKey } from '../shared/runCredit';
 import { hasKeepsakes, repairLoadout, sanitizeCharacterHoard, type CharacterHoard } from './hoard';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
@@ -131,9 +131,10 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
     }
   }
   d.universes = int(o.universes);
+  // Not capped here: the set may hold older keys beyond `CREDITED_RUNS_MAX` while claims are out
+  // for them, and only MetaProgress knows which (`trimCreditedRuns`, applied as the set is written).
   if (Array.isArray(o.creditedRuns)) {
     for (const k of o.creditedRuns as unknown[]) if (isRunKey(k) && !d.creditedRuns.includes(k)) d.creditedRuns.push(k);
-    d.creditedRuns = d.creditedRuns.slice(-CREDITED_RUNS_MAX);
   }
   return d;
 }

@@ -29,7 +29,7 @@
  * A file from a newer build is read as far as it is understood and never written (docs/adr/0001):
  * this build's changes then live in memory.
  */
-import { CREDITED_RUNS_MAX, isRunKey } from '../shared/runCredit';
+import { isRunKey } from '../shared/runCredit';
 import type { KeyValueStorage } from './save';
 
 export const CREDITED_RUNS_MIRROR_KEY = 'dust-bunny:credited-runs:v1';
@@ -50,7 +50,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 
 const empty = (): CreditedRunsMirror => ({ keys: [], local: [], unknown: false });
 
-function readKeys(v: unknown, max: number): string[] {
+function readKeys(v: unknown, max = Infinity): string[] {
   if (!Array.isArray(v)) return [];
   const out: string[] = [];
   for (const k of v as unknown[]) if (isRunKey(k) && !out.includes(k)) out.push(k);
@@ -88,13 +88,14 @@ export class CreditedRunsMirrorStore {
       return empty();
     }
     if (!isObj(parsed)) return empty();
-    const file: CreditedRunsMirror = { keys: readKeys(parsed.keys, CREDITED_RUNS_MAX), local: readKeys(parsed.local, LOCAL_CREDITS_MAX), unknown: parsed.unknown === true };
+    // `keys` follows the synced set whatever its size (MetaProgress owns its cap, and may keep pinned keys beyond it).
+    const file: CreditedRunsMirror = { keys: readKeys(parsed.keys), local: readKeys(parsed.local, LOCAL_CREDITS_MAX), unknown: parsed.unknown === true };
     if (typeof parsed.version === 'number' && parsed.version > CREDITED_RUNS_MIRROR_VERSION) this.memory = file;
     return { keys: [...file.keys], local: [...file.local], unknown: file.unknown };
   }
 
   write(m: CreditedRunsMirror): void {
-    const next: CreditedRunsMirror = { keys: m.keys.slice(-CREDITED_RUNS_MAX), local: m.local.slice(-LOCAL_CREDITS_MAX), unknown: m.unknown };
+    const next: CreditedRunsMirror = { keys: [...m.keys], local: m.local.slice(-LOCAL_CREDITS_MAX), unknown: m.unknown };
     if (this.memory) {
       this.memory = next;
       return;

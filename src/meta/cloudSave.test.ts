@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
 import { type KeyValueStorage, parseSave, SAVE_KEY, type SaveStorageEvent } from './save';
@@ -326,6 +327,31 @@ describe('cloud save', () => {
     await s.signIn('u1');
     expect(s.meta.lastLoadout('lint')).toEqual([{ type: 'reclaim', rarity: 2 }]);
     expect(s.server.rows.get('u1')?.loadouts).toEqual({ lint: [{ type: 'reclaim', rarity: 2 }] });
+  });
+
+  it('waits to upload while creditedRuns holds pinned keys beyond the cap, and sends the newest cap once their claims land (docs/adr/0003)', async () => {
+    const s = setup(prog(50, 100, 3));
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    let pinned: string[] = ['k0'];
+    s.meta.pinCreditedRuns(() => pinned); // as the claim queue does: k0's claim is still out
+    for (let i = 0; i < CREDITED_RUNS_MAX + 1; i++) s.meta.awardRun({ runKey: `k${i}`, reason: 'died', stats });
+    expect(s.meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 1);
+    // Not `signIn` (it drains every timer, and a held upload keeps a retry armed): connect, then let its GET answer.
+    s.server.signIn('u1');
+    s.acct.signIn('u1');
+    await vi.advanceTimersByTimeAsync(50);
+    // Nothing sent: the server takes at most CREDITED_RUNS_MAX keys, and a copy without k0 could be adopted elsewhere with k0's Fluff.
+    expect(s.server.puts).toHaveLength(0);
+    expect(s.server.rows.get('u1')).toBeUndefined();
+    expect(s.cloud.status).toBe('syncing');
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('u1');
+    // k0's claim landed: the retry uploads the newest cap (k0's row is far older than the sweep fetches).
+    pinned = [];
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.server.puts).toHaveLength(1);
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(Array.from({ length: CREDITED_RUNS_MAX }, (_, i) => `k${i + 1}`));
+    expect(s.cloud.status).toBe('synced');
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('');
   });
 
   it('adopt carries creditedRuns with the Fluff; a server copy without it keeps the device set (docs/adr/0003)', async () => {

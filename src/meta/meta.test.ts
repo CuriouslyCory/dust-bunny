@@ -349,13 +349,44 @@ describe('MetaProgress', () => {
     expect(meta.data.stats.runs).toBe(CREDITED_RUNS_MAX + 5);
   });
 
-  it('reads creditedRuns from a save (deduplicated, capped) and defaults to none', () => {
+  it('reads creditedRuns from a save (deduplicated; the cap applies at the next write) and defaults to none', () => {
     expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: undefined })).data.creditedRuns).toEqual([]);
     const many = Array.from({ length: CREDITED_RUNS_MAX + 2 }, (_, i) => `k${i}`);
     const d = parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: ['a', 'a', 7, '', ...many] })).data;
-    expect(d.creditedRuns[0]).toBe('k2'); // 'a' once, then k0…k101: the newest 100 stay
-    expect(d.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    // Valid keys once each; not cut back on read (an older key may be pinned by a pending claim, which only MetaProgress learns later).
+    expect(d.creditedRuns).toEqual(['a', ...many]);
     expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: 'nope' })).data.creditedRuns).toEqual([]);
+    const storage = memStorage();
+    storage.setItem(SAVE_KEY, JSON.stringify({ ...defaultSave(), creditedRuns: ['a', ...many] }));
+    const meta = new MetaProgress(storage);
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 3);
+    expect(meta.awardRun({ runKey: 'new', reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX); // the write trims: the newest 100 stay
+    expect(meta.data.creditedRuns[0]).toBe('k3');
+    expect(meta.data.creditedRuns.at(-1)).toBe('new');
+  });
+
+  it('keeps a pinned key (a claim is still out for it) beyond the cap, and lets it age out once unpinned (docs/adr/0003)', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    let pinned: string[] = ['k0', 'k3'];
+    meta.pinCreditedRuns(() => pinned);
+    for (let i = 0; i < CREDITED_RUNS_MAX + 5; i++) expect(meta.awardRun({ runKey: `k${i}`, reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 2);
+    expect(meta.data.creditedRuns.slice(0, 3)).toEqual(['k0', 'k3', 'k5']); // the pinned keys, then the newest 100
+    expect(meta.awardRun({ runKey: 'k0', reason: 'died', stats: stats() })).toBeNull(); // still held: no second credit
+    expect(meta.credited('k1')).toBe(false);
+    // The save and the mirror carry the whole set: a reload (before the queue registers its pins again) loses nothing.
+    expect(new MetaProgress(storage).data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 2);
+    // The claims landed: the next write lets the keys go like any other.
+    pinned = [];
+    expect(meta.awardRun({ runKey: 'k-last', reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    expect(meta.data.creditedRuns[0]).toBe('k6');
+    // An adopt still replaces the set whole: a pinned key the adopted copy lacks is gone with its Fluff, so the claim's answer can restore it.
+    pinned = ['k-last'];
+    meta.store.update((d) => meta.adoptCreditedRuns(d, ['other'], false));
+    expect(meta.credited('k-last')).toBe(false);
   });
 
   it('counts a Universe on each victory in the last Area, once per Run; universesAfter looks ahead', () => {

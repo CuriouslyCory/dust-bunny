@@ -138,6 +138,7 @@ export class Game {
     awardRun: (e, opts) => getMeta().awardRun(e, opts),
     credited: (runKey) => getMeta().credited(runKey),
     creditedRunsKnown: () => getMeta().creditedRunsKnown(),
+    pinCreditedRuns: (source) => getMeta().pinCreditedRuns(source),
   });
   readonly handoff = new RunHandoff({
     store: getSuspendedRuns(),

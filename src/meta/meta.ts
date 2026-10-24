@@ -114,11 +114,37 @@ export class MetaProgress {
   readonly store: SaveStore;
   /** The device's own record of `creditedRuns` (./creditedRuns.ts): repairs a save another build rewrote without it. */
   private readonly mirror: CreditedRunsMirrorStore;
+  /** Keys `creditedRuns` keeps beyond its cap: those a claim is still out for (`pinCreditedRuns`). */
+  private pins: () => readonly string[] = () => [];
 
   /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
   constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
     this.mirror = new CreditedRunsMirrorStore(storage);
     this.store = new SaveStore(storage, undefined, events, (d, read) => this.repairCreditedRuns(d, read));
+  }
+
+  /**
+   * Names the Run keys whose claim is still waiting for the server's answer (the claim queue
+   * registers this, src/meta/runCredits.ts). A Run credited on the device before its claim went
+   * out (`local`) holds its Fluff under its key; were the key to age out of `creditedRuns` while the
+   * claim is pending, the answer would credit the Run again. So the cap never evicts a pinned key
+   * (`trimCreditedRuns`); a key an adopt replaced the whole set without is still gone, so the
+   * answer still restores a credit the adopted copy lacks (docs/adr/0003).
+   */
+  pinCreditedRuns(source: () => readonly string[]): void {
+    this.pins = source;
+  }
+
+  /**
+   * `creditedRuns` as a write leaves it: the newest `CREDITED_RUNS_MAX` keys, plus any older key
+   * still pinned. Over the cap only while claims are out for the older keys; the cloud save waits
+   * for them to land before uploading (the server accepts at most `CREDITED_RUNS_MAX`).
+   */
+  trimCreditedRuns(keys: readonly string[]): string[] {
+    if (keys.length <= CREDITED_RUNS_MAX) return [...keys];
+    const pinned = new Set(this.pins());
+    const older = keys.slice(0, keys.length - CREDITED_RUNS_MAX).filter((k) => pinned.has(k));
+    return [...older, ...keys.slice(-CREDITED_RUNS_MAX)];
   }
 
   /**
@@ -133,7 +159,9 @@ export class MetaProgress {
     const mirror = this.mirror.read();
     if (read.lostCreditedRuns && !mirror.unknown && this.mirror.exists()) this.mirror.write({ ...mirror, unknown: true });
     const missing = mirror.keys.filter((k) => !d.creditedRuns.includes(k));
-    if (missing.length) d.creditedRuns = [...missing, ...d.creditedRuns].slice(-CREDITED_RUNS_MAX);
+    // Not cut back to the cap here: which older keys are pinned isn't known until the claim queue
+    // registers them (after this runs at load). A set over the cap only holds credits; the next write trims it.
+    if (missing.length) d.creditedRuns = [...missing, ...d.creditedRuns];
   }
 
   /**
@@ -213,7 +241,7 @@ export class MetaProgress {
       d.stats.totalFluffEarned += fluff;
       if ((opts.countUniverse ?? true) && endsUniverse(e)) d.universes++;
       if (opts.ledger ?? true) {
-        d.creditedRuns = [...d.creditedRuns, e.runKey].slice(-CREDITED_RUNS_MAX);
+        d.creditedRuns = this.trimCreditedRuns([...d.creditedRuns, e.runKey]);
         this.mirror.write({ ...mirror, keys: [...d.creditedRuns] });
       } else this.mirror.write({ ...mirror, local: [...mirror.local, e.runKey] });
       return true;

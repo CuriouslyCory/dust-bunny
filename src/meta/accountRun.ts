@@ -816,7 +816,7 @@ export class AccountRuns implements QuitCreditor {
 let singleton: AccountRuns | null = null;
 
 /** The browser's instance (signed out until `installAccountRuns` hears from the Account). */
-export function getAccountRuns(meta: Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown'>): AccountRuns {
+export function getAccountRuns(meta: Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown' | 'pinCreditedRuns'>): AccountRuns {
   singleton ??= new AccountRuns({
     api: createSavedRunApi(),
     store: getSuspendedRuns(),

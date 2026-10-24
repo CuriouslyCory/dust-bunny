@@ -25,6 +25,7 @@
 import type { KeepsakeRef } from '../data/keepsakes';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, isEmptyProgress, mergeUniverses, sameProgress, validateProgress, type Progress } from '../shared/progress';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import type { MetaProgress } from './meta';
 import { repairLoadout } from './hoard';
 import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from './save';
@@ -87,8 +88,18 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   const storage = opts.storage === undefined ? browserStorage() : opts.storage;
   const debounceMs = opts.debounceMs ?? 1500;
   const retryMs = opts.retryMs ?? 30_000;
-  /** This device's copy as the server should see it (without `creditedRuns` while the set is unknown). */
-  const current = (d: SaveData = meta.data): Progress => progressOf(d, meta.creditedRunsKnown());
+  /**
+   * This device's copy as the server should see it (without `creditedRuns` while the set is
+   * unknown). The set is trimmed as a write would leave it, so keys unpinned since the last write
+   * don't hold an upload back (`upload`).
+   */
+  const current = (d: SaveData = meta.data): Progress => {
+    const p = progressOf(d, meta.creditedRunsKnown());
+    if (p.creditedRuns) p.creditedRuns = meta.trimCreditedRuns(p.creditedRuns);
+    return p;
+  };
+  /** The upload is waiting for `creditedRuns` to fit the server's cap (see `upload`): the status stays `syncing`. */
+  let waiting = false;
 
   let status: CloudSaveStatus = 'off';
   const listeners = new Set<(s: CloudSaveStatus) => void>();
@@ -196,6 +207,17 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
    * flight stay local and upload next. Refused (the server holds more progress): adopt its copy.
    */
   async function upload(p: Progress): Promise<void> {
+    // More keys than the server accepts: claims of this device are still out for the older ones
+    // (MetaProgress.trimCreditedRuns). Sending the copy without them would let another device
+    // adopt their Fluff without their keys and credit those Runs again from the sweep (docs/adr/0003),
+    // so the upload waits for the claims to land; the copy stays dirty meanwhile.
+    if (p.creditedRuns && p.creditedRuns.length > CREDITED_RUNS_MAX) {
+      waiting = true;
+      setDirty(true);
+      schedule(retryMs);
+      return;
+    }
+    waiting = false;
     const res = await call({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
     if (!res.progress) return;
     if (res.accepted) {
@@ -221,7 +243,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       setStatus('syncing');
       try {
         await step();
-        if (userId === forUser) setStatus('synced');
+        if (userId === forUser) setStatus(waiting ? 'syncing' : 'synced');
       } catch (err) {
         console.warn('[cloudSave]', err);
         if (userId !== forUser) return;
@@ -301,9 +323,11 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   const offAccount = account.subscribe(onAccount);
 
   const onPageHide = () => {
-    if (!userId || !connected || !lastSynced || sameProgress(current(), lastSynced)) return;
+    if (!userId || !connected || !lastSynced) return;
+    const p = current();
+    if (sameProgress(p, lastSynced) || (p.creditedRuns && p.creditedRuns.length > CREDITED_RUNS_MAX)) return; // the latter waits (see `upload`)
     // keepalive lets the upload finish after the tab closes.
-    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(current()) }).catch(() => undefined);
+    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(() => undefined);
   };
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('pagehide', onPageHide);
 

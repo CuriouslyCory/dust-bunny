@@ -135,7 +135,7 @@ export interface RunCreditQueueOptions {
   storage: KeyValueStorage | null;
   /** Where other tabs' `storage` events arrive (null: another tab's answers aren't heard here). */
   events?: StorageEventSource | null;
-  meta: Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown'>;
+  meta: Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown'> & Partial<Pick<MetaProgress, 'pinCreditedRuns'>>;
   /** First retry delay (ms); doubles up to `maxRetryMs`. */
   retryMs?: number;
   maxRetryMs?: number;
@@ -219,6 +219,10 @@ export class RunCreditQueue {
     this.meta = opts.meta;
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
+    // The queue is what says which Runs are still waiting for an answer: their keys stay in
+    // `creditedRuns` whatever its cap, or a Run credited here before its claim went out would be
+    // credited again from the answer (every Account's claims: a signed-out device still holds its copy).
+    opts.meta.pinCreditedRuns?.(() => this.read().claims.map((c) => c.runKey));
     if (opts.events && opts.storage) {
       const onStorage = (e: SaveStorageEvent) => {
         if (e.key !== null && e.key !== RUN_CREDITS_KEY) return;
