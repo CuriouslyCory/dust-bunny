@@ -261,14 +261,30 @@ export function installLeaderboardPosting(
     current.addArea(e.stats);
     void autoPost(current, [e.stats.area]);
   });
+  /**
+   * Runs whose credit the Account's server is still deciding (docs/adr/0003): their Run board
+   * entry waits for the answer. A Run refused as carried on elsewhere (another device plays it on)
+   * must not take the board's one slot per Run id from the fork that counts.
+   */
+  const awaitingCredit = new Map<string, RunPosts>();
+  const runs = (game as Partial<Game>).accountRuns;
   game.events.on('runEnded', (e) => {
     if (!current) return;
     current.finish(e);
-    void autoPost(current);
+    if (runs?.deferred(e.runKey)) awaitingCredit.set(e.runKey, current);
+    else void autoPost(current);
+  });
+  runs?.credits.onCredit((o) => {
+    const posts = awaitingCredit.get(o.runKey);
+    if (!posts) return;
+    awaitingCredit.delete(o.runKey);
+    if (o.award) void autoPost(posts);
+    else if (o.refused === 'carriedOn') posts.unrank('this Run carried on on another device.');
+    else void autoPost(posts); // already credited by a client from before the ledger: it ended here all the same
   });
   // Signing in (say from the results screen's inline buttons) posts what is still waiting.
   account.subscribe((s) => {
-    if (s.status === 'signedIn' && current?.pending) void autoPost(current);
+    if (s.status === 'signedIn' && current?.pending && !(current.result && awaitingCredit.has(current.result.runKey))) void autoPost(current);
   });
 
   installed = {

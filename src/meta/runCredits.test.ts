@@ -213,3 +213,137 @@ describe('RunCreditQueue', () => {
     expect(calls).toEqual(['claim:ok']);
   });
 });
+
+describe('RunCreditQueue: answers across an Account switch, and the server contract (docs/adr/0003)', () => {
+  it('after an Account switch, the new Account’s claim goes out once the old one’s request settles; the old answer stays queued for its Account', async () => {
+    const storage = memStorage();
+    const { api, ledger, calls } = fakeApi();
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    let slow = true;
+    const gated: RunCreditApi = { ...api, claim: async (b, k) => (slow ? gate.then(() => api.claim(b, k)) : api.claim(b, k)) };
+    const { q, meta } = queue(storage, gated);
+    q.setUser('u1');
+    q.claim({ userId: 'u1', runKey: 'a', lease: 'l', reason: 'died', stats }); // on its way (slowly)...
+    q.setUser('u2'); // ...when u2 signs in
+    slow = false;
+    q.claim({ userId: 'u2', runKey: 'b', lease: 'l', reason: 'died', stats });
+    await new Promise((r) => setTimeout(r, 5));
+    expect(calls).toEqual([]); // a hasn't reached the fake yet; b waits: one request at a time
+    open();
+    await q.idle();
+    expect(calls).toEqual(['claim:a', 'claim:b']); // b went out once a settled
+    expect(ledger.map((c) => c.runKey)).toEqual(['a', 'b']);
+    expect(meta.data.creditedRuns).toEqual(['b']); // a's answer was nobody's to apply...
+    expect(claimsIn(storage).map((c) => [c.userId, c.runKey])).toEqual([['u1', 'a']]); // ...so a is still queued for u1
+    q.setUser('u1');
+    await q.idle();
+    expect(calls).toEqual(['claim:a', 'claim:b', 'claim:a']); // sent again: the server returns the same row
+    expect(meta.data.creditedRuns).toEqual(['b', 'a']);
+    expect(ledger).toHaveLength(2);
+  });
+
+  it('a 200 whose row this build can’t read credits the Run from the claim’s own stats, and doesn’t block the queue', async () => {
+    const storage = memStorage();
+    const { api, calls } = fakeApi();
+    const odd: RunCreditApi = { ...api, claim: async (b, k) => (b.runKey === 'odd' ? { ok: true, credit: null, created: true } : api.claim(b, k)) };
+    const { q, meta, outcomes } = queue(storage, odd);
+    q.setUser('u1');
+    q.claim({ userId: 'u1', runKey: 'odd', lease: 'l', reason: 'victory', stats, at: 1 });
+    q.claim({ userId: 'u1', runKey: 'next', lease: 'l', reason: 'died', stats, at: 2 });
+    await q.idle();
+    expect(claimsIn(storage)).toEqual([]);
+    expect(calls).toEqual(['claim:next']); // (the odd one never reached the fake)
+    expect(meta.data.creditedRuns).toEqual(['odd', 'next']);
+    expect(meta.data.stats.wins).toBe(1);
+    expect(outcomes.map((o) => [o.runKey, !!o.award])).toEqual([['odd', true], ['next', true]]);
+  });
+
+  it('409 run_ended: already credited by a client from before the ledger; the claim is dropped, nothing applied, never retried', async () => {
+    const storage = memStorage();
+    const { api } = fakeApi();
+    const calls: string[] = [];
+    const ended: RunCreditApi = { ...api, claim: async (b) => (calls.push(`claim:${b.runKey}`), { ok: false, reason: 'runEnded' }) };
+    const { q, meta, outcomes } = queue(storage, ended);
+    q.setUser('u1');
+    q.claim({ userId: 'u1', runKey: 'old', lease: 'l', reason: 'died', stats });
+    await q.idle();
+    q.replay();
+    await q.idle();
+    expect(calls).toEqual(['claim:old']);
+    expect(claimsIn(storage)).toEqual([]);
+    expect(outcomes).toEqual([{ runKey: 'old', reason: 'died', award: null, refused: 'elsewhere' }]);
+    expect(meta.data).toMatchObject({ fluff: 0, creditedRuns: [], stats: { runs: 0 } });
+  });
+
+  it('409 carried_on: another device holds the Run; the claim is dropped, nothing is lost, and the sweep brings the row once the holder ends it', async () => {
+    const storage = memStorage();
+    const { api, ledger, state, calls } = fakeApi();
+    state.refuse = true;
+    const { q, meta, outcomes } = queue(storage, api);
+    q.setUser('u1');
+    q.claim({ userId: 'u1', runKey: 'r', lease: 'stale', reason: 'died', stats });
+    await q.idle();
+    expect(claimsIn(storage)).toEqual([]);
+    expect(outcomes).toEqual([{ runKey: 'r', reason: 'died', award: null, refused: 'carriedOn' }]);
+    expect(meta.data.creditedRuns).toEqual([]);
+    // The holder ends it: the ledger has the row, and the sweep applies it here, once.
+    state.refuse = false;
+    ledger.push({ id: 1, runKey: 'r', reason: 'victory', stats, creditedAt: '' });
+    await q.sweep();
+    await q.sweep();
+    expect(meta.data.creditedRuns).toEqual(['r']);
+    expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1 });
+    expect(calls.filter((c) => c.startsWith('claim'))).toHaveLength(1);
+  });
+
+  it('a 400 is a bug on this side: surfaced, dropped, and never a 0-Fluff credit', async () => {
+    const storage = memStorage();
+    const { api, state } = fakeApi();
+    state.reject = true;
+    const errors: unknown[] = [];
+    const orig = console.error;
+    console.error = (...args: unknown[]) => void errors.push(args[0]);
+    try {
+      const { q, meta, outcomes } = queue(storage, api);
+      q.setUser('u1');
+      q.claim({ userId: 'u1', runKey: 'bad', lease: 'l', reason: 'died', stats });
+      await q.idle();
+      expect(errors).toHaveLength(1);
+      expect(String(errors[0])).toContain('bad');
+      expect(outcomes).toEqual([]);
+      expect(meta.data).toMatchObject({ fluff: 0, creditedRuns: [], stats: { runs: 0 } });
+    } finally {
+      console.error = orig;
+    }
+  });
+
+  it('the sweep leaves a row for a Run this device’s own claim is out for to that claim, which is the one that counts a Universe', async () => {
+    const storage = memStorage();
+    const { api, ledger, calls } = fakeApi();
+    const win = { maxRadius: 10, debrisAbsorbed: 100, tierReached: 9, area: 'universe' };
+    let down = true;
+    const flaky: RunCreditApi = {
+      ...api,
+      claim: async (b, k) => {
+        if (down) throw new SavedRunNetError('offline');
+        return api.claim(b, k);
+      },
+    };
+    const { q, meta } = queue(storage, flaky);
+    q.setUser('u1');
+    // The Run's row is already in the ledger (the answer to this claim was lost, say): the claim is still waiting.
+    ledger.push({ id: 1, runKey: 'v', reason: 'victory', stats: win, creditedAt: '' });
+    q.claim({ userId: 'u1', runKey: 'v', lease: 'l', reason: 'victory', stats: win });
+    await q.idle();
+    await q.sweep();
+    expect(calls).toContain('list');
+    expect(meta.data.creditedRuns).toEqual([]); // skipped: the claim's answer is coming
+    down = false;
+    q.replay();
+    await q.idle();
+    expect(meta.data).toMatchObject({ creditedRuns: ['v'], universes: 1 });
+    await q.sweep();
+    expect(meta.data.universes).toBe(1);
+  });
+});

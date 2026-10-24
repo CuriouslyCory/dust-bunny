@@ -7,6 +7,7 @@ import { Run } from '../game/run';
 import type { RunStats } from '../game/runStats';
 import { registerPerks } from '../perks/perks';
 import { CREDITED_RUNS_MAX } from '../shared/runCredit';
+import { CREDITED_RUNS_MIRROR_KEY, CREDITED_RUNS_MIRROR_VERSION, LOCAL_CREDITS_MAX } from './creditedRuns';
 import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
 import { AREA_ORDER } from '../world/types';
 import { endsUniverse, MetaProgress } from './meta';
@@ -385,5 +386,67 @@ describe('MetaProgress', () => {
     expect(reloaded.level('wide_choice')).toBe(1);
     expect(reloaded.fluff).toBe(780);
     expect(reloaded.runModifiers()).toEqual([{ stat: 'perkChoices', op: 'add', value: 1, source: 'upgrade:wide_choice' }]);
+  });
+});
+
+describe('creditedRuns on a device shared with a build from before the ledger (docs/adr/0003)', () => {
+  const died = (runKey: string) => ({ runKey, reason: 'died' as const, stats: stats() });
+
+  it('a save rewritten without creditedRuns gets its keys back from the mirror, and nothing is credited twice', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    for (const k of ['a', 'b', 'c']) expect(meta.awardRun(died(k))).not.toBeNull(); // three ledger rows applied
+    const before = meta.data.fluff;
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ version: CREDITED_RUNS_MIRROR_VERSION, keys: ['a', 'b', 'c'] });
+    // An old-build tab buys an Upgrade: its sanitiser drops the field it doesn't know, the Fluff stays.
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = (raw.fluff as number) - 10;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual([]); // the file alone says "no credit held"
+    // The next sweep replays the same rows: the repaired set refuses them all.
+    for (const k of ['a', 'b', 'c']) expect(meta.awardRun(died(k))).toBeNull();
+    expect(meta.data.fluff).toBe(before - 10);
+    expect(meta.data.stats.runs).toBe(3);
+    expect(meta.data.creditedRuns).toEqual(['a', 'b', 'c']);
+    // A fresh page reads it repaired too, and a new credit writes the whole set back.
+    const next = new MetaProgress(storage);
+    expect(next.data.creditedRuns).toEqual(['a', 'b', 'c']);
+    expect(next.awardRun(died('d'))).not.toBeNull();
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual(['a', 'b', 'c', 'd']);
+    expect(next.awardRun(died('a'))).toBeNull();
+  });
+
+  it('a credit with no Account is remembered on the device only: it dedups, and takes no slot from ledger keys', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    expect(meta.awardRun(died('ledger-1'))).not.toBeNull();
+    for (let i = 0; i < CREDITED_RUNS_MAX + 10; i++) expect(meta.awardRun(died(`offline-${i}`), { ledger: false })).not.toBeNull();
+    expect(meta.data.creditedRuns).toEqual(['ledger-1']); // still remembered after 110 signed-out Runs
+    expect(meta.awardRun(died('ledger-1'))).toBeNull(); // so the same ledger row never credits twice
+    expect(meta.credited(`offline-${CREDITED_RUNS_MAX + 9}`)).toBe(true);
+    expect(meta.awardRun(died(`offline-${CREDITED_RUNS_MAX + 9}`), { ledger: false })).toBeNull();
+    expect(new MetaProgress(storage).awardRun(died(`offline-${CREDITED_RUNS_MAX + 9}`))).toBeNull(); // another tab, too
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!).local).toHaveLength(LOCAL_CREDITS_MAX);
+  });
+
+  it('a Universe victory counts only when the device that ended the Run credits it; a row the sweep brings adds Fluff alone', () => {
+    const meta = new MetaProgress(memStorage());
+    const win = { runKey: 'win', reason: 'victory' as const, stats: stats({ area: AREA_ORDER[AREA_ORDER.length - 1] }) };
+    const swept = meta.awardRun(win, { countUniverse: false })!;
+    expect(swept.fluff).toBeGreaterThan(0);
+    expect(swept.universes).toBe(0);
+    expect(meta.data.stats.wins).toBe(1);
+    expect(meta.awardRun(win)).toBeNull();
+  });
+
+  it('a mirror from a newer build is read but never written', () => {
+    const storage = memStorage({ [CREDITED_RUNS_MIRROR_KEY]: JSON.stringify({ version: CREDITED_RUNS_MIRROR_VERSION + 1, keys: ['future'], local: [], later: true }) });
+    const meta = new MetaProgress(storage);
+    expect(meta.data.creditedRuns).toEqual(['future']);
+    expect(meta.awardRun(died('future'))).toBeNull();
+    expect(meta.awardRun(died('now'))).not.toBeNull();
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ version: CREDITED_RUNS_MIRROR_VERSION + 1, keys: ['future'], later: true });
+    expect(meta.awardRun(died('now'))).toBeNull(); // this page still remembers, in memory
   });
 });

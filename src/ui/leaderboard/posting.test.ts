@@ -240,3 +240,55 @@ describe('installLeaderboardPosting', () => {
     expect(posts.pending).toBe(false);
   });
 });
+
+describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
+  type Outcome = { runKey: string; reason: 'died'; award: { fluff: number } | null; refused?: 'carriedOn' | 'elsewhere' };
+  function withCredit(deferred: Set<string>) {
+    const listeners = new Set<(o: Outcome) => void>();
+    const accountRuns = { deferred: (k: string) => deferred.has(k), credits: { onCredit: (fn: (o: Outcome) => void) => (listeners.add(fn), () => listeners.delete(fn)) } };
+    return { accountRuns, settle: (o: Outcome) => listeners.forEach((fn) => fn(o)) };
+  }
+
+  it('posts the Run board entry once the credit lands, and not at all for a Run that carried on elsewhere', async () => {
+    const { client, posted } = offlineClient();
+    const { account } = fakeAccount('signedIn', 'Ada');
+    const { game, events } = fakeGame();
+    const deferred = new Set(['run-1', 'run-2']);
+    const credit = withCredit(deferred);
+    (game as unknown as { accountRuns: unknown }).accountRuns = credit.accountRuns;
+    const posting = installLeaderboardPosting(game, { client, account });
+    events.emit('runStarted', { seed: 's', characterId: 'lint' });
+    events.emit('areaCompleted', { stats: house, characterId: 'lint', difficulty: 'casual' });
+    await settle();
+    const runId = posting.current!.runId;
+    const e1 = { runKey: 'run-1', reason: 'died' as const, stats: stats([house]) };
+    events.emit('runEnded', e1);
+    await settle();
+    expect(posted).toEqual([`house:Ada:${runId}`]); // the Run entry waits
+    expect(posting.forResult(e1).get('run')?.state).toBe('unsent');
+    credit.settle({ runKey: 'run-1', reason: 'died', award: { fluff: 5 } });
+    await settle();
+    expect(posted).toEqual([`house:Ada:${runId}`, `run:Ada:${runId}`]);
+
+    events.emit('runStarted', { seed: 's2', characterId: 'lint' });
+    const e2 = { runKey: 'run-2', reason: 'died' as const, stats: stats([]) };
+    events.emit('runEnded', e2);
+    credit.settle({ runKey: 'run-2', reason: 'died', award: null, refused: 'carriedOn' });
+    await settle();
+    expect(posted).toHaveLength(2);
+    expect(posting.forResult(e2).get('run')).toMatchObject({ state: 'invalid', error: 'this Run carried on on another device.' });
+    expect(posting.forResult(e2).pending).toBe(false);
+  });
+
+  it('a Run credited at once posts at once', async () => {
+    const { client, posted } = offlineClient();
+    const { account } = fakeAccount('signedIn', 'Ada');
+    const { game, events } = fakeGame();
+    (game as unknown as { accountRuns: unknown }).accountRuns = withCredit(new Set()).accountRuns;
+    installLeaderboardPosting(game, { client, account });
+    events.emit('runStarted', { seed: 's', characterId: 'lint' });
+    events.emit('runEnded', { runKey: 'run-1', reason: 'died' as const, stats: stats([]) });
+    await settle();
+    expect(posted).toHaveLength(1);
+  });
+});

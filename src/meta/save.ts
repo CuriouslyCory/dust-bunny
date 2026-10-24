@@ -222,10 +222,16 @@ export class SaveStore {
   private raw: string | null | undefined;
   private readonly offEvents: () => void = () => undefined;
 
+  /**
+   * `repair`: run on every value read from storage (at load and when another tab wrote), before it
+   * becomes `data`: puts back what a write by another build may have dropped (MetaProgress uses it
+   * for `creditedRuns`). It changes `data` in memory; the next write persists it.
+   */
   constructor(
     private readonly storage: KeyValueStorage | null,
     readonly key = SAVE_KEY,
     events: StorageEventSource | null = null,
+    private readonly repair: ((data: SaveData) => void) | null = null,
   ) {
     const raw = this.readRaw();
     const { data, status } = raw === undefined ? parseSave(null) : this.load(raw);
@@ -262,6 +268,7 @@ export class SaveStore {
         /* ignore */
       }
     }
+    this.repair?.(parsed.data);
     return parsed;
   }
 

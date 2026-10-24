@@ -160,8 +160,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       d.universes = universes;
       d.fluff = p.fluff;
       // The credits this Fluff accounts for come with it (docs/adr/0003); unknown on an older copy: the device's set stays.
-      if (p.creditedRuns) d.creditedRuns = [...p.creditedRuns];
-      else if (replace) d.creditedRuns = [];
+      meta.adoptCreditedRuns(d, p.creditedRuns, replace);
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
       d.stats = { ...d.stats, ...p.stats };

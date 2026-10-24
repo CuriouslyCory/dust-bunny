@@ -13,6 +13,7 @@ import type { StatModifier } from '../entities/stats';
 import type { RunEndReason } from '../game/runStats';
 import { CREDITED_RUNS_MAX, type CreditStats } from '../shared/runCredit';
 import { AREA_ORDER } from '../world/types';
+import { CreditedRunsMirrorStore } from './creditedRuns';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
 import { browserStorage, browserStorageEvents, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore, type StorageEventSource } from './save';
@@ -43,6 +44,23 @@ export interface RunAward {
   newBestRadius: boolean;
   /** The player's Universes count after this Run (one more than before after a Universe victory). */
   universes: number;
+}
+
+/** How a credit reached this copy (docs/adr/0003, "Implementation notes"). */
+export interface AwardOptions {
+  /**
+   * The Account's ledger has, or will get, a row for this key (default): it is remembered in the
+   * synced `creditedRuns`. False for a Run credited with no Account: no row will ever exist for it,
+   * so it is remembered on this device only and takes no slot from keys the sweep can bring back.
+   */
+  ledger?: boolean;
+  /**
+   * Count a Universe victory in `universes` (default). False for a ledger row that reached this
+   * copy by the sweep or an upload's answer: another device's Run (its copy counted it, and the
+   * cloud save's merge keeps the larger count), or this copy's own Run whose key a merge dropped
+   * while the larger count survived. Only the device that ended the Run counts it.
+   */
+  countUniverse?: boolean;
 }
 
 /** The Area whose `victory` ends the story (the Universe; the only Area that emits one). */
@@ -94,10 +112,23 @@ function feltCheckOn(d: SaveData, characterId: string, ref: KeepsakeRef): FeltCh
 
 export class MetaProgress {
   readonly store: SaveStore;
+  /** The device's own record of `creditedRuns` (./creditedRuns.ts): repairs a save another build rewrote without it. */
+  private readonly mirror: CreditedRunsMirrorStore;
 
   /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
   constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
-    this.store = new SaveStore(storage, undefined, events);
+    this.mirror = new CreditedRunsMirrorStore(storage);
+    this.store = new SaveStore(storage, undefined, events, (d) => this.repairCreditedRuns(d));
+  }
+
+  /**
+   * A save read from storage that lacks keys the mirror says this copy's set held (a tab from before
+   * the ledger rewrote it) gets them back, oldest first. Its Fluff is left as it is: a key without
+   * its Fluff can only under-credit, never double credit.
+   */
+  private repairCreditedRuns(d: SaveData): void {
+    const missing = this.mirror.missingFrom(d.creditedRuns);
+    if (missing.length) d.creditedRuns = [...missing, ...d.creditedRuns].slice(-CREDITED_RUNS_MAX);
   }
 
   get data() {
@@ -152,11 +183,12 @@ export class MetaProgress {
    * write share one update, so two tabs applying the same credit can't both add it, and the key
    * is remembered in the same write as the Fluff (docs/adr/0003).
    */
-  awardRun(e: RunCreditInput): RunAward | null {
+  awardRun(e: RunCreditInput, opts: AwardOptions = {}): RunAward | null {
     const fluff = fluffForRun(e.reason, e.stats);
     let newBestRadius = false;
     const added = this.store.updateIf((d) => {
-      if (d.creditedRuns.includes(e.runKey)) return false;
+      const mirror = this.mirror.read();
+      if (d.creditedRuns.includes(e.runKey) || mirror.local.includes(e.runKey)) return false;
       newBestRadius = e.stats.maxRadius > d.stats.bestRadius;
       d.fluff += fluff;
       d.stats.runs++;
@@ -164,17 +196,33 @@ export class MetaProgress {
       d.stats.bestRadius = Math.max(d.stats.bestRadius, e.stats.maxRadius);
       d.stats.bestTier = Math.max(d.stats.bestTier, e.stats.tierReached);
       d.stats.totalFluffEarned += fluff;
-      if (endsUniverse(e)) d.universes++;
-      d.creditedRuns = [...d.creditedRuns, e.runKey].slice(-CREDITED_RUNS_MAX);
+      if ((opts.countUniverse ?? true) && endsUniverse(e)) d.universes++;
+      if (opts.ledger ?? true) {
+        d.creditedRuns = [...d.creditedRuns, e.runKey].slice(-CREDITED_RUNS_MAX);
+        this.mirror.write({ ...mirror, keys: [...d.creditedRuns] });
+      } else this.mirror.write({ ...mirror, local: [...mirror.local, e.runKey] });
       return true;
     });
     if (!added) return null;
     return { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
   }
 
-  /** Whether this copy holds the credit for the Run. */
+  /** Whether this copy holds the credit for the Run (in the synced set, or credited on this device without an Account). */
   credited(runKey: string): boolean {
-    return this.store.data.creditedRuns.includes(runKey);
+    return this.store.data.creditedRuns.includes(runKey) || this.mirror.read().local.includes(runKey);
+  }
+
+  /**
+   * Inside the cloud save's adopt (`d` is the save being written): the adopted copy's set replaces
+   * this one's, in the same write as its Fluff. Unknown on a row from before the ledger: this
+   * copy's set stays (missing means unknown), or starts empty when another Account's save is being
+   * loaded (`replace`). The device's mirror follows, so the keys the adopted copy lacks are what
+   * the sweep may bring back.
+   */
+  adoptCreditedRuns(d: SaveData, keys: readonly string[] | undefined, replace: boolean): void {
+    if (keys) d.creditedRuns = [...keys];
+    else if (replace) d.creditedRuns = [];
+    this.mirror.write({ ...this.mirror.read(), keys: [...d.creditedRuns] });
   }
 
   /** The Universes count once `e` is credited: as it is now, plus one for a Universe victory still to land. */
@@ -182,9 +230,9 @@ export class MetaProgress {
     return this.store.data.universes + (endsUniverse(e) && !this.credited(e.runKey) ? 1 : 0);
   }
 
-  /** Credits a saved Run the device lets go of (replaced in its slot, or abandoned) as a quit (`QuitCreditor`, src/meta/suspendedRun.ts). */
+  /** Credits a saved Run the device lets go of (replaced in its slot, or abandoned) as a quit, with no Account (`QuitCreditor`, src/meta/suspendedRun.ts). */
   creditQuit(s: { runKey: string; stats: CreditStats }): void {
-    this.awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats });
+    this.awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats }, { ledger: false });
   }
 
   // --- Keepsakes ---

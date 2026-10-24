@@ -21,6 +21,7 @@ import { registerKeepsakeRevealScreen } from '../ui/screens/keepsakeReveal';
 import { registerKeptSection } from '../ui/screens/kept';
 import { registerShopScreen } from '../ui/screens/shop';
 import { registerUnderTheCouchScreen } from '../ui/screens/underTheCouch';
+import { creditStatsOf } from './accountRun';
 import { fluffForRun } from './fluff';
 import { KeepsakeTracker, setKeepsakeTracker } from './keepsakes';
 import { getMeta } from './meta';
@@ -88,7 +89,7 @@ export function installRoguelike(game: Game): void {
   // to this page's claim, which may land later (src/meta/accountRun.ts; docs/adr/0003).
   game.events.on('runEnded', (e) => {
     const award = game.accountRuns.ended(e);
-    const amount = award?.fluff ?? fluffForRun(e.reason, e.stats);
+    const amount = award?.fluff ?? fluffForRun(e.reason, creditStatsOf(e.stats)); // pending: what the claim sends
     game.events.emit('fluffAwarded', { runKey: e.runKey, amount, total: award?.total ?? meta.fluff, reason: e.reason, pending: !award });
   });
   game.accountRuns.credits.onCredit((o) => {

@@ -43,8 +43,14 @@ export interface PendingClaim {
 
 export type ClaimBody = Pick<PendingClaim, 'runKey' | 'lease' | 'prevLease' | 'reason' | 'stats'>;
 
-/** `carriedOn`: another device holds the Run. `runEnded`: a client from before the ledger ended it. `rejected`: 400/413 (never sent again). */
-export type ClaimResult = { ok: true; credit: RunCredit; created: boolean } | { ok: false; reason: 'carriedOn' | 'runEnded' | 'rejected' };
+/**
+ * `credit: null`: the server credited the Run (200) but answered with a row this build can't read
+ * (the claim's own stats stand in for it). `carriedOn`: another device holds the Run (its holder
+ * record, or the slot). `runEnded`: a client from before the ledger ended it, or replaced its
+ * stored copy, and credited it itself: already credited elsewhere. `rejected`: 400/413 (a bug on
+ * this side: never sent again).
+ */
+export type ClaimResult = { ok: true; credit: RunCredit | null; created: boolean } | { ok: false; reason: 'carriedOn' | 'runEnded' | 'rejected' };
 
 export interface RunCreditApi {
   claim(body: ClaimBody, keepalive?: boolean): Promise<ClaimResult>;
@@ -63,11 +69,7 @@ export function createRunCreditApi(opts: JsonCallerOptions & { baseUrl?: string 
   return {
     async claim(body, keepalive = false) {
       const r = await call('POST', baseUrl, body, keepalive);
-      if (r.status === 200) {
-        const credit = toCredit(r.body.credit);
-        if (!credit) throw new SavedRunAuthError('bad credit'); // never retried: the server answered, but not with a row this build reads
-        return { ok: true, credit, created: r.body.created === true };
-      }
+      if (r.status === 200) return { ok: true, credit: toCredit(r.body.credit), created: r.body.created === true };
       if (r.status === 409) return { ok: false, reason: r.body.error === 'run_ended' ? 'runEnded' : 'carriedOn' };
       return { ok: false, reason: 'rejected' };
     },
@@ -80,11 +82,17 @@ export function createRunCreditApi(opts: JsonCallerOptions & { baseUrl?: string 
   };
 }
 
-/** What landed for a Run: a credit applied to this copy (`award`), or a refused claim (`award: null`). */
+/**
+ * What landed for a Run: a credit applied to this copy (`award`), or a claim the server answered
+ * without one (`award: null`): `carriedOn`, another device holds the Run (it credits it when it
+ * ends; the sweep brings the row here); `elsewhere`, a client from before the ledger already
+ * credited it (`409 run_ended`: nothing more will come for it).
+ */
 export interface CreditOutcome {
   runKey: string;
   reason: RunCreditReason;
   award: RunAward | null;
+  refused?: 'carriedOn' | 'elsewhere';
 }
 
 export interface RunCreditQueueOptions {
@@ -258,7 +266,8 @@ export class RunCreditQueue {
       })
       .finally(() => {
         this.sending = false;
-        if (gen === this.gen && !this.timer) this.pump();
+        // Even after an Account switch: the Account signed in now may have claims waiting on this request.
+        if (!this.timer) this.pump();
         this.wake();
       });
   }
@@ -270,23 +279,40 @@ export class RunCreditQueue {
     } catch (err) {
       return err instanceof SavedRunAuthError ? 'stop' : 'retry';
     }
-    // A definite answer: the claim is done, whoever is signed in now; it is applied only for its Account.
-    this.change((claims) => claims.filter((x) => !(x.userId === c.userId && x.runKey === c.runKey && x.at === c.at)));
+    // The Account changed while it was out: the answer is nobody's to apply now. The claim stays
+    // for its Account (a claim is safe to send again: the server returns the same row) and goes out
+    // again when it signs in.
     if (gen !== this.gen) return 'done';
-    if (res.ok) this.apply(res.credit);
-    else if (res.reason !== 'rejected') this.notify({ runKey: c.runKey, reason: c.reason, award: null });
-    else console.warn(`[run-credits] claim for ${c.runKey} rejected by the server`);
+    // A definite answer: the claim is done.
+    this.change((claims) => claims.filter((x) => !(x.userId === c.userId && x.runKey === c.runKey && x.at === c.at)));
+    if (res.ok) {
+      // A row this build can't read: the server credited the Run all the same, with (for a new row) the stats this claim sent.
+      const credit = res.credit ?? { id: 0, runKey: c.runKey, reason: c.reason, stats: c.stats, creditedAt: '' };
+      if (!res.credit) console.warn(`[run-credits] the ledger row for ${c.runKey} isn't readable by this build: applied from the claim`);
+      this.apply(credit, true);
+    } else if (res.reason === 'rejected') {
+      // The server found the claim malformed: a bug here (a Run's own stats always pass), not a 0-Fluff Run. Surfaced, parked.
+      console.error(`[run-credits] claim for ${c.runKey} rejected by the server (400): not credited; the claim is dropped`, c);
+    } else this.notify({ runKey: c.runKey, reason: c.reason, award: null, refused: res.reason === 'runEnded' ? 'elsewhere' : 'carriedOn' });
     return 'done';
   }
 
-  /** Credits a ledger row to this copy (once per Run key). Listeners hear about it when it lands. */
-  apply(credit: RunCredit): RunAward | null {
-    const award = this.meta.awardRun({ runKey: credit.runKey, reason: credit.reason, stats: credit.stats });
+  /**
+   * Credits a ledger row to this copy (once per Run key). Listeners hear about it when it lands.
+   * `own`: the answer to this device's claim (the Run ended here): a Universe victory counts; a row
+   * the sweep or an upload's answer brought credits Fluff and stats only (see `AwardOptions`).
+   */
+  apply(credit: RunCredit, own = false): RunAward | null {
+    const award = this.meta.awardRun({ runKey: credit.runKey, reason: credit.reason, stats: credit.stats }, { countUniverse: own });
     if (award) this.notify({ runKey: credit.runKey, reason: credit.reason, award });
     return award;
   }
 
-  /** Applies the ledger rows this copy missed (the newest `RUN_CREDIT_LIST_LIMIT`). Never throws. */
+  /**
+   * Applies the ledger rows this copy missed (the newest `RUN_CREDIT_LIST_LIMIT`). A row for a Run
+   * this device's own claim is still out for is left to that claim's answer (it is the one that
+   * counts a Universe victory). Never throws.
+   */
   sweep(): Promise<void> {
     if (!this.userId) return Promise.resolve();
     if (this.sweeping) return this.sweeping;
@@ -296,7 +322,7 @@ export class RunCreditQueue {
         const credits = await this.api.list();
         if (gen !== this.gen) return;
         // Oldest first, so the newest keys are the last `creditedRuns` forgets.
-        for (const c of [...credits].reverse()) this.apply(c);
+        for (const c of [...credits].reverse()) if (!this.has(c.runKey)) this.apply(c);
       } catch {
         // Offline, or the session is gone: the next title visit tries again.
       } finally {

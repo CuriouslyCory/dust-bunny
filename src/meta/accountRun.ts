@@ -44,12 +44,12 @@
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
 import type { AccountClient } from '../net/account';
-import { pickCreditStats, type CreditStats, type RunCredit } from '../shared/runCredit';
+import { pickCreditStats, salvageCreditStats, type CreditStats, type RunCredit } from '../shared/runCredit';
 import type { ServerSavedRun } from '../shared/savedRun';
 import { createJsonCaller, SavedRunAuthError, SavedRunNetError, type JsonCallerOptions } from './accountHttp';
 import type { MetaProgress, RunAward, RunCreditInput } from './meta';
 import { createRunCreditApi, RunCreditQueue, type CreditOutcome } from './runCredits';
-import { browserStorage } from './save';
+import { browserStorage, type KeyValueStorage } from './save';
 import { getSuspendedRuns, type QuitCreditor, type SuspendedRunStore } from './suspendedRun';
 
 export { SavedRunAuthError, SavedRunNetError } from './accountHttp';
@@ -115,8 +115,18 @@ interface Live {
 
 type Op = { kind: 'put'; runKey: string; snapshot: RunSnapshot } | { kind: 'take'; runKey: string };
 
-/** Where a Run's credit stands on this page (the results screen). */
-export type CreditState = { state: 'credited'; award: RunAward } | { state: 'pending' } | { state: 'refused' };
+/**
+ * Where a Run's credit stands on this page (the results screen). `refused`: `carriedOn`, another
+ * device holds the Run (it credits it when it ends); `elsewhere`, a client from before the ledger
+ * already credited it.
+ */
+export type CreditState = { state: 'credited'; award: RunAward } | { state: 'pending' } | { state: 'refused'; why: 'carriedOn' | 'elsewhere' };
+
+/** localStorage key: the Runs the server was told about from this device (`AccountRuns.ended` defers their credit to it). */
+export const KNOWN_RUNS_KEY = 'dust-bunny:known-runs:v1';
+export const KNOWN_RUNS_VERSION = 1;
+/** How many known Run keys the device remembers (the newest; one Run plays at a time). */
+export const KNOWN_RUNS_MAX = 20;
 
 /** What the title shows about the Account's saved Run (`syncTitle`). */
 export interface TitleSync {
@@ -139,6 +149,8 @@ export interface AccountRunsOptions {
   maxRetryMs?: number;
   /** Whether the page is hidden (uploads then use `keepalive`). */
   hidden?: () => boolean;
+  /** Where the known Runs are remembered (`KNOWN_RUNS_KEY`; null: memory only, lost with the page). */
+  storage?: KeyValueStorage | null;
 }
 
 /** Strips the device-only tag before uploading. */
@@ -156,9 +168,14 @@ function leaseFields(leases: readonly string[]): { lease: string; prevLease?: st
   return { lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
 }
 
-/** A claim's stats: the bounded subset; zeros if the stats are unreadable (the Run is still recorded as ended). */
-function claimStats(stats: unknown): CreditStats {
-  return pickCreditStats(stats) ?? { maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 };
+/**
+ * The stats a Run is credited with: the bounded subset of its own (`pickCreditStats`; a Run's own
+ * stats always pass). Only a stored copy with broken stats falls back to salvaging what reads
+ * (`salvageCreditStats`): never zeros for a real Run. The results screen computes its pending
+ * "+X Fluff" from this, so it shows what the claim sends.
+ */
+export function creditStatsOf(stats: unknown): CreditStats {
+  return pickCreditStats(stats) ?? salvageCreditStats(stats);
 }
 
 export class AccountRuns implements QuitCreditor {
@@ -181,7 +198,10 @@ export class AccountRuns implements QuitCreditor {
   private userListeners = new Set<(userId: string | null) => void>();
   /** What this page's ended Runs were credited (or refused), for `creditOf`; cleared on a new Run. */
   private awards = new Map<string, RunAward>();
-  private refused = new Set<string>();
+  private refused = new Map<string, 'carriedOn' | 'elsewhere'>();
+  /** Known Runs this page keeps in memory when `storage` is null or holds a newer build's file. */
+  private knownMemory: string[] | null = null;
+  private readonly storage: KeyValueStorage | null;
   private waiters: (() => void)[] = [];
   /**
    * Title actions that change who holds the Account's Run (`resume`, `abandon`) send their take or
@@ -211,12 +231,57 @@ export class AccountRuns implements QuitCreditor {
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
     this.hidden = opts.hidden ?? (() => typeof document !== 'undefined' && document.hidden);
+    this.storage = opts.storage ?? null;
     this.credits.onCredit((o) => this.settle(o));
   }
 
   private settle(o: CreditOutcome): void {
     if (o.award) this.awards.set(o.runKey, o.award);
-    else this.refused.add(o.runKey);
+    else this.refused.set(o.runKey, o.refused ?? 'carriedOn');
+  }
+
+  // --- known Runs ------------------------------------------------------------------------------
+  //
+  // A Run the server was told about from this device (an upload queued for it, or a take: it was
+  // resumed from the Account) may be taken by another device, so its credit is the server's to
+  // decide (`ended`). That is remembered durably, not in `live`: signing out and back in mid-Run
+  // (or a reload after a pause) must not make a known Run look like one the server never saw.
+
+  private readKnown(): string[] {
+    if (this.knownMemory) return this.knownMemory;
+    if (!this.storage) return (this.knownMemory = []);
+    try {
+      const raw = this.storage.getItem(KNOWN_RUNS_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return [];
+      const file = parsed as { version?: unknown; known?: unknown };
+      const known = Array.isArray(file.known) ? (file.known as unknown[]).filter((k): k is string => typeof k === 'string') : [];
+      if (typeof file.version === 'number' && file.version > KNOWN_RUNS_VERSION) return (this.knownMemory = known); // a newer build's: read, never written
+      return known;
+    } catch {
+      return [];
+    }
+  }
+
+  /** Remembers that the server knows `runKey` from this device. */
+  private know(runKey: string): void {
+    const known = this.readKnown();
+    if (known.includes(runKey)) return;
+    const next = [...known, runKey].slice(-KNOWN_RUNS_MAX);
+    if (this.knownMemory) {
+      this.knownMemory = next;
+      return;
+    }
+    try {
+      this.storage?.setItem(KNOWN_RUNS_KEY, JSON.stringify({ version: KNOWN_RUNS_VERSION, known: next }));
+    } catch {
+      this.knownMemory = next;
+    }
+  }
+
+  /** Whether the server was ever told about `runKey` from this device. */
+  knows(runKey: string): boolean {
+    return this.readKnown().includes(runKey);
   }
 
   get signedIn(): boolean {
@@ -353,15 +418,16 @@ export class AccountRuns implements QuitCreditor {
     if (live) this.live = null;
     const userId = this.userId;
     if (!userId) return this.local(e);
-    const known = !!live && !live.localOnly;
+    // Known: an upload or take was ever queued for it from this device (durable), unless it is kept here only.
+    const known = live ? !live.localOnly : this.knows(e.runKey);
     const award = known ? null : this.local(e);
-    this.credits.claim({ userId, runKey: e.runKey, ...leaseFields(live?.leases ?? [newHandoffId()]), reason: e.reason, stats: claimStats(e.stats) });
+    this.credits.claim({ userId, runKey: e.runKey, ...leaseFields(live?.leases ?? [newHandoffId()]), reason: e.reason, stats: creditStatsOf(e.stats) });
     return award;
   }
 
-  /** Credits on the device now (and remembers it for `creditOf`). */
+  /** Credits on the device now (and remembers it for `creditOf`). Signed in, the claim's row will match the key. */
   private local(e: RunCreditInput): RunAward | null {
-    const award = this.meta.awardRun(e);
+    const award = this.meta.awardRun(e, { ledger: this.userId !== null });
     if (award) this.awards.set(e.runKey, award);
     return award;
   }
@@ -370,7 +436,13 @@ export class AccountRuns implements QuitCreditor {
   creditOf(runKey: string): CreditState {
     const award = this.awards.get(runKey);
     if (award) return { state: 'credited', award };
-    return this.refused.has(runKey) ? { state: 'refused' } : { state: 'pending' };
+    const why = this.refused.get(runKey);
+    return why ? { state: 'refused', why } : { state: 'pending' };
+  }
+
+  /** Whether the Run's credit is the server's to decide and still out: a claim of this page's is waiting for its answer. */
+  deferred(runKey: string): boolean {
+    return this.creditOf(runKey).state === 'pending' && this.credits.has(runKey);
   }
 
   /**
@@ -384,13 +456,13 @@ export class AccountRuns implements QuitCreditor {
     const userId = this.userId;
     const tag = s.account;
     if (!userId) {
-      this.meta.awardRun(e);
+      this.meta.awardRun(e, { ledger: false });
       return;
     }
     if (tag && tag.userId !== userId) return; // another Account's: never credited here
     if (!tag) this.meta.awardRun(e);
     const leases = this.live?.runKey === s.runKey ? this.live.leases : tag ? leasesOf(tag) : [newHandoffId()];
-    this.credits.claim({ userId, runKey: s.runKey, ...leaseFields(leases), reason: 'quit', stats: claimStats(s.stats) });
+    this.credits.claim({ userId, runKey: s.runKey, ...leaseFields(leases), reason: 'quit', stats: creditStatsOf(s.stats) });
   }
 
   // --- the title -------------------------------------------------------------------------------
@@ -514,6 +586,7 @@ export class AccountRuns implements QuitCreditor {
         return 'failed';
       }
       this.live = { runKey: shown.runKey, leases: [take.newLease], confirmed: true, localOnly: false };
+      this.know(shown.runKey);
       return 'mine';
     } catch (err) {
       if (err instanceof SavedRunAuthError || gen !== this.gen) return 'failed';
@@ -579,6 +652,7 @@ export class AccountRuns implements QuitCreditor {
   // --- sending ---------------------------------------------------------------------------------
 
   private queue(op: Op): void {
+    this.know(op.runKey);
     this.ops.delete(op.runKey);
     this.ops.set(op.runKey, op);
     // New work goes out now, not after the backoff (it may settle what the retry is waiting on).
@@ -702,6 +776,7 @@ export function getAccountRuns(meta: Pick<MetaProgress, 'awardRun'>): AccountRun
     store: getSuspendedRuns(),
     meta,
     credits: new RunCreditQueue({ api: createRunCreditApi(), storage: browserStorage(), meta }),
+    storage: browserStorage(),
   });
   return singleton;
 }

@@ -18,6 +18,7 @@ import { getDifficulty } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
+import { creditStatsOf } from '../../meta/accountRun';
 import { endsUniverse, getMeta } from '../../meta/meta';
 import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, fluffForRun, GALAXY_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
@@ -114,13 +115,23 @@ function registerDefaultSections(): void {
     id: 'fluff',
     slot: 'fluff',
     render(el, e, game) {
-      const fluff = fluffForRun(e.reason, e.stats);
+      // Pending: the Fluff the claim's stats come to (the same bounded subset the server stores).
+      const fluff = fluffForRun(e.reason, creditStatsOf(e.stats));
       const meta = getMeta();
       const paint = (): void => {
         const credit = game.accountRuns.creditOf(e.runKey);
         const award = credit.state === 'credited' ? credit.award : null;
         const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-        const note = credit.state === 'refused' ? 'Not added: this Run carried on on another device.' : credit.state === 'pending' ? (offline ? 'Added when you’re back online' : 'Adding to your Account…') : null;
+        const note =
+          credit.state === 'refused'
+            ? credit.why === 'elsewhere'
+              ? 'Already added on another device.'
+              : 'Not added: this Run carried on on another device.'
+            : credit.state === 'pending'
+              ? offline
+                ? 'Added when you’re back online'
+                : 'Adding to your Account…'
+              : null;
         el.dataset.credit = credit.state;
         el.replaceChildren(
           h('span', { className: 'fluff-earned' }, h('span', { className: 'fluff-icon', textContent: '☁️' }), `+${award?.fluff ?? fluff} Fluff`),

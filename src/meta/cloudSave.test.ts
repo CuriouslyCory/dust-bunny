@@ -524,3 +524,26 @@ describe('cloud save', () => {
     expect(s.server.puts.length).toBe(before);
   });
 });
+
+describe('Universe credits across the merge (docs/adr/0003)', () => {
+  it('a victory this device counted survives the merge by count; the sweep repairs its Fluff without counting it again', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1, area: 'universe' };
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    const win = s.meta.awardRun({ runKey: 'V', reason: 'victory', stats })!; // ended here: counted
+    expect(win.universes).toBe(1);
+    await vi.advanceTimersByTimeAsync(150);
+    // Another device got further without V: its copy wins. The larger Universes count stays, V's key does not.
+    s.server.rows.set('u1', prog(9000, 20000, 60, {}, 0, ['other']));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 9000, universes: 1, creditedRuns: ['other'] });
+    // The sweep brings V's row back: its Fluff is missing from this copy, its Universe is not.
+    const swept = s.meta.awardRun({ runKey: 'V', reason: 'victory', stats }, { countUniverse: false })!;
+    expect(swept.fluff).toBe(win.fluff);
+    expect(s.meta.data).toMatchObject({ fluff: 9000 + win.fluff, universes: 1, creditedRuns: ['other', 'V'] });
+  });
+});
