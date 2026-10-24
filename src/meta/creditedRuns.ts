@@ -31,6 +31,7 @@
  */
 import { isRunKey } from '../shared/runCredit';
 import type { KeyValueStorage } from './save';
+import { type VersionedFormat, VersionedStore } from './versionedStore';
 
 export const CREDITED_RUNS_MIRROR_KEY = 'dust-bunny:credited-runs:v1';
 export const CREDITED_RUNS_MIRROR_VERSION = 1;
@@ -46,8 +47,6 @@ export interface CreditedRunsMirror {
   unknown: boolean;
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
-
 const empty = (): CreditedRunsMirror => ({ keys: [], local: [], unknown: false });
 
 function readKeys(v: unknown, max = Infinity): string[] {
@@ -57,54 +56,33 @@ function readKeys(v: unknown, max = Infinity): string[] {
   return out.slice(-max);
 }
 
-export class CreditedRunsMirrorStore {
-  /** The file is a newer build's (never written) or storage is unavailable: this build's record lives here. */
-  private memory: CreditedRunsMirror | null = null;
+const MIRROR_FORMAT: VersionedFormat<CreditedRunsMirror> = {
+  key: CREDITED_RUNS_MIRROR_KEY,
+  version: CREDITED_RUNS_MIRROR_VERSION,
+  empty,
+  // `keys` follows the synced set whatever its size (MetaProgress owns its cap, and may keep pinned keys beyond it).
+  parse: (o) => ({ keys: readKeys(o.keys), local: readKeys(o.local, LOCAL_CREDITS_MAX), unknown: o.unknown === true }),
+  serialize: (m) => ({ keys: [...m.keys], local: m.local.slice(-LOCAL_CREDITS_MAX), unknown: m.unknown }),
+};
 
-  constructor(private readonly storage: KeyValueStorage | null) {}
+export class CreditedRunsMirrorStore {
+  private readonly file: VersionedStore<CreditedRunsMirror>;
+
+  constructor(storage: KeyValueStorage | null) {
+    this.file = new VersionedStore(storage, MIRROR_FORMAT);
+  }
 
   /** Whether this device has a record at all (it has used the ledger): a save without `creditedRuns` then lost the field. */
   exists(): boolean {
-    if (this.memory) return true;
-    try {
-      return !!this.storage?.getItem(CREDITED_RUNS_MIRROR_KEY);
-    } catch {
-      return false;
-    }
+    return this.file.read().found !== 'empty';
   }
 
   read(): CreditedRunsMirror {
-    if (this.memory) return { keys: [...this.memory.keys], local: [...this.memory.local], unknown: this.memory.unknown };
-    if (!this.storage) {
-      this.memory = empty();
-      return empty();
-    }
-    let parsed: unknown;
-    try {
-      const raw = this.storage.getItem(CREDITED_RUNS_MIRROR_KEY);
-      if (!raw) return empty();
-      parsed = JSON.parse(raw);
-    } catch {
-      return empty();
-    }
-    if (!isObj(parsed)) return empty();
-    // `keys` follows the synced set whatever its size (MetaProgress owns its cap, and may keep pinned keys beyond it).
-    const file: CreditedRunsMirror = { keys: readKeys(parsed.keys), local: readKeys(parsed.local, LOCAL_CREDITS_MAX), unknown: parsed.unknown === true };
-    if (typeof parsed.version === 'number' && parsed.version > CREDITED_RUNS_MIRROR_VERSION) this.memory = file;
-    return { keys: [...file.keys], local: [...file.local], unknown: file.unknown };
+    return this.file.read().value;
   }
 
   write(m: CreditedRunsMirror): void {
-    const next: CreditedRunsMirror = { keys: [...m.keys], local: m.local.slice(-LOCAL_CREDITS_MAX), unknown: m.unknown };
-    if (this.memory) {
-      this.memory = next;
-      return;
-    }
-    try {
-      this.storage?.setItem(CREDITED_RUNS_MIRROR_KEY, JSON.stringify({ version: CREDITED_RUNS_MIRROR_VERSION, ...next }));
-    } catch {
-      this.memory = next; // storage full or refused: this page keeps its record in memory
-    }
+    this.file.write(m);
   }
 
   /** Keys the mirror remembers in the synced set that `creditedRuns` lacks (the save lost them). */
