@@ -8,10 +8,10 @@
  * client.
  *
  *   GET    /api/saved-run  -> 200 { savedRun: ServerSavedRun | null }
- *   PUT    /api/saved-run  body: { runKey, lease, prevLease?, snapshot }      (pause, Save & quit)
- *                          -> 200 { stored: true, replaced: { runKey, snapshot } | null }
+ *   PUT    /api/saved-run  body: { runKey, lease, prevLease?, snapshot, ledger? }  (pause, Save & quit)
+ *                          -> 200 { stored: true, replaced: { runKey, snapshot } | null, credits: RunCredit[] }
  *                          -> 409 carried_on       the same Run is held under another lease
- *                          -> 409 run_ended        the same Run has ended
+ *                          -> 409 run_ended        the same Run has ended (its row, or the credit ledger)
  *                          -> 409 newer_saved_run  another Run from a newer build is stored: kept
  *   POST   /api/saved-run  body: { runKey, lease, newLease }                  (take: Resume, unpause)
  *                          -> 200 { taken: true, snapshot, version }
@@ -29,12 +29,21 @@
  * the row (the lease moves), so a device that fell behind is refused later. Older snapshots are
  * migrated on the way in and out; newer ones are stored and returned as they are.
  *
+ * Credit ledger (docs/adr/0003, api/run-credit.ts): a Run in `run_credits` has ended for good, so
+ * a PUT of it is refused (`run_ended`) whatever the row holds now. A PUT with `ledger: true` (a
+ * client that credits through the ledger) replacing a different stored Run records that Run as a
+ * quit in the ledger, in the same transaction, and returns the row in `credits`. Without the flag
+ * the client credits `replaced` itself, as before the ledger.
+ * TODO(adr-0003): once every client sends `ledger`, drop `replaced` crediting and DELETE.
+ *
  * Errors are JSON `{ error: code, message, field? }`: 401 unauthorized (no session), 400 invalid /
  * bad_json, 405, 409, 413 too_large, 503 unavailable.
  */
 import { sessionUser } from '../server/auth.js';
 import { ensureSchema, query, transaction } from '../server/db.js';
 import { errorResponse, HttpError, json, readJson } from '../server/http.js';
+import { recordCredit } from '../server/runCredits.js';
+import { pickCreditStats, type RunCredit } from '../src/shared/runCredit.js';
 import { MAX_SAVED_RUN_BYTES, migrateRunSnapshot, validateSavedRunClaim, validateSavedRunUpload, type ServerSavedRun } from '../src/shared/savedRun.js';
 
 /** Take and end bodies are only ids. */
@@ -88,15 +97,19 @@ async function put(request: Request): Promise<Response> {
   const userId = await requireUser(request);
   const v = validateSavedRunUpload(await readJson(request, MAX_SAVED_RUN_BYTES));
   if (!v.ok) throw new HttpError(400, 'invalid', v.message, { field: v.field });
-  const { runKey, lease, prevLease, snapshot, version } = v.value;
+  const { runKey, lease, prevLease, snapshot, version, ledger } = v.value;
   const body = JSON.stringify(snapshot);
   return transaction(async (q) => {
+    // A Run in the credit ledger ended for good, whatever the row holds now (a device that fell
+    // behind across a whole other Run's start can't store it again, docs/adr/0003).
+    const [credited] = await q<{ id: number }>(`SELECT id FROM run_credits WHERE user_id = $1 AND run_key = $2`, [userId, runKey]);
+    if (credited) throw new HttpError(409, 'run_ended', 'This Run has already ended.');
     const inserted = await q(
       `INSERT INTO saved_runs (user_id, run_key, lease, snapshot, version, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5, now())
        ON CONFLICT (user_id) DO NOTHING RETURNING user_id`,
       [userId, runKey, lease, body, version],
     );
-    if (inserted.length) return json(200, { stored: true, replaced: null });
+    if (inserted.length) return json(200, { stored: true, replaced: null, credits: [] });
     // The row exists: lock it, so a take or another store can't slip in between the check and the write.
     const [old] = await q<Row>(`SELECT ${COLUMNS} FROM saved_runs WHERE user_id = $1 FOR UPDATE`, [userId]);
     if (!old) throw new HttpError(503, 'unavailable', 'The saved Run changed; try again.');
@@ -108,8 +121,15 @@ async function put(request: Request): Promise<Response> {
       throw new HttpError(409, 'newer_saved_run', 'A saved Run from a newer version of the game is stored; update to replace it.');
     }
     await q(`UPDATE saved_runs SET run_key = $2, lease = $3, snapshot = $4::jsonb, version = $5, ended_at = NULL, updated_at = now() WHERE user_id = $1`, [userId, runKey, lease, body, version]);
-    const replaced = old.run_key !== runKey && old.snapshot !== null ? { runKey: old.run_key, snapshot: readSnapshot(old.snapshot) } : null;
-    return json(200, { stored: true, replaced });
+    const replacedSnapshot = old.run_key !== runKey && old.snapshot !== null ? readSnapshot(old.snapshot) : null;
+    const replaced = replacedSnapshot ? { runKey: old.run_key, snapshot: replacedSnapshot } : null;
+    // A ledger client's replace credits the replaced Run here, as a quit, once per Run key.
+    const credits: RunCredit[] = [];
+    if (ledger && replaced) {
+      const stats = pickCreditStats(replacedSnapshot?.stats) ?? { maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 };
+      credits.push((await recordCredit(q, { userId, runKey: old.run_key, lease: old.lease, reason: 'quit', stats })).credit);
+    }
+    return json(200, { stored: true, replaced, credits });
   });
 }
 
