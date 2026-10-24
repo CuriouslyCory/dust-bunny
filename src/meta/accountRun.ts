@@ -27,8 +27,8 @@
  * - Resume (`resume`) waits for the server take: of two devices racing, one gets the Run and the
  *   other's title refreshes. Offline, it resumes and takes in the background, as unpausing does.
  * - New run (`abandon`) and the Run ending (`ended`) end the row, only for this page's lease (the
- *   server keeps it, marked ended, so a late upload of the Run is refused). `abandon` first waits
- *   out an upload of the Run still on its way, so the delete can't land before it.
+ *   server keeps it, marked ended, so a late upload of the Run is refused). `abandon` and `resume`
+ *   first wait out an upload of the Run still on its way, so the delete or take can't land before it.
  */
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
@@ -419,13 +419,15 @@ export class AccountRuns {
       this.live = null;
       return 'mine';
     }
-    const leases = leasesOf(tag);
-    const take = { runKey: shown.runKey, lease: leases[0]!, newLease: leases[1] ?? newHandoffId() };
     const userId = this.userId;
+    const settled = await this.settledTag(shown, userId);
+    if (typeof settled === 'string') return settled;
+    const leases = leasesOf(settled);
+    const take = { runKey: shown.runKey, lease: leases[0]!, newLease: leases[1] ?? newHandoffId() };
     try {
       const res = await this.api.take(take);
       if (userId !== this.userId) return 'failed';
-      if (!res.taken && !(tag.synced === false && (!res.savedRun || res.savedRun.runKey !== shown.runKey))) {
+      if (!res.taken && !(settled.synced === false && (!res.savedRun || res.savedRun.runKey !== shown.runKey))) {
         if (this.store.peek()?.runKey === shown.runKey) this.store.clear();
         return 'lost';
       }
@@ -440,7 +442,7 @@ export class AccountRuns {
       if (err instanceof SavedRunAuthError) return 'failed';
       // Offline: play it, and take it in the background, as an unpause does.
       if (!start()) return 'failed';
-      this.live = { runKey: shown.runKey, leases: [take.lease, take.newLease], confirmed: tag.synced, localOnly: false };
+      this.live = { runKey: shown.runKey, leases: [take.lease, take.newLease], confirmed: settled.synced, localOnly: false };
       this.queue({ kind: 'take', runKey: shown.runKey });
       return 'mine';
     }
@@ -462,14 +464,8 @@ export class AccountRuns {
   async abandon(shown: RunSnapshot, abandonLocal: () => boolean): Promise<'done' | 'lost' | 'failed'> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) return abandonLocal() ? 'done' : 'failed';
-    const userId = this.userId;
-    // An upload of this Run still on its way would land after the delete and store it again: let it
-    // settle first, and drop any still waiting. What it settled to is in the device slot.
-    await this.settled(shown.runKey);
-    if (userId !== this.userId) return 'failed';
-    const now = this.store.peek();
-    if (now?.runKey !== shown.runKey) return 'lost'; // a 409 on that upload: another device has it
-    const nowTag = now.account?.userId === userId ? now.account : tag;
+    const nowTag = await this.settledTag(shown, this.userId);
+    if (typeof nowTag === 'string') return nowTag;
     const leases = leasesOf(nowTag);
     const body = { runKey: shown.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
     try {
@@ -484,6 +480,20 @@ export class AccountRuns {
       this.queue({ kind: 'end', runKey: shown.runKey, leases });
     }
     return abandonLocal() ? 'done' : 'failed';
+  }
+
+  /**
+   * Before the title takes or deletes the Run on screen: an upload of it still on its way would
+   * land after that and store it again, so it is waited out (and any still waiting dropped). Returns
+   * the Run's tag as that left it in the device slot; `lost` when the slot lost it (a 409 on that
+   * upload: another device has it), `failed` when the Account changed meanwhile.
+   */
+  private async settledTag(shown: RunSnapshot, userId: string): Promise<SnapshotAccountTag | 'lost' | 'failed'> {
+    await this.settled(shown.runKey);
+    if (userId !== this.userId) return 'failed';
+    const now = this.store.peek();
+    if (now?.runKey !== shown.runKey) return 'lost';
+    return now.account?.userId === userId ? now.account : shown.account!;
   }
 
   /** A device abandon outside the title (any new Run start): the server row goes too. */
@@ -531,7 +541,8 @@ export class AccountRuns {
       })
       .finally(() => {
         this.inFlight = null;
-        if (userId === this.userId) this.pump();
+        // Even after an Account switch: the current Account's work may be waiting on this request.
+        this.pump();
         this.wake();
       });
   }

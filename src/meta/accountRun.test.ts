@@ -393,6 +393,47 @@ describe('Account saved Run (two devices, one server)', () => {
     expect((await resumeOn(b)).res).toBe('none');
   });
 
+  it('Resume on the title waits for the Save & quit upload, so the Run isn’t left resumable elsewhere', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const s = snapshot();
+    let open!: () => void;
+    server.hold.put = new Promise((r) => (open = r));
+    a.handoff.store(s, 'pause');
+    a.handoff.forget(); // Save & quit: the title has it now
+    const shown = a.store.peek()!;
+    const { game, resumed } = fakeGame();
+    const resuming = a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(server.calls).toEqual(['put']); // the take waits for the upload
+    open();
+    expect(await resuming).toBe('mine');
+    expect(resumed[0]?.runKey).toBe(s.runKey);
+    await settle(a.runs);
+    expect(server.calls).toEqual(['put', 'take']);
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null }); // A plays it: nothing to resume
+    expect(await a.runs.confirmHeld(s.runKey)).toBe(true);
+    expect((await resumeOn(device(server))).res).toBe('none');
+  });
+
+  it('after an Account switch, the new Account’s upload goes out once the old one’s request settles', async () => {
+    const server = new FakeServer();
+    const a = device(server, 'u1');
+    let open!: () => void;
+    server.hold.put = new Promise((r) => (open = r));
+    a.handoff.store(snapshot('u1-run'), 'pause'); // u1's upload is on its way...
+    a.handoff.forget();
+    a.runs.setUser('u2'); // ...when u2 signs in and pauses a Run
+    a.runs.newRun();
+    const mine = snapshot('u2-run');
+    a.handoff.store(mine, 'pause');
+    open();
+    await settle(a.runs);
+    expect(a.runs.pending).toBe(0);
+    expect(server.calls).toEqual(['put', 'put']);
+    expect(server.row?.runKey).toBe(mine.runKey);
+  });
+
   it('a device that fell behind can’t store a Run that ended elsewhere again', async () => {
     const server = new FakeServer();
     const a = device(server);
