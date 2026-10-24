@@ -47,7 +47,7 @@ import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
 import { getMeta } from '../meta/meta';
-import { getAccountRuns } from '../meta/accountRun';
+import { gateRunEnding, getAccountRuns } from '../meta/accountRun';
 import { getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
 import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
@@ -338,6 +338,13 @@ export class Game {
     const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
+    // Dying or winning while the server take back is unconfirmed: credited once the Account agrees.
+    gateRunEnding(run, this.accountRuns, {
+      waiting: () => this.hud.toast('Checking your Run with your Account…', { tone: 'info' }),
+      lost: () => {
+        if (this.run === run) this.stepAside('otherDevice');
+      },
+    });
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();

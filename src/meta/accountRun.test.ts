@@ -9,7 +9,7 @@ import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import type { ServerSavedRun } from '../shared/savedRun';
-import { AccountRuns, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
+import { AccountRuns, gateRunEnding, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress } from './meta';
 import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
 
@@ -584,6 +584,102 @@ describe('Account saved Run (two devices, one server)', () => {
         expect(abandoned).toBe(0);
         expect(a.runs.pending).toBe(0);
       }
+    });
+  });
+
+  describe('dying or winning while the take back is unconfirmed (as End run, via gateRunEnding)', () => {
+    /** A Run in progress on device `d`, paused and stored, with its endings counted (as the meta install credits them). */
+    const playing = async (d: ReturnType<typeof device>, timeoutMs?: number) => {
+      const bus = new EventBus();
+      const run = createRun(bus, { seed: 'ending', characterId: 'zap' });
+      for (let i = 0; i < 30; i++) run.update(1 / 60);
+      const credited: string[] = [];
+      bus.on('runEnded', (e) => {
+        credited.push(e.reason);
+        d.meta.awardRun(e);
+        d.runs.ended(run.runKey);
+      });
+      let lost = 0;
+      let waited = 0;
+      gateRunEnding(run, d.runs, { waiting: () => void waited++, lost: () => void lost++, ...(timeoutMs ? { timeoutMs } : {}) });
+      d.handoff.store(run.toSnapshot(), 'pause');
+      await settle(d.runs);
+      return { run, credited, lost: () => lost, waited: () => waited };
+    };
+
+    it('refused (another device took it): not credited, and the page steps aside', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const p = await playing(a);
+      server.row = { ...server.row!, lease: 'b-lease', snapshot: null, version: null }; // B resumed it
+      let open!: () => void;
+      server.hold.take = new Promise((r) => (open = r));
+      expect(await a.handoff.takeBack()).toBe(true);
+      p.run.end('died');
+      expect(p.credited).toEqual([]); // held while the take is on its way
+      expect(p.waited()).toBe(1);
+      open();
+      await settle(a.runs);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(p.credited).toEqual([]);
+      expect(a.meta.calls).toEqual([]);
+      expect(p.lost()).toBe(1);
+      expect(server.row).toMatchObject({ lease: 'b-lease' }); // B's Run is left alone
+    });
+
+    it('confirmed: credited once, after the take', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const p = await playing(a);
+      let open!: () => void;
+      server.hold.take = new Promise((r) => (open = r));
+      expect(await a.handoff.takeBack()).toBe(true);
+      p.run.end('victory');
+      expect(p.credited).toEqual([]);
+      open();
+      await settle(a.runs);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(p.credited).toEqual(['victory']);
+      expect(a.meta.calls).toHaveLength(1);
+      expect(p.lost()).toBe(0);
+      expect(server.row).toMatchObject({ snapshot: null, ended: true });
+    });
+
+    it('offline: the device’s word after the timeout, as End run', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const p = await playing(a, 30);
+      a.link.offline = true;
+      expect(await a.handoff.takeBack()).toBe(true);
+      p.run.end('died');
+      expect(p.credited).toEqual([]);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(p.credited).toEqual(['died']);
+      expect(p.lost()).toBe(0);
+    });
+
+    it('take already confirmed, quit, or signed out: credited at once', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const p = await playing(a);
+      expect(await a.handoff.takeBack()).toBe(true);
+      await settle(a.runs);
+      p.run.end('died');
+      expect(p.credited).toEqual(['died']);
+      expect(p.waited()).toBe(0);
+
+      const b = device(server);
+      const q = await playing(b);
+      b.link.offline = true;
+      expect(await b.handoff.takeBack()).toBe(true);
+      q.run.end('quit'); // End run confirmed already (Game.endRun)
+      expect(q.credited).toEqual(['quit']);
+
+      const c = device(server, null);
+      const r = await playing(c);
+      expect(await c.handoff.takeBack()).toBe(true);
+      r.run.end('died');
+      expect(r.credited).toEqual(['died']);
     });
   });
 

@@ -20,6 +20,6 @@ The device slot stays and is written first, so pausing and Save & quit never wai
 
 - One saved Run per Account, as there is one per browser. Saving a different Run over it counts the replaced one as a quit, whichever device does it.
 - A Run is credited once: by the device that ends it, or by whoever abandons or replaces it. A device that loses a Run disposes it without `runEnded`.
-- End run and Quit to title from pause credit the Run, so for a signed-in player they wait for the server take (with a short timeout when offline).
+- End run and Quit to title from pause credit the Run, so for a signed-in player they wait for the server take (with a short timeout when offline). So does a Run that ends by itself (died, victory) while that take is unconfirmed: `runEnded` waits, and if the take is refused the Run is not credited and the page steps aside.
 - The server remembers only the last Run that ended. A device that fell behind on Run A, while A ended and then another Run B was stored on another device, can still store A over B when it reconnects (B counts as a quit). It needs offline play across a whole other Run's start.
 - Known gap: say a device unpauses while offline, so its take back is still waiting, and meanwhile another device stores a different Run over the Account's slot. When the first device reconnects, its Run is dropped uncredited. It needs offline play and a new Run on another device in the same window.

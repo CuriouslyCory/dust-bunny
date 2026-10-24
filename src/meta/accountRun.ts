@@ -19,7 +19,9 @@
  * - Unpause: optimistic. The Run plays on at once and the server take runs in the background
  *   (`takenBack`), retried with backoff while offline; never awaited. If the server says another
  *   device holds the Run (a refused take, or a 409 on a later upload) the page is told (`onLost`):
- *   it disposes its copy without `runEnded`, so nothing is credited twice, and says so.
+ *   it disposes its copy without `runEnded`, so nothing is credited twice, and says so. Ending the
+ *   Run before the take is heard back from (End run, `confirmHeld`; dying or winning,
+ *   `gateRunEnding`) waits for it first.
  * - Title: `syncTitle` waits until this page's own uploads have landed, then reads the server copy,
  *   which wins over the device slot: it is mirrored into the slot (a different Run that only this
  *   device had is credited as a quit first). A device copy the server never confirmed is uploaded
@@ -33,6 +35,7 @@
  * - An answer that arrives after an Account switch is dropped (`gen`): it never credits, or touches
  *   the device slot, for the Account signed in now.
  */
+import type { RunEndReason } from '../game/runStats';
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
 import type { AccountClient } from '../net/account';
@@ -313,12 +316,18 @@ export class AccountRuns {
     for (;;) {
       const live = this.live;
       if (!this.userId || !live || live.runKey !== runKey) return !this.lostKeys.has(runKey);
-      const busy = this.ops.has(runKey) || this.inFlight?.runKey === runKey || live.leases.length > 1;
-      if (!busy || live.localOnly) return true;
+      if (!this.unconfirmed(runKey)) return true;
       const left = deadline - Date.now();
       if (left <= 0) return true;
       await this.nextWake(left);
     }
+  }
+
+  /** Whether `confirmHeld` would wait: this page's server take (or other work) for the Run it plays is still unsettled. */
+  unconfirmed(runKey: string): boolean {
+    const live = this.live;
+    if (!this.userId || !live || live.runKey !== runKey || live.localOnly) return false;
+    return this.ops.has(runKey) || this.inFlight?.runKey === runKey || live.leases.length > 1;
   }
 
   /** Resolves when a request settles (or the page loses a Run), or after `ms`. */
@@ -655,6 +664,31 @@ export class AccountRuns {
         .catch(() => undefined);
     }
   }
+}
+
+export interface RunEndingHooks {
+  /** The ending waits for the server (a brief "checking" note). */
+  waiting?: () => void;
+  /** The server says another device has the Run: it is not credited here (step aside). */
+  lost: () => void;
+  timeoutMs?: number;
+}
+
+/**
+ * A natural ending (died, victory) credits the Run (`runEnded`), so while this page's take back
+ * of it is unconfirmed it waits for the server first, as End run does (`confirmHeld`; offline, the
+ * device's word after the timeout). Refused: `lost`, and no `runEnded`. Signed out or confirmed,
+ * it ends at once. Quit is left alone (End run confirms before ending it).
+ */
+export function gateRunEnding(run: { runKey: string; endGate: ((reason: RunEndReason) => Promise<boolean> | null) | null }, runs: AccountRuns, hooks: RunEndingHooks): void {
+  run.endGate = (reason) => {
+    if (reason === 'quit' || !runs.unconfirmed(run.runKey)) return null;
+    hooks.waiting?.();
+    return runs.confirmHeld(run.runKey, hooks.timeoutMs).then((ok) => {
+      if (!ok) hooks.lost();
+      return ok;
+    });
+  };
 }
 
 let singleton: AccountRuns | null = null;
