@@ -1,20 +1,16 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { getAbilitySystem, type DecoyAbility, type DischargeAbility } from '../abilities';
 import { EventBus } from '../core/events';
 import type { InputState } from '../core/input';
-import { AREAS } from '../data/areas';
 import {
   AREA_BOSSES,
   COLLIDING_GALAXY,
   COSMIC_VOID,
   DARK_ENERGY_GUST,
-  DIRECTOR_EXCLUDE,
-  GALAXY_DIRECTOR,
   GAMMA_RAY_BURST,
   QUASAR,
   THE_EXPANSION,
-  tierValue,
-  UNIVERSE_DIRECTOR,
 } from '../data/hazards';
 import { peakRarityForBoss } from '../data/keepsakes';
 import { getTier } from '../data/tiers';
@@ -24,10 +20,8 @@ import { Run } from '../game/run';
 import { onScreen, viewRadiusFor } from '../systems/camera';
 import { maxSpeedFor } from '../systems/movement';
 import { createModel } from '../world/models';
-import { absorbRadiusFor } from './common';
-import { spawnWeights } from './director';
 import { inBurst, type GammaRayBurst } from './gammaRayBurst';
-import { HazardManager, hazardRegistry } from './index';
+import { HazardManager } from './index';
 import type { LintRoller } from './lintRoller';
 import { HAZARD_MODEL_SIZES } from './models';
 import type { Mop } from './mop';
@@ -35,7 +29,6 @@ import type { Roomba } from './roomba';
 import { expansionNotch, expansionRates, hubbleSpeed, tugGain, type TheExpansion } from './theExpansion';
 import type { UprightVacuum } from './uprightVacuum';
 
-const UNIVERSE_HAZARDS = ['quasar', 'colliding_galaxy', 'gamma_ray_burst', 'cosmic_void', 'dark_energy_gust'];
 const ratio = 0.7;
 const STEP = 1 / 60;
 
@@ -57,12 +50,6 @@ function moveToOpen(run: Run, clear = 0): { x: number; z: number } {
   return p;
 }
 
-function firstTableTier(id: string): number {
-  const i = UNIVERSE_DIRECTOR.tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the universe spawn tables`);
-  return UNIVERSE_DIRECTOR.firstTier + i;
-}
-
 /** A universe Debris type a test can spawn (has room weights). */
 function universeType(run: Run, maxSize = Infinity): number {
   const i = run.debris.types.findIndex((t) => t.area === 'universe' && t.size <= maxSize && Object.keys(t.rooms).length > 0);
@@ -79,11 +66,7 @@ function segmentDistance(x: number, z: number, a: { x: number; z: number }, b: {
 }
 
 describe('universe Hazards', () => {
-  it('run in Universe units (1 = 10 Mly) with their own models, whose fallbacks carry the GLB node names', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(AREAS.universe.unit);
-    expect(run.bunny.radius).toBeCloseTo(AREAS.universe.arrivalRadius!);
-    for (const id of [...UNIVERSE_HAZARDS, 'the_expansion']) expect(hazardRegistry.require(id).modelId, id).toBe(id);
+  it('its models\' fallbacks carry the GLB node names', () => {
     const nodes: Record<string, string[]> = {
       quasar: ['disk', 'jets'],
       colliding_galaxy: ['galaxy_a', 'galaxy_b'],
@@ -99,52 +82,9 @@ describe('universe Hazards', () => {
     expect(HAZARD_MODEL_SIZES.the_expansion).toEqual({ w: 6.99, d: 7.24, h: 0.68 });
   });
 
-  it('are a threat on arrival and in their first Tier; the Tier 20 ones are food by early Tier 21', () => {
-    const { run } = makeRun();
-    const tier21 = tierRadius(run, 21);
-    for (const id of UNIVERSE_HAZARDS) {
-      const h = run.hazards.spawn(id, run.bunny.x + 20, run.bunny.z);
-      const need = absorbRadiusFor(h.size, ratio);
-      expect(need, id).toBeGreaterThan(AREAS.universe.arrivalRadius!);
-      const first = firstTableTier(id);
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      if (first === 20) expect(need, id).toBeLessThan(tier21 * 1.1);
-      h.dead = true;
-    }
-  });
-
-  it('universe spawn tables list only universe Hazards, the Dark-energy gust from Tier 21, never the Expansion', () => {
-    for (let t = UNIVERSE_DIRECTOR.firstTier; t <= 21; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'universe'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(UNIVERSE_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(20, {}, 'universe'))).not.toContain('dark_energy_gust');
-    expect(Object.keys(spawnWeights(21, {}, 'universe'))).toContain('dark_energy_gust');
-    expect(DIRECTOR_EXCLUDE).toContain('the_expansion');
-    for (const t of GALAXY_DIRECTOR.tiers) for (const id of UNIVERSE_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(GAMMA_RAY_BURST.range, 21)).toBe(GAMMA_RAY_BURST.range[20]);
+  it('the Expansion is a 7-hit boss that arrives at Tier 21, and its Keepsake drop peaks at rarity 5', () => {
     expect(AREA_BOSSES.universe).toEqual({ id: 'the_expansion', hits: 7, paceTier: 21, size: Infinity, tier: 21, arrivalDelay: 4 });
     expect(peakRarityForBoss('the_expansion')).toBe(5);
-  });
-
-  it('the director spawns universe Hazards and brings the Expansion 4 s after Tier 21', () => {
-    const { run, events } = makeRun('universe-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    run.bunny.setRadius(tierRadius(run, 20) * 1.5);
-    for (let i = 0; i < 60 * 50 && !run.ended; i++) run.update(STEP);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-    run.bunny.setRadius(tierRadius(run, 21) * 1.02);
-    for (let i = 0; i < 60 * (AREA_BOSSES.universe.arrivalDelay + 1) && !run.ended; i++) run.update(STEP);
-    expect(bosses).toEqual(['The Expansion']);
-    expect(run.hazards.count('the_expansion')).toBe(1);
-    for (const id of spawned) expect([...UNIVERSE_HAZARDS, 'the_expansion']).toContain(id);
   });
 
   it("the Quasar's pull drags the Bunny in and swirls loose Debris round without eating it; its disc spins and its jets pulse", () => {

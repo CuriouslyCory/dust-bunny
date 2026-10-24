@@ -1,36 +1,22 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { rect } from '../core/math';
-import { AREAS } from '../data/areas';
 import { getDebrisType } from '../data/debris';
 import {
-  bossAbsorbRadius,
-  bossArrivalRadius,
-  AREA_BOSSES,
-  AREA_DIRECTORS,
-  CITY_DIRECTOR,
-  CONTINENT_DIRECTOR,
-  DIRECTOR,
-  DIRECTOR_EXCLUDE,
   GLACIER_TONGUE,
-  HURRICANE,
   ICE_SHEET,
-  NEIGHBORHOOD_DIRECTOR,
-  REGION_DIRECTOR,
   RIVER_SURGE,
-  TORNADO,
   VOLCANO,
   tierValue,
 } from '../data/hazards';
 import { CALVED_ICEBERG_ID } from '../data/iceSheetDebris';
-import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
 import { getHazardDirector, installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { roomAt } from '../world/house';
-import type { AreaId, HouseLayout, Obstacle } from '../world/types';
+import type { HouseLayout, Obstacle } from '../world/types';
 import { absorbRadiusFor, hazardFloorFree } from './common';
-import { spawnWeights } from './director';
 import { IceSheet, isMountainRange, touchesMountainRange } from './iceSheet';
 import { hazardRegistry } from './index';
 import { GLACIER_ZONES } from './lintRoller';
@@ -38,8 +24,6 @@ import type { Mop } from './mop';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
 
-const CONTINENT_HAZARDS = ['tornado', 'glacier_tongue', 'volcano', 'river_surge', 'hurricane'];
-const TUNINGS = { tornado: TORNADO, glacier_tongue: GLACIER_TONGUE, volcano: VOLCANO, river_surge: RIVER_SURGE, hurricane: HURRICANE } as const;
 const ratio = 0.7;
 
 /** A Run in the Continent (placeholder map, 200 × 150 units of 10 km); the Bunny arrives at 0.85 units. */
@@ -47,13 +31,6 @@ const makeRun = (seed = 'continent-hazards') => {
   const events = new EventBus();
   const run = new Run(events, { seed, characterId: 'lint', area: 'continent' });
   return { events, run };
-};
-
-/** Bunny radius (Continent units) at the start of a Tier. */
-const tierRadius = (run: Run, tier: number) => getTier(tier).minRadius / run.unit;
-
-const step = (run: Run, seconds: number) => {
-  for (let i = 0; i < 60 * seconds && !run.ended; i++) run.update(1 / 60);
 };
 
 /** An open plains spot with `clear` units of free floor around it (no obstacle, inside the map). */
@@ -80,13 +57,6 @@ function mountain(house: HouseLayout): Obstacle {
   return o;
 }
 
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
-}
-
 function icebergs(run: Run): Debris[] {
   const out: Debris[] = [];
   run.debris.forEach((d) => d.alive && d.type.id === CALVED_ICEBERG_ID && out.push(d));
@@ -94,84 +64,6 @@ function icebergs(run: Run): Debris[] {
 }
 
 describe('continent Hazards', () => {
-  it('arrives short of its absorb radius (about a minute of growth) and 3 hits break it', () => {
-    expect(absorbRadiusFor(ICE_SHEET.size, ratio)).toBeCloseTo(4, 1);
-    expect(bossArrivalRadius('continent', ratio)).toBeLessThan(bossAbsorbRadius('continent', ratio));
-    expect(bossAbsorbRadius('continent', ratio)).toBeCloseTo(absorbRadiusFor(ICE_SHEET.size, ratio));
-    expect(AREA_BOSSES.continent).toMatchObject({ id: 'ice_sheet', hits: 3 });
-    expect(hazardRegistry.require('ice_sheet').boss).toBe(true);
-    // It summons nothing: it calves icebergs.
-    expect(ICE_SHEET.miniId).toBeUndefined();
-  });
-
-  it('run in Continent units (1 = 10 km) with their own Blender models', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(1e6);
-    expect(run.bunny.radius).toBeCloseTo(AREAS.continent.arrivalRadius!);
-    for (const [id, cfg] of Object.entries(TUNINGS)) {
-      expect(cfg.modelId, id).toBe(id);
-      expect(hazardRegistry.require(id).modelId, id).toBe(id);
-    }
-    expect(hazardRegistry.require('ice_sheet').modelId).toBe('ice_sheet');
-  });
-
-  it('are a threat on arrival and absorbable before the Ice Sheet is; Tier 12 ones are food by early Tier 13', () => {
-    const tier13 = tierRadius(makeRun().run, 13);
-    const boss = absorbRadiusFor(ICE_SHEET.size, ratio);
-    for (const id of CONTINENT_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      const p = moveToOpen(run);
-      const h = run.hazards.spawn(id, p.x + 8, p.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, ratio);
-      expect(need, id).toBeGreaterThan(AREAS.continent.arrivalRadius!);
-      const first = firstTableTier(id, 'continent');
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      expect(need, id).toBeLessThan(boss);
-      if (first === 12) expect(need, id).toBeLessThan(tier13 * 1.1);
-    }
-  });
-
-
-  it('continent spawn tables list only continent Hazards, Hurricanes from Tier 13, never the Ice Sheet', () => {
-    for (let t = CONTINENT_DIRECTOR.firstTier; t <= 13; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'continent'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(CONTINENT_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(11, {}, 'continent'))).toEqual(Object.keys(spawnWeights(12, {}, 'continent')));
-    expect(Object.keys(spawnWeights(12, {}, 'continent'))).not.toContain('hurricane');
-    expect(Object.keys(spawnWeights(13, {}, 'continent'))).toContain('hurricane');
-    expect(DIRECTOR_EXCLUDE).toContain('ice_sheet');
-    for (const t of [...DIRECTOR.tiers, ...NEIGHBORHOOD_DIRECTOR.tiers, ...CITY_DIRECTOR.tiers, ...REGION_DIRECTOR.tiers]) for (const id of CONTINENT_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(TORNADO.speed, 11)).toBe(TORNADO.speed[11]);
-    expect(tierValue(TORNADO.speed, 13)).toBe(TORNADO.speed[12]);
-  });
-
-  it('the director spawns continent Hazards and brings the Ice Sheet at its arrival size, named without a doubled article', () => {
-    const { run, events } = makeRun('continent-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    step(run, 30);
-    run.bunny.setRadius(bossArrivalRadius('continent', run.bunny.stats.get('absorbRatio')) * 0.95);
-    step(run, 60);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-    run.bunny.setRadius(bossArrivalRadius('continent', run.bunny.stats.get('absorbRatio')) * 1.02);
-    step(run, AREA_BOSSES.continent.arrivalDelay + 1);
-    expect(bosses).toEqual(['Ice Sheet']);
-    // HUD copy reads "the Ice Sheet" (areaHud, Tier-up banner): the def name has no article.
-    expect(`hunt the ${bosses[0]}`).toBe('hunt the Ice Sheet');
-    expect(run.hazards.count('ice_sheet')).toBe(1);
-    for (const id of spawned) expect([...CONTINENT_HAZARDS, 'ice_sheet']).toContain(id);
-    const b = run.bunny;
-    for (const h of run.hazards.hazards) expect(Math.hypot(h.x - b.x, h.z - b.z), h.def.id).toBeLessThan(150);
-  });
-
   it('the Tornado pulls the Bunny in and spins its funnel', () => {
     const { run } = makeRun('tornado');
     moveToOpen(run);

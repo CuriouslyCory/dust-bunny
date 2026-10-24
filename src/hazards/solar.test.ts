@@ -1,33 +1,18 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
-import { AREAS } from '../data/areas';
 import {
-  bossAbsorbRadius,
-  bossArrivalRadius,
-  AREA_BOSSES,
-  AREA_DIRECTORS,
   COMET,
-  DIRECTOR,
-  DIRECTOR_EXCLUDE,
-  GLOBE_DIRECTOR,
-  ROGUE_ASTEROID,
-  SOLAR_DIRECTOR,
-  SOLAR_FLARE,
   SUNGRAZER,
-  SUNSPOT,
   THE_SUN,
   tierValue,
 } from '../data/hazards';
 import { HOT_JUPITER_ID, PROMINENCE_ID } from '../data/sunDebris';
-import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
-import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { debrisLocked } from '../systems/absorb';
 import { sunCentre } from '../world/solarSystem';
-import type { AreaId } from '../world/types';
 import { absorbRadiusFor } from './common';
-import { spawnWeights } from './director';
 import { hazardRegistry, type Hazard } from './index';
 import { ringPath, type LintRoller } from './lintRoller';
 import type { Mop } from './mop';
@@ -35,9 +20,8 @@ import { type BossState } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import { TheSun, isBlockingGiant } from './theSun';
 import type { UprightVacuum } from './uprightVacuum';
+import './content';
 
-const SOLAR_HAZARDS = ['rogue_asteroid', 'comet', 'sunspot', 'sungrazer', 'solar_flare'];
-const TUNINGS = { rogue_asteroid: ROGUE_ASTEROID, comet: COMET, sunspot: SUNSPOT, sungrazer: SUNGRAZER, solar_flare: SOLAR_FLARE } as const;
 const ratio = 0.7;
 const GIANTS = THE_SUN.giants.typeIds;
 
@@ -48,21 +32,11 @@ const makeRun = (seed = 'solar-hazards') => {
   return { events, run };
 };
 
-/** Bunny radius (Solar System units) at the start of a Tier. */
-const tierRadius = (run: Run, tier: number) => getTier(tier).minRadius / run.unit;
-
 /** The spawn: Earth's old orbit, open space (the Solar System has no obstacles). */
 function moveToOpen(run: Run): { x: number; z: number } {
   const p = { x: run.house.spawn.x, z: run.house.spawn.z };
   run.bunny.teleport(p.x, p.z);
   return p;
-}
-
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
 }
 
 function typeIndex(run: Run, id: string): number {
@@ -83,79 +57,6 @@ function clearGiants(run: Run): void {
 }
 
 describe('solar system Hazards', () => {
-  it('arrives short of its absorb radius (about a minute of growth) and 3 hits break it', () => {
-    expect(absorbRadiusFor(THE_SUN.size, ratio)).toBeCloseTo(4, 1);
-    expect(bossArrivalRadius('solar_system', ratio)).toBeLessThan(bossAbsorbRadius('solar_system', ratio));
-    expect(bossAbsorbRadius('solar_system', ratio)).toBeCloseTo(absorbRadiusFor(THE_SUN.size, ratio));
-    expect(AREA_BOSSES.solar_system).toMatchObject({ id: 'the_sun', hits: 3 });
-    expect(hazardRegistry.require('the_sun').boss).toBe(true);
-    expect(THE_SUN.miniId).toBeUndefined();
-  });
-
-  it('run in Solar System units (1 = 0.01 AU) with their own models', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(1.496e11);
-    expect(run.bunny.radius).toBeCloseTo(AREAS.solar_system.arrivalRadius!);
-    for (const [id, cfg] of Object.entries(TUNINGS)) {
-      expect(cfg.modelId, id).toBe(id);
-      expect(hazardRegistry.require(id).modelId, id).toBe(id);
-    }
-    expect(hazardRegistry.require('the_sun').modelId).toBe('the_sun');
-  });
-
-  it('are a threat on arrival and absorbable before the Sun is; Tier 16 ones are food by early Tier 17', () => {
-    const tier17 = tierRadius(makeRun().run, 17);
-    const boss = absorbRadiusFor(THE_SUN.size, ratio);
-    for (const id of SOLAR_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      const p = moveToOpen(run);
-      const h = run.hazards.spawn(id, p.x + 8, p.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, ratio);
-      expect(need, id).toBeGreaterThan(AREAS.solar_system.arrivalRadius!);
-      const first = firstTableTier(id, 'solar_system');
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      expect(need, id).toBeLessThan(boss);
-      if (first === 16) expect(need, id).toBeLessThan(tier17 * 1.1);
-    }
-  });
-
-
-  it('solar system spawn tables list only solar system Hazards, Solar Flares from Tier 17, never the Sun', () => {
-    for (let t = SOLAR_DIRECTOR.firstTier; t <= 17; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'solar_system'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(SOLAR_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(15, {}, 'solar_system'))).toEqual(Object.keys(spawnWeights(16, {}, 'solar_system')));
-    expect(Object.keys(spawnWeights(16, {}, 'solar_system'))).not.toContain('solar_flare');
-    expect(Object.keys(spawnWeights(17, {}, 'solar_system'))).toContain('solar_flare');
-    expect(DIRECTOR_EXCLUDE).toContain('the_sun');
-    for (const t of [...DIRECTOR.tiers, ...GLOBE_DIRECTOR.tiers]) for (const id of SOLAR_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(ROGUE_ASTEROID.speed, 16)).toBe(ROGUE_ASTEROID.speed[15]);
-    expect(tierValue(ROGUE_ASTEROID.speed, 17)).toBe(ROGUE_ASTEROID.speed[16]);
-  });
-
-  it('the director spawns solar system Hazards and brings the Sun at its arrival size', () => {
-    const { run, events } = makeRun('solar-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    for (let i = 0; i < 60 * 30 && !run.ended; i++) run.update(1 / 60);
-    run.bunny.setRadius(bossArrivalRadius('solar_system', run.bunny.stats.get('absorbRatio')) * 0.95);
-    for (let i = 0; i < 60 * 60 && !run.ended; i++) run.update(1 / 60);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-    run.bunny.setRadius(bossArrivalRadius('solar_system', run.bunny.stats.get('absorbRatio')) * 1.02);
-    for (let i = 0; i < 60 * (AREA_BOSSES.solar_system.arrivalDelay + 1) && !run.ended; i++) run.update(1 / 60);
-    expect(bosses).toEqual(['The Sun']);
-    expect(run.hazards.count('the_sun')).toBe(1);
-    for (const id of spawned) expect([...SOLAR_HAZARDS, 'the_sun']).toContain(id);
-  });
-
   it("the Rogue Asteroid's gravity pulls the Bunny in, and its rock tumbles", () => {
     const { run } = makeRun('asteroid');
     moveToOpen(run);

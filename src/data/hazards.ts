@@ -2,7 +2,7 @@
  * Hazard tuning (data only). Logic lives in src/hazards/. Sizes are radii in cm, speeds in
  * cm/s, times in seconds. `PerTier` arrays are indexed by Tier − 1 (Tier 1 first) and `tierValue`
  * clamps to the last entry: house tables have 5 entries (Tiers 6–9 reuse the Tier 5 value),
- * outdoor ones use `outdoorTiers(t5, t6, t7)` (7 entries) and city ones `cityTiers(t7, t8, t9)` (9).
+ * each later Area's use `areaTiers(area, …)`, one value per Tier of its band (`outdoorTiers(t5, t6, t7)`: 7 entries).
  *
  * A Hazard is absorbable once size ≤ Bunny radius × absorbRatio (0.7 by default), so with
  * the default ratio: Lint Roller at r ≈ 10, Spray Bottle ≈ 11.4, Mop ≈ 21.4, Roomba ≈ 24.3,
@@ -27,8 +27,8 @@
  * stays escapable at every Tier; it is multiplied by the Bunny's suctionMultiplier stat.
  */
 import type { HazardModelId } from '../hazards/models';
-import { nextArea, type AreaId } from '../world/types';
-import { areaUnit } from './areas';
+import { AREA_ORDER, nextArea, type AreaId } from '../world/types';
+import { AREAS, areaUnit } from './areas';
 import { getTier } from './tiers';
 
 /** Seconds a Roomba / Mop / Upright Vacuum holds still after landing a hit (no pinning against walls). */
@@ -37,72 +37,54 @@ export const HAZARD_RECOIL = 1.4;
 export type PerTier = readonly [number, number, number, number, number, ...number[]];
 
 /**
- * Per-Tier values for outdoor Hazards (Tiers 5, 6, 7). Tiers 1–4 repeat the Tier 5 value:
- * outdoor Hazards only appear in the neighborhood, which starts at Tier 5.
+ * Per-Tier values for Hazards that live only in `area`: one value per Tier of its Debris Tier band
+ * (`AREAS[area].tiers`), in order, with every earlier Tier repeating the first (the Bunny can arrive
+ * a Tier early) and `tierValue` clamping later ones to the last.
  */
+export function areaTiers(area: AreaId, ...values: number[]): PerTier {
+  const [lo, hi] = AREAS[area].tiers;
+  if (values.length !== hi - lo + 1) throw new Error(`${area} Hazards take ${hi - lo + 1} per-Tier values, got ${values.length}`);
+  return Array.from({ length: hi }, (_, i) => values[Math.max(0, i - (lo - 1))]!) as number[] as unknown as PerTier;
+}
+
+/** Per-Tier values for outdoor Hazards (the Neighborhood's Tiers 5, 6, 7; `areaTiers`). */
 export function outdoorTiers(t5: number, t6: number, t7: number): PerTier {
-  return [t5, t5, t5, t5, t5, t6, t7];
+  return areaTiers('neighborhood', t5, t6, t7);
 }
 
-/**
- * Per-Tier values for city Hazards (Tiers 7, 8, 9). Tiers 1–6 repeat the Tier 7 value: city
- * Hazards only appear in the city, which starts at Tier 7.
- */
+/** Per-Tier values for city Hazards (Tiers 7, 8, 9; `areaTiers`). */
 export function cityTiers(t7: number, t8: number, t9: number): PerTier {
-  return [t7, t7, t7, t7, t7, t7, t7, t8, t9];
+  return areaTiers('city', t7, t8, t9);
 }
 
-/**
- * Per-Tier values for region Hazards (Tiers 10, 11), in Region units (1 = 10 m). Tiers 1–9 repeat
- * the Tier 10 value: the Bunny arrives in the region at Tier 9 and region Hazards live only there.
- */
+/** Per-Tier values for region Hazards (Tiers 10, 11; `areaTiers`), in Region units (1 = 10 m). */
 export function regionTiers(t10: number, t11: number): PerTier {
-  return [t10, t10, t10, t10, t10, t10, t10, t10, t10, t10, t11];
+  return areaTiers('region', t10, t11);
 }
 
-/**
- * Per-Tier values for continent Hazards (Tiers 12, 13), in Continent units (1 = 10 km). Tiers 1–11
- * repeat the Tier 12 value: the Bunny arrives in the continent at Tier 11 (0.85 units, the arrival
- * leap) and continent Hazards live only there.
- */
+/** Per-Tier values for continent Hazards (Tiers 12, 13; `areaTiers`), in Continent units (1 = 10 km). */
 export function continentTiers(t12: number, t13: number): PerTier {
-  return [t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t12, t13];
+  return areaTiers('continent', t12, t13);
 }
 
-/**
- * Per-Tier values for globe Hazards (Tiers 14, 15), in Globe units (1 = 1,000 km). Tiers 1–13
- * repeat the Tier 14 value: the Bunny arrives on the Globe at Tier 13 (0.85 units, the arrival
- * leap) and globe Hazards live only there.
- */
+/** Per-Tier values for globe Hazards (Tiers 14, 15; `areaTiers`), in Globe units (1 = 1,000 km). */
 export function globeTiers(t14: number, t15: number): PerTier {
-  return [t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t14, t15];
+  return areaTiers('globe', t14, t15);
 }
 
-/**
- * Per-Tier values for solar system Hazards (Tiers 16, 17), in Solar System units (1 = 0.01 AU).
- * Tiers 1–15 repeat the Tier 16 value: the Bunny arrives in the Solar System at Tier 15 (0.85
- * units, the arrival leap) and solar system Hazards live only there.
- */
+/** Per-Tier values for solar system Hazards (Tiers 16, 17; `areaTiers`), in Solar System units (1 = 0.01 AU). */
 export function solarTiers(t16: number, t17: number): PerTier {
-  return [t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t16, t17];
+  return areaTiers('solar_system', t16, t17);
 }
 
-/**
- * Per-Tier values for galaxy Hazards (Tiers 18, 19), in Galaxy units (1 = 100 ly). Tiers 1–17
- * repeat the Tier 18 value: the Bunny arrives in the Galaxy at Tier 17 (0.85 units, the arrival
- * leap) and galaxy Hazards live only there.
- */
+/** Per-Tier values for galaxy Hazards (Tiers 18, 19; `areaTiers`), in Galaxy units (1 = 100 ly). */
 export function galaxyTiers(t18: number, t19: number): PerTier {
-  return [t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t18, t19];
+  return areaTiers('galaxy', t18, t19);
 }
 
-/**
- * Per-Tier values for universe Hazards (Tiers 20, 21), in Universe units (1 = 10 Mly). Tiers 1–19
- * repeat the Tier 20 value: the Bunny arrives in the Universe at Tier 19 (0.85 units, the arrival
- * leap) and universe Hazards live only there.
- */
+/** Per-Tier values for universe Hazards (Tiers 20, 21; `areaTiers`), in Universe units (1 = 10 Mly). */
 export function universeTiers(t20: number, t21: number): PerTier {
-  return [t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t20, t21];
+  return areaTiers('universe', t20, t21);
 }
 
 /** Roomba behaviour: wander, bounce, suction ring. Also used by the Robotic Mower, Floor Scrubber and boss summons. */
@@ -2820,6 +2802,8 @@ export interface AreaBoss {
   readonly lead?: number;
   readonly tier?: number;
   readonly arrivalDelay: number;
+  /** What it summons (its `BossTuning.miniId`; none: nothing). */
+  readonly miniId?: string | undefined;
 }
 
 /**
@@ -2831,14 +2815,14 @@ export interface AreaBoss {
  * at about half the absorb radius.
  */
 export const AREA_BOSSES: Readonly<Record<AreaId, AreaBoss>> = {
-  house: { id: 'robovac_9000', hits: 3, paceTier: 5, size: ROBOVAC_9000.size, lead: 0.69, arrivalDelay: 3 },
-  neighborhood: { id: 'street_sweeper', hits: 3, paceTier: 7, size: STREET_SWEEPER.size, lead: 0.87, arrivalDelay: 4 },
-  city: { id: 'garbage_truck', hits: 3, paceTier: 9, size: GARBAGE_TRUCK.size, lead: 0.88, arrivalDelay: 4 },
-  region: { id: 'incinerator', hits: 3, paceTier: 11, size: INCINERATOR.size, lead: 0.55, arrivalDelay: 4 },
-  continent: { id: 'ice_sheet', hits: 3, paceTier: 13, size: ICE_SHEET.size, lead: 0.5, arrivalDelay: 4 },
-  globe: { id: 'orbital_sweeper', hits: 3, paceTier: 15, size: ORBITAL_SWEEPER.size, lead: 0.58, arrivalDelay: 4 },
-  solar_system: { id: 'the_sun', hits: 3, paceTier: 17, size: THE_SUN.size, lead: 0.57, arrivalDelay: 4 },
-  galaxy: { id: 'sagittarius_a', hits: 5, paceTier: 19, size: SAGITTARIUS_A.size, lead: 0.57, arrivalDelay: 4 },
+  house: { id: 'robovac_9000', hits: 3, paceTier: 5, size: ROBOVAC_9000.size, lead: 0.69, arrivalDelay: 3, miniId: ROBOVAC_9000.miniId },
+  neighborhood: { id: 'street_sweeper', hits: 3, paceTier: 7, size: STREET_SWEEPER.size, lead: 0.87, arrivalDelay: 4, miniId: STREET_SWEEPER.miniId },
+  city: { id: 'garbage_truck', hits: 3, paceTier: 9, size: GARBAGE_TRUCK.size, lead: 0.88, arrivalDelay: 4, miniId: GARBAGE_TRUCK.miniId },
+  region: { id: 'incinerator', hits: 3, paceTier: 11, size: INCINERATOR.size, lead: 0.55, arrivalDelay: 4, miniId: INCINERATOR.miniId },
+  continent: { id: 'ice_sheet', hits: 3, paceTier: 13, size: ICE_SHEET.size, lead: 0.5, arrivalDelay: 4, miniId: ICE_SHEET.miniId },
+  globe: { id: 'orbital_sweeper', hits: 3, paceTier: 15, size: ORBITAL_SWEEPER.size, lead: 0.58, arrivalDelay: 4, miniId: ORBITAL_SWEEPER.miniId },
+  solar_system: { id: 'the_sun', hits: 3, paceTier: 17, size: THE_SUN.size, lead: 0.57, arrivalDelay: 4, miniId: THE_SUN.miniId },
+  galaxy: { id: 'sagittarius_a', hits: 5, paceTier: 19, size: SAGITTARIUS_A.size, lead: 0.57, arrivalDelay: 4, miniId: SAGITTARIUS_A.miniId },
   universe: { id: 'the_expansion', hits: 7, paceTier: 21, size: Infinity, tier: 21, arrivalDelay: 4 },
 };
 
@@ -2894,8 +2878,11 @@ export function areaQuietFor(area: AreaId, bunny: { maxRadius: number; unit: num
   return bunny.maxRadius * bunny.unit >= quietRadius(area, bunny.stats.get('absorbRatio'));
 }
 
-/** Hazards the director never picks at random (bosses and their summons). */
-export const DIRECTOR_EXCLUDE: readonly string[] = ['robovac_9000', 'mini_roomba', 'street_sweeper', 'mini_mower', 'garbage_truck', 'mini_scrubber', 'incinerator', 'mini_compactor', 'ice_sheet', 'orbital_sweeper', 'mini_sweeper', 'the_sun', 'sagittarius_a', 'the_expansion'];
+/** Hazards the director never picks at random: every Area's boss and its summons (`AREA_BOSSES`), in Area order. */
+export const DIRECTOR_EXCLUDE: readonly string[] = AREA_ORDER.flatMap((a) => {
+  const { id, miniId } = AREA_BOSSES[a];
+  return miniId ? [id, miniId] : [id];
+});
 
 export function tierValue(values: PerTier, tier: number): number {
   return values[Math.min(Math.max(Math.round(tier), 1), values.length) - 1]!;

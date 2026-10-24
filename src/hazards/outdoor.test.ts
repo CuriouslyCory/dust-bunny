@@ -1,20 +1,16 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { Rng } from '../core/rng';
-import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, DIRECTOR, DIRECTOR_EXCLUDE, LAWN_MOWER, LEAF_BLOWER, NEIGHBORHOOD_DIRECTOR, STREET_SWEEPER } from '../data/hazards';
+import { LAWN_MOWER, LEAF_BLOWER, STREET_SWEEPER } from '../data/hazards';
 import { getTier } from '../data/tiers';
-import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
-import type { AreaId } from '../world/types';
 import { NEIGHBORHOOD } from '../world/neighborhood';
 import { absorbRadiusFor, hazardFloorFree } from './common';
-import { spawnWeights } from './director';
 import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
-
-const OUTDOOR = ['robo_mower', 'lawn_mower', 'leaf_blower', 'sprinkler'];
-const HOUSE = ['roomba', 'lint_roller', 'broom', 'spray_bottle', 'mop', 'upright_vacuum', 'robovac_9000', 'mini_roomba'];
+import './content';
 
 const makeRun = (seed = 'outdoor') => {
   const events = new EventBus();
@@ -34,68 +30,7 @@ function moveToStreet(run: Run): void {
   throw new Error('no open street');
 }
 
-/** First Tier whose spawn table lists `id` (the tables decide when a Hazard first appears). */
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
-}
-
 describe('outdoor Hazards', () => {
-  it('are a threat on arrival outside and absorbable by Tier 7 (except the boss at full size)', () => {
-    const tier7 = getTier(7).minRadius;
-    for (const id of OUTDOOR) {
-      const { run } = makeRun(`absorb-${id}`);
-      moveToStreet(run);
-      const h = run.hazards.spawn(id, run.bunny.x + 400, run.bunny.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, 0.7);
-      expect(need, id).toBeGreaterThan(NEIGHBORHOOD.debugStartRadius);
-      expect(need, id).toBeGreaterThan(getTier(firstTableTier(id, 'neighborhood')).minRadius);
-      expect(need, id).toBeLessThan(tier7);
-    }
-    expect(absorbRadiusFor(STREET_SWEEPER.size, 0.7)).toBeGreaterThan(tier7);
-  });
-
-
-  it('outdoor spawn tables only list outdoor Hazards, and bosses / summons are never random picks', () => {
-    for (let t = NEIGHBORHOOD_DIRECTOR.firstTier; t <= 7; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'neighborhood'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(OUTDOOR).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(6, {}, 'neighborhood'))).toContain('lawn_mower');
-    for (const id of ['street_sweeper', 'mini_mower']) expect(DIRECTOR_EXCLUDE).toContain(id);
-    for (const t of DIRECTOR.tiers) for (const id of OUTDOOR) expect(Object.keys(t.types)).not.toContain(id);
-  });
-
-  it('the director spawns outdoor Hazards (never house ones) and brings the Street Sweeper at its arrival size', () => {
-    const { run, events } = makeRun('outdoor-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    const step = (seconds: number) => {
-      for (let i = 0; i < 60 * seconds && !run.ended; i++) run.update(1 / 60);
-    };
-    step(40);
-    expect(run.tier).toBe(5);
-    run.bunny.setRadius(bossArrivalRadius('neighborhood', run.bunny.stats.get('absorbRatio')) * 0.95);
-    step(30);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-
-    run.bunny.setRadius(bossArrivalRadius('neighborhood', run.bunny.stats.get('absorbRatio')) * 1.02);
-    step(AREA_BOSSES.neighborhood.arrivalDelay + 1);
-    expect(bosses).toEqual(['Street Sweeper']);
-    expect(run.hazards.count('street_sweeper')).toBe(1);
-    for (const id of spawned) expect(HOUSE).not.toContain(id);
-    for (const id of spawned) expect([...OUTDOOR, 'street_sweeper', 'mini_mower']).toContain(id);
-  });
-
   it('absorbing the Street Sweeper opens the road to the city (bossDefeated → exitOpened) and clears its minis', () => {
     const { run, events } = makeRun('sweeper-win');
     moveToStreet(run);
