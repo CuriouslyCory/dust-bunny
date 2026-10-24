@@ -178,3 +178,21 @@ CREATE INDEX IF NOT EXISTS run_credits_user_idx ON run_credits (user_id, id DESC
 -- The newest Run keys whose credit the stored progress copy holds (Progress.creditedRuns); it
 -- travels with the Fluff. Kept as it is when an upload from before the ledger omits it.
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS credited_runs jsonb;
+
+-- Who holds each Run (server/runCredits.ts): the lease it was last stored or taken under, and
+-- ended_at once it is over (an end, a claim, or a replace of its stored copy). It outlives the
+-- saved_runs slot, which only shows the last Run stored: a Run another device replaced in the slot
+-- while this device plays it is still this device's, so a stale copy's claim or upload of it is
+-- refused (carried_on); a Run that ended stays ended whatever the slot holds. ended_at with no
+-- run_credits row means a client from before the ledger ended and credited it itself: a claim for
+-- it answers run_ended and nothing applies it. Pruned per Account on a store: rows older than 90
+-- days, or past the newest 200 (HOLDER_RETENTION_DAYS, HOLDER_KEEP).
+CREATE TABLE IF NOT EXISTS run_holders (
+  user_id    text        NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  run_key    text        NOT NULL,
+  lease      text        NOT NULL,
+  ended_at   timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, run_key)
+);
+CREATE INDEX IF NOT EXISTS run_holders_user_updated_idx ON run_holders (user_id, updated_at DESC);

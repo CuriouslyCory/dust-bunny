@@ -15,6 +15,8 @@ export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT
   AND to_regclass('public.saved_runs') IS NOT NULL
   AND to_regclass('public.run_credits') IS NOT NULL
   AND to_regclass('public.run_credits_user_idx') IS NOT NULL
+  AND to_regclass('public.run_holders') IS NOT NULL
+  AND to_regclass('public.run_holders_user_updated_idx') IS NOT NULL
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
   AND to_regclass('public.area_scores_user_idx') IS NOT NULL
@@ -182,4 +184,17 @@ export const SCHEMA: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS run_credits_user_idx ON run_credits (user_id, id DESC)`,
   // The newest Run keys whose credit the stored progress copy holds (NULL: a row from before the ledger).
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS credited_runs jsonb`,
+  // Who holds each Run (server/runCredits.ts): the lease it was last stored or taken under, and
+  // ended_at once it is over. Outlives the saved_runs slot, which only shows the last Run stored.
+  // ended_at with no run_credits row: a client from before the ledger ended and credited it itself.
+  // Pruned per Account on a store: older than HOLDER_RETENTION_DAYS, or past the newest HOLDER_KEEP.
+  `CREATE TABLE IF NOT EXISTS run_holders (
+    user_id text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+    run_key text NOT NULL,
+    lease text NOT NULL,
+    ended_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, run_key)
+  )`,
+  `CREATE INDEX IF NOT EXISTS run_holders_user_updated_idx ON run_holders (user_id, updated_at DESC)`,
 ];

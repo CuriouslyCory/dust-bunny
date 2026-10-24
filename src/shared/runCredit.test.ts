@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CREDITED_RUNS_MAX, CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, pickCreditStats, sameCreditedRuns, validateCreditedRuns, validateRunCreditClaim } from './runCredit';
+import { PROGRESS_BOUNDS } from './progress';
+import { CREDITED_RUNS_MAX, CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, pickCreditStats, salvageCreditStats, sameCreditedRuns, validateCreditedRuns, validateRunCreditClaim } from './runCredit';
+import { SCORE_TIER_MIN_RADII } from './score';
 
 const fullStats = {
   seed: 's',
@@ -50,6 +52,27 @@ describe('pickCreditStats', () => {
     expect(pickCreditStats({ maxRadius: 1, debrisAbsorbed: 0, tierReached: 0, areas: many })).toBeNull();
     expect(pickCreditStats(null)).toBeNull();
     expect(pickCreditStats([])).toBeNull();
+  });
+
+  it('accepts a Universe-sized Run: radii are real centimetres', () => {
+    // A Universe Run's maxRadius is past 2.8e25 cm; the bound is the cloud save's (`bestRadius`).
+    expect(CREDIT_STATS_BOUNDS.radius).toBe(PROGRESS_BOUNDS.bestRadius);
+    const universe = { maxRadius: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 1.2, debrisAbsorbed: 2_000_000, tierReached: SCORE_TIER_MIN_RADII.length, area: 'universe', universeCleared: true,
+      areas: [{ area: 'galaxy', radiusIn: 9.461e19, maxRadius: 2.8e20, debrisAbsorbed: 5000, cleared: true }, { area: 'universe', radiusIn: 9.461e24, maxRadius: 2.9e25, debrisAbsorbed: 7000, cleared: true }] };
+    expect(pickCreditStats(universe)).toEqual(universe);
+    expect(validateRunCreditClaim({ runKey: 'u', lease: 'l', reason: 'victory', stats: universe })).toMatchObject({ ok: true });
+    expect(pickCreditStats({ ...universe, maxRadius: CREDIT_STATS_BOUNDS.radius * 10 })).toBeNull();
+  });
+
+  it('salvages what it can from stats it would otherwise refuse', () => {
+    expect(salvageCreditStats(fullStats)).toEqual(pickCreditStats(fullStats));
+    expect(salvageCreditStats(null)).toEqual({ maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 });
+    // A missing or absurd number is 0 or clamped, not a reason to lose the rest.
+    expect(salvageCreditStats({ maxRadius: Infinity, debrisAbsorbed: -3, tierReached: 500, characterId: 'zap' })).toEqual({ maxRadius: 0, debrisAbsorbed: 0, tierReached: CREDIT_STATS_BOUNDS.tier, characterId: 'zap' });
+    // Areas that read stay; the broken one goes; the list is capped.
+    const many = Array.from({ length: CREDIT_STATS_BOUNDS.areas + 3 }, (_, i) => ({ area: 'house', radiusIn: 1, maxRadius: i, debrisAbsorbed: 0, cleared: false }));
+    expect(salvageCreditStats({ maxRadius: 5, debrisAbsorbed: 1, tierReached: 1, areas: [{ area: '', radiusIn: 1 }, ...many] }).areas).toHaveLength(CREDIT_STATS_BOUNDS.areas);
+    expect(salvageCreditStats({ maxRadius: 5, debrisAbsorbed: 1, tierReached: 1, areas: [{ area: 'house', radiusIn: 'x', maxRadius: 2, debrisAbsorbed: 1, cleared: true }] }).areas).toEqual([{ area: 'house', radiusIn: 0, maxRadius: 2, debrisAbsorbed: 1, cleared: true }]);
   });
 
   it('stays small whatever the client sent', () => {

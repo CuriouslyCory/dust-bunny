@@ -8,7 +8,7 @@ A Run is credited when its Fluff and lifetime stats (`MetaProgress.awardRun`) ar
 
 Two problems were tangled: **authority** (may this Run be credited, and by whom) and **idempotency** (apply the credit exactly once to a progress copy). They are now separate:
 
-- **Authority is the server's.** A `run_credits` row, unique per `(user_id, run_key)`, is the only thing that means "this Run is credited". It is written when the device holding the Run claims its ending (`POST /api/run-credit`), or when the server itself replaces or abandons a stored copy. Nothing on the client decides it any more.
+- **Authority is the server's.** A `run_credits` row, unique per `(user_id, run_key)`, is the only thing that means "this Run is credited". It is written when the device holding the Run claims its ending (`POST /api/run-credit`), or when the server itself replaces or abandons a stored copy. Nothing on the client decides it any more. *Who holds* a Run is the server's too: a `run_holders` row per `(user_id, run_key)` outlives the one-per-Account slot, so a Run is checked against its own holder, not against whatever the slot happens to hold now.
 - **Idempotency lives in the progress copy.** `creditedRuns`, the newest Run keys whose credit a copy holds, is a field of the device save and of the cloud save (`Progress`). It is written in the same update as the Fluff it accounts for and adopted together with it, so whichever copy wins the cloud save's whole-copy merge carries the right set. Any device may apply any ledger row; `awardRun` is a no-op for a key the copy already lists.
 
 The client still computes the Fluff from the Run's stats (`fluffForRun`) and the cloud save still carries it. The server stores only `reason` and a bounded stats subset.
@@ -30,35 +30,53 @@ CREATE TABLE IF NOT EXISTS run_credits (
 );
 CREATE INDEX IF NOT EXISTS run_credits_user_idx ON run_credits (user_id, id DESC);
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS credited_runs jsonb;  -- NULL: a row from before the ledger
+
+CREATE TABLE IF NOT EXISTS run_holders (
+  user_id    text        NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+  run_key    text        NOT NULL,
+  lease      text        NOT NULL,   -- the lease the Run was last stored or taken under
+  ended_at   timestamptz,            -- set once the Run is over (an end, a claim, a replace of its stored copy)
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, run_key)
+);
+CREATE INDEX IF NOT EXISTS run_holders_user_updated_idx ON run_holders (user_id, updated_at DESC);
 ```
 
-Applied lazily by `ensureSchema` (`server/schema.ts`; the probe checks `run_credits`, its index and `credited_runs`) and mirrored in `db/schema.sql`. `saved_runs.ended_at` stays, for clients from before the ledger; the new path treats "ended" as "in the ledger" first.
+Applied lazily by `ensureSchema` (`server/schema.ts`; the probe checks `run_credits`, `run_holders`, their indexes and `credited_runs`) and mirrored in `db/schema.sql`. `saved_runs.ended_at` stays, for clients from before the ledger; the new path treats "ended" as "in the ledger" first, then as the holder record's `ended_at`.
 
-`CreditStats` is what crediting reads: `maxRadius`, `debrisAbsorbed`, `tierReached` (required, bounded), and if present `characterId`, `difficulty`, `area`, the `*Cleared` flags that are true, and `areas` (≤ 16 of `{ area, radiusIn, maxRadius, debrisAbsorbed, cleared }`). `pickCreditStats` takes it out of a full `RunStats` or a stored snapshot's `stats`; a claim whose stats lack the three numbers is a 400.
+**Holders.** `saved_runs` is one slot per Account, so it only remembers the last Run stored: once device A's new Run Y replaces X there, the slot no longer knows that device B is playing X. `run_holders` does. PUT (a store) and the take write the Run's current lease; the claim, DELETE and a replace of a stored copy set `ended_at`. A PUT or a claim for X is checked against X's own holder first: `ended_at` set → `409 run_ended`; a lease that is neither the caller's `lease` nor `prevLease` → `409 carried_on`; no row → the server never saw X, so nobody else can hold it. The slot's own lease and `ended_at` are checked second, for rows from before `run_holders` existed. The take needs the snapshot, which only the slot has, so it is unchanged apart from refusing a Run in the ledger. A DELETE for a Run the slot no longer holds but whose holder is the caller's answers `deleted: true` (the Run was theirs to end).
+
+*Retention.* On every store the Account's holder rows older than `HOLDER_RETENTION_DAYS` (90) or past the newest `HOLDER_KEEP` (200) are pruned (`pruneHolders`, `server/runCredits.ts`). A pruned Run reads as "never seen", which only matters for a device more than 90 days (or 200 Runs) behind: its claim for a Run that is in the ledger still gets the ledger row, and one for a Run that was ended by an old client (no ledger row) could be credited once more. Accepted.
+
+**Serialisation.** Every write (PUT, take, DELETE, claim) runs in a transaction that first takes `pg_advisory_xact_lock(hashtext('account_runs'), hashtext(user_id))` (`lockAccountRuns`). A row lock could not do this: a PUT into an empty slot and a claim for the same Run (the pagehide flush sends them together) found no row to lock and both decided. The take also carries `NOT EXISTS (… run_credits …)`, so a Run in the ledger is never handed out even to a client that skips the lock path.
+
+`CreditStats` is what crediting reads: `maxRadius`, `debrisAbsorbed`, `tierReached` (required, bounded), and if present `characterId`, `difficulty`, `area`, the `*Cleared` flags that are true, and `areas` (≤ 16 of `{ area, radiusIn, maxRadius, debrisAbsorbed, cleared }`). Radii are real centimetres, so `CREDIT_STATS_BOUNDS.radius` is `PROGRESS_BOUNDS.bestRadius` (the last tier start, 2.8e25, times ten): a Universe Run must pass. `pickCreditStats` takes the subset out of a full `RunStats` or a stored snapshot's `stats`; a claim whose stats lack the three numbers, or exceed a bound, is a 400. `salvageCreditStats` is the server's last resort for a stored copy it credits on its own (a replace): each number is kept where it reads (clamped), 0 where it doesn't, Areas that read are kept; zeros for all three only when the copy has no stats at all. The client never needs it: a Run's own stats always pass `pickCreditStats`, and a client must not substitute zeros for stats it could not pick (that would credit a real Run as nothing); it sends the stats it has and treats a 400 as a bug to surface, not a credit of 0.
 
 ## API
 
 **`POST /api/run-credit`** body `{ runKey, lease, prevLease?, reason: 'died' | 'victory' | 'quit', stats }` (≤ 8 KB)
 - `200 { credit: RunCredit, created: boolean }` with `RunCredit = { id, runKey, reason, stats, creditedAt }`.
-- `409 carried_on`: the saved Run row holds `runKey` under a lease that is neither `lease` nor `prevLease`, and it hasn't ended. Nothing is written.
-- `409 run_ended`: the row says `runKey` ended but the ledger has no row for it (a client from before the ledger ended and credited it itself). Nothing is written.
+- `409 carried_on`: `runKey`'s holder record (or, for a Run from before holders, the slot) has it under a lease that is neither `lease` nor `prevLease`, and it hasn't ended. Nothing is written. The client: the Run is another device's; apply nothing, show "carried on on another device".
+- `409 run_ended`: `runKey` ended but the ledger has no row for it. A client from before the ledger ended it (DELETE), or replaced its stored copy without `ledger: true`, and credited it itself; so it is **already credited elsewhere**: the client applies nothing, drops the claim, and must not retry it. The body is the usual `{ error: 'run_ended', message }`; no extra field distinguishes the two origins because the client's answer is the same for both. Nothing is written.
 - 400 `invalid`, 401, 405, 413, 503 as the other functions.
 
-Under the player's `saved_runs` row lock: a ledger row for `runKey` already there is returned, `created: false`, whatever the lease and whoever asks (a retry after a lost answer, or another device's claim for a Run already credited). Otherwise, if the row holds `runKey` under the caller's lease it is marked ended (snapshot cleared, `ended_at`), as DELETE did. If the row holds another Run, or none, nobody else can have this Run, so it is credited and recorded as the ended Run on an empty row (a Run still going on the row is left alone), as DELETE did. Then the row is inserted. A claim is therefore safe to send any number of times, from any device.
+Under the Account's advisory lock: a ledger row for `runKey` already there is returned, `created: false`, whatever the lease and whoever asks (a retry after a lost answer, or another device's claim for a Run already credited). Otherwise the Run's holder record is checked (above), then the slot: if it holds `runKey` under the caller's lease it is marked ended (snapshot cleared, `ended_at`), as DELETE did. If the slot holds another Run, or none, and the holder record allows it, the Run is credited and recorded as the ended Run on an empty slot (a Run still going in the slot is left alone), as DELETE did. The holder record is marked ended and the ledger row inserted. A claim is therefore safe to send any number of times, from any device.
 
 **`GET /api/run-credit?limit=20`** → `200 { credits: RunCredit[] }`, newest first, at most 50.
 
 **`PUT /api/saved-run`** gains `ledger?: boolean` and `credits: RunCredit[]` in its 200 answer:
 - A `runKey` in the ledger is refused with `409 run_ended`, whatever the row holds now.
-- With `ledger: true`, replacing a different stored Run records that Run in the ledger as a quit, with its stored snapshot's stats, in the same transaction; the row comes back in `credits` (and still in `replaced`). Without the flag nothing is recorded and the caller credits `replaced` itself, as before.
+- A `runKey` whose holder record says ended is refused with `409 run_ended`; one another device holds (holder record or slot) with `409 carried_on`.
+- With `ledger: true`, replacing a different stored Run records that Run in the ledger as a quit, with its stored snapshot's stats (`pickCreditStats`, else `salvageCreditStats`), in the same transaction; the row comes back in `credits` (and still in `replaced`). Without the flag nothing is recorded in the ledger and the caller credits `replaced` itself, as before. Either way the replaced Run's holder record is marked ended, so a later claim for it by a ledger client answers `run_ended` (already credited elsewhere) rather than crediting it again, and the sweep never sees it (it has no ledger row).
+- The stored Run's holder record is written with the caller's lease.
 
-`DELETE /api/saved-run` is unchanged and no longer used by ledger clients. `TODO(adr-0003)`: once every client sends `ledger`, drop `replaced` crediting and DELETE.
+`DELETE /api/saved-run` is no longer used by ledger clients. It marks the Run's holder record ended (the old client credits a `deleted: true` Run itself, so that mark is what later turns a ledger client's claim into `run_ended`), and it answers `deleted: true` for a Run the caller holds by its record even when the slot has moved on. `TODO(adr-0003)`: once every client sends `ledger`, drop `replaced` crediting and DELETE.
 
 **`PUT /api/progress`** stores `creditedRuns` with the copy; a body without it keeps the stored set (like `loadouts`), and a row without one leaves it out of the answer.
 
 ### The `ledger: true` flag, and deploys
 
-Vercel swaps the build under open tabs (ADR 0001). A tab from before the ledger credits a replaced Run from `replaced`, locally; if the server also wrote a ledger row for it, a new tab's sweep would credit it again. So the server writes a ledger row on a replace only when the uploading client says it credits through the ledger. Old tabs never claim, so their ended Runs never reach the ledger either.
+Vercel swaps the build under open tabs (ADR 0001). A tab from before the ledger credits a replaced Run from `replaced`, locally; if the server also wrote a ledger row for it, a new tab's sweep would credit it again. So the server writes a ledger row on a replace only when the uploading client says it credits through the ledger. Old tabs never claim, so their ended Runs never reach the ledger either. What they do leave is the holder record's `ended_at`: a new tab holding a stale synced copy of such a Run gets `409 run_ended` for its claim, not a second credit, however many Runs have passed through the slot since.
 
 ## The client (the spec for src/meta)
 
@@ -112,6 +130,6 @@ The client (src/meta) follows the spec above, with these small additions, none o
 
 ## Test plan
 
-Server (`server/api.test.ts`, against a throwaway `postgres:16` via `TEST_DATABASE_URL`): claim by the holder (200, `created`, row ended, picked stats); a retry and another lease's claim return the same row; another device's claim while held → 409 and nothing written; a never-uploaded Run → 200 without touching a stored Run; a Run an old client ended → 409 `run_ended`; replace with and without `ledger`; a ledgered Run refused on PUT whatever the row holds; racing claims create one row; the list's order and bounds; body validation and the 8 KB cap; `credited_runs` kept when an upload omits it; the schema probe false → DDL → true.
+Server (`server/api.test.ts`, against a throwaway `postgres:16` via `TEST_DATABASE_URL`): claim by the holder (200, `created`, row ended, picked stats); a retry and another lease's claim return the same row; another device's claim while held → 409 and nothing written; a never-uploaded Run → 200 without touching a stored Run; a Run an old client ended → 409 `run_ended`; replace with and without `ledger`; a ledgered Run refused on PUT whatever the row holds; a Universe-sized Run credited with its stats intact (claim and replace); a stored copy's broken stats salvaged, zeros only for none; an old client's replace or DELETE leaves `run_ended` for a later claim even after the slot moved on; the A/B/C scenario (B plays X, A's Y replaces it, C's stale claim refused, B's pause and end still count), with a claim and with DELETE; a store and a claim for one Run racing never leave it both credited and resumable; another Run's store and the holder's claim racing credit once; racing claims create one row; the list's order and bounds; body validation and the 8 KB cap; `credited_runs` kept when an upload omits it; the schema probe false → DDL → true for the ledger and for holders.
 
 Client (`src/meta/accountRun.test.ts` with its `FakeServer` extended with a ledger, plus `meta.test.ts`, `cloudSave.test.ts`, `runCredits.test.ts`): one test per race; a lost claim answer credits once; two devices sweeping one row credit once; `awardRun` idempotent by key, capped; `adopt` carries `creditedRuns`; the merge-loss repair; the queue's replay on load, other-Account claims waiting, a newer version untouched.

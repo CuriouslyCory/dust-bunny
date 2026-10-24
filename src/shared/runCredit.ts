@@ -3,8 +3,9 @@
  * (docs/adr/0003). The server decides, once per Run key, that a signed-in player's Run is credited
  * (Fluff and lifetime stats): a `run_credits` row is the only thing that means "credited". The
  * client computes the Fluff from the row's `stats` and applies it at most once per progress copy
- * (`Progress.creditedRuns`). Pure and dependency-free (see the note in `./score.ts`).
+ * (`Progress.creditedRuns`). Shared module (see the note in `./score.ts`).
  */
+import { SCORE_TIER_MIN_RADII } from './score.js';
 
 export type RunCreditReason = 'died' | 'victory' | 'quit';
 
@@ -20,8 +21,18 @@ export const RUN_CREDIT_LIST_MAX = 50;
  */
 export const CREDITED_RUNS_MAX = 100;
 export const MAX_RUN_KEY_LENGTH = 128;
-/** Bounds on the stats subset (they stop garbage, not cheating: the game runs on the client). */
-export const CREDIT_STATS_BOUNDS = { tier: 100, count: 100_000_000, radius: 1e12, areas: 16, id: 40 } as const;
+/**
+ * Bounds on the stats subset (they stop garbage, not cheating: the game runs on the client). Radii
+ * are real centimetres, so the ceiling is the Universe's last tier start times ten (the same as
+ * `PROGRESS_BOUNDS.bestRadius`): a Galaxy Run passes 1e20 and a Universe Run 2.8e25.
+ */
+export const CREDIT_STATS_BOUNDS = {
+  tier: 100,
+  count: 100_000_000,
+  radius: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 10,
+  areas: 16,
+  id: 40,
+} as const;
 
 /** One Area of the Run, as `fluffRadiusTerm` (src/meta/fluff.ts) reads it. */
 export interface CreditAreaStats {
@@ -112,6 +123,38 @@ export function pickCreditStats(raw: unknown): CreditStats | null {
       areas.push({ area: a.area, radiusIn: a.radiusIn, maxRadius: a.maxRadius, debrisAbsorbed: a.debrisAbsorbed, cleared: a.cleared === true });
     }
     out.areas = areas;
+  }
+  return out;
+}
+
+/**
+ * Best-effort `CreditStats` from stats `pickCreditStats` refused: each required number is kept
+ * where it is a finite non-negative number (clamped to its bound) and 0 otherwise; Areas that
+ * read are kept, the rest dropped. For a stored copy the server credits on its own (a replace),
+ * where refusing is not an option and zeros would lose the player the Run. The client should
+ * never need it: a Run's own `RunStats` always pass `pickCreditStats`.
+ */
+export function salvageCreditStats(raw: unknown): CreditStats {
+  const src = isObj(raw) ? raw : {};
+  const num = (v: unknown, max: number): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(v, max) : 0);
+  const out: CreditStats = {
+    maxRadius: num(src.maxRadius, CREDIT_STATS_BOUNDS.radius),
+    debrisAbsorbed: num(src.debrisAbsorbed, CREDIT_STATS_BOUNDS.count),
+    tierReached: num(src.tierReached, CREDIT_STATS_BOUNDS.tier),
+  };
+  const id = (v: unknown): v is string => typeof v === 'string' && v.length > 0 && v.length <= CREDIT_STATS_BOUNDS.id;
+  if (id(src.characterId)) out.characterId = src.characterId;
+  if (id(src.difficulty)) out.difficulty = src.difficulty;
+  if (id(src.area)) out.area = src.area;
+  for (const flag of CLEARED_FLAGS) if (src[flag] === true) out[flag] = true;
+  if (Array.isArray(src.areas)) {
+    const areas: CreditAreaStats[] = [];
+    for (const a of src.areas as unknown[]) {
+      if (areas.length === CREDIT_STATS_BOUNDS.areas) break;
+      if (!isObj(a) || !id(a.area)) continue;
+      areas.push({ area: a.area, radiusIn: num(a.radiusIn, CREDIT_STATS_BOUNDS.radius), maxRadius: num(a.maxRadius, CREDIT_STATS_BOUNDS.radius), debrisAbsorbed: num(a.debrisAbsorbed, CREDIT_STATS_BOUNDS.count), cleared: a.cleared === true });
+    }
+    if (areas.length) out.areas = areas;
   }
   return out;
 }
