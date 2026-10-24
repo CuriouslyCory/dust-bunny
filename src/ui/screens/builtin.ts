@@ -1,20 +1,23 @@
 /**
  * Core screens: title, playing, paused, plus results/settings/howToPlay (see results.ts, menus.ts).
  * With a Run saved (pause → Save & quit) the title leads with Resume run and Play becomes New run,
- * which asks once before abandoning the saved Run.
+ * which asks once before abandoning the saved Run. A paused Run is stored too, so another tab's
+ * title offers Resume run for it; the pausing tab then steps aside to the title with a notice
+ * (`TitleParams.notice`, src/game/handoff.ts). Resume and New run take the slot under the saved
+ * Run Web Lock (`withSavedRunLock`).
  * Replace one by re-registering the same id before it is first shown. The title menu shows
  * Shop / Leaderboard buttons and the account chip (top right), and Play routes through
  * 'characterSelect' when that screen is registered. (A first Run opens on the story's 'intro'
  * screen instead of 'playing': Game.runOpening, src/story/install.ts.)
  */
-import type { Game } from '../../game/game';
+import type { Game, TitleParams } from '../../game/game';
 import { getMeta } from '../../meta/meta';
 import { accountChip } from '../account/screen';
 import { AREAS } from '../../data/areas';
 import { getCharacter } from '../../data/characters';
 import { getTier } from '../../data/tiers';
 import type { RunSnapshot } from '../../game/snapshot';
-import { abandonSuspendedRun, getSuspendedRuns, resumeSuspendedRun } from '../../meta/suspendedRun';
+import { abandonSuspendedRun, getSuspendedRuns, resumeSuspendedRun, withSavedRunLock } from '../../meta/suspendedRun';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, menu, panel } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings } from '../settings';
@@ -95,14 +98,19 @@ export function registerBuiltinScreens(): void {
        */
       let shownKey: string | null = null;
       const outOfDate = (): boolean => (saved.peek()?.runKey ?? null) !== shownKey;
-      const resumeShown = (): boolean => shownKey !== null && resumeSuspendedRun(game, saved, getMeta(), shownKey);
-      const resume = button(
-        'Resume run',
-        () => {
-          if (!resumeShown()) refresh();
-        },
-        { variant: 'primary', size: 'lg', icon: '▶' },
-      );
+      const onTitle = (): boolean => game.screens.current?.id === 'title';
+      /** Resumes the Run on screen, under the lock (a paused tab may be taking it back right now). */
+      const resumeShown = (): void => {
+        const key = shownKey;
+        if (key === null) return;
+        const take = (): boolean => onTitle() && resumeSuspendedRun(game, saved, getMeta(), key);
+        void withSavedRunLock(take)
+          .catch(take)
+          .then((ok) => {
+            if (!ok && onTitle()) refresh();
+          });
+      };
+      const resume = button('Resume run', resumeShown, { variant: 'primary', size: 'lg', icon: '▶' });
       const resumeInfo = h('p', { className: 'saved-run-info' });
       const startNew = (): void => {
         if (outOfDate()) {
@@ -115,8 +123,19 @@ export function registerBuiltinScreens(): void {
           return;
         }
         // Confirmed: the saved Run is gone now (a quit), even if Character select is left with Back.
-        if (shownKey !== null) abandonSuspendedRun(saved, getMeta(), shownKey);
-        playFromMenu(game);
+        const key = shownKey;
+        if (key === null) {
+          playFromMenu(game);
+          return;
+        }
+        const abandon = (): boolean => onTitle() && abandonSuspendedRun(saved, getMeta(), key);
+        void withSavedRunLock(abandon)
+          .catch(abandon)
+          .then((ok) => {
+            if (!onTitle()) return;
+            if (ok) playFromMenu(game);
+            else refresh(); // taken back (or replaced) meanwhile: show the slot as it is
+          });
       };
       const play = button('Play', startNew, { variant: 'primary', size: 'lg', icon: '▶' });
       const playLabel = play.querySelector('.btn-label') as HTMLElement;
@@ -153,6 +172,9 @@ export function registerBuiltinScreens(): void {
       const chipSlot = h('div', {}, chip);
       const tagline = h('p', { className: 'tagline', textContent: TAGLINE });
       const hint = h('p', { className: 'hint title-hint' });
+      /** Why the Run on screen went away (a paused Run picked up in another window). */
+      const notice = h('p', { className: 'title-notice' });
+      notice.setAttribute('role', 'status');
       const el = h(
         'div',
         { className: 'title-screen' },
@@ -164,13 +186,17 @@ export function registerBuiltinScreens(): void {
           mascot('title-mascot'),
           logo(),
           tagline,
+          notice,
           menu(savedRun, play, secondary),
           hint,
         ),
       );
       return {
         el,
-        enter() {
+        enter(params?: unknown) {
+          const text = (params as TitleParams | undefined)?.notice ?? '';
+          notice.textContent = text;
+          notice.hidden = !text;
           shop.hidden = !screenRegistry.has('shop');
           board.hidden = !screenRegistry.has('leaderboard');
           chipSlot.hidden = !screenRegistry.has('account');
@@ -185,7 +211,7 @@ export function registerBuiltinScreens(): void {
             // Only what the screen shows: a Run saved (or taken) by another tab since is shown first.
             if (outOfDate()) refresh();
             else if (shownKey === null) playFromMenu(game);
-            else if (!resumeShown()) refresh();
+            else resumeShown();
             return true;
           }
           return false;
@@ -227,18 +253,11 @@ export function registerBuiltinScreens(): void {
       const set = button('Settings', () => game.go('settings', { back: 'paused' }), { icon: '⚙' });
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'paused' }), { icon: '?' });
       const mute = button('', () => settings.update({ muted: !settings.value.muted }), { icon: '🔊' });
-      const end = button('End run', () => game.quitRun(), { variant: 'ghost' });
+      // Both end the Run only if it is still this tab's (another may have picked it up: Game.endRun).
+      const end = button('End run', () => void game.endRun(), { variant: 'ghost' });
       // Keeps the Run on this device to resume from the title (src/meta/suspendedRun.ts).
       const save = button('Save & quit', () => game.saveAndQuit(), { icon: '💾' });
-      const quit = button(
-        'Quit to title',
-        () => {
-          game.quitRun(); // emits runEnded so meta progress still records the Run
-          game.disposeRun();
-          game.go('title');
-        },
-        { variant: 'ghost' },
-      );
+      const quit = button('Quit to title', () => void game.endRun(true), { variant: 'ghost' });
       settings.subscribe((s) => {
         (mute.querySelector('.btn-label') as HTMLElement).textContent = s.muted ? 'Unmute' : 'Mute';
         (mute.querySelector('.btn-icon') as HTMLElement).textContent = s.muted ? '🔇' : '🔊';

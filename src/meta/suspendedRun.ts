@@ -16,6 +16,10 @@
  *   events (`watchSuspendedRunStorage`) and tells its `onChange` listeners, marked `external`, so
  *   an open title shows the saved Run as it is. Resume and New run name the Run the screen showed
  *   (`runKey`) and do nothing if the slot holds another one by then.
+ * - Pausing stores the Run too, under a fresh `handoffId` the pausing page remembers
+ *   (`storePausedRun`); unpausing takes it back only while the slot still holds that id
+ *   (`takeBackPausedRun`). Until then any other tab may pick it up with Resume run, and the
+ *   pausing page steps aside (src/game/handoff.ts). Takes run under a Web Lock (`withSavedRunLock`).
  * - An unreadable or outdated slot reads as empty (`parseRunSnapshot`) and is dropped.
  */
 import type { Game } from '../game/game';
@@ -200,4 +204,84 @@ export function resumeSuspendedRun(game: Game, store: SuspendedRunStore, meta: P
   if (!s) return false;
   game.resumeRun(s, repairLoadout(s.characterId, s.loadout, meta.data.characters[s.characterId]));
   return true;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Pause hand-off: a paused Run is a saved Run. The page that pauses stores its Run under a fresh
+// `handoffId` and remembers it (src/game/handoff.ts); unpausing takes the Run back only while the
+// slot still holds that id. Meanwhile anyone else may take it (another tab's Resume run, or its
+// New run): the Run was then picked up elsewhere, and the pausing page steps aside.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * What the slot says about the Run (`runKey`) this page stored on pause under `handoffId`:
+ * - `mine`: still there, as stored. The page may take it back and play on.
+ * - `carriedOn`: taken (resumed elsewhere, or abandoned by New run, which credited it), or stored
+ *   again by whoever took it (the same Run under another hand-off). Data this build can't read
+ *   counts here too and is left alone (docs/adr/0001): most likely a newer build's copy of it.
+ * - `replaced`: another Run was saved over it (and this one credited as a quit then).
+ */
+export type PausedRunState = 'mine' | 'carriedOn' | 'replaced';
+
+export function pausedRunState(store: SuspendedRunStore, handoffId: string, runKey: string): PausedRunState {
+  const s = store.peek();
+  if (s && s.handoffId === handoffId && s.runKey === runKey) return 'mine';
+  return s && s.runKey !== runKey ? 'replaced' : 'carriedOn';
+}
+
+/**
+ * Pause: stores `snapshot` under `handoffId`, by the Save & quit rule (`saveSuspendedRun`: a
+ * different Run already in the slot is credited as a quit once the write sticks; the same Run again
+ * credits nothing). True when the write reached storage, so other tabs can pick it up; false when
+ * only this page's memory holds it (still this page's to take back).
+ */
+export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, handoffId: string, meta: Pick<MetaProgress, 'awardRun'>): boolean {
+  snapshot.handoffId = handoffId;
+  const prev = store.peek();
+  const stored = store.save(snapshot);
+  if (stored && prev && prev.runKey !== snapshot.runKey) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  return stored;
+}
+
+/**
+ * Unpause, and End run / Quit to title from pause: clears the slot if it still holds this page's
+ * Run (`handoffId`, `runKey`) and returns `mine`: the page is its only owner again and may play on
+ * (or end and credit it). Otherwise it touches nothing and returns why (`pausedRunState`): the Run
+ * is someone else's now, and this page must neither play nor credit it. Run it inside
+ * `withSavedRunLock`.
+ */
+export function takeBackPausedRun(store: SuspendedRunStore, handoffId: string, runKey: string): PausedRunState {
+  const state = pausedRunState(store, handoffId, runKey);
+  if (state === 'mine') store.clear();
+  return state;
+}
+
+/** The Web Lock every take of the slot runs under (Resume run, New run, the take back on unpause). */
+export const SAVED_RUN_LOCK = 'dust-bunny:saved-run';
+
+/** The part of `navigator.locks` used here. */
+export interface LockManagerLike {
+  request<T>(name: string, callback: () => T | Promise<T>): Promise<T>;
+}
+
+function browserLocks(): LockManagerLike | null {
+  const nav = (globalThis as { navigator?: { locks?: LockManagerLike } }).navigator;
+  return nav?.locks && typeof nav.locks.request === 'function' ? nav.locks : null;
+}
+
+/**
+ * Runs `fn` (a read then a write of the slot) under the `SAVED_RUN_LOCK` Web Lock, so two tabs
+ * can't take the same Run in the same moment. Without Web Locks (`locks` null) `fn` runs at once,
+ * synchronously; the race window is then the few milliseconds between its read and write. The
+ * store itself stays synchronous: only this wrapper is async.
+ */
+export function withSavedRunLock<T>(fn: () => T, locks: LockManagerLike | null = browserLocks()): Promise<T> {
+  if (!locks) {
+    try {
+      return Promise.resolve(fn());
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+  return locks.request(SAVED_RUN_LOCK, fn);
 }

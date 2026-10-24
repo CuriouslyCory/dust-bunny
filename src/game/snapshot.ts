@@ -19,6 +19,10 @@
  * slot credits a Run it replaces, src/meta/suspendedRun.ts). Snapshots saved before it existed get
  * one on read (`legacyRunKey`).
  *
+ * `handoffId` marks a Run stored by a pause rather than Save & quit: whichever page holds that id
+ * may take the Run back on unpause; anyone else may pick it up (src/game/handoff.ts). Optional and
+ * additive (docs/adr/0001): older snapshots and builds read it as absent.
+ *
  * `parseRunSnapshot` never throws: anything unreadable, from another version or with a field of
  * the wrong type is rejected (null) rather than half-restored.
  */
@@ -93,10 +97,24 @@ export interface RunSnapshot {
   unranked?: boolean;
   /** The Area the Run was started in (`RunConfig.area`, a debug start past the house). */
   startArea?: AreaId;
+  /**
+   * Stored by a pause (`Game.checkpointRun`): fresh per pause. The pausing page remembers it, and
+   * plays on only while the slot still holds it (src/game/handoff.ts). Absent for Save & quit.
+   */
+  handoffId?: string;
 }
 
 /** A fresh Run identity (random, so two Runs on the same seed and Character still differ). */
 export function newRunKey(): string {
+  return randomId();
+}
+
+/** A fresh hand-off id for one pause (`RunSnapshot.handoffId`). */
+export function newHandoffId(): string {
+  return randomId();
+}
+
+function randomId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (c?.randomUUID) return c.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
@@ -166,6 +184,7 @@ export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
   if (s.leaderboardRunId !== undefined && !isStr(s.leaderboardRunId)) return null;
   if (s.unranked !== undefined && typeof s.unranked !== 'boolean') return null;
   if (s.startArea !== undefined && !isArea(s.startArea)) return null;
+  if (s.handoffId !== undefined && !(isStr(s.handoffId) && s.handoffId.length > 0)) return null;
   const out = structuredClone(s) as unknown as RunSnapshot;
   out.runKey ??= legacyRunKey(out);
   return out;
