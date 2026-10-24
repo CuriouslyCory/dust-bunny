@@ -12,6 +12,7 @@
  * check whatever a schema change adds.
  */
 export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
+  AND to_regclass('public.saved_runs') IS NOT NULL
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
   AND to_regclass('public.area_scores_user_idx') IS NOT NULL
@@ -145,4 +146,16 @@ export const SCHEMA: readonly string[] = [
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0)`,
   // Tables created before Loadouts synced: each Character's remembered Loadout (NULL until a client sends them).
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS loadouts jsonb`,
+
+  // --- The Account's saved Run (api/saved-run.ts): one per player, held by one device at a time ---
+  // run_key names the Run (RunSnapshot.runKey); lease is whoever holds it now; snapshot (with its
+  // version) is NULL while a device is playing it. Taking it moves the lease; ending it deletes the row.
+  `CREATE TABLE IF NOT EXISTS saved_runs (
+    user_id text PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
+    run_key text NOT NULL,
+    lease text NOT NULL,
+    snapshot jsonb,
+    version integer,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
 ];

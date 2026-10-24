@@ -23,7 +23,7 @@
  * - An unreadable or outdated slot reads as empty (`parseRunSnapshot`) and is dropped.
  */
 import type { Game } from '../game/game';
-import { parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
+import { isNewerSnapshot, parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
 import { repairLoadout } from './hoard';
 import type { MetaProgress } from './meta';
 import { browserStorage, type KeyValueStorage } from './save';
@@ -42,8 +42,32 @@ export class SuspendedRunStore {
   /** The last write didn't reach storage: `memory` is the truth for this page from then on. */
   private stale = false;
   private listeners = new Set<(change: SuspendedRunChange) => void>();
+  /** The signed-in Account (null: none). A copy tagged with another Account (or any, signed out) reads as empty. */
+  private viewer: string | null = null;
 
   constructor(private readonly storage: Storage | null) {}
+
+  /** Sets who is signed in (src/meta/accountRun.ts); tells listeners when it changes what the slot shows. */
+  setViewer(userId: string | null): void {
+    if (userId === this.viewer) return;
+    this.viewer = userId;
+    this.emit({ external: false });
+  }
+
+  private parsed(): unknown {
+    const raw = this.read();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The slot holds a saved Run from a newer build: kept as it is, unread (docs/adr/0001). */
+  get newer(): boolean {
+    return isNewerSnapshot(this.parsed());
+  }
 
   private read(): string | null {
     if (!this.storage || this.stale) return this.memory;
@@ -55,6 +79,14 @@ export class SuspendedRunStore {
   }
 
   private write(value: string | null): void {
+    // A newer build's saved Run is never deleted or overwritten here: this page keeps its own copy
+    // in memory instead, as when storage is full.
+    if (this.storage && !this.stale && this.newer) {
+      this.memory = value;
+      this.stale = true;
+      this.emit({ external: false });
+      return;
+    }
     this.memory = value;
     if (this.storage) {
       try {
@@ -91,15 +123,19 @@ export class SuspendedRunStore {
     this.emit({ external: true });
   }
 
-  /** The saved Run, or null (none, or one that can't be resumed). */
+  /**
+   * The saved Run, or null (none, one that can't be resumed, or one kept for an Account other than
+   * the signed-in one: another player's Runs are never offered, credited or taken).
+   */
   peek(): RunSnapshot | null {
-    const raw = this.read();
-    if (!raw) return null;
-    try {
-      return parseRunSnapshot(JSON.parse(raw));
-    } catch {
-      return null;
-    }
+    const s = this.peekAny();
+    if (s?.account && s.account.userId !== this.viewer) return null;
+    return s;
+  }
+
+  /** The saved Run whoever's Account it is kept for (null: none, or unreadable). */
+  peekAny(): RunSnapshot | null {
+    return parseRunSnapshot(this.parsed());
   }
 
   get has(): boolean {
@@ -112,10 +148,22 @@ export class SuspendedRunStore {
     return !this.stale;
   }
 
+  /**
+   * Marks the copy in the slot as confirmed by the server, if it still is `runKey` stored under
+   * `lease` (src/meta/accountRun.ts). False when the slot holds something else by now.
+   */
+  markSynced(runKey: string, lease: string): boolean {
+    const s = this.peek();
+    if (!s?.account || s.runKey !== runKey || s.account.lease !== lease || s.account.synced) return false;
+    s.account = { userId: s.account.userId, lease, synced: true };
+    this.write(JSON.stringify(s));
+    return !this.stale;
+  }
+
   /** Reads and clears the saved Run (Resume). */
   take(): RunSnapshot | null {
     const s = this.peek();
-    if (this.read() !== null) this.write(null);
+    if (s) this.write(null);
     return s;
   }
 
