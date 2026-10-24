@@ -44,9 +44,12 @@
  * Area (the Universe) the Run is won (bossDefeated → victory → runEnded 'victory').
  *
  * Abilities (src/abilities): bosses hunt and telegraph at Lint's Decoy while it is within
- * `chargeTrigger` (aimTarget) and their suction drags it in. `abilityStun` is the external stun
- * (a clog, a charge into an Amassing Tumble, a Discharge): it enters the same `stunned` state as a
- * wall crash, so one hit lands on contact.
+ * `chargeTrigger` (aimTarget) and their suction drags it in.
+ *
+ * Stuns: every stun (a wall crash, indigestion, Spiky Dash, an Ability) goes through
+ * run.hazards.status (./status.ts), which owns the stun timer, the Hit ledger (one Hit per stun,
+ * the cut to HIT_STUN after a Hit, the Ability limit) and `bossStunned`. `state` reads 'stunned'
+ * while that timer runs; `onStunned` drops any telegraph or charge so the boss recovers after it.
  */
 import type { Rng } from '../core/rng';
 import { bossHits, bossPace, GARBAGE_TRUCK, INCINERATOR, ROBOVAC_9000, STREET_SWEEPER, type AshTuning, type BossTuning } from '../data/hazards';
@@ -59,17 +62,19 @@ import { DECAL_COLORS, laneDecal, ringDecal } from './decals';
 import { HazardManager, hazardRegistry, type HazardDef } from './index';
 import { projectileMaterial, Volley, type Projectile } from './projectiles';
 import { scatterDebris, shedMass } from './shed';
+import { hittable, stunCause, type AbilityStunCause, type StunCause } from './status';
 
 /** The ash volley's phase: waiting, amber lane locked on the target, pellets leaving the chimney. */
 export type AshState = 'idle' | 'telegraph' | 'firing';
 
 export type BossState = 'intro' | 'hunt' | 'telegraph' | 'charge' | 'stunned' | 'recover';
 
-/** What stunned the boss last: a wall crash, Sagittarius A*'s indigestion, Spiky Dash, or an Ability (src/abilities). */
-export type BossStunCause = 'wall' | 'indigestion' | 'spiky' | 'decoy' | 'amass' | 'discharge';
+/** What stunned the boss last (see StunCause in ./status.ts). */
+export type BossStunCause = StunCause;
+export type { AbilityStunCause };
 
-/** Stuns an Ability deals (src/abilities). */
-export type AbilityStunCause = Exclude<BossStunCause, 'wall' | 'indigestion' | 'spiky'>;
+/** The state machine's phase; 'stunned' is only ever read (the status module's stun timer). */
+type BossPhase = Exclude<BossState, 'stunned'>;
 
 /**
  * Seconds after a landed hit during which the boss deals no contact damage (it stays stunned 0.6 s,
@@ -78,23 +83,18 @@ export type AbilityStunCause = Exclude<BossStunCause, 'wall' | 'indigestion' | '
 export const BOSS_HIT_GRACE = 1.6;
 
 export class RoboVac9000 extends BaseHazard {
-  state: BossState = 'intro';
+  private phase: BossPhase = 'intro';
+  /** Seconds left of the current phase (frozen while stunned). */
   private timer: number;
   private chargeDirX = 0;
   private chargeDirZ = 1;
   private charged = 0;
   private summonTimer: number;
-  /** Hit already landed during the current stun. */
-  private hitThisStun = false;
   /** Hits landed so far; `maxHits` break it (AREA_BOSSES.hits). */
   hits = 0;
   readonly maxHits: number;
   /** Seconds after a hit during which touching it does no damage (BOSS_HIT_GRACE). */
   hitGrace = 0;
-  /** Cause of the current / last stun. */
-  stunCause: BossStunCause | null = null;
-  /** Grounded: seconds after a Discharge during which it can't be Discharged again (counted down by the Ability System). */
-  groundedFor = 0;
   /**
    * Extra effect of the hit landed during the current stun (Amass sets it when a charge crashes
    * into its core): the stun lasts `hold` more seconds after the hit and `pieces` more parts fall
@@ -158,6 +158,25 @@ export class RoboVac9000 extends BaseHazard {
     return this.size / this.cfg.size;
   }
 
+  /** The state machine's phase, or 'stunned' while the stun timer runs. */
+  get state(): BossState {
+    return this.stunned ? 'stunned' : this.phase;
+  }
+
+  /** Sets the phase (tests, debug); a running stun still reads 'stunned' until it ends. */
+  set state(phase: BossPhase) {
+    this.phase = phase;
+  }
+
+  /** Cause of the current / last stun. */
+  get stunCause(): BossStunCause | null {
+    return stunCause(this);
+  }
+
+  protected override get ticksWhileStunned(): boolean {
+    return true;
+  }
+
   absorbRadius(run: Run): number {
     return absorbRadiusFor(this.size, run.bunny.stats.get('absorbRatio'));
   }
@@ -169,12 +188,14 @@ export class RoboVac9000 extends BaseHazard {
     const dx = b.x - this.x;
     const dz = b.z - this.z;
     const dist = Math.hypot(dx, dz);
-    this.timer -= dt;
     this.hitGrace = Math.max(0, this.hitGrace - dt);
     this.spin('brush_l', dt * c.brushSpin);
     this.spin('brush_r', -dt * c.brushSpin);
 
-    switch (this.state) {
+    // Stunned: it wobbles in place; its phase (set by onStunned) waits for the stun to end.
+    if (this.stunned) this.yaw += Math.sin(this.time * 40) * 0.02;
+    else this.timer -= dt;
+    switch (this.stunned ? null : this.phase) {
       case 'intro': {
         const t = aimTarget(run, this.x, this.z, c.chargeTrigger);
         if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
@@ -242,10 +263,6 @@ export class RoboVac9000 extends BaseHazard {
         }
         break;
       }
-      case 'stunned':
-        this.yaw += Math.sin(this.time * 40) * 0.02;
-        if (this.timer <= 0) this.enter('recover', c.recover);
-        break;
       case 'recover':
         if (this.timer <= 0) this.enter('hunt', randomIn(this.rng, c.huntTime));
         break;
@@ -328,45 +345,31 @@ export class RoboVac9000 extends BaseHazard {
     });
   }
 
-  /**
-   * Stuns it for `stunTime` as a crash does (a charge into a wall, or Sagittarius A*'s
-   * indigestion): cancels a telegraph or charge, and one hit lands on contact.
-   */
+  /** Stuns it for `stunTime` as a crash does (a charge into a wall, or Sagittarius A*'s indigestion). */
   protected crashStun(run: Run, cause: 'wall' | 'indigestion'): void {
-    this.lane.visible = false;
-    this.hitThisStun = false;
-    this.hitBonus = null;
-    this.stunCause = cause;
-    this.enter('stunned', this.cfg.stunTime);
+    // The crash's own effects come first, so `bossStunned` listeners see them.
     if (cause === 'wall') this.onCrashStun(run);
-    run.events.emit('bossStunned', { hazardId: this.id, cause });
+    run.hazards.status.stun(this, this.cfg.stunTime, cause);
   }
 
-  /** Spiky Dash stun: one hit can land during it, like a wall crash. */
-  override stun(_seconds: number): void {
-    this.hitThisStun = false;
-    this.hitBonus = null;
-    this.stunCause = 'spiky';
+  /** An Ability stun (shorthand for run.hazards.status.stun, which applies the Ability limit). */
+  abilityStun(run: Run, seconds: number, cause: AbilityStunCause): boolean {
+    return run.hazards.status.stun(this, seconds, cause);
   }
 
   /**
-   * External stun from an Ability (Decoy clog, Amass crash, Discharge): cancels any telegraph or
-   * charge and enters the `stunned` state for `seconds`, so one hit lands on contact. The Ability
-   * System enforces the 6 s boss limit before calling this.
+   * Any stun (HazardStatus.stun): drops a telegraph or charge and clears the last Hit's bonus;
+   * the boss recovers once the stun ends.
    */
-  abilityStun(run: Run, seconds: number, cause: AbilityStunCause): void {
+  onStunned(_cause: StunCause, _seconds: number): void {
     this.lane.visible = false;
-    this.hitThisStun = false;
     this.hitBonus = null;
-    this.stunCause = cause;
-    // Never cut short a stun that is already running.
-    this.enter('stunned', this.state === 'stunned' ? Math.max(this.timer, seconds) : seconds);
-    run.events.emit('bossStunned', { hazardId: this.id, cause });
+    this.enter('recover', this.cfg.recover);
   }
 
   /** True while ramming it lands a hit: stunned, and no hit landed in this stun yet. */
   get hittable(): boolean {
-    return (this.state === 'stunned' || this.stunned) && !this.hitThisStun;
+    return hittable(this);
   }
 
   /** True mid-charge: running into an Amassing Tumble then stuns it like a wall. */
@@ -398,8 +401,8 @@ export class RoboVac9000 extends BaseHazard {
     scatterDebris(run, this.rng, this.x, this.z, count, size, inner, outer);
   }
 
-  private enter(state: BossState, time: number): void {
-    this.state = state;
+  private enter(phase: BossPhase, time: number): void {
+    this.phase = phase;
     this.timer = time;
   }
 
@@ -441,12 +444,12 @@ export class RoboVac9000 extends BaseHazard {
     const b = run.bunny;
     if (bunnySheltered(run, c.height)) return;
     const radius = c.contactRadius * this.scale;
-    if (this.state === 'stunned' || this.stunned) {
-      if (!this.hitThisStun) {
-        this.hitThisStun = true;
+    if (this.stunned) {
+      const bonus = this.hitBonus;
+      // A Hit lands once per stun; the stun is then cut to HIT_STUN (+ the bonus hold).
+      if (run.hazards.status.landHit(this, bonus?.hold ?? 0)) {
         this.hits++;
         // Parts knocked loose: absorbable Debris around the boss.
-        const bonus = this.hitBonus;
         this.scatterParts(run, c.hitPieces + (bonus?.pieces ?? 0), b.radius * 0.45, radius + b.radius, radius + b.radius * 4);
         run.events.emit('bossHit', { hazardId: this.id, hits: this.hits, maxHits: this.maxHits });
         if (this.hits >= this.maxHits) {
@@ -454,7 +457,6 @@ export class RoboVac9000 extends BaseHazard {
           run.hazards.absorb(this);
           return;
         }
-        if (this.state === 'stunned') this.timer = Math.min(this.timer, 0.6 + (bonus?.hold ?? 0));
         // The Bunny that landed it gets away: no contact damage while it recovers.
         this.hitGrace = BOSS_HIT_GRACE + (bonus?.hold ?? 0);
       }

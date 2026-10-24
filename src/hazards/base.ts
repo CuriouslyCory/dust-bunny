@@ -15,6 +15,7 @@ import { DECAL_COLORS, ringDecal, type Decal } from './decals';
 import { playAbsorbFx } from './fx';
 import type { Hazard, HazardDef, HazardShape } from './index';
 import { HAZARD_MODEL_SIZES, type HazardModelId } from './models';
+import { isStunned } from './status';
 
 export abstract class BaseHazard implements Hazard {
   readonly object3d = new Group();
@@ -26,8 +27,11 @@ export abstract class BaseHazard implements Hazard {
   yaw = 0;
   /** Seconds alive. */
   time = 0;
-  /** Spiky Dash stun (set and counted down by the combat System): no movement or attacks. */
-  stunnedFor = 0;
+  /** Status timers (s): written and counted down only by HazardStatus (run.hazards.status, ./status.ts). */
+  readonly stunnedFor: number = 0;
+  readonly cloggedFor: number = 0;
+  readonly groundedFor: number = 0;
+  readonly ignoresBunnyFor: number = 0;
 
   /** Seconds the Hazard backs off after landing a hit, so it can't pin the Bunny against a wall. */
   recoilFor = 0;
@@ -35,7 +39,12 @@ export abstract class BaseHazard implements Hazard {
   protected recoilHeight = 20;
 
   get stunned(): boolean {
-    return this.stunnedFor > 0;
+    return isStunned(this);
+  }
+
+  /** Keep calling tick() while stunned (bosses run their own stunned phase); others freeze. */
+  protected get ticksWhileStunned(): boolean {
+    return false;
   }
 
   /** Height this Hazard collides at when pushed back (by an Amassing Tumble, or while recoiling). */
@@ -46,8 +55,6 @@ export abstract class BaseHazard implements Hazard {
   /** Shake amplitude (world units) while Amass strains at it without moving it (0 = still). */
   tension = 0;
 
-  /** Called by the combat System when stunned; the wobble is driven by `stunnedFor` in sync(). */
-  stun(_seconds: number): void {}
   protected readonly decals: Decal[] = [];
   private readonly absorbMarker: Decal;
 
@@ -75,7 +82,7 @@ export abstract class BaseHazard implements Hazard {
     if (this.recoilFor > 0) {
       this.recoilFor -= dt;
       this.backOff(dt, run);
-    } else if (!this.stunned) this.tick(dt, run);
+    } else if (!this.stunned || this.ticksWhileStunned) this.tick(dt, run);
     this.sync(run);
   }
 

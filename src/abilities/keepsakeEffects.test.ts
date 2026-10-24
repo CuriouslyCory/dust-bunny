@@ -256,7 +256,7 @@ describe('Tumble · Amass Keepsakes', () => {
     const boss = run.hazards.spawn('robovac_9000', b.x - b.radius - ROBOVAC_9000.contactRadius - b.radius, b.z) as RoboVac9000;
     boss.state = 'recover';
     amass(run, input);
-    h.stunnedFor = 0;
+    run.hazards.status.clear(h);
     const d0 = Math.hypot(h.x - b.x, h.z - b.z);
     input.abilityHeld = false;
     run.update(1 / 60);

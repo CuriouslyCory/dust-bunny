@@ -7,9 +7,8 @@
  *   - every tunable comes from `params` (resolveAbilityParams, see ./params.ts; resolved again
  *     on keepsakeTuckedIn and whenever a Perk is applied, so controllers read it each time rather
  *     than keeping a copy);
- *   - the boss limit: a boss can be stunned by an Ability at most once per
- *     params.bossStunInterval seconds (stunBoss). Wall crashes and Spiky Dash don't count;
- *   - Grounded: `hazard.groundedFor` (set by Discharge) counts down here.
+ * Stuns, clogs and Grounded go through run.hazards.status (src/hazards/status.ts), which also
+ * holds the boss rules (the 6 s Ability limit, one Hit per stun).
  *
  * Hooks for later effects (Keepsakes): the params modifiers, the events in ./events.ts
  * (abilityUsed, abilityEnded, hazardClogged, hazardSwallowed, bossCrashedIntoAmass,
@@ -23,17 +22,11 @@ import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import type { Hazard } from '../hazards';
-import { RoboVac9000, type AbilityStunCause, type BossStunCause } from '../hazards/robovac';
+import { RoboVac9000, type BossStunCause } from '../hazards/robovac';
+import { isAbilityCause } from '../hazards/status';
 import { resolveAbilityParams, type AbilityParams } from './params';
 import type { AbilityEndReason } from './events';
 import './events';
-
-declare module '../hazards' {
-  interface Hazard {
-    /** Seconds a boss stays Grounded after a Discharge: it can't be Discharged again meanwhile. */
-    groundedFor?: number;
-  }
-}
 
 export const ABILITY_SYSTEM_ID = 'ability';
 
@@ -69,7 +62,7 @@ export interface AbilityController {
 export interface AbilityHooks {
   /** The Decoy ended at (x, z) (Reclaim). */
   decoyEnded?(run: Run, reason: AbilityEndReason, x: number, z: number): void;
-  /** An Ability stunned a boss. */
+  /** An Ability (or Emergency Discharge) stunned a boss. */
   bossStunned?(run: Run, boss: RoboVac9000, cause: BossStunCause, seconds: number): void;
   /** A Discharge hit these Hazards (first target first). */
   discharged?(run: Run, targets: readonly Hazard[]): void;
@@ -102,8 +95,6 @@ export class AbilitySystem implements System {
   readonly controller: AbilityController;
   readonly rng: Rng;
   readonly hooks: AbilityHooks = {};
-  /** Simulated second of each boss's last Ability stun (by Hazard id). */
-  private readonly lastBossStun = new Map<number, number>();
   private area: string;
   private resolved: AbilityParams;
   /** run.perkVersion the params were last resolved at (Character Perks edit them too). */
@@ -115,6 +106,13 @@ export class AbilitySystem implements System {
     this.resolvedPerks = run.perkVersion;
     // A Keepsake tucked in mid-Run changes the numbers from the next read on.
     run.disposables.add(run.events.on('keepsakeTuckedIn', () => (this.resolved = resolveAbilityParams(run))));
+    run.disposables.add(
+      run.events.on('bossStunned', (e) => {
+        if (!isAbilityCause(e.cause) || !this.hooks.bossStunned) return;
+        const boss = run.hazards.hazards.find((h) => h.id === e.hazardId);
+        if (boss && isBoss(boss)) this.hooks.bossStunned(run, boss, e.cause, e.seconds);
+      }),
+    );
     this.rng = run.rng.fork('ability');
     this.area = run.area;
     const factory = factories.get(this.data.id);
@@ -135,32 +133,14 @@ export class AbilitySystem implements System {
   update(dt: number, run: Run): void {
     if (run.area !== this.area) {
       this.area = run.area;
-      this.lastBossStun.clear();
       this.controller.areaChanged();
     }
-    for (const h of run.hazards.hazards) if (h.groundedFor && h.groundedFor > 0) h.groundedFor = Math.max(0, h.groundedFor - dt);
     this.controller.update(dt, run.inputState);
   }
 
-  /** True if an Ability may stun this boss now (the 6 s limit). */
+  /** True if an Ability may stun this boss now (the 6 s limit, HazardStatus.canStun). */
   canStunBoss(boss: Hazard): boolean {
-    const last = this.lastBossStun.get(boss.id);
-    return last === undefined || this.run.time - last >= this.params.bossStunInterval;
-  }
-
-  /** Stuns a boss with an Ability if the limit allows (abilityStun, so a hit lands on contact). */
-  stunBoss(boss: RoboVac9000, seconds: number, cause: AbilityStunCause): boolean {
-    if (!this.canStunBoss(boss)) return false;
-    this.lastBossStun.set(boss.id, this.run.time);
-    boss.abilityStun(this.run, seconds, cause);
-    this.hooks.bossStunned?.(this.run, boss, cause, seconds);
-    return true;
-  }
-
-  /** Stuns a non-boss Hazard (no movement or attacks) for at least `seconds`. */
-  stunHazard(h: Hazard, seconds: number): void {
-    h.stunnedFor = Math.max(h.stunnedFor ?? 0, seconds);
-    h.stun?.(seconds);
+    return this.run.hazards.status.canStun(boss, 'discharge');
   }
 
   hud(): AbilityHudState {

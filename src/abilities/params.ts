@@ -7,7 +7,7 @@
  *
  * Ranges and sizes are in Bunny radii (r) unless noted.
  */
-import { ABILITY_RULES, AMASS, DECOY, DISCHARGE } from '../data/abilities';
+import { AMASS, DECOY, DISCHARGE } from '../data/abilities';
 import type { Run } from '../game/run';
 
 export interface DecoyParams {
@@ -108,8 +108,6 @@ export interface DischargeParams {
 }
 
 export interface AbilityParams {
-  /** A boss can be stunned by an Ability at most once per this many seconds. */
-  bossStunInterval: number;
   decoy: DecoyParams;
   amass: AmassParams;
   discharge: DischargeParams;
@@ -118,7 +116,6 @@ export interface AbilityParams {
 /** A fresh, mutable copy of the base values (no modifiers). */
 export function baseAbilityParams(): AbilityParams {
   return {
-    bossStunInterval: ABILITY_RULES.bossStunInterval,
     decoy: {
       radius: DECOY.radius,
       duration: DECOY.duration,
