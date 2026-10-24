@@ -6,6 +6,7 @@ import { BASE_BUNNY_STATS, computeStats } from '../entities/stats';
 import { Run } from '../game/run';
 import type { RunStats } from '../game/runStats';
 import { registerPerks } from '../perks/perks';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
 import { AREA_ORDER } from '../world/types';
 import { endsUniverse, MetaProgress } from './meta';
@@ -314,34 +315,61 @@ describe('save shared between tabs', () => {
     const tabA = new MetaProgress(storage);
     const tabB = new MetaProgress(storage);
     tabA.buy('wide_choice');
-    const award = tabB.awardRun({ reason: 'died', stats: stats() });
+    const award = tabB.awardRun({ runKey: 'r1', reason: 'died', stats: stats() })!;
     expect(award.total).toBe(award.fluff);
     expect(new MetaProgress(storage).data).toMatchObject({ fluff: award.fluff, upgrades: { wide_choice: 1 }, stats: { runs: 1 } });
   });
 });
 
 describe('MetaProgress', () => {
-  it('awards Fluff once per runEnded payload and records stats', () => {
-    const meta = new MetaProgress(memStorage());
-    const e = { reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
-    const a = meta.awardRun(e);
+  it('awards Fluff once per Run key and records stats; the key is remembered with the Fluff', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    const e = { runKey: 'run-a', reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
+    const a = meta.awardRun(e)!;
     expect(a.fluff).toBe(Math.floor((12 + 50 / 30 + 400 / 1000) * VICTORY_FLUFF_MULTIPLIER));
-    expect(meta.awardRun(e)).toBe(a);
+    expect(meta.credited('run-a')).toBe(true);
+    // The same key again, from any payload (another tab's copy, a ledger row), adds nothing.
+    expect(meta.awardRun(e)).toBeNull();
+    expect(meta.awardRun({ ...e, stats: stats({ maxRadius: 500 }) })).toBeNull();
+    expect(new MetaProgress(storage).awardRun(e)).toBeNull();
     expect(meta.fluff).toBe(a.fluff);
     expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1, bestRadius: 50, bestTier: 3 });
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual(['run-a']);
   });
 
-  it('counts a Universe on each victory in the last Area, once per payload', () => {
+  it('remembers the newest CREDITED_RUNS_MAX keys, oldest dropped first', () => {
+    const meta = new MetaProgress(memStorage());
+    for (let i = 0; i < CREDITED_RUNS_MAX + 5; i++) expect(meta.awardRun({ runKey: `k${i}`, reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    expect(meta.data.creditedRuns[0]).toBe('k5');
+    expect(meta.data.creditedRuns.at(-1)).toBe(`k${CREDITED_RUNS_MAX + 4}`);
+    expect(meta.credited('k4')).toBe(false); // aged out: a repeat would count again (the sweep fetches far fewer than this)
+    expect(meta.data.stats.runs).toBe(CREDITED_RUNS_MAX + 5);
+  });
+
+  it('reads creditedRuns from a save (deduplicated, capped) and defaults to none', () => {
+    expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: undefined })).data.creditedRuns).toEqual([]);
+    const many = Array.from({ length: CREDITED_RUNS_MAX + 2 }, (_, i) => `k${i}`);
+    const d = parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: ['a', 'a', 7, '', ...many] })).data;
+    expect(d.creditedRuns[0]).toBe('k2'); // 'a' once, then k0…k101: the newest 100 stay
+    expect(d.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: 'nope' })).data.creditedRuns).toEqual([]);
+  });
+
+  it('counts a Universe on each victory in the last Area, once per Run; universesAfter looks ahead', () => {
     const storage = memStorage();
     const meta = new MetaProgress(storage);
     const last = AREA_ORDER[AREA_ORDER.length - 1]!;
-    const win = { reason: 'victory' as const, stats: stats({ area: last }) };
+    const win = { runKey: 'w1', reason: 'victory' as const, stats: stats({ area: last }) };
     expect(endsUniverse(win)).toBe(true);
-    expect(meta.awardRun(win).universes).toBe(1);
-    expect(meta.awardRun(win).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'died', stats: stats({ area: last }) }).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: 'city' }) }).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: last }) }).universes).toBe(2);
+    expect(meta.universesAfter(win)).toBe(1); // not credited yet: counts it
+    expect(meta.awardRun(win)!.universes).toBe(1);
+    expect(meta.universesAfter(win)).toBe(1); // credited: as it is
+    expect(meta.awardRun(win)).toBeNull();
+    expect(meta.awardRun({ runKey: 'd1', reason: 'died', stats: stats({ area: last }) })!.universes).toBe(1);
+    expect(meta.awardRun({ runKey: 'w2', reason: 'victory', stats: stats({ area: 'city' }) })!.universes).toBe(1);
+    expect(meta.awardRun({ runKey: 'w3', reason: 'victory', stats: stats({ area: last }) })!.universes).toBe(2);
     expect(new MetaProgress(storage).universes).toBe(2);
   });
 

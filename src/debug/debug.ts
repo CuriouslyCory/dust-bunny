@@ -120,7 +120,7 @@ export function installDebug(game: Game): DebugTools {
       run.bunny.form = 'black_hole';
       run.ended = true;
       run.endReason = 'victory';
-      const params: EndingParams = { result: { reason: 'victory', stats: run.getStats() }, from };
+      const params: EndingParams = { result: { runKey: run.runKey, reason: 'victory', stats: run.getStats() }, from };
       game.go('ending', params);
     },
     advance(seconds) {

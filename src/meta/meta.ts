@@ -6,11 +6,12 @@
  * Every check that decides a write (can this be afforded? is the Keepsake still there?) runs inside
  * the store's update callback, on the freshly read save, so another tab's spend is never undone.
  */
-import type { GameEvents } from '../core/events';
 import type { DifficultyId } from '../data/difficulty';
 import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_RARITY, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
+import type { RunEndReason } from '../game/runStats';
+import { CREDITED_RUNS_MAX, type CreditStats } from '../shared/runCredit';
 import { AREA_ORDER } from '../world/types';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
@@ -19,10 +20,21 @@ import { levelOf, upgradeCost, upgradeModifiers } from './upgrades';
 
 declare module '../core/events' {
   interface GameEvents {
-    /** Fluff credited for a finished Run (after the save is written). */
-    fluffAwarded: { amount: number; total: number; reason: GameEvents['runEnded']['reason'] };
+    /**
+     * Fluff for a finished Run. `pending`: the Run is credited by the Account's answer, not yet
+     * (`amount` is what it will be; `total` the wallet without it): it fires again with `pending:
+     * false` once the credit lands, `amount: 0` if the server refused it (src/meta/accountRun.ts).
+     */
+    fluffAwarded: { runKey: string; amount: number; total: number; reason: RunEndReason; pending: boolean };
     upgradePurchased: { upgradeId: string; level: number; cost: number; fluffLeft: number };
   }
+}
+
+/** What crediting a Run reads: the `runEnded` payload, or a ledger row (docs/adr/0003). */
+export interface RunCreditInput {
+  runKey: string;
+  reason: RunEndReason;
+  stats: CreditStats;
 }
 
 export interface RunAward {
@@ -37,7 +49,7 @@ export interface RunAward {
 const LAST_AREA = AREA_ORDER[AREA_ORDER.length - 1]!;
 
 /** True for a Run that won the last Area: it counts one more Universe. */
-export function endsUniverse(e: Pick<GameEvents['runEnded'], 'reason' | 'stats'>): boolean {
+export function endsUniverse(e: Pick<RunCreditInput, 'reason' | 'stats'>): boolean {
   return e.reason === 'victory' && e.stats.area === LAST_AREA;
 }
 
@@ -82,7 +94,6 @@ function feltCheckOn(d: SaveData, characterId: string, ref: KeepsakeRef): FeltCh
 
 export class MetaProgress {
   readonly store: SaveStore;
-  private awarded = new WeakMap<object, RunAward>();
 
   /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
   constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
@@ -137,15 +148,15 @@ export class MetaProgress {
 
   /**
    * Credits Fluff and records stats for a finished Run, and counts a Universe victory in
-   * `universes`. Idempotent per runEnded payload, so both the results screen and the event
-   * listener may call it.
+   * `universes`. Once per Run key: null when `creditedRuns` already lists it. The check and the
+   * write share one update, so two tabs applying the same credit can't both add it, and the key
+   * is remembered in the same write as the Fluff (docs/adr/0003).
    */
-  awardRun(e: GameEvents['runEnded']): RunAward {
-    const prev = this.awarded.get(e);
-    if (prev) return prev;
+  awardRun(e: RunCreditInput): RunAward | null {
     const fluff = fluffForRun(e.reason, e.stats);
     let newBestRadius = false;
-    this.store.update((d) => {
+    const added = this.store.updateIf((d) => {
+      if (d.creditedRuns.includes(e.runKey)) return false;
       newBestRadius = e.stats.maxRadius > d.stats.bestRadius;
       d.fluff += fluff;
       d.stats.runs++;
@@ -154,10 +165,26 @@ export class MetaProgress {
       d.stats.bestTier = Math.max(d.stats.bestTier, e.stats.tierReached);
       d.stats.totalFluffEarned += fluff;
       if (endsUniverse(e)) d.universes++;
+      d.creditedRuns = [...d.creditedRuns, e.runKey].slice(-CREDITED_RUNS_MAX);
+      return true;
     });
-    const award = { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
-    this.awarded.set(e, award);
-    return award;
+    if (!added) return null;
+    return { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
+  }
+
+  /** Whether this copy holds the credit for the Run. */
+  credited(runKey: string): boolean {
+    return this.store.data.creditedRuns.includes(runKey);
+  }
+
+  /** The Universes count once `e` is credited: as it is now, plus one for a Universe victory still to land. */
+  universesAfter(e: RunCreditInput): number {
+    return this.store.data.universes + (endsUniverse(e) && !this.credited(e.runKey) ? 1 : 0);
+  }
+
+  /** Credits a saved Run the device lets go of (replaced in its slot, or abandoned) as a quit (`QuitCreditor`, src/meta/suspendedRun.ts). */
+  creditQuit(s: { runKey: string; stats: CreditStats }): void {
+    this.awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats });
   }
 
   // --- Keepsakes ---

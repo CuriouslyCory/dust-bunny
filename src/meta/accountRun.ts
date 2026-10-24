@@ -12,126 +12,88 @@
  * credited (`SuspendedRunStore.setViewer`).
  *
  * - Pause (and Save & quit): the device slot is written first, synchronously (src/game/handoff.ts),
- *   then the copy is uploaded (`stored`). A hidden page uploads with `keepalive`, and so does
- *   `pagehide` for an upload still waiting, so a closing tab still gets it there. A different Run
- *   the upload replaces comes back from the server and is credited as a quit, unless the device
- *   slot's own replace just credited it. A copy in the slot the server had confirmed is never
- *   credited by the slot's replace (it may be another device's Run in progress by now): only by
- *   that answer, which hands back a stored copy only if nobody took it.
+ *   then the copy is uploaded (`stored`, with `ledger: true`). A hidden page uploads with
+ *   `keepalive`, and so does `pagehide` for an upload still waiting, so a closing tab still gets it
+ *   there. A different Run the upload replaces is recorded in the ledger by the server and its row
+ *   comes back in `credits`, which is applied here.
  * - Unpause: optimistic. The Run plays on at once and the server take runs in the background
  *   (`takenBack`), retried with backoff while offline; never awaited. If the server says another
  *   device holds the Run (a refused take, or a 409 on a later upload) the page is told (`onLost`):
- *   it disposes its copy without `runEnded`, so nothing is credited twice, and says so. Ending the
- *   Run before the take is heard back from (End run, `confirmHeld`; dying or winning,
- *   `gateRunEnding`) waits for it first.
+ *   it disposes its copy without `runEnded`, so nothing is credited twice, and says so.
+ * - Credit (docs/adr/0003): nothing here decides that a Run is credited; the server's ledger does
+ *   (src/meta/runCredits.ts, `credits`). The Run ending (`ended`) and every quit of a saved copy
+ *   (the device slot's replace, New run's abandon, the title's "server copy wins": `creditQuit`)
+ *   send a claim. A Run the server was never told about (never uploaded from here, or kept on this
+ *   device only) is credited at once and the claim just records it; one the server knows is
+ *   credited from the answer, so the results screen shows its Fluff as pending until then (offline:
+ *   until the page is back online). Signed out, every Run is credited at once, on the device.
+ *   `creditOf` says where a Run's credit stands for the results screen.
  * - Title: `syncTitle` waits until this page's own uploads (and any Resume or New run on its way,
  *   `titleEpoch`) have settled, then reads the server copy (a read that overlapped one is read
  *   again). The server copy wins over the device slot: it is mirrored into the slot (a different
- *   Run that only this device had is credited as a quit first). A device copy the server never
+ *   Run that only this device had is claimed as a quit first). A device copy the server never
  *   confirmed is uploaded instead. One from a newer build is left alone, on both sides, and the
- *   title says an update is needed (docs/adr/0001).
+ *   title says an update is needed (docs/adr/0001). The ledger sweep runs once the read is done.
  * - Resume (`resume`) waits for the server take: of two devices racing, one gets the Run and the
  *   other's title refreshes. Offline, it resumes and takes in the background, as unpausing does.
- * - New run (`abandon`) and the Run ending (`ended`) end the row, only for this page's lease (the
- *   server keeps it, marked ended, so a late upload of the Run is refused). `abandon` and `resume`
- *   first wait out an upload of the Run still on its way, so the delete or take can't land before it.
+ *   `abandon` and `resume` first wait out an upload of the Run still on its way, so the claim or
+ *   take can't land before it.
  * - An answer that arrives after an Account switch is dropped (`gen`): it never credits, or touches
  *   the device slot, for the Account signed in now.
  */
-import type { RunEndReason } from '../game/runStats';
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
 import type { AccountClient } from '../net/account';
+import { pickCreditStats, type CreditStats, type RunCredit } from '../shared/runCredit';
 import type { ServerSavedRun } from '../shared/savedRun';
-import type { MetaProgress } from './meta';
-import { abandonSuspendedRun, getSuspendedRuns, type SuspendedRunStore } from './suspendedRun';
+import { createJsonCaller, SavedRunAuthError, SavedRunNetError, type JsonCallerOptions } from './accountHttp';
+import type { MetaProgress, RunAward, RunCreditInput } from './meta';
+import { createRunCreditApi, RunCreditQueue, type CreditOutcome } from './runCredits';
+import { browserStorage } from './save';
+import { getSuspendedRuns, type QuitCreditor, type SuspendedRunStore } from './suspendedRun';
+
+export { SavedRunAuthError, SavedRunNetError } from './accountHttp';
 
 // ---------------------------------------------------------------------------------------------
 // HTTP client for api/saved-run.ts
 // ---------------------------------------------------------------------------------------------
 
-/** The request didn't get a definite answer (offline, timeout, 5xx): try again later. */
-export class SavedRunNetError extends Error {}
-/** The session is gone (401): stop until the Account says otherwise. */
-export class SavedRunAuthError extends Error {}
-
 export type PutResult =
-  | { ok: true; replaced: { runKey: string; snapshot: Record<string, unknown> | null } | null }
-  /** `carriedOn`: another device holds this Run. `newer`: a newer build's Run is stored and kept. `rejected`: 400/413. */
+  /** `credits`: ledger rows this upload produced (a different Run it replaced, recorded as a quit). */
+  | { ok: true; credits: RunCredit[] }
+  /** `carriedOn`: another device holds this Run, or it ended. `newer`: a newer build's Run is stored and kept. `rejected`: 400/413. */
   | { ok: false; reason: 'carriedOn' | 'newer' | 'rejected' };
 
 export type TakeResult = { taken: true; snapshot: Record<string, unknown> | null } | { taken: false; savedRun: ServerSavedRun | null };
 
 export interface SavedRunApi {
   get(): Promise<ServerSavedRun | null>;
-  put(body: { runKey: string; lease: string; prevLease?: string; snapshot: unknown }, keepalive?: boolean): Promise<PutResult>;
+  put(body: { runKey: string; lease: string; prevLease?: string; snapshot: unknown; ledger: true }, keepalive?: boolean): Promise<PutResult>;
   take(body: { runKey: string; lease: string; newLease: string }): Promise<TakeResult>;
-  end(body: { runKey: string; lease: string; prevLease?: string }): Promise<{ deleted: boolean }>;
 }
 
-export interface SavedRunApiOptions {
-  baseUrl?: string;
-  fetch?: typeof fetch;
-  /** A request without an answer by then counts as offline (ms). */
-  timeoutMs?: number;
-}
+export type SavedRunApiOptions = JsonCallerOptions & { baseUrl?: string };
 
 export function createSavedRunApi(opts: SavedRunApiOptions = {}): SavedRunApi {
   const baseUrl = opts.baseUrl ?? '/api/saved-run';
-  const doFetch = opts.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
-  const timeoutMs = opts.timeoutMs ?? 8000;
-
-  async function call(method: string, body?: unknown, keepalive = false): Promise<{ status: number; body: Record<string, unknown> }> {
-    let res: Response;
-    const ctrl = typeof AbortController === 'function' && !keepalive ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-    try {
-      res = await doFetch(baseUrl, {
-        method,
-        credentials: 'same-origin',
-        keepalive,
-        signal: ctrl?.signal,
-        headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-    } catch (err) {
-      throw new SavedRunNetError(String(err));
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-    if (res.status === 401) throw new SavedRunAuthError('unauthorized');
-    if (res.status >= 500 || res.status === 429) throw new SavedRunNetError(`saved-run ${res.status}`);
-    let parsed: Record<string, unknown> = {};
-    try {
-      parsed = ((await res.json()) as Record<string, unknown>) ?? {};
-    } catch {
-      if (res.ok) throw new SavedRunNetError('bad response');
-    }
-    return { status: res.status, body: parsed };
-  }
-
+  const call = createJsonCaller(opts);
   return {
     async get() {
-      const r = await call('GET');
+      const r = await call('GET', baseUrl);
       if (r.status !== 200) throw new SavedRunNetError(`saved-run ${r.status}`);
       return (r.body.savedRun as ServerSavedRun | null) ?? null;
     },
     async put(body, keepalive = false) {
-      const r = await call('PUT', body, keepalive);
-      if (r.status === 200) return { ok: true, replaced: (r.body.replaced as { runKey: string; snapshot: Record<string, unknown> | null } | null) ?? null };
+      const r = await call('PUT', baseUrl, body, keepalive);
+      if (r.status === 200) return { ok: true, credits: Array.isArray(r.body.credits) ? (r.body.credits as RunCredit[]) : [] };
       if (r.status === 409) return { ok: false, reason: r.body.error === 'newer_saved_run' ? 'newer' : 'carriedOn' };
       return { ok: false, reason: 'rejected' };
     },
     async take(body) {
-      const r = await call('POST', body);
+      const r = await call('POST', baseUrl, body);
       if (r.status === 200) return { taken: true, snapshot: (r.body.snapshot as Record<string, unknown> | null) ?? null };
       if (r.status === 409) return { taken: false, savedRun: (r.body.savedRun as ServerSavedRun | undefined) ?? null };
       throw new SavedRunNetError(`saved-run ${r.status}`);
-    },
-    async end(body) {
-      const r = await call('DELETE', body);
-      if (r.status !== 200) throw new SavedRunNetError(`saved-run ${r.status}`);
-      return { deleted: r.body.deleted === true };
     },
   };
 }
@@ -151,11 +113,10 @@ interface Live {
   localOnly: boolean;
 }
 
-type Op =
-  | { kind: 'put'; runKey: string; snapshot: RunSnapshot; prevLocalKey: string | null }
-  | { kind: 'take'; runKey: string }
-  /** `credit`: the abandoned Run's stats, credited as a quit only if the server confirms the delete. */
-  | { kind: 'end'; runKey: string; leases: string[]; credit?: RunSnapshot['stats'] };
+type Op = { kind: 'put'; runKey: string; snapshot: RunSnapshot } | { kind: 'take'; runKey: string };
+
+/** Where a Run's credit stands on this page (the results screen). */
+export type CreditState = { state: 'credited'; award: RunAward } | { state: 'pending' } | { state: 'refused' };
 
 /** What the title shows about the Account's saved Run (`syncTitle`). */
 export interface TitleSync {
@@ -171,6 +132,8 @@ export interface AccountRunsOptions {
   api: SavedRunApi;
   store: SuspendedRunStore;
   meta: Pick<MetaProgress, 'awardRun'>;
+  /** The ledger's claim queue (src/meta/runCredits.ts). */
+  credits: RunCreditQueue;
   /** First retry delay (ms); doubles up to `maxRetryMs`. */
   retryMs?: number;
   maxRetryMs?: number;
@@ -188,7 +151,17 @@ function leasesOf(tag: SnapshotAccountTag): string[] {
   return tag.prevLease ? [tag.prevLease, tag.lease] : [tag.lease];
 }
 
-export class AccountRuns {
+/** `{ lease, prevLease? }` for a claim or an upload, from the leases the server may hold (oldest first). */
+function leaseFields(leases: readonly string[]): { lease: string; prevLease?: string } {
+  return { lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
+}
+
+/** A claim's stats: the bounded subset; zeros if the stats are unreadable (the Run is still recorded as ended). */
+function claimStats(stats: unknown): CreditStats {
+  return pickCreditStats(stats) ?? { maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 };
+}
+
+export class AccountRuns implements QuitCreditor {
   private userId: string | null = null;
   /**
    * Bumped on every Account change (`setUser`). Each answer from the server is applied only under
@@ -201,15 +174,18 @@ export class AccountRuns {
   private ops = new Map<string, Op>();
   private inFlight: Op | null = null;
   private attempt = 0;
+  /** A request failed to reach the server: sweep the ledger once the queue drains (its answer may have carried a credit). */
+  private sweepAfter = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lostListeners = new Set<(runKey: string) => void>();
   private userListeners = new Set<(userId: string | null) => void>();
-  /** Runs this page was told it lost (for `confirmHeld`). */
-  private lostKeys = new Set<string>();
+  /** What this page's ended Runs were credited (or refused), for `creditOf`; cleared on a new Run. */
+  private awards = new Map<string, RunAward>();
+  private refused = new Set<string>();
   private waiters: (() => void)[] = [];
   /**
    * Title actions that change who holds the Account's Run (`resume`, `abandon`) send their take or
-   * delete themselves, outside the queue, so `pending` doesn't see them. `titleBusy` counts those
+   * claim themselves, outside the queue, so `pending` doesn't see them. `titleBusy` counts those
    * on their way; `titleEpoch` is bumped when one starts and when it settles. A title read
    * (`syncTitle`) that overlapped either is stale (it may still show a Run just credited, or just
    * taken), so it is read again rather than mirrored.
@@ -219,6 +195,8 @@ export class AccountRuns {
   private readonly api: SavedRunApi;
   private readonly store: SuspendedRunStore;
   private readonly meta: Pick<MetaProgress, 'awardRun'>;
+  /** The ledger's claim queue: it follows the Account with this, and its outcomes feed `creditOf`. */
+  readonly credits: RunCreditQueue;
   private readonly retryMs: number;
   private readonly maxRetryMs: number;
   private readonly hidden: () => boolean;
@@ -229,9 +207,16 @@ export class AccountRuns {
     this.api = opts.api;
     this.store = opts.store;
     this.meta = opts.meta;
+    this.credits = opts.credits;
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
     this.hidden = opts.hidden ?? (() => typeof document !== 'undefined' && document.hidden);
+    this.credits.onCredit((o) => this.settle(o));
+  }
+
+  private settle(o: CreditOutcome): void {
+    if (o.award) this.awards.set(o.runKey, o.award);
+    else this.refused.add(o.runKey);
   }
 
   get signedIn(): boolean {
@@ -254,7 +239,10 @@ export class AccountRuns {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.title = { fromAccount: null, newerOnAccount: false, offline: false };
+    this.awards.clear();
+    this.refused.clear();
     this.store.setViewer(userId);
+    this.credits.setUser(userId);
     for (const fn of this.userListeners) fn(userId);
   }
 
@@ -275,7 +263,8 @@ export class AccountRuns {
   /** A new Run started on this page: it isn't on the server until it is first stored. */
   newRun(): void {
     this.live = null;
-    this.lostKeys.clear();
+    this.awards.clear();
+    this.refused.clear();
   }
 
   /**
@@ -297,16 +286,11 @@ export class AccountRuns {
     return this.live;
   }
 
-  /**
-   * The device slot now holds `snapshot` (tagged by `tag`): uploads it. `prevLocalKey`: a different
-   * Run the slot's replace credited on the device (null: none), so the server's copy of it isn't
-   * credited again. A server-confirmed Account copy the slot held isn't credited there
-   * (`creditsReplacedOnDevice`): only the server's answer credits it, if it still stored it.
-   */
-  stored(snapshot: RunSnapshot, prevLocalKey: string | null): void {
+  /** The device slot now holds `snapshot` (tagged by `tag`): uploads it. */
+  stored(snapshot: RunSnapshot): void {
     if (!this.userId || !snapshot.account) return;
     if (this.live?.runKey === snapshot.runKey && this.live.localOnly) return;
-    this.queue({ kind: 'put', runKey: snapshot.runKey, snapshot, prevLocalKey });
+    this.queue({ kind: 'put', runKey: snapshot.runKey, snapshot });
   }
 
   /** The paused Run was taken back on the device (unpause): take it back on the server, in the background. */
@@ -317,31 +301,6 @@ export class AccountRuns {
     // One take at a time: a second unpause before the first is heard back from reuses its lease.
     if (live.leases.length === 1) live.leases.push(newHandoffId());
     this.queue({ kind: 'take', runKey });
-  }
-
-  /**
-   * Before this page ends (and credits) the Run it took back (End run, Quit to title from pause):
-   * waits until the server take is settled. False when another device holds the Run (`onLost` was
-   * called). True when it is this page's, signed out, or offline after `timeoutMs` (the device's
-   * word is then all there is).
-   */
-  async confirmHeld(runKey: string, timeoutMs = 6000): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const live = this.live;
-      if (!this.userId || !live || live.runKey !== runKey) return !this.lostKeys.has(runKey);
-      if (!this.unconfirmed(runKey)) return true;
-      const left = deadline - Date.now();
-      if (left <= 0) return true;
-      await this.nextWake(left);
-    }
-  }
-
-  /** Whether `confirmHeld` would wait: this page's server take (or other work) for the Run it plays is still unsettled. */
-  unconfirmed(runKey: string): boolean {
-    const live = this.live;
-    if (!this.userId || !live || live.runKey !== runKey || live.localOnly) return false;
-    return this.ops.has(runKey) || this.inFlight?.runKey === runKey || live.leases.length > 1;
   }
 
   /** Resolves when a request settles (or the page loses a Run), or after `ms`. */
@@ -380,12 +339,58 @@ export class AccountRuns {
     for (const w of ws) w();
   }
 
-  /** The Run ended on this page (`runEnded`): its row is marked ended, if this page still holds it. */
-  ended(runKey: string): void {
-    const live = this.live;
-    if (!this.userId || !live || live.runKey !== runKey) return;
-    this.live = null;
-    if (!live.localOnly) this.queue({ kind: 'end', runKey, leases: [...live.leases] });
+  // --- credit ----------------------------------------------------------------------------------
+
+  /**
+   * The Run ended on this page (`runEnded`): credits it. Signed out, or a Run the server was never
+   * told about from here: at once, returning the award (signed in, a claim records it on the
+   * server too). One the server knows (it was stored from here, or resumed from the Account): a
+   * claim under this page's leases, credited from the answer; null meanwhile (`creditOf` reads
+   * `pending`, then `credited` or `refused` when another device holds the Run).
+   */
+  ended(e: RunCreditInput): RunAward | null {
+    const live = this.live?.runKey === e.runKey ? this.live : null;
+    if (live) this.live = null;
+    const userId = this.userId;
+    if (!userId) return this.local(e);
+    const known = !!live && !live.localOnly;
+    const award = known ? null : this.local(e);
+    this.credits.claim({ userId, runKey: e.runKey, ...leaseFields(live?.leases ?? [newHandoffId()]), reason: e.reason, stats: claimStats(e.stats) });
+    return award;
+  }
+
+  /** Credits on the device now (and remembers it for `creditOf`). */
+  private local(e: RunCreditInput): RunAward | null {
+    const award = this.meta.awardRun(e);
+    if (award) this.awards.set(e.runKey, award);
+    return award;
+  }
+
+  /** Where a Run's credit stands on this page: `pending` until it is credited or refused. */
+  creditOf(runKey: string): CreditState {
+    const award = this.awards.get(runKey);
+    if (award) return { state: 'credited', award };
+    return this.refused.has(runKey) ? { state: 'refused' } : { state: 'pending' };
+  }
+
+  /**
+   * A saved copy the device lets go of (replaced in its slot, abandoned by New run, or replaced by
+   * the server's copy on the title) counts as a quit. One tagged for this Account is claimed from
+   * the server, which credits it unless another device plays it by now; an untagged one (saved
+   * signed out) is credited here, the claim recording it. Signed out: credited here.
+   */
+  creditQuit(s: RunSnapshot): void {
+    const e: RunCreditInput = { runKey: s.runKey, reason: 'quit', stats: s.stats };
+    const userId = this.userId;
+    const tag = s.account;
+    if (!userId) {
+      this.meta.awardRun(e);
+      return;
+    }
+    if (tag && tag.userId !== userId) return; // another Account's: never credited here
+    if (!tag) this.meta.awardRun(e);
+    const leases = this.live?.runKey === s.runKey ? this.live.leases : tag ? leasesOf(tag) : [newHandoffId()];
+    this.credits.claim({ userId, runKey: s.runKey, ...leaseFields(leases), reason: 'quit', stats: claimStats(s.stats) });
   }
 
   // --- the title -------------------------------------------------------------------------------
@@ -420,9 +425,11 @@ export class AccountRuns {
         return offline();
       }
       if (gen !== this.gen) return this.title;
-      // Nothing went out while it was on its way: neither an upload nor a title take or delete.
+      // Nothing went out while it was on its way: neither an upload nor a title take or claim.
       if (this.pending === 0 && epoch === this.titleEpoch) break;
     }
+    // This page's work has settled: credits it missed (a lost answer, another device's replace) land now.
+    void this.credits.sweep();
     const view: TitleSync = { fromAccount: null, newerOnAccount: false, offline: false };
     const local = this.store.peek();
     const mine = local?.account?.userId === userId ? local.account : null;
@@ -443,9 +450,9 @@ export class AccountRuns {
       } else if (local && local.runKey === row.runKey && local.handoffId === server.handoffId && local.savedAt === server.savedAt && mine?.lease === row.lease) {
         if (!mine.synced) this.store.markSynced(row.runKey, row.lease); // the same copy: the server has it
       } else {
-        // The server copy wins. A different Run only this device had is replaced: a quit (as the slot
-        // credits a Run saved over another). One the server had confirmed was credited by whoever replaced it there.
-        if (local && local.runKey !== row.runKey && !mine?.synced) this.meta.awardRun({ reason: 'quit', stats: local.stats });
+        // The server copy wins. A different Run in the slot is replaced: a quit (as the slot credits a
+        // Run saved over another), claimed from the server, which knows whether it carried on elsewhere.
+        if (local && local.runKey !== row.runKey) this.creditQuit(local);
         const copy: RunSnapshot = { ...server, account: { userId, lease: row.lease, synced: true } };
         this.store.save(copy);
         if (!(local && local.runKey === row.runKey && sameHolder(row.lease))) view.fromAccount = row.runKey;
@@ -469,7 +476,7 @@ export class AccountRuns {
     const tag = copy.account?.userId === this.userId ? copy.account : null;
     copy.account = { userId: this.userId, lease: tag?.lease ?? newHandoffId(), ...(tag?.prevLease ? { prevLease: tag.prevLease } : {}), synced: false };
     if (!tag) this.store.save(copy);
-    this.queue({ kind: 'put', runKey: copy.runKey, snapshot: copy, prevLocalKey: copy.runKey });
+    this.queue({ kind: 'put', runKey: copy.runKey, snapshot: copy });
   }
 
   /**
@@ -522,40 +529,24 @@ export class AccountRuns {
     if (!this.userId) return;
     const copy: RunSnapshot = { ...structuredClone(shown), account: { userId: this.userId, lease, synced: false } };
     if (this.store.peek()?.runKey === shown.runKey) this.store.save(copy);
-    this.queue({ kind: 'put', runKey: copy.runKey, snapshot: copy, prevLocalKey: copy.runKey });
+    this.queue({ kind: 'put', runKey: copy.runKey, snapshot: copy });
   }
 
   /**
-   * New run on the title gives up the Run on screen: its row is deleted (only if it is still held
-   * under the lease shown) and then `abandon` credits it on the device. `lost` when another device
-   * took it meanwhile (nothing is credited; refresh). Offline the device abandons it and the delete
-   * is retried in the background.
+   * New run on the title gives up the Run on screen: `abandonLocal` takes it from the slot and
+   * credits it through `creditQuit` (a claim, for an Account copy: the server credits it unless
+   * another device took it meanwhile). An upload of it still on its way is waited out first, so the
+   * claim lands after it; `lost` when the slot lost the Run meanwhile (refresh).
    */
   async abandon(shown: RunSnapshot, abandonLocal: () => boolean): Promise<'done' | 'lost' | 'failed'> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) return abandonLocal() ? 'done' : 'failed';
     const gen = this.gen;
-    return this.titleAction(() => this.abandonHeld(shown, abandonLocal, gen));
-  }
-
-  private async abandonHeld(shown: RunSnapshot, abandonLocal: () => boolean, gen: number): Promise<'done' | 'lost' | 'failed'> {
-    const nowTag = await this.settledTag(shown, gen);
-    if (typeof nowTag === 'string') return nowTag;
-    const leases = leasesOf(nowTag);
-    const body = { runKey: shown.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
-    try {
-      const res = await this.api.end(body);
-      if (gen !== this.gen) return 'failed'; // another Account's now: nothing to credit here
-      // Not deleted: another device holds it now, unless the server never had it.
-      if (!res.deleted && nowTag.synced) {
-        if (this.store.peek()?.runKey === shown.runKey) this.store.clear();
-        return 'lost';
-      }
-    } catch (err) {
-      if (err instanceof SavedRunAuthError || gen !== this.gen) return 'failed';
-      this.queue({ kind: 'end', runKey: shown.runKey, leases });
-    }
-    return abandonLocal() ? 'done' : 'failed';
+    return this.titleAction(async () => {
+      const nowTag = await this.settledTag(shown, gen);
+      if (typeof nowTag === 'string') return nowTag;
+      return abandonLocal() ? 'done' : 'failed';
+    });
   }
 
   /** Runs a title `resume` or `abandon`, marking the title's reads around it stale (`titleEpoch`). */
@@ -572,7 +563,7 @@ export class AccountRuns {
   }
 
   /**
-   * Before the title takes or deletes the Run on screen: an upload of it still on its way would
+   * Before the title takes or claims the Run on screen: an upload of it still on its way would
    * land after that and store it again, so it is waited out (and any still waiting dropped). Returns
    * the Run's tag as that left it in the device slot; `lost` when the slot lost it (a 409 on that
    * upload: another device has it), `failed` when the Account changed meanwhile.
@@ -583,26 +574,6 @@ export class AccountRuns {
     const now = this.store.peek();
     if (now?.runKey !== shown.runKey) return 'lost';
     return now.account?.userId === this.userId ? now.account : shown.account!;
-  }
-
-  /**
-   * A device abandon outside the title (any new Run start): the server row goes too. `credit`: the
-   * device didn't credit it (a copy the server had confirmed, `creditsOnServer`), so it is credited
-   * as a quit once the server confirms it deleted the row under the copy's lease; refused (another
-   * device took it, or it ended elsewhere), nothing is credited here.
-   */
-  abandoned(s: RunSnapshot, credit = false): void {
-    if (!this.userId || s.account?.userId !== this.userId) return;
-    this.queue({ kind: 'end', runKey: s.runKey, leases: leasesOf(s.account), ...(credit ? { credit: s.stats } : {}) });
-  }
-
-  /**
-   * Whether abandoning `s` outside the title is credited from the server's answer rather than on
-   * the device: a copy of this Account's Run the server confirmed, which another device may be
-   * playing by now (the rule `creditsReplacedOnDevice` applies to a replace).
-   */
-  creditsOnServer(s: RunSnapshot): boolean {
-    return !!this.userId && s.account?.userId === this.userId && s.account.synced;
   }
 
   // --- sending ---------------------------------------------------------------------------------
@@ -622,7 +593,14 @@ export class AccountRuns {
   private pump(): void {
     if (this.inFlight || this.timer || !this.userId) return;
     const next = this.ops.values().next();
-    if (next.done) return;
+    if (next.done) {
+      // A request failed to reach the server: an answer may have been lost with a credit in it (a replace).
+      if (this.sweepAfter) {
+        this.sweepAfter = false;
+        void this.credits.sweep();
+      }
+      return;
+    }
     const op = next.value;
     this.ops.delete(op.runKey);
     this.inFlight = op;
@@ -634,6 +612,7 @@ export class AccountRuns {
       .catch((err: unknown) => {
         if (gen !== this.gen) return; // asked for another Account (or before a switch back): dropped
         if (err instanceof SavedRunAuthError) return; // signed out elsewhere: the Account client will say so
+        this.sweepAfter = true;
         // Retry later, unless something newer for the Run superseded it meanwhile.
         if (!this.ops.has(op.runKey)) this.ops.set(op.runKey, op);
         const delay = Math.min(this.maxRetryMs, this.retryMs * 2 ** this.attempt++);
@@ -652,12 +631,6 @@ export class AccountRuns {
 
   /** Sends `op`; its answer is applied only if the Account hasn't changed since (`gen`). */
   private async send(op: Op, gen: number): Promise<void> {
-    if (op.kind === 'end') {
-      const leases = op.leases;
-      const res = await this.api.end({ runKey: op.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) });
-      if (gen === this.gen && res.deleted && op.credit) this.meta.awardRun({ reason: 'quit', stats: op.credit });
-      return;
-    }
     const live = this.live?.runKey === op.runKey ? this.live : null;
     if (op.kind === 'take') {
       if (!live || live.leases.length < 2) return; // settled meanwhile (an upload confirmed it, or the Run is gone)
@@ -676,8 +649,8 @@ export class AccountRuns {
     // The page's newest leases for a Run it is playing; the tag's for a copy it only keeps.
     const leases = live ? [...live.leases] : leasesOf(tag);
     const lease = leases[leases.length - 1]!;
-    const res = await this.api.put({ runKey: op.runKey, lease, ...(leases.length > 1 ? { prevLease: leases[0] } : {}), snapshot: uploadable(op.snapshot) }, this.hidden());
-    if (gen !== this.gen) return; // a replaced Run it returns was another Account's: not credited here
+    const res = await this.api.put({ runKey: op.runKey, ...leaseFields(leases), snapshot: uploadable(op.snapshot), ledger: true }, this.hidden());
+    if (gen !== this.gen) return; // a credit it returns was another Account's: not applied here
     if (res.ok) {
       if (live && this.live === live) {
         // The server holds `lease` now. A lease added since this was sent (an unpause) is kept: its
@@ -688,11 +661,8 @@ export class AccountRuns {
         live.confirmed = true;
       }
       this.store.markSynced(op.runKey, lease);
-      const replaced = res.replaced;
-      if (replaced && replaced.runKey !== op.prevLocalKey && replaced.runKey !== op.runKey && replaced.snapshot) {
-        const s = parseRunSnapshot(replaced.snapshot);
-        if (s) this.meta.awardRun({ reason: 'quit', stats: s.stats });
-      }
+      // A different Run this upload replaced: the server recorded it as a quit; its row lands here.
+      for (const credit of res.credits) this.credits.apply(credit);
     } else if (res.reason === 'carriedOn') {
       this.lose(op.runKey, leases);
     } else if (live && this.live === live) {
@@ -706,76 +676,43 @@ export class AccountRuns {
     this.ops.delete(runKey);
     const local = this.store.peek();
     if (local?.runKey === runKey && local.account && leases.includes(local.account.lease)) this.store.clear();
-    this.lostKeys.add(runKey);
     for (const fn of this.lostListeners) fn(runKey);
     this.wake();
   }
 
-  /** The page is going away: uploads still waiting go now, with `keepalive` (pagehide). */
+  /** The page is going away: uploads and claims still waiting go now, with `keepalive` (pagehide). */
   flush(): void {
     if (!this.userId) return;
     for (const op of this.ops.values()) {
       if (op.kind !== 'put' || !op.snapshot.account) continue;
       const live = this.live?.runKey === op.runKey ? this.live : null;
       const leases = live ? live.leases : leasesOf(op.snapshot.account);
-      void this.api
-        .put({ runKey: op.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}), snapshot: uploadable(op.snapshot) }, true)
-        .catch(() => undefined);
+      void this.api.put({ runKey: op.runKey, ...leaseFields(leases), snapshot: uploadable(op.snapshot), ledger: true }, true).catch(() => undefined);
     }
+    this.credits.flush();
   }
-}
-
-export interface RunEndingHooks {
-  /** The ending waits for the server (a brief "checking" note). */
-  waiting?: () => void;
-  /** The server says another device has the Run: it is not credited here (step aside). */
-  lost: () => void;
-  timeoutMs?: number;
-}
-
-/**
- * A natural ending (died, victory) credits the Run (`runEnded`), so while this page's take back
- * of it is unconfirmed it waits for the server first, as End run does (`confirmHeld`; offline, the
- * device's word after the timeout). Refused: `lost`, and no `runEnded`. Signed out or confirmed,
- * it ends at once. Quit is left alone (End run confirms before ending it).
- */
-export function gateRunEnding(run: { runKey: string; endGate: ((reason: RunEndReason) => Promise<boolean> | null) | null }, runs: AccountRuns, hooks: RunEndingHooks): void {
-  run.endGate = (reason) => {
-    if (reason === 'quit' || !runs.unconfirmed(run.runKey)) return null;
-    hooks.waiting?.();
-    return runs.confirmHeld(run.runKey, hooks.timeoutMs).then((ok) => {
-      if (!ok) hooks.lost();
-      return ok;
-    });
-  };
 }
 
 let singleton: AccountRuns | null = null;
 
 /** The browser's instance (signed out until `installAccountRuns` hears from the Account). */
 export function getAccountRuns(meta: Pick<MetaProgress, 'awardRun'>): AccountRuns {
-  singleton ??= new AccountRuns({ api: createSavedRunApi(), store: getSuspendedRuns(), meta });
+  singleton ??= new AccountRuns({
+    api: createSavedRunApi(),
+    store: getSuspendedRuns(),
+    meta,
+    credits: new RunCreditQueue({ api: createRunCreditApi(), storage: browserStorage(), meta }),
+  });
   return singleton;
 }
 
-/** Follows the signed-in Account and sends waiting uploads on pagehide (call once at boot). */
+/**
+ * Follows the signed-in Account (which also replays its waiting claims), sends waiting uploads and
+ * claims on pagehide, and replays claims when the browser comes back online (call once at boot).
+ */
 export function installAccountRuns(runs: AccountRuns, account: AccountClient): void {
   account.subscribe((s) => runs.setUser(s.status === 'signedIn' ? (s.user?.id ?? null) : null));
-  if (typeof window !== 'undefined') window.addEventListener('pagehide', () => runs.flush());
-}
-
-/**
- * `abandonSuspendedRun` for a new Run start, deleting the Account's copy too. A copy the server had
- * confirmed is credited only once the server confirms the delete (`creditsOnServer`).
- */
-export function abandonSavedRun(store: SuspendedRunStore, meta: Pick<MetaProgress, 'awardRun'>, runs: AccountRuns | null): boolean {
-  const s = store.peek();
-  if (s && runs?.creditsOnServer(s)) {
-    if (!store.take()) return false;
-    runs.abandoned(s, true);
-    return true;
-  }
-  if (!abandonSuspendedRun(store, meta)) return false;
-  if (s && runs) runs.abandoned(s);
-  return true;
+  if (typeof window === 'undefined') return;
+  window.addEventListener('pagehide', () => runs.flush());
+  window.addEventListener('online', () => runs.credits.replay());
 }

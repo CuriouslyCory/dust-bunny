@@ -15,6 +15,7 @@ const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map:
 };
 
 const ended = (reason: GameEvents['runEnded']['reason'], seed = 'seed-a', characterId = 'lint'): GameEvents['runEnded'] => ({
+  runKey: `${seed}:${characterId}`,
   reason,
   stats: { seed, characterId, timeSec: 300, maxRadius: 50, finalRadius: 50, debrisAbsorbed: 900, hazardsAbsorbed: 1, tierReached: 5, tierTimes: {}, perks: [], area: 'neighborhood', houseCleared: true } as RunStats,
 });

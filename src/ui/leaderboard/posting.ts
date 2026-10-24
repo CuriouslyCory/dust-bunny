@@ -217,8 +217,8 @@ export function installLeaderboardPosting(
 ): LeaderboardPosting {
   const client = opts.client ?? defaultClient;
   const account = opts.account ?? defaultAccount;
-  // awardRun is idempotent per Run and counts a Universe victory, so the count is current whichever runEnded listener runs first.
-  const universes = opts.universes ?? ((e: GameEvents['runEnded']) => getMeta().awardRun(e).universes);
+  // The count once this Run is credited (it may be already, or still pending with the Account), whichever runEnded listener runs first.
+  const universes = opts.universes ?? ((e: GameEvents['runEnded']) => getMeta().universesAfter(e));
   let current: RunPosts | null = null;
   /** Whether the current Run counts (see RunPosts.ranked). */
   let ranked = true;

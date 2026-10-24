@@ -10,10 +10,12 @@
  * other tabs' writes as they happen.
  *
  * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
- * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`) don't need a bump.
+ * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`,
+ * `creditedRuns`) don't need a bump.
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
+import { CREDITED_RUNS_MAX, isRunKey } from '../shared/runCredit';
 import { hasKeepsakes, repairLoadout, sanitizeCharacterHoard, type CharacterHoard } from './hoard';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
@@ -58,6 +60,12 @@ export interface SaveData {
   lastLoadout: Record<string, KeepsakeRef[]>;
   /** Universe victories (endings) so far; the title reads "Universe N" with N = universes + 1. */
   universes: number;
+  /**
+   * The newest Run keys whose credit (Fluff and stats) this save holds, oldest first, at most
+   * `CREDITED_RUNS_MAX` (docs/adr/0003). Written in the same update as the Fluff it accounts for and
+   * synced with it, so a Run is credited at most once per progress copy.
+   */
+  creditedRuns: string[];
 }
 
 export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'corrupt';
@@ -74,6 +82,7 @@ export function defaultSave(): SaveData {
     characters: {},
     lastLoadout: {},
     universes: 0,
+    creditedRuns: [],
   };
 }
 
@@ -122,6 +131,10 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
     }
   }
   d.universes = int(o.universes);
+  if (Array.isArray(o.creditedRuns)) {
+    for (const k of o.creditedRuns as unknown[]) if (isRunKey(k) && !d.creditedRuns.includes(k)) d.creditedRuns.push(k);
+    d.creditedRuns = d.creditedRuns.slice(-CREDITED_RUNS_MAX);
+  }
   return d;
 }
 

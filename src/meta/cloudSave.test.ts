@@ -10,13 +10,14 @@ const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map:
   return { map, getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v) };
 };
 
-const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, universes = 0): Progress => ({
+const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, universes = 0, creditedRuns: string[] = []): Progress => ({
   fluff,
   upgrades,
   characters: {},
   loadouts: {},
   universes,
   stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
+  creditedRuns,
 });
 
 /** In-memory /api/progress with the same accept rule as the real one (per signed-in user). */
@@ -42,8 +43,8 @@ function fakeServer() {
       rows.set(user, { ...stored, universes });
       return Response.json({ accepted: false, progress: rows.get(user) });
     }
-    // A body without Loadouts (an older bundle) keeps the stored ones.
-    rows.set(user, { ...v.value, loadouts: v.value.loadouts ?? stored?.loadouts, universes });
+    // A body without Loadouts or creditedRuns (an older bundle) keeps the stored ones.
+    rows.set(user, { ...v.value, loadouts: v.value.loadouts ?? stored?.loadouts, creditedRuns: v.value.creditedRuns ?? stored?.creditedRuns, universes });
     return Response.json({ accepted: true, progress: rows.get(user) });
   });
   return {
@@ -324,6 +325,52 @@ describe('cloud save', () => {
     await s.signIn('u1');
     expect(s.meta.lastLoadout('lint')).toEqual([{ type: 'reclaim', rarity: 2 }]);
     expect(s.server.rows.get('u1')?.loadouts).toEqual({ lint: [{ type: 'reclaim', rarity: 2 }] });
+  });
+
+  it('adopt carries creditedRuns with the Fluff; a server copy without it keeps the device set (docs/adr/0003)', async () => {
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'local-1', reason: 'died', stats: { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 } });
+    await s.signIn('u1');
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['local-1']);
+    // Another device credited two more Runs: its copy wins, keys and all, in one write.
+    s.server.rows.set('u1', prog(999, 2000, 40, {}, 0, ['local-1', 'other-1', 'other-2']));
+    const seen: string[][] = [];
+    s.meta.store.onChange((d) => void seen.push([...d.creditedRuns]));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 999, creditedRuns: ['local-1', 'other-1', 'other-2'] });
+    expect(seen.at(-1)).toEqual(['local-1', 'other-1', 'other-2']);
+    expect(s.meta.awardRun({ runKey: 'other-2', reason: 'quit', stats: { maxRadius: 1, debrisAbsorbed: 1, tierReached: 1 } })).toBeNull();
+    // A stored row from before the ledger (no creditedRuns) that wins keeps the device's set rather than wiping it.
+    const { creditedRuns: _c, ...older } = prog(5000, 9000, 60);
+    s.server.rows.set('u1', older);
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 5000, creditedRuns: ['local-1', 'other-1', 'other-2'] });
+  });
+
+  it('merge loss is repairable: the losing copy’s credit is missing from the winner’s keys, so its ledger row applies once', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    // Offline, this device credits A; meanwhile another device credited B and got further (its copy is on the server).
+    s.server.setDown(true);
+    s.meta.awardRun({ runKey: 'A', reason: 'died', stats });
+    s.server.rows.set('u1', prog(900, 2000, 40, {}, 0, ['B']));
+    s.server.setDown(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    // The server copy won: A's Fluff is gone from this copy, and so is its key, so the ledger row for A applies again.
+    expect(s.meta.data).toMatchObject({ fluff: 900, creditedRuns: ['B'] });
+    const repaired = s.meta.awardRun({ runKey: 'A', reason: 'died', stats });
+    expect(repaired).not.toBeNull();
+    expect(s.meta.awardRun({ runKey: 'B', reason: 'died', stats })).toBeNull(); // B's Fluff is in the copy: never twice
+    expect(s.meta.data.creditedRuns).toEqual(['B', 'A']);
   });
 
   it('adopts the server copy when another device got further', async () => {

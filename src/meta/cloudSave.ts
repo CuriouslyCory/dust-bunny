@@ -18,6 +18,9 @@
  *   when it stores an upload (except when loading another account's save, which replaces it).
  * - An adopted Loadout is repaired against the adopted Hoard. A server copy without `loadouts`
  *   (stored before Loadouts synced) keeps the device's, which then upload.
+ * - `creditedRuns` (the Run credits a copy's Fluff accounts for, docs/adr/0003) travels with the
+ *   Fluff: adopted in the same write, so whichever copy wins carries the right set, and the credit
+ *   ledger's sweep (src/meta/runCredits.ts) can re-apply any credit the losing copy held alone.
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import type { AccountClient, AccountState } from '../net/account';
@@ -56,6 +59,7 @@ export function progressOf(d: SaveData): Progress {
     loadouts,
     stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned },
     universes: d.universes,
+    creditedRuns: [...d.creditedRuns],
   };
 }
 
@@ -155,6 +159,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       }
       d.universes = universes;
       d.fluff = p.fluff;
+      // The credits this Fluff accounts for come with it (docs/adr/0003); unknown on an older copy: the device's set stays.
+      if (p.creditedRuns) d.creditedRuns = [...p.creditedRuns];
+      else if (replace) d.creditedRuns = [];
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
       d.stats = { ...d.stats, ...p.stats };

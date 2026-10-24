@@ -11,6 +11,10 @@
  * - Starting a new Run instead abandons it (`abandonSuspendedRun`): its Fluff and stats are
  *   credited as a quit. The title does it as soon as New run is confirmed; any other new Run start
  *   does it on runStarted.
+ * - Who credits a Run the slot lets go of is the `QuitCreditor`'s business: `MetaProgress` credits
+ *   it on the device at once; `AccountRuns` (src/meta/accountRun.ts) does the same for a copy the
+ *   Account never saw, and claims an Account copy from the server instead (docs/adr/0003), since
+ *   another device may be playing it by now.
  * - Not signed in, it stays on the device. Signed in, the slot mirrors the Account's saved Run
  *   (src/meta/accountRun.ts, api/saved-run.ts; docs/adr/0002): every copy written then is tagged
  *   with the Account (`RunSnapshot.account`) and uploaded, and the title takes the server's copy
@@ -252,16 +256,11 @@ function savedRunIf(store: SuspendedRunStore, runKey: string | undefined): RunSn
 }
 
 /**
- * Whether saving `next` over `prev` credits `prev` here, on the device: a different Run, unless
- * `prev` is a copy of the Account's saved Run the server confirmed (mirrored from the server, say,
- * by any tab) and `next` goes to the same Account. The server's copy of that Run may have been
- * taken by another device since, which will credit it when it ends; so it is credited only from
- * the server's answer to `next`'s upload, which hands back a stored copy it really replaced
- * (src/meta/accountRun.ts, `stored`; docs/adr/0002).
+ * Credits a saved Run the slot lets go of (replaced by another Run, or abandoned for a new one) as
+ * a quit: `MetaProgress` on the device; `AccountRuns` for a signed-in player (see the header).
  */
-export function creditsReplacedOnDevice(prev: RunSnapshot, next: RunSnapshot): boolean {
-  if (prev.runKey === next.runKey) return false;
-  return !(prev.account?.synced && next.account?.userId === prev.account.userId);
+export interface QuitCreditor {
+  creditQuit(s: RunSnapshot): void;
 }
 
 /**
@@ -271,12 +270,12 @@ export function creditsReplacedOnDevice(prev: RunSnapshot, next: RunSnapshot): b
  * storage credits nothing either (the replaced Run is still there). True when a different Run was
  * replaced.
  */
-export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot, meta: Pick<MetaProgress, 'awardRun'>): boolean {
+export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot, credit: QuitCreditor): boolean {
   const prev = store.peek();
   const replaced = !!prev && prev.runKey !== snapshot.runKey;
   // Credited only once it is really gone: after a failed write the old Run is still in storage, and
   // another tab or a reload can still resume or abandon it (and be credited then).
-  if (store.save(snapshot) && prev && replaced && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (store.save(snapshot) && prev && replaced) credit.creditQuit(prev);
   return replaced;
 }
 
@@ -285,11 +284,11 @@ export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot
  * Fluff and stats are credited, as Quit to title would have). False when there was none. With
  * `runKey` (the Run a screen showed) it only abandons that Run: another one is left alone.
  */
-export function abandonSuspendedRun(store: SuspendedRunStore, meta: Pick<MetaProgress, 'awardRun'>, runKey?: string): boolean {
+export function abandonSuspendedRun(store: SuspendedRunStore, credit: QuitCreditor, runKey?: string): boolean {
   if (!savedRunIf(store, runKey)) return false;
   const s = store.take();
   if (!s) return false;
-  meta.awardRun({ reason: 'quit', stats: s.stats });
+  credit.creditQuit(s);
   return true;
 }
 
@@ -334,11 +333,11 @@ export function pausedRunState(store: SuspendedRunStore, handoffId: string, runK
  * credits nothing). True when the write reached storage, so other tabs can pick it up; false when
  * only this page's memory holds it (still this page's to take back).
  */
-export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, handoffId: string, meta: Pick<MetaProgress, 'awardRun'>): boolean {
+export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, handoffId: string, credit: QuitCreditor): boolean {
   snapshot.handoffId = handoffId;
   const prev = store.peek();
   const stored = store.save(snapshot);
-  if (stored && prev && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (stored && prev && prev.runKey !== snapshot.runKey) credit.creditQuit(prev);
   return stored;
 }
 

@@ -18,6 +18,7 @@ import {
   takeBackPausedRun,
   withSavedRunLock,
   type LockManagerLike,
+  type QuitCreditor,
 } from './suspendedRun';
 
 const memStorage = () => {
@@ -50,7 +51,8 @@ type Award = Parameters<MetaProgress['awardRun']>[0];
 /** A meta stand-in that records what it was credited. */
 const awards = () => {
   const calls: Award[] = [];
-  return { calls, awardRun: (e: Award) => void calls.push(e) } as unknown as Pick<MetaProgress, 'awardRun'> & { calls: Award[] };
+  const awardRun = (e: Award) => void calls.push(e);
+  return { calls, awardRun, creditQuit: (s: RunSnapshot) => awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats }) } as unknown as Pick<MetaProgress, 'awardRun' | 'creditQuit'> & { calls: Award[] };
 };
 
 const fakeGame = () => {
@@ -119,22 +121,19 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     expect(tabB.peek()?.runKey).toBe(b.runKey);
   });
 
-  it('a server-confirmed Account copy replaced in the slot is left for the server to credit (Save & quit and pause)', () => {
-    const tag = (s: RunSnapshot, synced: boolean): RunSnapshot => ({ ...s, account: { userId: 'u1', lease: 'l-' + s.runKey, synced } });
+  it('a replaced Account copy goes to the creditor with its tag, so a signed-in page can claim it from the server (Save & quit and pause)', () => {
+    const tag = (s: RunSnapshot): RunSnapshot => ({ ...s, account: { userId: 'u1', lease: 'l-' + s.runKey, synced: true } });
     for (const replace of [
-      (store: SuspendedRunStore, s: RunSnapshot, meta: ReturnType<typeof awards>) => saveSuspendedRun(store, s, meta),
-      (store: SuspendedRunStore, s: RunSnapshot, meta: ReturnType<typeof awards>) => storePausedRun(store, s, 'h2', meta),
+      (store: SuspendedRunStore, s: RunSnapshot, credit: QuitCreditor) => saveSuspendedRun(store, s, credit),
+      (store: SuspendedRunStore, s: RunSnapshot, credit: QuitCreditor) => storePausedRun(store, s, 'h2', credit),
     ]) {
       const store = new SuspendedRunStore(memStorage());
       store.setViewer('u1');
-      const meta = awards();
-      store.save(tag(snapshot(), true)); // mirrored from the server: it may be another device's Run in progress by now
-      replace(store, tag(snapshot(), false), meta);
-      expect(meta.calls).toEqual([]);
-      // A copy the server never confirmed is only this device's: the slot credits it, as before.
-      store.save(tag(snapshot(), false));
-      replace(store, tag(snapshot(), false), meta);
-      expect(meta.calls.map((c) => c.reason)).toEqual(['quit']);
+      const quits: RunSnapshot[] = [];
+      const prev = tag(snapshot());
+      store.save(prev);
+      replace(store, tag(snapshot()), { creditQuit: (s) => void quits.push(s) });
+      expect(quits.map((s) => [s.runKey, s.account?.lease])).toEqual([[prev.runKey, prev.account!.lease]]);
     }
   });
 
@@ -262,7 +261,7 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
   const page = (storage: ReturnType<typeof memStorage>, locks: LockManagerLike | null, meta = awards()) => {
     const store = new SuspendedRunStore(storage);
     const lost: HandoffLoss[] = [];
-    const handoff = new RunHandoff({ store, meta, onLost: (why) => void lost.push(why), locks });
+    const handoff = new RunHandoff({ store, credit: meta, onLost: (why) => void lost.push(why), locks });
     return { store, handoff, lost, meta };
   };
 

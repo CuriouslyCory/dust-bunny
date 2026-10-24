@@ -145,8 +145,8 @@ export function registerBuiltinScreens(): void {
         const shown = saved.peek();
         if (waiting || !shown) return;
         waiting = true;
-        const abandonLocal = (): boolean => onTitle() && abandonSuspendedRun(saved, getMeta(), key);
-        // The Account's copy is deleted first, only if no other device has taken it meanwhile.
+        // An Account copy is claimed as a quit from the server (src/meta/accountRun.ts), which credits it unless another device took it.
+        const abandonLocal = (): boolean => onTitle() && abandonSuspendedRun(saved, game.accountRuns, key);
         const abandon = (): Promise<string> => game.accountRuns.abandon(shown, abandonLocal);
         void withSavedRunLock(abandon)
           .catch(abandon)
