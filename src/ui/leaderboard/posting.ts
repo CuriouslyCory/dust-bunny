@@ -267,7 +267,7 @@ export function installLeaderboardPosting(
    * must not take the board's one slot per Run id from the fork that counts.
    */
   const awaitingCredit = new Map<string, RunPosts>();
-  const runs = (game as Partial<Game>).accountRuns;
+  const runs = (game as Partial<Game>).savedRuns;
   game.events.on('runEnded', (e) => {
     if (!current) return;
     current.finish(e);

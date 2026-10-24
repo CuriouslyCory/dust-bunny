@@ -47,8 +47,7 @@ import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
 import { getMeta } from '../meta/meta';
-import { getAccountRuns } from '../meta/accountRun';
-import { getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
+import { getSavedRuns } from '../meta/savedRuns';
 import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
 
@@ -129,22 +128,23 @@ export class Game {
   private readonly lensing = new LensingPass();
   /** Screen that paused the Run, if it is paused mid-Run. */
   private pausedBy: string | null = null;
-  /**
-   * Who owns the paused Run (./handoff.ts): pausing stores it in the saved Run slot, playing takes
-   * it back. Another tab picking it up meanwhile makes this page step aside.
-   */
-  /** The Account's copy of the saved Run for a signed-in player (src/meta/accountRun.ts). */
-  readonly accountRuns = getAccountRuns({
+  /** The saved Run (Save & quit, a paused Run), on this device and with a signed-in player's Account (src/meta/savedRuns.ts). */
+  readonly savedRuns = getSavedRuns({
     awardRun: (e, opts) => getMeta().awardRun(e, opts),
     credited: (runKey) => getMeta().credited(runKey),
     creditedRunsKnown: () => getMeta().creditedRunsKnown(),
     pinCreditedRuns: (source) => getMeta().pinCreditedRuns(source),
+    get data() {
+      return getMeta().data;
+    },
   });
+  /**
+   * Who owns the paused Run (./handoff.ts): pausing stores it in the saved Run slot, playing takes
+   * it back. Another tab picking it up meanwhile makes this page step aside.
+   */
   readonly handoff = new RunHandoff({
-    store: getSuspendedRuns(),
-    credit: this.accountRuns,
+    runs: this.savedRuns,
     onLost: (why) => this.stepAside(why),
-    cloud: this.accountRuns,
   });
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
@@ -207,10 +207,8 @@ export class Game {
         else if (this.canSaveRun && !this.handoff.busy) this.checkpointRun('hidden');
       } else if (this.handoff.holding === 'hidden') this.takeBackRun();
     });
-    // Closing or reloading the tab keeps a paused Run stored (as Save & quit would).
-    window.addEventListener('pagehide', () => this.handoff.flush());
-    // The Account says another device has the Run this page has (src/meta/accountRun.ts).
-    this.accountRuns.onLost((runKey) => {
+    // The Account says another device has the Run this page has (src/meta/savedRuns.ts).
+    this.savedRuns.onLost((runKey) => {
       if (this.run && !this.run.ended && this.run.runKey === runKey) this.stepAside('otherDevice');
       else if (!this.run && this.screens.current?.id === 'title') this.go('title', { notice: handoffNotice('otherDevice') } satisfies TitleParams);
     });
@@ -429,7 +427,7 @@ export class Game {
   }
 
   /**
-   * Save & quit: keeps the Run in progress on this device (src/meta/suspendedRun.ts) and returns to
+   * Save & quit: keeps the Run in progress as the saved Run (src/meta/savedRuns.ts) and returns to
    * the title, disposing it without ending it (no runEnded, no Fluff yet). From pause it is already
    * stored (`checkpointRun`), so it is only let go of; if another tab picked it up meanwhile the
    * title says so. Otherwise it is stored now (`runSuspended` listeners add their own fields first;
@@ -448,15 +446,7 @@ export class Game {
     }
     const snapshot = run.toSnapshot();
     this.events.emit('runSuspended', { snapshot });
-    const store = getSuspendedRuns();
-    const save = (): boolean => {
-      // The device first, then the Account (src/meta/accountRun.ts, which also credits a replaced Run).
-      this.accountRuns.tag(snapshot);
-      const replaced = saveSuspendedRun(store, snapshot, this.accountRuns);
-      this.accountRuns.stored(snapshot);
-      return replaced;
-    };
-    void withSavedRunLock(save).catch(save);
+    void this.savedRuns.save(snapshot);
     this.disposeRun();
     this.go('title');
     return true;

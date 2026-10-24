@@ -245,8 +245,8 @@ describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
   type Outcome = { runKey: string; reason: 'died'; fluff: number; award: { fluff: number } | null; already?: boolean; refused?: 'carriedOn' | 'elsewhere' | 'rejected' };
   function withCredit(deferred: Set<string>) {
     const listeners = new Set<(o: Outcome) => void>();
-    const accountRuns = { deferred: (k: string) => deferred.has(k), credits: { onCredit: (fn: (o: Outcome) => void) => (listeners.add(fn), () => listeners.delete(fn)) } };
-    return { accountRuns, settle: (o: Outcome) => listeners.forEach((fn) => fn(o)) };
+    const savedRuns = { deferred: (k: string) => deferred.has(k), credits: { onCredit: (fn: (o: Outcome) => void) => (listeners.add(fn), () => listeners.delete(fn)) } };
+    return { savedRuns, settle: (o: Outcome) => listeners.forEach((fn) => fn(o)) };
   }
 
   it('posts the Run board entry once the credit lands, and not at all for a Run that carried on elsewhere', async () => {
@@ -255,7 +255,7 @@ describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
     const { game, events } = fakeGame();
     const deferred = new Set(['run-1', 'run-2']);
     const credit = withCredit(deferred);
-    (game as unknown as { accountRuns: unknown }).accountRuns = credit.accountRuns;
+    (game as unknown as { savedRuns: unknown }).savedRuns = credit.savedRuns;
     const posting = installLeaderboardPosting(game, { client, account });
     events.emit('runStarted', { seed: 's', characterId: 'lint' });
     events.emit('areaCompleted', { stats: house, characterId: 'lint', difficulty: 'casual' });
@@ -289,7 +289,7 @@ describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
       const { account } = fakeAccount('signedIn', 'Ada');
       const { game, events } = fakeGame();
       const credit = withCredit(new Set(['run-1']));
-      (game as unknown as { accountRuns: unknown }).accountRuns = credit.accountRuns;
+      (game as unknown as { savedRuns: unknown }).savedRuns = credit.savedRuns;
       const posting = installLeaderboardPosting(game, { client, account });
       events.emit('runStarted', { seed: 's', characterId: 'lint' });
       const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([]) };
@@ -307,7 +307,7 @@ describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
     const { client, posted } = offlineClient();
     const { account } = fakeAccount('signedIn', 'Ada');
     const { game, events } = fakeGame();
-    (game as unknown as { accountRuns: unknown }).accountRuns = withCredit(new Set()).accountRuns;
+    (game as unknown as { savedRuns: unknown }).savedRuns = withCredit(new Set()).savedRuns;
     installLeaderboardPosting(game, { client, account });
     events.emit('runStarted', { seed: 's', characterId: 'lint' });
     events.emit('runEnded', { runKey: 'run-1', reason: 'died' as const, stats: stats([]) });

@@ -1,95 +1,55 @@
 /**
- * Pause hand-off: who owns a paused Run (issue #53). Pausing stores the Run in the saved Run slot
- * (src/meta/suspendedRun.ts) under a fresh `handoffId` that only this page knows; while it is
- * paused any other tab or window can pick it up with Resume run. Unpausing takes it back only if
- * the slot still holds that id. If not, the Run carried on elsewhere and this page steps aside
- * (`onLost`): it disposes its copy without `runEnded`, so nothing is played or credited twice.
+ * Pause hand-off: who owns a paused Run (issue #53). Pausing stores the Run as the saved Run
+ * (`SavedRuns.pause`, src/meta/savedRuns.ts) under a fresh `handoffId` that only this page knows;
+ * while it is paused any other tab or window can pick it up with Resume run. Unpausing takes it
+ * back only if the slot still holds that id. If not, the Run carried on elsewhere and this page
+ * steps aside (`onLost`): it disposes its copy without `runEnded`, so nothing is played or credited
+ * twice.
  *
  * All of "is this paused Run still mine" lives here, so Game (src/game/game.ts) only says when to
- * store and when to take back. For a signed-in player every store is also uploaded to the Account
- * and every take back also takes the Run on the server, in the background (`cloud`,
- * src/meta/accountRun.ts); a server that says another device has the Run makes the page step aside
- * too (`otherDevice`).
- *
- * Every write runs under the saved Run Web Lock (`withSavedRunLock`), in request order, so a store
- * and a later take back can't be overtaken by another tab's take. A store still waiting for the
- * lock when the page goes away is written at once by `flush()` (pagehide), so closing a paused tab
- * keeps its Run. That unlocked write is best effort, for the page going away only: Save & quit
- * lets go of a store still waiting and leaves it to be written under the lock.
+ * store and when to take back. `SavedRuns` does the rest: the saved Run lock (a store and a later
+ * take back run in request order, so neither can be overtaken by another tab's take), the
+ * Account's copy (uploaded on store, taken on the server in the background on take back; a server
+ * that says another device has the Run makes the page step aside too, `otherDevice`), and the
+ * store still waiting for the lock when the page goes away (`SavedRuns.flush`, pagehide). Save &
+ * quit lets go of a store still waiting and leaves it to be written under the lock.
  */
-import {
-  pausedRunState,
-  storePausedRun,
-  takeBackPausedRun,
-  withSavedRunLock,
-  type LockManagerLike,
-  type PausedRunState,
-  type QuitCreditor,
-  type SuspendedRunStore,
-} from '../meta/suspendedRun';
+import type { PausedRunState } from '../meta/suspendedRun';
+import type { SavedRuns } from '../meta/savedRuns';
 import { newHandoffId, type RunSnapshot } from './snapshot';
 
-/** Why a paused Run is no longer this page's (see `PausedRunState`; `otherDevice`: the Account's copy, src/meta/accountRun.ts). */
+/** Why a paused Run is no longer this page's (see `PausedRunState`; `otherDevice`: the Account's copy, src/meta/savedRuns.ts). */
 export type HandoffLoss = Exclude<PausedRunState, 'mine'> | 'otherDevice';
-
-/** The Account's copy of the saved Run (`AccountRuns`, src/meta/accountRun.ts); no-ops when signed out. */
-export interface HandoffCloud {
-  /** Tags a copy about to be written to the device slot with the Account and lease. */
-  tag(snapshot: RunSnapshot): void;
-  /** The copy is in the device slot: upload it. */
-  stored(snapshot: RunSnapshot): void;
-  /** The device took the Run back: take it on the server too, in the background. */
-  takenBack(runKey: string): void;
-}
 
 /** What stored the Run: the paused screen, or the tab being hidden on another in-Run screen. */
 export type HandoffReason = 'pause' | 'hidden';
 
 export interface RunHandoffOptions {
-  store: SuspendedRunStore;
-  /** Credits a different Run the store replaces (as a quit): `MetaProgress`, or `AccountRuns` signed in. */
-  credit: QuitCreditor;
+  /** The saved Run (src/meta/savedRuns.ts). */
+  runs: Pick<SavedRuns, 'slot' | 'pause' | 'pauseWaiting' | 'dropPause' | 'pausedState' | 'takeBack'>;
   /** The paused Run was picked up (or replaced) elsewhere: the page must drop its copy uncredited. */
   onLost(why: HandoffLoss): void;
-  /** Web Locks (default: `navigator.locks` where available; null: none, everything synchronous). */
-  locks?: LockManagerLike | null;
-  /** The Account's copy (none: the device slot only). */
-  cloud?: HandoffCloud | null;
 }
 
 interface Held {
   handoffId: string;
   runKey: string;
   by: HandoffReason;
-  /** Waiting for the lock to be written. */
-  pending: RunSnapshot | null;
 }
 
 export class RunHandoff {
   private held: Held | null = null;
-  /** Let go of by Save & quit while still waiting for the lock: written under it all the same. */
-  private released: Held | null = null;
   private taking: Promise<boolean> | null = null;
-  private readonly slot: SuspendedRunStore;
-  private readonly credit: QuitCreditor;
+  private readonly runs: RunHandoffOptions['runs'];
   private readonly onLost: (why: HandoffLoss) => void;
-  private readonly locks: LockManagerLike | null | undefined;
-  private readonly cloud: HandoffCloud | null;
 
   constructor(opts: RunHandoffOptions) {
-    this.slot = opts.store;
-    this.credit = opts.credit;
+    this.runs = opts.runs;
     this.onLost = opts.onLost;
-    this.locks = opts.locks;
-    this.cloud = opts.cloud ?? null;
     // Another tab took (or replaced) it: step aside at once rather than on Resume.
-    this.slot.onChange((c) => {
+    this.runs.slot.onChange((c) => {
       if (c.external) this.check();
     });
-  }
-
-  private lock<T>(fn: () => T): Promise<T> {
-    return this.locks === undefined ? withSavedRunLock(fn) : withSavedRunLock(fn, this.locks);
   }
 
   /** What stored the Run this page holds (null: it holds none). */
@@ -113,34 +73,15 @@ export class RunHandoff {
    */
   store(snapshot: RunSnapshot, by: HandoffReason): void {
     if (this.held) return;
-    const held: Held = { handoffId: newHandoffId(), runKey: snapshot.runKey, by, pending: snapshot };
-    this.held = held;
-    const write = (): void => this.write(held);
-    void this.lock(write).catch(write);
-  }
-
-  private write(held: Held): void {
-    if (!held.pending || (this.held !== held && this.released !== held)) return;
-    const snapshot = held.pending;
-    held.pending = null;
-    if (this.released === held) this.released = null;
-    this.cloud?.tag(snapshot);
-    // The device first (synchronously), then the Account.
-    storePausedRun(this.slot, snapshot, held.handoffId, this.credit);
-    this.cloud?.stored(snapshot);
-  }
-
-  /** The page is going away: writes a store still waiting for the lock now (pagehide). */
-  flush(): void {
-    if (this.released) this.write(this.released);
-    if (this.held) this.write(this.held);
+    this.held = { handoffId: newHandoffId(), runKey: snapshot.runKey, by };
+    this.runs.pause(snapshot, this.held.handoffId);
   }
 
   /** Where this page's paused Run stands (null: it holds none, or its store isn't written yet). */
   state(): PausedRunState | null {
     const h = this.held;
-    if (!h || h.pending) return null;
-    return pausedRunState(this.slot, h.handoffId, h.runKey);
+    if (!h || this.runs.pauseWaiting(h.handoffId)) return null;
+    return this.runs.pausedState(h.handoffId, h.runKey);
   }
 
   /**
@@ -157,23 +98,16 @@ export class RunHandoff {
   }
 
   /**
-   * Takes the paused Run back (unpause, End run, Quit to title): under the lock, clears the slot if
-   * it still holds this page's Run. Resolves true when the page owns the Run again (or held none);
-   * false when it was picked up elsewhere (`onLost` was called) or forgotten meanwhile. A take back
-   * already in flight is shared.
+   * Takes the paused Run back (unpause, End run, Quit to title): clears the slot if it still holds
+   * this page's Run. Resolves true when the page owns the Run again (or held none); false when it
+   * was picked up elsewhere (`onLost` was called) or forgotten meanwhile. A take back already in
+   * flight is shared.
    */
   takeBack(): Promise<boolean> {
     const h = this.held;
     if (!h) return Promise.resolve(true);
     if (this.taking) return this.taking;
-    const take = (): PausedRunState => {
-      this.write(h);
-      return takeBackPausedRun(this.slot, h.handoffId, h.runKey);
-    };
-    // A lock request that fails (an opaque origin, say) falls back to taking it at once.
-    const taking = this.lock(take)
-      .catch(take)
-      .then((st) => this.settle(h, st));
+    const taking = this.runs.takeBack(h.handoffId, h.runKey).then((st) => this.settle(h, st));
     this.taking = taking;
     return taking;
   }
@@ -182,11 +116,7 @@ export class RunHandoff {
     this.taking = null;
     if (this.held !== h) return false;
     this.held = null;
-    if (st === 'mine') {
-      // Optimistic: the page plays on now; the server take only reports back if it is refused.
-      this.cloud?.takenBack(h.runKey);
-      return true;
-    }
+    if (st === 'mine') return true; // optimistic: the page plays on now; the server take only reports back if it is refused
     this.onLost(st);
     return false;
   }
@@ -197,15 +127,14 @@ export class RunHandoff {
    * still waiting for the lock: it is written under the lock as queued, not here outside it).
    */
   leaveStored(): HandoffLoss | null {
-    const h = this.held;
     const st = this.state();
-    if (h?.pending) this.released = h;
     this.held = null;
     return st === null || st === 'mine' ? null : st;
   }
 
-  /** Drops what this page holds without touching the slot (a new Run, stepping aside). */
+  /** Drops what this page holds without touching the slot (a new Run, stepping aside); a store still waiting for the lock is dropped too. */
   forget(): void {
+    if (this.held) this.runs.dropPause(this.held.handoffId);
     this.held = null;
   }
 }
