@@ -2,6 +2,9 @@
  * Meta-progression on top of SaveStore: Fluff wallet, Upgrade purchases, Run awards,
  * last Character and Difficulty, settings, and each Character's Keepsake Hoard (credit, Felting,
  * shedding, the remembered Loadout). `getMeta()` returns the browser singleton (localStorage).
+ *
+ * Every check that decides a write (can this be afforded? is the Keepsake still there?) runs inside
+ * the store's update callback, on the freshly read save, so another tab's spend is never undone.
  */
 import type { GameEvents } from '../core/events';
 import type { DifficultyId } from '../data/difficulty';
@@ -11,7 +14,7 @@ import type { StatModifier } from '../entities/stats';
 import { AREA_ORDER } from '../world/types';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
-import { browserStorage, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore } from './save';
+import { browserStorage, browserStorageEvents, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore, type StorageEventSource } from './save';
 import { levelOf, upgradeCost, upgradeModifiers } from './upgrades';
 
 declare module '../core/events' {
@@ -62,12 +65,28 @@ function repairStoredLoadout(d: SaveData, characterId: string): void {
   else delete d.lastLoadout[characterId];
 }
 
+/** Whether `d` allows Felting three of `ref` (see FeltCheck). */
+function feltCheckOn(d: SaveData, characterId: string, ref: KeepsakeRef): FeltCheck {
+  const h = d.characters[characterId];
+  const ceiling = feltCeiling(h?.bossesBeaten ?? []);
+  if (getKeepsakeType(ref.type)?.characterId !== characterId) return { ok: false, reason: 'unknown', ceiling };
+  if (ref.rarity >= MAX_RARITY) return { ok: false, reason: 'max', ceiling };
+  const result = { type: ref.type, rarity: ref.rarity + 1 };
+  const cost = feltCost(result.rarity);
+  if (countOf(h, ref) < FELT_INPUT) return { ok: false, reason: 'count', result, cost, ceiling };
+  if (result.rarity > ceiling) return { ok: false, reason: 'ceiling', result, cost, ceiling };
+  if (countOf(h, result) >= 99) return { ok: false, reason: 'full', result, cost, ceiling };
+  if (d.fluff < cost) return { ok: false, reason: 'poor', result, cost, ceiling };
+  return { ok: true, result, cost, ceiling };
+}
+
 export class MetaProgress {
   readonly store: SaveStore;
   private awarded = new WeakMap<object, RunAward>();
 
-  constructor(storage: KeyValueStorage | null) {
-    this.store = new SaveStore(storage);
+  /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
+  constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
+    this.store = new SaveStore(storage, undefined, events);
   }
 
   get data() {
@@ -91,15 +110,19 @@ export class MetaProgress {
   buy(upgradeId: string): BuyResult {
     const u = getUpgrade(upgradeId);
     if (!u) return { ok: false, reason: 'unknown' };
-    const cost = upgradeCost(u, this.level(upgradeId));
-    if (cost === null) return { ok: false, reason: 'maxed' };
-    if (this.fluff < cost) return { ok: false, reason: 'poor' };
-    const level = this.level(upgradeId) + 1;
-    this.store.update((d) => {
-      d.fluff -= cost;
-      d.upgrades[upgradeId] = level;
+    let result: BuyResult = { ok: false, reason: 'poor' };
+    this.store.updateIf((d) => {
+      const owned = levelOf(d.upgrades, upgradeId);
+      const cost = upgradeCost(u, owned);
+      if (cost === null) result = { ok: false, reason: 'maxed' };
+      else if (d.fluff >= cost) {
+        d.fluff -= cost;
+        d.upgrades[upgradeId] = owned + 1;
+        result = { ok: true, level: owned + 1, cost };
+      }
+      return result.ok;
     });
-    return { ok: true, level, cost };
+    return result;
   }
 
   /** Stat modifiers from owned Upgrades, for game.nextRunConfig.modifiers. */
@@ -121,8 +144,9 @@ export class MetaProgress {
     const prev = this.awarded.get(e);
     if (prev) return prev;
     const fluff = fluffForRun(e.reason, e.stats);
-    const newBestRadius = e.stats.maxRadius > this.store.data.stats.bestRadius;
+    let newBestRadius = false;
     this.store.update((d) => {
+      newBestRadius = e.stats.maxRadius > d.stats.bestRadius;
       d.fluff += fluff;
       d.stats.runs++;
       if (e.reason === 'victory') d.stats.wins++;
@@ -176,46 +200,45 @@ export class MetaProgress {
 
   /** Replaces one `from` with one `to` (the first-kill choice). False if `from` isn't in the Hoard or `to`'s cell is full. */
   swapKeepsake(characterId: string, from: KeepsakeRef, to: KeepsakeRef): boolean {
-    if (getKeepsakeType(to.type)?.characterId !== characterId || this.keepsakeCount(characterId, from) < 1) return false;
-    if (from.type === to.type && from.rarity === to.rarity) return true;
-    // A full destination cell would swallow the source Keepsake.
-    if (this.keepsakeCount(characterId, to) >= HOARD_STACK_MAX) return false;
-    this.store.update((d) => {
-      const h = d.characters[characterId]!;
-      addToHoard(h, from, -1);
-      addToHoard(h, to, 1);
+    if (getKeepsakeType(to.type)?.characterId !== characterId) return false;
+    const same = from.type === to.type && from.rarity === to.rarity;
+    let ok = false;
+    this.store.updateIf((d) => {
+      const h = d.characters[characterId];
+      // A full destination cell would swallow the source Keepsake.
+      ok = countOf(h, from) >= 1 && (same || countOf(h, to) < HOARD_STACK_MAX);
+      if (!ok || same) return false;
+      addToHoard(h!, from, -1);
+      addToHoard(h!, to, 1);
       repairStoredLoadout(d, characterId);
+      return true;
     });
-    return true;
+    return ok;
   }
 
   feltCheck(characterId: string, ref: KeepsakeRef): FeltCheck {
-    const ceiling = this.feltCeiling(characterId);
-    if (getKeepsakeType(ref.type)?.characterId !== characterId) return { ok: false, reason: 'unknown', ceiling };
-    if (ref.rarity >= MAX_RARITY) return { ok: false, reason: 'max', ceiling };
-    const result = { type: ref.type, rarity: ref.rarity + 1 };
-    const cost = feltCost(result.rarity);
-    if (this.keepsakeCount(characterId, ref) < FELT_INPUT) return { ok: false, reason: 'count', result, cost, ceiling };
-    if (result.rarity > ceiling) return { ok: false, reason: 'ceiling', result, cost, ceiling };
-    if (this.keepsakeCount(characterId, result) >= 99) return { ok: false, reason: 'full', result, cost, ceiling };
-    if (this.fluff < cost) return { ok: false, reason: 'poor', result, cost, ceiling };
-    return { ok: true, result, cost, ceiling };
+    return feltCheckOn(this.store.data, characterId, ref);
   }
 
   /** Felts three of `ref` into one of the next rarity for its Fluff cost. */
   felt(characterId: string, ref: KeepsakeRef): FeltResult {
-    const check = this.feltCheck(characterId, ref);
-    if (!check.ok) return check;
-    const first = this.store.data.stats.feltings === 0;
-    this.store.update((d) => {
+    let out!: FeltResult;
+    this.store.updateIf((d) => {
+      const check = feltCheckOn(d, characterId, ref);
+      if (!check.ok) {
+        out = check;
+        return false;
+      }
+      out = { ...check, first: d.stats.feltings === 0 };
       const h = d.characters[characterId]!;
       addToHoard(h, ref, -FELT_INPUT);
       addToHoard(h, check.result, 1);
       d.fluff -= check.cost;
       d.stats.feltings++;
       repairStoredLoadout(d, characterId);
+      return true;
     });
-    return { ...check, first };
+    return out;
   }
 
   /**
@@ -224,14 +247,15 @@ export class MetaProgress {
    */
   shed(characterId: string, ref: KeepsakeRef): ShedResult {
     if (getKeepsakeType(ref.type)?.characterId !== characterId) return { ok: false, reason: 'unknown' };
-    if (this.keepsakeCount(characterId, ref) < 1) return { ok: false, reason: 'none' };
     const fluff = shedValue(ref.rarity);
-    this.store.update((d) => {
+    const shed = this.store.updateIf((d) => {
+      if (countOf(d.characters[characterId], ref) < 1) return false;
       addToHoard(d.characters[characterId]!, ref, -1);
       d.fluff += fluff;
       repairStoredLoadout(d, characterId);
+      return true;
     });
-    return { ok: true, fluff };
+    return shed ? { ok: true, fluff } : { ok: false, reason: 'none' };
   }
 
   /** The Loadout last tucked in for a Character, minus anything the Hoard no longer holds. */
@@ -241,26 +265,30 @@ export class MetaProgress {
 
   /** Remembers a Loadout (repaired against the Hoard) for the Character (synced by the cloud save). */
   setLastLoadout(characterId: string, loadout: Loadout): KeepsakeRef[] {
-    const repaired = repairLoadout(characterId, loadout, this.store.data.characters[characterId]);
-    if (sameLoadout(repaired, this.store.data.lastLoadout[characterId])) return repaired;
-    this.store.update((d) => {
+    let repaired: KeepsakeRef[] = [];
+    this.store.updateIf((d) => {
+      repaired = repairLoadout(characterId, loadout, d.characters[characterId]);
+      if (sameLoadout(repaired, d.lastLoadout[characterId])) return false;
       if (repaired.length) d.lastLoadout[characterId] = repaired;
       else delete d.lastLoadout[characterId];
+      return true;
     });
     return repaired;
   }
 
   setLastCharacter(id: string): void {
-    if (this.store.data.lastCharacterId === id) return;
-    this.store.update((d) => {
+    this.store.updateIf((d) => {
+      if (d.lastCharacterId === id) return false;
       d.lastCharacterId = id;
+      return true;
     });
   }
 
   setLastDifficulty(id: DifficultyId): void {
-    if (this.store.data.lastDifficulty === id) return;
-    this.store.update((d) => {
+    this.store.updateIf((d) => {
+      if (d.lastDifficulty === id) return false;
       d.lastDifficulty = id;
+      return true;
     });
   }
 
@@ -277,8 +305,8 @@ export class MetaProgress {
 
 let singleton: MetaProgress | null = null;
 
-/** Browser singleton backed by localStorage (in-memory only if storage is unavailable). */
+/** Browser singleton backed by localStorage (in-memory only if storage is unavailable), following other tabs. */
 export function getMeta(): MetaProgress {
-  singleton ??= new MetaProgress(browserStorage());
+  singleton ??= new MetaProgress(browserStorage(), browserStorageEvents());
   return singleton;
 }
