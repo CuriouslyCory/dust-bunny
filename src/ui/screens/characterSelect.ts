@@ -370,6 +370,8 @@ export function registerCharacterSelectScreen(): void {
             tabButtons[tab].focus();
             return true;
           }
+          // A focused About / Stats panel is for reading: Enter/Space there must not start the Run.
+          if ((e.code === 'Enter' || e.code === 'Space') && focused?.matches('[role="tabpanel"]')) return true;
           if ((e.code === 'Enter' || e.code === 'Space') && focused?.matches('button:not(.char-card):not(.char-start)')) return false;
           if (onSegment && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
             cycleDifficulty(e.code === 'ArrowLeft' ? -1 : 1);
