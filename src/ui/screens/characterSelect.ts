@@ -3,7 +3,8 @@
  * Upgrades and the Difficulty's heart change) as bars, strengths and weaknesses, plus the
  * Difficulty picker; remembers both choices in the save.
  * Under the stats: the Character's Ability card (numbers with the Loadout applied) and two
- * Keepsake slots; a slot opens a picker filtered to that Character's Hoard. The Loadout is
+ * Keepsake slots; a slot opens the Keepsake picker (keepsakePicker.ts) over that Character's
+ * Hoard. The Loadout is
  * remembered per Character (synced by the cloud save) and set as game.nextRunConfig.loadout. Stat bars carry
  * a tick at the Character's cap, with the cap's reason on hover.
  * Keys: ←/→ (A/D) or 1–3 to choose, ↑/↓ for the Difficulty, Enter/Space to start, S for the
@@ -21,7 +22,8 @@ import { BASE_BUNNY_STATS, computeStats, type BunnyStatValues, type StatKey } fr
 import type { Game } from '../../game/game';
 import { hoardEntries } from '../../meta/hoard';
 import { getMeta } from '../../meta/meta';
-import { COMPACT_QUERY, handleMenuKeys, isCompact, scrollArea, segmented } from '../components';
+import { COMPACT_QUERY, isCompact, scrollArea, segmented } from '../components';
+import { createKeepsakePicker } from '../keepsakePicker';
 import { abilityCard, keepsakeChip } from '../keepsakeUi';
 import { h, registerScreen } from '../screens';
 import '../roguelike.css';
@@ -125,65 +127,38 @@ export function registerCharacterSelectScreen(): void {
       let index = 0;
       let difficulty = getDifficulty(game.nextRunConfig.difficulty ?? meta.data.lastDifficulty);
       const loadoutEl = h('div', { className: 'ks-loadout' });
-      const picker = h('div', { className: 'ks-picker' });
-      picker.hidden = true;
-      picker.setAttribute('role', 'dialog');
-      picker.setAttribute('aria-modal', 'true');
-      let pickerReturn: HTMLElement | null = null;
+      const picker = createKeepsakePicker();
 
       const setLoadout = (c: CharacterDef, slots: Array<KeepsakeRef | null>) => {
         game.nextRunConfig.loadout = meta.setLastLoadout(c.id, slots.filter((k): k is KeepsakeRef => k !== null));
         renderLoadout();
       };
 
-      const closePicker = () => {
-        picker.hidden = true;
-        picker.replaceChildren();
-        pickerReturn?.focus({ preventScroll: true });
-      };
+      const focusSlot = (slot: number) => loadoutEl.querySelectorAll<HTMLElement>('.ks-slot')[Math.min(slot, LOADOUT_SLOTS - 1)]?.focus({ preventScroll: true });
 
-      /** Picker for one slot: "Empty" plus every Hoard cell with a copy not in the other slot. */
-      const openPicker = (slot: number, from: HTMLElement) => {
+      /** Picker for one slot, over the whole screen: a Keepsake from the Character's Hoard, or none (a later slot then moves up). */
+      const openPicker = (slot: number) => {
         const c = CHARACTERS[index]!;
         const current: Array<KeepsakeRef | null> = [...meta.lastLoadout(c.id)];
         while (current.length < LOADOUT_SLOTS) current.push(null);
-        const other = current.filter((_, i) => i !== slot);
-        const entries = hoardEntries(c.id, meta.hoardOf(c.id));
-        const pick = (ref: KeepsakeRef | null) => {
-          current[slot] = ref;
-          pickerReturn = null;
-          closePicker();
-          setLoadout(c, current);
-          (loadoutEl.querySelectorAll<HTMLElement>('.ks-slot')[Math.min(slot, LOADOUT_SLOTS - 1)])?.focus({ preventScroll: true });
-        };
-        const empty = h('button', { className: 'ks-pick ks-pick-empty', type: 'button', textContent: 'Empty slot' });
-        empty.onclick = () => pick(null);
-        const options = entries.map((e) => {
-          const used = other.filter((k) => k && k.type === e.type && k.rarity === e.rarity).length;
-          const left = e.count - used;
-          const b = h('button', { className: 'ks-pick', type: 'button' }, keepsakeChip(e, { count: left, describe: true }));
-          b.disabled = left < 1;
-          const cur = current[slot];
-          if (cur && cur.type === e.type && cur.rarity === e.rarity) b.classList.add('selected');
-          b.onclick = () => pick({ type: e.type, rarity: e.rarity });
-          return b;
+        const hoard = meta.hoardOf(c.id);
+        picker.open({
+          host: panel.parentElement ?? panel,
+          behind: panel,
+          character: c,
+          art: furBall(c),
+          slots: current,
+          slot,
+          entries: hoardEntries(c.id, hoard),
+          feltCeiling: meta.feltCeiling(c.id),
+          bossesBeaten: hoard.bossesBeaten,
+          onPick: (ref) => {
+            current[slot] = ref;
+            setLoadout(c, current);
+            focusSlot(slot);
+          },
+          onCancel: () => focusSlot(slot),
         });
-        const cancel = h('button', { className: 'btn', type: 'button', textContent: 'Cancel' });
-        cancel.onclick = closePicker;
-        picker.replaceChildren(
-          h('h3', { textContent: `Tuck into ${c.name}'s fur · slot ${slot + 1}` }),
-          h(
-            'div',
-            { className: 'ks-pick-list' },
-            empty,
-            ...options,
-            ...(entries.length ? [] : [h('p', { className: 'ks-pick-none', textContent: `${c.name} has no Keepsakes yet. Bosses leave them in the fur of the Bunny that absorbs them.` })]),
-          ),
-          h('div', { className: 'rl-row' }, cancel),
-        );
-        pickerReturn = from;
-        picker.hidden = false;
-        ((picker.querySelector('.ks-pick.selected') ?? empty) as HTMLElement).focus({ preventScroll: true });
       };
 
       /** Ability card and the two Keepsake slots for the selected Character. */
@@ -202,7 +177,7 @@ export function registerCharacterSelectScreen(): void {
             b.append(h('span', { className: 'ks-slot-empty', textContent: '＋ Tuck in a Keepsake' }));
             b.setAttribute('aria-label', `Slot ${i + 1}: empty. Tuck in a Keepsake`);
           }
-          b.onclick = () => openPicker(i, b);
+          b.onclick = () => openPicker(i);
           return b;
         });
         // Phones show a stacked "🛋 Couch" beside the slots; the aria-label keeps the full name.
@@ -323,22 +298,23 @@ export function registerCharacterSelectScreen(): void {
       back.onclick = () => game.go('title');
       shop.onclick = () => game.go('shop', { back: 'characterSelect' });
 
-      return {
-        el: h(
+      const panel = h(
+        'div',
+        { className: 'panel rl-panel char-select' },
+        h('h2', { textContent: 'Choose your Bunny' }),
+        body,
+        loadoutEl,
+        h(
           'div',
-          { className: 'panel rl-panel char-select' },
-          h('h2', { textContent: 'Choose your Bunny' }),
-          body,
-          loadoutEl,
-          picker,
-          h(
-            'div',
-            { className: 'char-foot' },
-            h('div', { className: 'char-diff-row' }, diffPicker.el, diffDesc),
-            h('div', { className: 'rl-row char-actions' }, back, shop, start),
-          ),
-          h('p', { className: 'hint key-hint', textContent: '←/→ or 1–3 to choose · ↑/↓ difficulty · Enter to start · S Shop · U Under the Couch' }),
+          { className: 'char-foot' },
+          h('div', { className: 'char-diff-row' }, diffPicker.el, diffDesc),
+          h('div', { className: 'rl-row char-actions' }, back, shop, start),
         ),
+        h('p', { className: 'hint key-hint', textContent: '←/→ or 1–3 to choose · ↑/↓ difficulty · Enter to start · S Shop · U Under the Couch' }),
+      );
+
+      return {
+        el: panel,
         enter() {
           placeLoadout();
           difficulty = getDifficulty(game.nextRunConfig.difficulty ?? meta.data.lastDifficulty);
@@ -351,14 +327,11 @@ export function registerCharacterSelectScreen(): void {
           shop.textContent = `Shop · ${meta.fluff} Fluff`;
           start.focus({ preventScroll: true });
         },
+        exit() {
+          picker.close();
+        },
         onKey(e) {
-          if (!picker.hidden) {
-            if (e.code === 'Escape') {
-              closePicker();
-              return true;
-            }
-            return handleMenuKeys(e, picker);
-          }
+          if (picker.isOpen) return picker.onKey(e);
           if (e.repeat) return false;
           // A focused Difficulty segment, Back or Shop handles Enter/Space itself (native click),
           // and ←/→ move along the Difficulty switch instead of changing the Character.
