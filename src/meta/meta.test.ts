@@ -210,7 +210,68 @@ describe('save data', () => {
     };
     const store = new SaveStore(broken);
     expect(store.data).toEqual(defaultSave());
-    expect(store.save()).toBe(false);
+    expect(store.save()).toBe('unavailable');
+  });
+});
+
+describe('a save from a newer build (docs/adr/0001)', () => {
+  const newerSave = JSON.stringify({ ...defaultSave(), version: SAVE_VERSION + 1, fluff: 500, upgrades: { fast_feet: 1 }, somethingNew: { a: 1 } }, null, 1);
+
+  it('is read as far as this build understands it', () => {
+    const { data, status } = parseSave(newerSave);
+    expect(status).toBe('newer');
+    expect(data.fluff).toBe(500);
+    expect(data.upgrades).toEqual({ fast_feet: 1 });
+  });
+
+  it('is never written: update, updateIf and save refuse, and the stored value is byte for byte unchanged', () => {
+    const storage = memStorage({ [SAVE_KEY]: newerSave });
+    const store = new SaveStore(storage);
+    expect(store.status).toBe('newer');
+    expect(store.writeStatus).toBe('newer');
+    const seen: number[] = [];
+    store.onChange((d) => seen.push(d.fluff));
+    let ran = false;
+    expect(store.update(() => (ran = true))).toBe('newer');
+    expect(store.updateIf(() => (ran = true))).toBe(false);
+    expect(ran).toBe(false);
+    expect(store.save()).toBe('newer');
+    expect(store.data.fluff).toBe(500);
+    expect(seen).toEqual([]);
+    expect(storage.map.get(SAVE_KEY)).toBe(newerSave);
+    expect(storage.map.has(`${SAVE_KEY}:corrupt`)).toBe(false);
+  });
+
+  it('refuses purchases, Run credit and settings in MetaProgress, leaving the stored save as it is', () => {
+    const storage = memStorage({ [SAVE_KEY]: newerSave });
+    const meta = new MetaProgress(storage);
+    expect(meta.saveStatus).toBe('newer');
+    expect(meta.buy('fast_feet')).toEqual({ ok: false, reason: 'poor' });
+    expect(meta.awardRun({ runKey: 'r1', reason: 'died', stats: stats() })).toBeNull();
+    meta.updateSettings({ masterVolume: 0.2 });
+    expect(meta.fluff).toBe(500);
+    expect(storage.map.get(SAVE_KEY)).toBe(newerSave);
+  });
+
+  it('written by another tab mid-session: this tab follows it, stops writing and tells its listeners', () => {
+    const storage = memStorage();
+    const events = tabEvents();
+    const store = new SaveStore(storage, SAVE_KEY, events);
+    store.update((d) => (d.fluff = 10));
+    expect(store.writeStatus).toBe('ok');
+    const seen: number[] = [];
+    store.onChange((d) => seen.push(d.fluff));
+    storage.map.set(SAVE_KEY, newerSave);
+    events.fire({ key: SAVE_KEY, storageArea: storage });
+    expect(store.writeStatus).toBe('newer');
+    expect(seen).toEqual([500]);
+    // And without the event (it hadn't arrived yet), the re-read before a write catches it.
+    const shared = memStorage();
+    const late = new SaveStore(shared);
+    expect(late.update((d) => (d.fluff = 1))).toBe('ok');
+    shared.map.set(SAVE_KEY, newerSave);
+    expect(late.update((d) => (d.fluff = 2))).toBe('newer');
+    expect(shared.map.get(SAVE_KEY)).toBe(newerSave);
   });
 });
 
