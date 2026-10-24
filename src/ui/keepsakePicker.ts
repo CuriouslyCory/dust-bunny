@@ -38,7 +38,7 @@ export interface KeepsakePickerOptions {
   entries: ReadonlyArray<KeepsakeRef & { count: number }>;
   feltCeiling: number;
   bossesBeaten: readonly string[];
-  /** A Keepsake, or null for "Empty the slot". The picker has closed already. */
+  /** A Keepsake, or null to take this slot's Keepsake out (a later slot's moves up). The picker has closed already. */
   onPick(ref: KeepsakeRef | null): void;
   /** Cancelled (Esc, ✕, Cancel). The picker has closed already. */
   onCancel(): void;
@@ -145,7 +145,11 @@ export function createKeepsakePicker(): KeepsakePicker {
 
   const emptyButton = (o: KeepsakePickerOptions, mode: Layout): HTMLElement[] => {
     if (!o.slots[o.slot]) return [];
-    const b = keyed(h('button', { className: 'btn btn-ghost ks-pk-empty', type: 'button', textContent: mode === 'landscape' ? 'Empty slot' : 'Empty the slot' }), 'empty');
+    // The Loadout is saved without gaps: with a later slot filled, its Keepsake moves up into this one.
+    const next = o.slots.findIndex((k, i) => i > o.slot && k);
+    const text = next >= 0 ? 'Take it out' : mode === 'landscape' ? 'Empty slot' : 'Empty the slot';
+    const b = keyed(h('button', { className: 'btn btn-ghost ks-pk-empty', type: 'button', textContent: text }), 'empty');
+    if (next >= 0) b.title = `Slot ${next + 1}'s Keepsake moves up into slot ${o.slot + 1}`;
     b.onclick = () => pick(null);
     return [b];
   };

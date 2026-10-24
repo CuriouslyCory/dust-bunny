@@ -136,7 +136,7 @@ export function registerCharacterSelectScreen(): void {
 
       const focusSlot = (slot: number) => loadoutEl.querySelectorAll<HTMLElement>('.ks-slot')[Math.min(slot, LOADOUT_SLOTS - 1)]?.focus({ preventScroll: true });
 
-      /** Picker for one slot, over the whole screen: the Character's Hoard, or "Empty the slot". */
+      /** Picker for one slot, over the whole screen: a Keepsake from the Character's Hoard, or none (a later slot then moves up). */
       const openPicker = (slot: number) => {
         const c = CHARACTERS[index]!;
         const current: Array<KeepsakeRef | null> = [...meta.lastLoadout(c.id)];
