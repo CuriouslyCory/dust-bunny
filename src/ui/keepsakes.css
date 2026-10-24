@@ -154,61 +154,6 @@
 .char-select {
   position: relative;
 }
-.ks-picker {
-  position: absolute;
-  inset: 12px;
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  background: var(--paper);
-  box-shadow: var(--shadow-lg);
-}
-.ks-picker[hidden] {
-  display: none;
-}
-.ks-picker h3 {
-  margin: 0;
-  font-family: var(--font-display);
-}
-.ks-pick-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 8px;
-  overflow-y: auto;
-  min-height: 0;
-  flex: 1;
-  align-content: start;
-}
-.ks-pick {
-  display: flex;
-  align-items: center;
-  min-height: 52px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  border: 2px solid var(--line);
-  background: var(--paper-2, var(--paper));
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.ks-pick.selected {
-  border-color: var(--accent);
-}
-.ks-pick:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.ks-pick-empty {
-  font: 600 var(--fs-sm) / 1.2 var(--font-display);
-  color: var(--ink-soft);
-}
-.ks-pick-none {
-  grid-column: 1 / -1;
-  color: var(--ink-soft);
-}
 
 /* Stat bar cap tick */
 .rl-bar {
@@ -557,10 +502,6 @@
   }
   .ks-couch-short {
     display: inline;
-  }
-  .ks-picker {
-    inset: 4px;
-    padding: 10px;
   }
   .kept-options {
     grid-template-columns: minmax(0, 1fr);
