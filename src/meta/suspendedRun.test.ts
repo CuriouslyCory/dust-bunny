@@ -119,6 +119,26 @@ describe('Save & quit from two tabs', () => {
     expect(meta.data.fluff).toBe(fluffForRun('quit', runA.stats) + fluffForRun('quit', runB.stats));
   });
 
+  it('a replacing write that fails credits nothing: the old Run is still in storage', () => {
+    const storage = memStorage();
+    const tabA = new SuspendedRunStore(storage);
+    const tabB = new SuspendedRunStore(storage);
+    const meta = new MetaProgress(null);
+    const runA = snapshot();
+    saveSuspendedRun(tabA, runA, meta);
+    const setItem = storage.setItem;
+    storage.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    saveSuspendedRun(tabB, snapshot(), meta);
+    expect(meta.data.stats.runs).toBe(0);
+    // Tab A (or a reload) still finds Run A, and abandoning it there credits it once.
+    storage.setItem = setItem;
+    expect(tabA.peek()?.runKey).toBe(runA.runKey);
+    expect(abandonSuspendedRun(tabA, meta)).toBe(true);
+    expect(meta.data.stats.runs).toBe(1);
+  });
+
   it('saving the same Run again credits nothing', () => {
     const storage = memStorage();
     const tabA = new SuspendedRunStore(storage);

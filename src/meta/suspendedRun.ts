@@ -102,8 +102,10 @@ export class SuspendedRunStore {
     return this.peek() !== null;
   }
 
-  save(snapshot: RunSnapshot): void {
+  /** Stores the saved Run. False when it only reached this page's memory (storage full or locked). */
+  save(snapshot: RunSnapshot): boolean {
     this.write(JSON.stringify(snapshot));
+    return !this.stale;
   }
 
   /** Reads and clears the saved Run (Resume). */
@@ -162,14 +164,16 @@ function savedRunIf(store: SuspendedRunStore, runKey: string | undefined): RunSn
 /**
  * Save & quit: stores `snapshot` in the slot. A different Run already there (saved from another
  * tab or window) is replaced and counted as a quit, as New run would (its Fluff and stats
- * credited); the same Run saved again (same `runKey`) credits nothing. True when a different Run
- * was replaced.
+ * credited); the same Run saved again (same `runKey`) credits nothing. A write that doesn't reach
+ * storage credits nothing either (the replaced Run is still there). True when a different Run was
+ * replaced.
  */
 export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot, meta: Pick<MetaProgress, 'awardRun'>): boolean {
   const prev = store.peek();
   const replaced = !!prev && prev.runKey !== snapshot.runKey;
-  if (prev && replaced) meta.awardRun({ reason: 'quit', stats: prev.stats });
-  store.save(snapshot);
+  // Credited only once it is really gone: after a failed write the old Run is still in storage, and
+  // another tab or a reload can still resume or abandon it (and be credited then).
+  if (store.save(snapshot) && prev && replaced) meta.awardRun({ reason: 'quit', stats: prev.stats });
   return replaced;
 }
 
