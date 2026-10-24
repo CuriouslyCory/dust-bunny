@@ -24,8 +24,10 @@ export interface GameEvents {
   /** A new Run has been created and is about to start simulating (`resumed`: a saved Run put back, see `Game.resumeRun`). */
   runStarted: { seed: string; characterId: string; resumed?: boolean };
   /**
-   * Save & quit: the Run is about to be stored and disposed (`Game.saveAndQuit`). Listeners may
-   * write their own fields into `snapshot` (the Keepsake tracker, leaderboard posting).
+   * The Run is about to be stored in the saved Run slot: on pause, or a hidden tab on another
+   * in-Run screen (`Game.checkpointRun`, the Run goes on), or Save & quit (`Game.saveAndQuit`, it
+   * is disposed). May fire several times per Run. Listeners may write their own fields into
+   * `snapshot` (the Keepsake tracker, leaderboard posting).
    */
   runSuspended: { snapshot: RunSnapshot };
   /** Debris (or anything absorbable) was absorbed by the Bunny. */

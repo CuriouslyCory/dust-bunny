@@ -32,6 +32,22 @@ export async function query<T>(text: string, params: unknown[] = []): Promise<T[
   return res.rows as T[];
 }
 
+/** Runs `fn` in one transaction on one connection (committed when it resolves, rolled back when it throws). */
+export async function transaction<T>(fn: (q: <R>(text: string, params?: unknown[]) => Promise<R[]>) => Promise<T>): Promise<T> {
+  const client = await getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const out = await fn(async <R>(text: string, params: unknown[] = []) => (await client.query(text, params)).rows as R[]);
+    await client.query('COMMIT');
+    return out;
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 /**
  * Applies SCHEMA once per instance (retried on the next call if it fails). A cold start whose
  * database is already current costs one probe query, not the DDL (which would briefly lock tables).

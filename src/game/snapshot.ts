@@ -19,8 +19,17 @@
  * slot credits a Run it replaces, src/meta/suspendedRun.ts). Snapshots saved before it existed get
  * one on read (`legacyRunKey`).
  *
- * `parseRunSnapshot` never throws: anything unreadable, from another version or with a field of
- * the wrong type is rejected (null) rather than half-restored.
+ * `handoffId` marks a Run stored by a pause rather than Save & quit: whichever page holds that id
+ * may take the Run back on unpause; anyone else may pick it up (src/game/handoff.ts). Optional and
+ * additive (docs/adr/0001): older snapshots and builds read it as absent.
+ *
+ * `account` tags a copy kept for a signed-in player (src/meta/accountRun.ts): whose Account holds
+ * it, under which lease, and whether the server has confirmed it. Device-only: it is not uploaded.
+ *
+ * `parseRunSnapshot` never throws: anything unreadable or with a field of the wrong type is
+ * rejected (null) rather than half-restored. An older version is migrated first
+ * (`migrateRunSnapshot`, src/shared/savedRun.ts); a newer one reads as null here, and callers
+ * leave it where it is (`isNewerSnapshot`, docs/adr/0001).
  */
 import { CHARACTERS } from '../data/characters';
 import { isDifficultyId } from '../data/difficulty';
@@ -29,10 +38,11 @@ import type { KeepsakeDrop } from '../meta/keepsakes';
 import type { StatModifier } from '../entities/stats';
 import type { BunnyForm } from '../entities/bunny';
 import type { DifficultyId } from '../shared/difficulty';
+import { migrateRunSnapshot, SNAPSHOT_VERSION } from '../shared/savedRun';
 import { AREA_ORDER, type AreaId } from '../world/types';
 import type { AreaStats, RunStats } from './runStats';
 
-export const SNAPSHOT_VERSION = 1;
+export { isNewerSnapshot, SNAPSHOT_VERSION } from '../shared/savedRun';
 
 export interface RunSnapshot {
   version: typeof SNAPSHOT_VERSION;
@@ -93,10 +103,37 @@ export interface RunSnapshot {
   unranked?: boolean;
   /** The Area the Run was started in (`RunConfig.area`, a debug start past the house). */
   startArea?: AreaId;
+  /**
+   * Stored by a pause (`Game.checkpointRun`): fresh per pause. The pausing page remembers it, and
+   * plays on only while the slot still holds it (src/game/handoff.ts). Absent for Save & quit.
+   */
+  handoffId?: string;
+  /** The Account copy this one mirrors (signed-in players only; device-only, never uploaded). */
+  account?: SnapshotAccountTag;
+}
+
+/** `RunSnapshot.account`: which Account's saved Run this local copy is, and its lease there. */
+export interface SnapshotAccountTag {
+  userId: string;
+  /** The lease this copy was stored (or taken) under. */
+  lease: string;
+  /** A lease the server may still hold instead (a take that hasn't been heard back from). */
+  prevLease?: string;
+  /** The server has confirmed this copy (or one of the same Run under this lease). */
+  synced: boolean;
 }
 
 /** A fresh Run identity (random, so two Runs on the same seed and Character still differ). */
 export function newRunKey(): string {
+  return randomId();
+}
+
+/** A fresh hand-off id for one pause (`RunSnapshot.handoffId`). */
+export function newHandoffId(): string {
+  return randomId();
+}
+
+function randomId(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (c?.randomUUID) return c.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
@@ -139,8 +176,9 @@ function isNumRecord(v: unknown): v is Record<string, number> {
  * A stored snapshot, validated (null for anything that can't be resumed safely: wrong version,
  * unknown Character or Area, a missing or mistyped field).
  */
-export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
-  if (!isObj(raw) || raw.version !== SNAPSHOT_VERSION) return null;
+export function parseRunSnapshot(input: unknown): RunSnapshot | null {
+  const raw = migrateRunSnapshot(input);
+  if (!raw || raw.version !== SNAPSHOT_VERSION) return null;
   const s = raw;
   if (!isNum(s.savedAt) || !isStr(s.seed) || !isStr(s.characterId) || !CHARACTERS.some((c) => c.id === s.characterId)) return null;
   if (s.runKey !== undefined && !(isStr(s.runKey) && s.runKey.length > 0)) return null;
@@ -166,6 +204,9 @@ export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
   if (s.leaderboardRunId !== undefined && !isStr(s.leaderboardRunId)) return null;
   if (s.unranked !== undefined && typeof s.unranked !== 'boolean') return null;
   if (s.startArea !== undefined && !isArea(s.startArea)) return null;
+  if (s.handoffId !== undefined && !(isStr(s.handoffId) && s.handoffId.length > 0)) return null;
+  const a = s.account;
+  if (a !== undefined && !(isObj(a) && isStr(a.userId) && isStr(a.lease) && typeof a.synced === 'boolean' && (a.prevLease === undefined || isStr(a.prevLease)))) return null;
   const out = structuredClone(s) as unknown as RunSnapshot;
   out.runKey ??= legacyRunKey(out);
   return out;
