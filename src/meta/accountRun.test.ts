@@ -11,7 +11,7 @@ import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import type { ServerSavedRun } from '../shared/savedRun';
 import { AccountRuns, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress } from './meta';
-import { resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
+import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
 
 const memStorage = () => {
   const map = new Map<string, string>();
@@ -35,6 +35,8 @@ interface Row {
   lease: string;
   snapshot: Record<string, unknown> | null;
   version: number | null;
+  /** The Run ended (or was abandoned): the row stays so a late upload of it is refused. */
+  ended?: boolean;
 }
 
 /** One Account's row, with api/saved-run.ts's rules. `offline`: every request fails. `calls`: what was asked. */
@@ -43,6 +45,8 @@ class FakeServer {
   offline = false;
   /** While set, every answer waits for it (a slow network). */
   gate: Promise<void> | null = null;
+  /** Answers to one kind of request (`put`, `take`, …) wait for its promise (that request is slow). */
+  hold: Partial<Record<string, Promise<void>>> = {};
   calls: string[] = [];
 
   /** `link.offline`: this device alone can't reach the server. */
@@ -50,19 +54,21 @@ class FakeServer {
     const net = async (what: string): Promise<void> => {
       this.calls.push(what);
       if (this.gate) await this.gate;
+      if (this.hold[what]) await this.hold[what];
       if (this.offline || link.offline) throw new SavedRunNetError('offline');
     };
-    const view = (r: Row): ServerSavedRun => ({ ...structuredClone(r), updatedAt: new Date(0).toISOString() });
+    const view = ({ ended: _ended, ...r }: Row): ServerSavedRun => ({ ...structuredClone(r), updatedAt: new Date(0).toISOString() });
     return {
       get: async () => {
         await net('get');
-        return this.row ? view(this.row) : null;
+        return this.row && !this.row.ended ? view(this.row) : null;
       },
       put: async (b): Promise<PutResult> => {
         await net('put');
         const snap = structuredClone(b.snapshot) as Record<string, unknown>;
         const version = snap.version as number;
         const old = this.row;
+        if (old?.ended && old.runKey === b.runKey) return { ok: false, reason: 'carriedOn' }; // 409 run_ended
         if (old && old.runKey === b.runKey && old.lease !== b.lease && old.lease !== b.prevLease) return { ok: false, reason: 'carriedOn' };
         if (old && old.runKey !== b.runKey && old.snapshot && (old.version ?? 0) > version) return { ok: false, reason: 'newer' };
         this.row = { runKey: b.runKey, lease: b.lease, snapshot: snap, version };
@@ -71,7 +77,7 @@ class FakeServer {
       take: async (b): Promise<TakeResult> => {
         await net('take');
         const r = this.row;
-        if (!r || r.runKey !== b.runKey || (r.lease !== b.lease && r.lease !== b.newLease)) return { taken: false, savedRun: r ? view(r) : null };
+        if (!r || r.ended || r.runKey !== b.runKey || (r.lease !== b.lease && r.lease !== b.newLease)) return { taken: false, savedRun: r ? view(r) : null };
         const snap = r.snapshot;
         this.row = { ...r, lease: b.newLease, snapshot: null, version: null };
         return { taken: true, snapshot: snap };
@@ -79,8 +85,9 @@ class FakeServer {
       end: async (b) => {
         await net('end');
         const r = this.row;
-        const deleted = !!r && r.runKey === b.runKey && (r.lease === b.lease || r.lease === b.prevLease);
-        if (deleted) this.row = null;
+        const deleted = !!r && !r.ended && r.runKey === b.runKey && (r.lease === b.lease || r.lease === b.prevLease);
+        if (deleted) this.row = { ...r, snapshot: null, version: null, ended: true };
+        else if (!r || (r.ended && r.runKey !== b.runKey)) this.row = { runKey: b.runKey, lease: b.lease, snapshot: null, version: null, ended: true };
         return { deleted };
       },
     };
@@ -186,7 +193,7 @@ describe('Account saved Run (two devices, one server)', () => {
     expect((await resumeOn(b)).res).toBe('mine'); // B is online
     b.runs.ended(s.runKey); // B plays it to the end (and credits it there)
     await settle(b.runs);
-    expect(server.row).toBeNull();
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
     a.link.offline = false; // A reconnects
     await settle(a.runs);
     expect(a.lostRuns).toEqual([s.runKey]);
@@ -340,6 +347,70 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(await a.runs.confirmHeld(s.runKey)).toBe(true);
     a.runs.ended(s.runKey);
     await settle(a.runs);
-    expect(server.row).toBeNull();
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
+    expect(await a.runs.syncTitle()).toMatchObject({ fromAccount: null });
+    expect(a.store.peek()).toBeNull();
+  });
+
+  it('unpausing while the pause upload is still on its way still takes the Run back on the server', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const b = device(server);
+    const s = snapshot();
+    let open!: () => void;
+    server.hold.put = new Promise((r) => (open = r));
+    a.handoff.store(s, 'pause');
+    expect(await a.handoff.takeBack()).toBe(true); // before the upload is heard back from
+    open();
+    await settle(a.runs);
+    expect(server.calls).toEqual(['put', 'take']);
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null }); // A plays it: nothing to resume
+    expect(await a.runs.confirmHeld(s.runKey)).toBe(true);
+    expect((await resumeOn(b)).res).toBe('none');
+    expect(a.lostRuns).toEqual([]);
+  });
+
+  it('New run on the title waits for the Save & quit upload, so the abandoned Run isn’t stored again', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const s = snapshot();
+    let open!: () => void;
+    server.hold.put = new Promise((r) => (open = r));
+    a.handoff.store(s, 'pause');
+    a.handoff.forget(); // Save & quit: the title has it now
+    const shown = a.store.peek()!;
+    const abandoning = a.runs.abandon(shown, () => abandonSuspendedRun(a.store, a.meta));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(server.calls).toEqual(['put']); // the delete waits for the upload
+    open();
+    expect(await abandoning).toBe('done');
+    await settle(a.runs);
+    expect(server.calls).toEqual(['put', 'end']);
+    expect(a.lostRuns).toEqual([]);
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
+    expect(a.meta.calls).toHaveLength(1); // credited once, here
+    const b = device(server);
+    expect((await resumeOn(b)).res).toBe('none');
+  });
+
+  it('a device that fell behind can’t store a Run that ended elsewhere again', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const b = device(server);
+    const s = snapshot();
+    a.handoff.store(s, 'pause');
+    await settle(a.runs);
+    a.link.offline = true;
+    expect(await a.handoff.takeBack()).toBe(true); // its take back waits...
+    a.handoff.store(structuredClone(s), 'pause'); // ...and is superseded by the next pause's upload
+    expect((await resumeOn(b)).res).toBe('mine');
+    b.runs.ended(s.runKey); // B ends (and credits) it
+    await settle(b.runs);
+    a.link.offline = false;
+    await settle(a.runs);
+    expect(a.lostRuns).toEqual([s.runKey]);
+    expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
+    expect(a.store.peek()).toBeNull();
+    expect(a.meta.calls).toEqual([]);
   });
 });

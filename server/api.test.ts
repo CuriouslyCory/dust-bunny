@@ -397,6 +397,42 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       expect(await getRun(cookie)).toBeNull();
     });
 
+    it('remembers a Run that ended, so a device that fell behind can’t store or take it again', async () => {
+      const cookie = await signUp(`Sre${RUN}`);
+      await send(cookie, 'PUT', { runKey: 'done', lease: 'a1', snapshot: runSnapshot('done') });
+      expect((await send(cookie, 'POST', { runKey: 'done', lease: 'a1', newLease: 'b1' })).status).toBe(200);
+      expect(await (await send(cookie, 'DELETE', { runKey: 'done', lease: 'b1' })).json()).toMatchObject({ deleted: true });
+      expect(await getRun(cookie)).toBeNull();
+      // A's upload under the lease it had (and B's own, late) are refused: the Run is over.
+      for (const body of [
+        { runKey: 'done', lease: 'a2', prevLease: 'a1', snapshot: runSnapshot('done') },
+        { runKey: 'done', lease: 'b1', snapshot: runSnapshot('done') },
+      ]) {
+        const late = await send(cookie, 'PUT', body);
+        expect(late.status).toBe(409);
+        expect(((await late.json()) as { error: string }).error).toBe('run_ended');
+      }
+      const take = await send(cookie, 'POST', { runKey: 'done', lease: 'b1', newLease: 'b2' });
+      expect(take.status).toBe(409);
+      expect(await take.json()).toMatchObject({ error: 'carried_on', savedRun: { runKey: 'done', snapshot: null } });
+      expect(await (await send(cookie, 'DELETE', { runKey: 'done', lease: 'b1' })).json()).toMatchObject({ deleted: false });
+      expect(await getRun(cookie)).toBeNull();
+      // Another Run is stored over it as over an empty slot (nothing to credit).
+      expect(await (await send(cookie, 'PUT', { runKey: 'next', lease: 'c1', snapshot: runSnapshot('next') })).json()).toEqual({ stored: true, replaced: null });
+      expect(await getRun(cookie)).toMatchObject({ runKey: 'next', lease: 'c1' });
+    });
+
+    it('records a Run abandoned before its upload arrived as ended, without touching a Run still going', async () => {
+      const cookie = await signUp(`Sra${RUN}`);
+      expect(await (await send(cookie, 'DELETE', { runKey: 'early', lease: 'a1' })).json()).toMatchObject({ deleted: false });
+      expect(await getRun(cookie)).toBeNull();
+      expect((await send(cookie, 'PUT', { runKey: 'early', lease: 'a1', snapshot: runSnapshot('early') })).status).toBe(409);
+      // A Run another device stored is left alone by a delete for a different one.
+      await send(cookie, 'PUT', { runKey: 'kept', lease: 'b1', snapshot: runSnapshot('kept') });
+      expect(await (await send(cookie, 'DELETE', { runKey: 'early', lease: 'a1' })).json()).toMatchObject({ deleted: false });
+      expect(await getRun(cookie)).toMatchObject({ runKey: 'kept', lease: 'b1', snapshot: { runKey: 'kept' } });
+    });
+
     it('replaces a different Run and returns it for the quit credit; keeps one from a newer version', async () => {
       const cookie = await signUp(`Srr${RUN}`);
       await send(cookie, 'PUT', { runKey: 'old-run', lease: 'x', snapshot: runSnapshot('old-run') });

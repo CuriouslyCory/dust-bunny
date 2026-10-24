@@ -14,10 +14,12 @@ The device slot stays and is written first, so pausing and Save & quit never wai
 - **Server only, no device slot.** Rejected: pausing, closing a tab and Save & quit would depend on the network, and players without an Account need the slot anyway.
 - **Unpause waits for the server take.** Rejected: unpausing must never stall on the network. A refused take after the fact is rare, and dropping a few minutes of play once is better than adding delay to every unpause.
 - **Delete the row when a device takes the Run.** Rejected: a device that fell behind (offline, or its take back still waiting) could then store its stale copy again as if nothing had happened. A row with a moved lease lets the server refuse it with a 409.
+- **Delete the row when the Run ends.** Rejected for the same reason: a device that fell behind could store a Run another device already ended and credited, and it would be offered (and credited) again. The row stays, marked ended and without a snapshot, until another Run is stored over it, and a late upload of the ended Run gets a 409. A delete for a Run the row doesn't hold yet (abandoned before its upload arrived) leaves the same record.
 
 ## Consequences
 
 - One saved Run per Account, as there is one per browser. Saving a different Run over it counts the replaced one as a quit, whichever device does it.
 - A Run is credited once: by the device that ends it, or by whoever abandons or replaces it. A device that loses a Run disposes it without `runEnded`.
 - End run and Quit to title from pause credit the Run, so for a signed-in player they wait for the server take (with a short timeout when offline).
+- The server remembers only the last Run that ended. A device that fell behind on Run A, while A ended and then another Run B was stored on another device, can still store A over B when it reconnects (B counts as a quit). It needs offline play across a whole other Run's start.
 - Known gap: say a device unpauses while offline, so its take back is still waiting, and meanwhile another device stores a different Run over the Account's slot. When the first device reconnects, its Run is dropped uncredited. It needs offline play and a new Run on another device in the same window.

@@ -26,7 +26,9 @@
  *   sides, and the title says an update is needed (docs/adr/0001).
  * - Resume (`resume`) waits for the server take: of two devices racing, one gets the Run and the
  *   other's title refreshes. Offline, it resumes and takes in the background, as unpausing does.
- * - New run (`abandon`) and the Run ending (`ended`) delete the row, only for this page's lease.
+ * - New run (`abandon`) and the Run ending (`ended`) end the row, only for this page's lease (the
+ *   server keeps it, marked ended, so a late upload of the Run is refused). `abandon` first waits
+ *   out an upload of the Run still on its way, so the delete can't land before it.
  */
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
@@ -316,13 +318,22 @@ export class AccountRuns {
     }
   }
 
+  /** Drops waiting work for `runKey` and waits out a request for it already sent (and any retry it queued). */
+  private async settled(runKey: string): Promise<void> {
+    this.ops.delete(runKey);
+    while (this.inFlight?.runKey === runKey) {
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+      this.ops.delete(runKey);
+    }
+  }
+
   private wake(): void {
     const ws = this.waiters;
     this.waiters = [];
     for (const w of ws) w();
   }
 
-  /** The Run ended on this page (`runEnded`): its row goes, if this page still holds it. */
+  /** The Run ended on this page (`runEnded`): its row is marked ended, if this page still holds it. */
   ended(runKey: string): void {
     const live = this.live;
     if (!this.userId || !live || live.runKey !== runKey) return;
@@ -451,12 +462,20 @@ export class AccountRuns {
   async abandon(shown: RunSnapshot, abandonLocal: () => boolean): Promise<'done' | 'lost' | 'failed'> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) return abandonLocal() ? 'done' : 'failed';
-    const leases = leasesOf(tag);
+    const userId = this.userId;
+    // An upload of this Run still on its way would land after the delete and store it again: let it
+    // settle first, and drop any still waiting. What it settled to is in the device slot.
+    await this.settled(shown.runKey);
+    if (userId !== this.userId) return 'failed';
+    const now = this.store.peek();
+    if (now?.runKey !== shown.runKey) return 'lost'; // a 409 on that upload: another device has it
+    const nowTag = now.account?.userId === userId ? now.account : tag;
+    const leases = leasesOf(nowTag);
     const body = { runKey: shown.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
     try {
       const res = await this.api.end(body);
       // Not deleted: another device holds it now, unless the server never had it.
-      if (!res.deleted && tag.synced) {
+      if (!res.deleted && nowTag.synced) {
         if (this.store.peek()?.runKey === shown.runKey) this.store.clear();
         return 'lost';
       }
@@ -544,7 +563,11 @@ export class AccountRuns {
     const res = await this.api.put({ runKey: op.runKey, lease, ...(leases.length > 1 ? { prevLease: leases[0] } : {}), snapshot: uploadable(op.snapshot) }, this.hidden());
     if (res.ok) {
       if (live && this.live === live) {
-        live.leases = [lease];
+        // The server holds `lease` now. A lease added since this was sent (an unpause) is kept: its
+        // take still has to move the Run off `lease`, and one that reused `lease` gets a fresh one.
+        const at = live.leases.indexOf(lease);
+        live.leases = at < 0 ? [lease] : live.leases.slice(at);
+        if (live.leases.length === 1 && this.ops.get(op.runKey)?.kind === 'take') live.leases.push(newHandoffId());
         live.confirmed = true;
       }
       this.store.markSynced(op.runKey, lease);
