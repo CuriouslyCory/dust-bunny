@@ -4,22 +4,19 @@ import { createRun } from '../game/assembly';
 import { legacyRunKey, parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
 import { KeepsakeTracker } from './keepsakes';
 import { MetaProgress } from './meta';
-import type { Game } from '../game/game';
-import {
-  abandonSuspendedRun,
-  resumeSuspendedRun,
-  saveSuspendedRun,
-  SUSPENDED_RUN_KEY,
-  SuspendedRunStore,
-  watchSuspendedRunStorage,
-  type SuspendedRunChange,
-} from './suspendedRun';
+import type { StorageEventSource } from './save';
+import { SavedRuns } from './savedRuns';
+import { TestServer } from './savedRunsTestServer';
+import { SUSPENDED_RUN_KEY, SuspendedRunStore, watchSuspendedRunStorage, type SuspendedRunChange } from './suspendedRun';
 import { fluffForRun } from './fluff';
 
 const memStorage = () => {
   const map = new Map<string, string>();
   return { map, getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
 };
+
+/** A tab's saved Run (src/meta/savedRuns.ts) over `storage`, signed out, crediting `meta`. */
+const tab = (storage: ReturnType<typeof memStorage>, meta: MetaProgress) => new SavedRuns({ storage, meta, ...new TestServer().client(), locks: null });
 
 const snapshot = (seconds = 1): RunSnapshot => {
   const run = createRun(new EventBus(), { seed: 'suspend', characterId: 'zap' });
@@ -83,94 +80,95 @@ describe('SuspendedRunStore', () => {
     expect(store.has).toBe(false);
   });
 
-  it('abandoning the saved Run credits it as a quit', () => {
-    const store = new SuspendedRunStore(memStorage());
+  it('a new Run abandons the saved Run, credited as a quit', () => {
     const meta = new MetaProgress(null);
+    const runs = tab(memStorage(), meta);
+    const store = runs.slot;
     store.save(snapshot());
-    expect(abandonSuspendedRun(store, meta)).toBe(true);
+    expect(runs.newRun()).toBe(true);
     expect(meta.data.stats.runs).toBe(1);
     expect(store.has).toBe(false);
-    expect(abandonSuspendedRun(store, meta)).toBe(false);
+    expect(runs.newRun()).toBe(false);
     expect(meta.data.stats.runs).toBe(1);
   });
 });
 
 describe('Save & quit from two tabs', () => {
-  it('saving Run B over Run A credits Run A once as a quit and keeps Run B', () => {
+  it('saving Run B over Run A credits Run A once as a quit and keeps Run B', async () => {
     // Two tabs: two stores over one localStorage.
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = new MetaProgress(null);
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const runA = snapshot(2);
     const runB = snapshot();
     // Same seed and Character, still two Runs.
     expect(runA.runKey).not.toBe(runB.runKey);
 
-    expect(saveSuspendedRun(tabA, runA, meta)).toBe(false);
+    await tabA.save(runA);
     expect(meta.data.stats.runs).toBe(0);
-    expect(saveSuspendedRun(tabB, runB, meta)).toBe(true);
+    await tabB.save(runB);
     expect(meta.data.stats.runs).toBe(1);
     expect(meta.data.fluff).toBe(fluffForRun('quit', runA.stats));
-    expect(tabA.peek()).toEqual(runB);
+    expect(tabA.slot.peek()).toEqual(runB);
     // Run A is gone from the slot: it can't be credited again.
-    expect(abandonSuspendedRun(tabA, meta)).toBe(true);
+    expect(tabA.newRun()).toBe(true);
     expect(meta.data.stats.runs).toBe(2);
     expect(meta.data.fluff).toBe(fluffForRun('quit', runA.stats) + fluffForRun('quit', runB.stats));
   });
 
-  it('a replacing write that fails credits nothing: the old Run is still in storage', () => {
+  it('a replacing write that fails credits nothing: the old Run is still in storage', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = new MetaProgress(null);
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const runA = snapshot();
-    saveSuspendedRun(tabA, runA, meta);
+    await tabA.save(runA);
     const setItem = storage.setItem;
     storage.setItem = () => {
       throw new Error('QuotaExceededError');
     };
-    saveSuspendedRun(tabB, snapshot(), meta);
+    await tabB.save(snapshot());
     expect(meta.data.stats.runs).toBe(0);
     // Tab A (or a reload) still finds Run A, and abandoning it there credits it once.
     storage.setItem = setItem;
-    expect(tabA.peek()?.runKey).toBe(runA.runKey);
-    expect(abandonSuspendedRun(tabA, meta)).toBe(true);
+    expect(tabA.slot.peek()?.runKey).toBe(runA.runKey);
+    expect(tabA.newRun()).toBe(true);
     expect(meta.data.stats.runs).toBe(1);
   });
 
-  it('saving the same Run again credits nothing', () => {
+  it('saving the same Run again credits nothing', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = new MetaProgress(null);
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const run = createRun(new EventBus(), { seed: 'suspend', characterId: 'zap' });
     const first = run.toSnapshot();
     for (let i = 0; i < 60; i++) run.update(1 / 60);
     const later = run.toSnapshot();
     expect(later.runKey).toBe(first.runKey);
-    expect(saveSuspendedRun(tabA, first, meta)).toBe(false);
-    expect(saveSuspendedRun(tabB, later, meta)).toBe(false);
-    expect(saveSuspendedRun(tabB, later, meta)).toBe(false);
+    await tabA.save(first);
+    await tabB.save(later);
+    await tabB.save(later);
     expect(meta.data.stats.runs).toBe(0);
-    expect(tabA.peek()?.time).toBe(later.time);
+    expect(tabA.slot.peek()?.time).toBe(later.time);
   });
 
-  it('a resumed Run keeps its key, so saving it again credits nothing', () => {
+  it('a resumed Run keeps its key, so saving it again credits nothing', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = new MetaProgress(null);
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const s = snapshot();
-    saveSuspendedRun(tabA, s, meta);
+    await tabA.save(s);
     // Tab B's title still shows the Run: it resumes it from a copy (the slot is left as it was).
-    const resumed = createRun(new EventBus(), { seed: s.seed, characterId: s.characterId, resume: tabB.peek()! });
+    const resumed = createRun(new EventBus(), { seed: s.seed, characterId: s.characterId, resume: tabB.slot.peek()! });
     expect(resumed.runKey).toBe(s.runKey);
-    expect(saveSuspendedRun(tabB, resumed.toSnapshot(), meta)).toBe(false);
+    await tabB.save(resumed.toSnapshot());
     expect(meta.data.stats.runs).toBe(0);
   });
 
-  it('a snapshot saved before runKey existed still parses, keyed by its leaderboard run id or seed and Character', () => {
+  it('a snapshot saved before runKey existed still parses, keyed by its leaderboard run id or seed and Character', async () => {
     const { runKey: _, ...old } = snapshot();
     const parsed = parseRunSnapshot(JSON.parse(JSON.stringify(old)));
     expect(parsed?.runKey).toBe(legacyRunKey(old));
@@ -186,7 +184,7 @@ describe('Save & quit from two tabs', () => {
     const storage = memStorage();
     storage.setItem(SUSPENDED_RUN_KEY, JSON.stringify(old));
     const meta = new MetaProgress(null);
-    expect(saveSuspendedRun(new SuspendedRunStore(storage), snapshot(), meta)).toBe(true);
+    await tab(storage, meta).save(snapshot());
     expect(meta.data.stats.runs).toBe(1);
   });
 });
@@ -200,7 +198,7 @@ describe('Saved Run changes from other tabs', () => {
       e.key = key;
       target.dispatchEvent(e);
     };
-    return { target, fire };
+    return { target, source: target as unknown as StorageEventSource, fire };
   };
 
   it('a storage event for the slot tells onChange listeners, marked external', () => {
@@ -208,7 +206,7 @@ describe('Saved Run changes from other tabs', () => {
     const tabA = new SuspendedRunStore(storage);
     const tabB = new SuspendedRunStore(storage);
     const win = storageEvents();
-    const stop = watchSuspendedRunStorage(tabA, win.target);
+    const stop = watchSuspendedRunStorage(tabA, win.source);
     const changes: SuspendedRunChange[] = [];
     tabA.onChange((c) => changes.push(c));
 
@@ -239,7 +237,7 @@ describe('Saved Run changes from other tabs', () => {
   it.skipIf(typeof StorageEvent === 'undefined')('works with a real StorageEvent', () => {
     const store = new SuspendedRunStore(memStorage());
     const win = storageEvents();
-    watchSuspendedRunStorage(store, win.target);
+    watchSuspendedRunStorage(store, win.source);
     let changes = 0;
     store.onChange(() => changes++);
     win.target.dispatchEvent(new StorageEvent('storage', { key: SUSPENDED_RUN_KEY }));
@@ -274,30 +272,30 @@ describe('Saved Run changes from other tabs', () => {
     expect(tabA.has).toBe(false);
   });
 
-  it('Resume and New run only act on the Run the title showed', () => {
+  it('Resume and New run only act on the Run the title showed', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = new MetaProgress(null);
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const resumed: RunSnapshot[] = [];
-    const game = { resumeRun: (s: RunSnapshot) => void resumed.push(s) } as unknown as Game;
+    const start = (s: RunSnapshot) => void resumed.push(s);
     const shown = snapshot();
-    tabA.save(shown);
+    await tabA.save(shown);
     // Tab B saves another Run over it before tab A's title has heard.
     const other = snapshot(2);
-    saveSuspendedRun(tabB, other, meta);
+    await tabB.save(other);
     expect(meta.data.stats.runs).toBe(1);
 
-    expect(resumeSuspendedRun(game, tabA, meta, shown.runKey)).toBe(false);
-    expect(abandonSuspendedRun(tabA, meta, shown.runKey)).toBe(false);
+    expect(await tabA.resume(shown.runKey, start)).toBe('lost');
+    expect(await tabA.abandon(shown.runKey)).toBe('lost');
     expect(resumed).toEqual([]);
     expect(meta.data.stats.runs).toBe(1);
-    expect(tabA.peek()).toEqual(other);
+    expect(tabA.slot.peek()).toEqual(other);
 
     // Once the title shows the new Run, Resume takes it.
-    expect(resumeSuspendedRun(game, tabA, meta, other.runKey)).toBe(true);
+    expect(await tabA.resume(other.runKey, start)).toBe('mine');
     expect(resumed.map((s) => s.runKey)).toEqual([other.runKey]);
-    expect(tabA.has).toBe(false);
+    expect(tabA.slot.has).toBe(false);
   });
 });
 

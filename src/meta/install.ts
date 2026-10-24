@@ -4,7 +4,7 @@
  * results "Kept" section; feeds owned Upgrades, the last Character and Difficulty and that
  * Character's last Loadout into game.nextRunConfig; opens the Perk draft modal on tierUp; awards
  * Fluff on runEnded and Keepsakes on bossDefeated; remembers a Keepsake tucked in mid-Run in the
- * Loadout; keeps the Account's saved Run in step with Run starts and ends (src/meta/accountRun.ts);
+ * Loadout; keeps the Account's saved Run in step with Run starts and ends (src/meta/savedRuns.ts);
  * adds HUD widgets and the Keepsake reward moment.
  * Pickup / Perk content and the per-Run combat hooks and Pickup director are the Run assembly's
  * job (src/game/assembly.ts).
@@ -21,11 +21,10 @@ import { registerKeepsakeRevealScreen } from '../ui/screens/keepsakeReveal';
 import { registerKeptSection } from '../ui/screens/kept';
 import { registerShopScreen } from '../ui/screens/shop';
 import { registerUnderTheCouchScreen } from '../ui/screens/underTheCouch';
-import { creditStatsOf } from './accountRun';
+import { creditStatsOf } from './savedRuns';
 import { fluffForRun } from './fluff';
 import { KeepsakeTracker, setKeepsakeTracker } from './keepsakes';
 import { getMeta } from './meta';
-import { abandonSuspendedRun, getSuspendedRuns } from './suspendedRun';
 
 export function installRoguelike(game: Game): void {
   registerGameplayContent();
@@ -59,11 +58,8 @@ export function installRoguelike(game: Game): void {
     tracker.start({ seed: e.seed, characterId: e.characterId, difficulty: run?.difficulty.id, ranked: isRankedRun(game.debug, run?.config) }, resumed);
     draftOnPlay = !!e.resumed;
     // A new Run replaces a saved one (the title asks first): it counts as quit (an Account copy is
-    // claimed from the server, src/meta/accountRun.ts). The new Run isn't on the server until it is stored.
-    if (!e.resumed) {
-      game.accountRuns.newRun();
-      abandonSuspendedRun(getSuspendedRuns(), game.accountRuns);
-    }
+    // claimed from the server, src/meta/savedRuns.ts). The new Run isn't on the server until it is stored.
+    if (!e.resumed) game.savedRuns.newRun();
   });
   // A Run saved with a Perk draft waiting opens it again once play is on screen.
   let draftOnPlay = false;
@@ -86,14 +82,14 @@ export function installRoguelike(game: Game): void {
   // The Run queues the draft itself (run.perkDraft); this only opens the modal.
   game.events.on('tierUp', () => openPerkDraft(game));
   // Credit: at once on the device, or (signed in, a Run the Account knows) from the server's answer
-  // to this page's claim, which may land later (src/meta/accountRun.ts; docs/adr/0003).
+  // to this page's claim, which may land later (src/meta/savedRuns.ts; docs/adr/0003).
   game.events.on('runEnded', (e) => {
-    const award = game.accountRuns.ended(e);
+    const award = game.savedRuns.ended(e);
     const amount = award?.fluff ?? fluffForRun(e.reason, creditStatsOf(e.stats)); // pending: what the claim sends
     game.events.emit('fluffAwarded', { runKey: e.runKey, amount, total: award?.total ?? meta.fluff, reason: e.reason, pending: !award });
   });
   // Every definite answer settles the pending "+X Fluff": applied here, already held (another tab applied it), or refused (0).
-  game.accountRuns.credits.onCredit((o) => {
+  game.savedRuns.credits.onCredit((o) => {
     game.events.emit('fluffAwarded', { runKey: o.runKey, amount: o.award?.fluff ?? o.fluff, total: o.award?.total ?? meta.fluff, reason: o.reason, pending: false });
   });
 

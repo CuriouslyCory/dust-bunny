@@ -1,8 +1,23 @@
 /**
- * The Account's saved Run (issue #54): for a signed-in player, the saved Run slot on the device
- * (./suspendedRun.ts) is mirrored to the server (api/saved-run.ts), so a Run paused on one device
- * can be resumed on another. Players who aren't signed in never reach the server: every call here
- * is then a no-op and the slot works per browser, as before.
+ * The saved Run (Save & quit, or a paused Run), on this device and, for a signed-in player, with
+ * the Account. `SavedRuns` is the one module callers use for it: it owns the device slot
+ * (./suspendedRun.ts), the saved Run Web Lock and its fallback, the Account copy on the server
+ * (api/saved-run.ts; docs/adr/0002), the upload queue and who credits a Run the slot lets go of
+ * (docs/adr/0003). Each caller action is one call:
+ *
+ * - `save(snapshot)`: Save & quit. `pause(snapshot, handoffId)`: the pause store, under a hand-off
+ *   id the pausing page remembers (src/game/handoff.ts); `takeBack(handoffId, runKey)` unpauses,
+ *   `pausedState` says where it stands. Both writes run under the lock and follow one rule (`write`):
+ *   the copy is tagged for the Account, written to the device slot, a different Run it replaces is
+ *   credited as a quit, then the copy is uploaded.
+ * - `resume(runKey, start)` and `abandon(runKey)`: the title's Resume run and confirmed New run.
+ *   `newRun()`: any other new Run start, which abandons a saved Run still in the slot.
+ * - `syncTitle()`: the title brings the device slot in line with the Account's copy.
+ * - `ended(e)`, `creditOf(runKey)`: crediting a Run that ended, and where that stands.
+ * - `flush()`: the page is going away (pagehide).
+ *
+ * Signed out, the slot works per browser: nothing reaches the server, and a Run the slot lets go of
+ * is credited on the device at once. Signed in, the rest of this header applies.
  *
  * Leases. The server row names whoever holds the Run with a lease, a random id per device and take.
  * This page's Run in progress (`live`) knows the lease it holds, and while a take hasn't been heard
@@ -11,11 +26,11 @@
  * confirmed it (`RunSnapshot.account`); a copy tagged for another Account is never shown, taken or
  * credited (`SuspendedRunStore.setViewer`).
  *
- * - Pause (and Save & quit): the device slot is written first, synchronously (src/game/handoff.ts),
- *   then the copy is uploaded (`stored`, with `ledger: true`). A hidden page uploads with
- *   `keepalive`, and so does `pagehide` for an upload still waiting, so a closing tab still gets it
- *   there. A different Run the upload replaces is recorded in the ledger by the server and its row
- *   comes back in `credits`, which is applied here.
+ * - Pause (and Save & quit): the device slot is written first, synchronously, then the copy is
+ *   uploaded (`stored`, with `ledger: true`). A hidden page uploads with `keepalive`, and so does
+ *   `pagehide` for an upload still waiting, so a closing tab still gets it there. A different Run
+ *   the upload replaces is recorded in the ledger by the server and its row comes back in
+ *   `credits`, which is applied here.
  * - Unpause: optimistic. The Run plays on at once and the server take runs in the background
  *   (`takenBack`), retried with backoff while offline; never awaited. If the server says another
  *   device holds the Run (a refused take, or a 409 on a later upload) the page is told (`onLost`):
@@ -34,9 +49,9 @@
  *   Run that only this device had is claimed as a quit first). A device copy the server never
  *   confirmed is uploaded instead. One from a newer build is left alone, on both sides, and the
  *   title says an update is needed (docs/adr/0001). The ledger sweep runs once the read is done.
- * - Resume (`resume`) waits for the server take: of two devices racing, one gets the Run and the
- *   other's title refreshes. Offline, it resumes and takes in the background, as unpausing does.
- *   `abandon` and `resume` first wait out an upload of the Run still on its way, so the claim or
+ * - Resume waits for the server take: of two devices racing, one gets the Run and the other's
+ *   title refreshes. Offline, it resumes and takes in the background, as unpausing does. Abandon
+ *   and Resume first wait out an upload of the Run still on its way (`settledTag`), so the claim or
  *   take can't land before it.
  * - An answer that arrives after an Account switch is dropped (`gen`): it never credits, or touches
  *   the device slot, for the Account signed in now.
@@ -48,10 +63,20 @@ import { pickCreditStats, salvageCreditStats, type CreditStats, type RunCredit }
 import type { ServerSavedRun } from '../shared/savedRun';
 import { createJsonCaller, SavedRunAuthError, SavedRunNetError, type JsonCallerOptions } from './accountHttp';
 import type { MetaProgress, RunAward, RunCreditInput } from './meta';
-import { createRunCreditApi, RunCreditQueue, type CreditOutcome } from './runCredits';
-import { browserStorage, browserStorageEvents, type KeyValueStorage } from './save';
+import { repairLoadout } from './hoard';
+import { createRunCreditApi, RunCreditQueue, type CreditOutcome, type RunCreditApi } from './runCredits';
+import { browserStorage, browserStorageEvents, type KeyValueStorage, type StorageEventSource } from './save';
 import { type VersionedFormat, VersionedStore } from './versionedStore';
-import { getSuspendedRuns, type QuitCreditor, type SuspendedRunStore } from './suspendedRun';
+import {
+  pausedRunState,
+  SuspendedRunStore,
+  takeBackPausedRun,
+  watchSuspendedRunStorage,
+  withSavedRunLock,
+  type LockManagerLike,
+  type PausedRunState,
+} from './suspendedRun';
+import type { KeepsakeRef } from '../data/keepsakes';
 
 export { SavedRunAuthError, SavedRunNetError } from './accountHttp';
 
@@ -127,7 +152,7 @@ export type CreditState =
   | { state: 'pending' }
   | { state: 'refused'; why: 'carriedOn' | 'elsewhere' | 'rejected' };
 
-/** localStorage key: the Runs the server was told about from this device (`AccountRuns.ended` defers their credit to it), with their leases. */
+/** localStorage key: the Runs the server was told about from this device (`SavedRuns.ended` defers their credit to it), with their leases. */
 export const KNOWN_RUNS_KEY = 'dust-bunny:known-runs:v1';
 export const KNOWN_RUNS_VERSION = 1;
 /** How many known Run keys the device remembers (the newest; one Run plays at a time). */
@@ -168,20 +193,31 @@ export interface TitleSync {
   offline: boolean;
 }
 
-export interface AccountRunsOptions {
+/** What `SavedRuns` needs from the progress copy: crediting (with the ledger's bookkeeping) and the Hoards a resumed Loadout is repaired against. */
+export type SavedRunsMeta = Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown' | 'data'> & Partial<Pick<MetaProgress, 'pinCreditedRuns'>>;
+
+export interface SavedRunsOptions {
+  /** Where the device slot, the known Runs and the waiting claims live (null: memory only, lost with the page). */
+  storage: KeyValueStorage | null;
+  /** The server's saved Run (api/saved-run.ts). */
   api: SavedRunApi;
-  store: SuspendedRunStore;
-  meta: Pick<MetaProgress, 'awardRun'>;
-  /** The ledger's claim queue (src/meta/runCredits.ts). */
-  credits: RunCreditQueue;
+  /** The server's Run credit ledger (api/run-credit.ts). */
+  creditApi: RunCreditApi;
+  meta: SavedRunsMeta;
+  /** Where other tabs' `storage` events arrive (the slot and the claims follow them; null: none). */
+  events?: StorageEventSource | null;
+  /** Web Locks for the saved Run lock (default: `navigator.locks` where available; null: none, takes run at once). */
+  locks?: LockManagerLike | null;
   /** First retry delay (ms); doubles up to `maxRetryMs`. */
   retryMs?: number;
   maxRetryMs?: number;
   /** Whether the page is hidden (uploads then use `keepalive`). */
   hidden?: () => boolean;
-  /** Where the known Runs are remembered (`KNOWN_RUNS_KEY`; null: memory only, lost with the page). */
-  storage?: KeyValueStorage | null;
 }
+
+/** Where a title Resume run or New run ended up. `lost`: the Run on screen isn't the slot's (or this page's) any more: refresh. */
+export type ResumeResult = 'mine' | 'lost' | 'failed';
+export type AbandonResult = 'done' | 'lost' | 'failed';
 
 /** Strips the device-only tag before uploading. */
 function uploadable(s: RunSnapshot): RunSnapshot {
@@ -208,7 +244,7 @@ export function creditStatsOf(stats: unknown): CreditStats {
   return pickCreditStats(stats) ?? salvageCreditStats(stats);
 }
 
-export class AccountRuns implements QuitCreditor {
+export class SavedRuns {
   private userId: string | null = null;
   /**
    * Bumped on every Account change (`setUser`). Each answer from the server is applied only under
@@ -243,9 +279,14 @@ export class AccountRuns implements QuitCreditor {
    */
   private titleBusy = 0;
   private titleEpoch = 0;
+  /** Pause stores waiting for the lock, by hand-off id (`pause`): `flush` writes them at once. */
+  private paused = new Map<string, RunSnapshot>();
   private readonly api: SavedRunApi;
   private readonly store: SuspendedRunStore;
-  private readonly meta: Pick<MetaProgress, 'awardRun'>;
+  private readonly meta: SavedRunsMeta;
+  private readonly locks: LockManagerLike | null | undefined;
+  /** The device slot, to read (the title's `peek`, `newer`, `onChange`). Write it through this module only. */
+  readonly slot: SuspendedRunStore;
   /** The ledger's claim queue: it follows the Account with this, and its outcomes feed `creditOf`. */
   readonly credits: RunCreditQueue;
   private readonly retryMs: number;
@@ -254,15 +295,17 @@ export class AccountRuns implements QuitCreditor {
   /** The last `syncTitle` result (the title reads it on refresh). */
   title: TitleSync = { fromAccount: null, newerOnAccount: false, offline: false };
 
-  constructor(opts: AccountRunsOptions) {
+  constructor(opts: SavedRunsOptions) {
     this.api = opts.api;
-    this.store = opts.store;
+    this.store = this.slot = new SuspendedRunStore(opts.storage);
+    watchSuspendedRunStorage(this.slot, opts.events);
     this.meta = opts.meta;
-    this.credits = opts.credits;
+    this.locks = opts.locks;
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
+    this.credits = new RunCreditQueue({ api: opts.creditApi, storage: opts.storage, events: opts.events, meta: opts.meta, retryMs: opts.retryMs, maxRetryMs: opts.maxRetryMs });
     this.hidden = opts.hidden ?? (() => typeof document !== 'undefined' && document.hidden);
-    this.known = new VersionedStore(opts.storage ?? null, KNOWN_RUNS_FORMAT);
+    this.known = new VersionedStore(opts.storage, KNOWN_RUNS_FORMAT);
     this.credits.onCredit((o) => this.settle(o));
   }
 
@@ -351,12 +394,96 @@ export class AccountRuns implements QuitCreditor {
 
   // --- the Run in progress ---------------------------------------------------------------------
 
-  /** A new Run started on this page: it isn't on the server until it is first stored. */
-  newRun(): void {
+  /**
+   * A new Run started on this page (not resumed): it isn't on the server until it is first stored.
+   * A saved Run still in the slot is abandoned, counted as a quit (`creditQuit`): the title asks
+   * before that, and any other start (Play again, say) gives it up the same way. True when one was.
+   */
+  newRun(): boolean {
     this.live = null;
     this.awards.clear();
     this.refused.clear();
     this.already.clear();
+    const s = this.store.takeIf();
+    if (s) this.creditQuit(s);
+    return s !== null;
+  }
+
+  /**
+   * Save & quit: stores `snapshot` (the Run in progress) as the saved Run, under the lock so two
+   * tabs saving over the same Run at once credit it once (`write`). Without the lock (or when its
+   * request fails) it is written at once.
+   */
+  save(snapshot: RunSnapshot): Promise<void> {
+    return this.locked(() => void this.write(snapshot));
+  }
+
+  /**
+   * Pause: stores `snapshot` under `handoffId`, which only the pausing page knows (src/game/handoff.ts),
+   * once the lock is granted. Until then the store is waiting (`pauseWaiting`): `flush` (the page
+   * going away) writes it at once, `takeBack` writes it first, `dropPause` drops it.
+   */
+  pause(snapshot: RunSnapshot, handoffId: string): void {
+    this.paused.set(handoffId, snapshot);
+    void this.locked(() => this.writePaused(handoffId));
+  }
+
+  /** A pause store under `handoffId` is still waiting for the lock. */
+  pauseWaiting(handoffId: string): boolean {
+    return this.paused.has(handoffId);
+  }
+
+  /** Drops a pause store still waiting for the lock (the page let go of its Run first). */
+  dropPause(handoffId: string): void {
+    this.paused.delete(handoffId);
+  }
+
+  /** What the slot says about the Run this page paused under `handoffId` (`PausedRunState`). */
+  pausedState(handoffId: string, runKey: string): PausedRunState {
+    return pausedRunState(this.store, handoffId, runKey);
+  }
+
+  /**
+   * Unpause, and End run / Quit to title from pause: under the lock, writes the pause store if it is
+   * still waiting, then takes the Run back if the slot still holds it under `handoffId`
+   * (`takeBackPausedRun`). `mine`: the page owns it again and plays on, and the Account's copy is
+   * taken back on the server in the background. Otherwise why it is someone else's now.
+   */
+  takeBack(handoffId: string, runKey: string): Promise<PausedRunState> {
+    return this.locked(() => {
+      this.writePaused(handoffId);
+      const st = takeBackPausedRun(this.store, handoffId, runKey);
+      if (st === 'mine') this.takenBack(runKey);
+      return st;
+    });
+  }
+
+  private writePaused(handoffId: string): void {
+    const s = this.paused.get(handoffId);
+    if (!s) return;
+    this.paused.delete(handoffId);
+    this.write(s, handoffId);
+  }
+
+  /**
+   * Every write of a Run to the slot (Save & quit, pause): tagged for the Account, then written to
+   * the device (synchronously, so it never waits for the network), then uploaded. A different Run
+   * it replaces is counted as a quit once the write has stuck; the same Run again credits nothing.
+   * True when the write reached storage, so other tabs can pick it up; false when only this page's
+   * memory holds it.
+   */
+  private write(snapshot: RunSnapshot, handoffId?: string): boolean {
+    if (handoffId !== undefined) snapshot.handoffId = handoffId;
+    this.tag(snapshot);
+    const { stored, replaced } = this.store.replace(snapshot);
+    if (replaced) this.creditQuit(replaced);
+    this.stored(snapshot);
+    return stored;
+  }
+
+  /** Runs `fn` (a read then a write of the slot) under the saved Run lock; a lock request that fails (an opaque origin, say) runs it at once. */
+  private locked<T>(fn: () => T | Promise<T>): Promise<T> {
+    return (withSavedRunLock(fn, this.locks) as Promise<T>).catch(fn);
   }
 
   /**
@@ -364,7 +491,7 @@ export class AccountRuns implements QuitCreditor {
    * lease for the Run (a fresh one for a Run the server hasn't seen from here). Signed out: removes
    * any tag, so the copy is an ordinary per-browser one.
    */
-  tag(snapshot: RunSnapshot): void {
+  private tag(snapshot: RunSnapshot): void {
     if (!this.userId) {
       delete snapshot.account;
       return;
@@ -379,14 +506,14 @@ export class AccountRuns implements QuitCreditor {
   }
 
   /** The device slot now holds `snapshot` (tagged by `tag`): uploads it. */
-  stored(snapshot: RunSnapshot): void {
+  private stored(snapshot: RunSnapshot): void {
     if (!this.userId || !snapshot.account) return;
     if (this.live?.runKey === snapshot.runKey && this.live.localOnly) return;
     this.queue({ kind: 'put', runKey: snapshot.runKey, snapshot });
   }
 
   /** The paused Run was taken back on the device (unpause): take it back on the server, in the background. */
-  takenBack(runKey: string): void {
+  private takenBack(runKey: string): void {
     if (!this.userId) return;
     const live = this.live;
     if (!live || live.runKey !== runKey || live.localOnly) return;
@@ -485,7 +612,7 @@ export class AccountRuns implements QuitCreditor {
    * the server, which credits it unless another device plays it by now; an untagged one (saved
    * signed out) is credited here, the claim recording it. Signed out: credited here.
    */
-  creditQuit(s: RunSnapshot): void {
+  private creditQuit(s: RunSnapshot): void {
     const e: RunCreditInput = { runKey: s.runKey, reason: 'quit', stats: s.stats };
     const userId = this.userId;
     const tag = s.account;
@@ -586,12 +713,27 @@ export class AccountRuns implements QuitCreditor {
   }
 
   /**
-   * Resume run on the title, for the Run the slot shows (`shown`). A copy kept for the Account is
-   * taken on the server first, and this waits for it: `lost` when another device got there first
-   * (the title should refresh). Offline it resolves `mine` and keeps taking in the background. A
-   * copy that isn't the Account's resolves `mine` at once. `resume` then starts it.
+   * Resume run on the title, for the Run it shows (`runKey`), under the lock. A copy kept for the
+   * Account is taken on the server first, and this waits for it: `lost` when another device got
+   * there first, or the slot holds another Run by now (the title should refresh). Offline it
+   * resolves `mine` and keeps taking in the background. A copy that isn't the Account's resolves
+   * `mine` at once. Once it is this page's, `ready` is asked (false: the title was left
+   * meanwhile, `failed`), the slot is taken and `start` gets the Run with its Loadout repaired
+   * against the Hoard (which may have changed since).
    */
-  async resume(shown: RunSnapshot, start: () => boolean): Promise<'mine' | 'lost' | 'failed'> {
+  resume(runKey: string, start: (snapshot: RunSnapshot, loadout: KeepsakeRef[]) => void, ready: () => boolean = () => true): Promise<ResumeResult> {
+    const shown = this.store.peek();
+    if (shown?.runKey !== runKey) return Promise.resolve('lost');
+    const startShown = (): boolean => {
+      const s = ready() ? this.store.takeIf(runKey) : null;
+      if (!s) return false;
+      start(s, repairLoadout(s.characterId, s.loadout, this.meta.data.characters[s.characterId]));
+      return true;
+    };
+    return this.locked(() => this.resumeShown(shown, startShown));
+  }
+
+  private async resumeShown(shown: RunSnapshot, start: () => boolean): Promise<ResumeResult> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) {
       if (!start()) return 'failed';
@@ -602,7 +744,7 @@ export class AccountRuns implements QuitCreditor {
     return this.titleAction(() => this.resumeHeld(shown, start, gen));
   }
 
-  private async resumeHeld(shown: RunSnapshot, start: () => boolean, gen: number): Promise<'mine' | 'lost' | 'failed'> {
+  private async resumeHeld(shown: RunSnapshot, start: () => boolean, gen: number): Promise<ResumeResult> {
     const settled = await this.settledTag(shown, gen);
     if (typeof settled === 'string') return settled;
     const leases = leasesOf(settled);
@@ -640,12 +782,24 @@ export class AccountRuns implements QuitCreditor {
   }
 
   /**
-   * New run on the title gives up the Run on screen: `abandonLocal` takes it from the slot and
-   * credits it through `creditQuit` (a claim, for an Account copy: the server credits it unless
-   * another device took it meanwhile). An upload of it still on its way is waited out first, so the
-   * claim lands after it; `lost` when the slot lost the Run meanwhile (refresh).
+   * New run on the title gives up the Run it shows (`runKey`), under the lock: once `ready` (false:
+   * the title was left meanwhile, `failed`), it is taken from the slot and counted as a quit
+   * (`creditQuit`: for an Account copy a claim, which the server credits unless another device took
+   * it meanwhile). An upload of it still on its way is waited out first, so the claim lands after
+   * it; `lost` when the slot lost the Run meanwhile, or holds another one (refresh).
    */
-  async abandon(shown: RunSnapshot, abandonLocal: () => boolean): Promise<'done' | 'lost' | 'failed'> {
+  abandon(runKey: string, ready: () => boolean = () => true): Promise<AbandonResult> {
+    const shown = this.store.peek();
+    if (shown?.runKey !== runKey) return Promise.resolve('lost');
+    const abandonShown = (): boolean => {
+      const s = ready() ? this.store.takeIf(runKey) : null;
+      if (s) this.creditQuit(s);
+      return s !== null;
+    };
+    return this.locked(() => this.abandonShown(shown, abandonShown));
+  }
+
+  private async abandonShown(shown: RunSnapshot, abandonLocal: () => boolean): Promise<AbandonResult> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) return abandonLocal() ? 'done' : 'failed';
     const gen = this.gen;
@@ -791,8 +945,13 @@ export class AccountRuns implements QuitCreditor {
     this.wake();
   }
 
-  /** The page is going away: uploads and claims still waiting go now, with `keepalive` (pagehide). */
+  /**
+   * The page is going away (pagehide): a pause store still waiting for the lock is written now,
+   * without it (best effort, so closing a paused tab keeps its Run), and uploads and claims still
+   * waiting go now, with `keepalive`.
+   */
   flush(): void {
+    for (const handoffId of [...this.paused.keys()]) this.writePaused(handoffId);
     if (!this.userId) return;
     for (const op of this.ops.values()) {
       if (op.kind !== 'put' || !op.snapshot.account) continue;
@@ -804,25 +963,20 @@ export class AccountRuns implements QuitCreditor {
   }
 }
 
-let singleton: AccountRuns | null = null;
+let singleton: SavedRuns | null = null;
 
-/** The browser's instance (signed out until `installAccountRuns` hears from the Account). */
-export function getAccountRuns(meta: Pick<MetaProgress, 'awardRun' | 'credited' | 'creditedRunsKnown' | 'pinCreditedRuns'>): AccountRuns {
-  singleton ??= new AccountRuns({
-    api: createSavedRunApi(),
-    store: getSuspendedRuns(),
-    meta,
-    credits: new RunCreditQueue({ api: createRunCreditApi(), storage: browserStorage(), events: browserStorageEvents(), meta }),
-    storage: browserStorage(),
-  });
+/** The browser's instance (signed out until `installSavedRuns` hears from the Account), kept current with other tabs. */
+export function getSavedRuns(meta: SavedRunsMeta): SavedRuns {
+  singleton ??= new SavedRuns({ storage: browserStorage(), api: createSavedRunApi(), creditApi: createRunCreditApi(), meta, events: browserStorageEvents() });
   return singleton;
 }
 
 /**
- * Follows the signed-in Account (which also replays its waiting claims), sends waiting uploads and
- * claims on pagehide, and replays claims when the browser comes back online (call once at boot).
+ * Follows the signed-in Account (which also replays its waiting claims), writes waiting pause
+ * stores and sends waiting uploads and claims on pagehide, and replays claims when the browser
+ * comes back online (call once at boot).
  */
-export function installAccountRuns(runs: AccountRuns, account: AccountClient): void {
+export function installSavedRuns(runs: SavedRuns, account: AccountClient): void {
   account.subscribe((s) => runs.setUser(s.status === 'signedIn' ? (s.user?.id ?? null) : null));
   if (typeof window === 'undefined') return;
   window.addEventListener('pagehide', () => runs.flush());

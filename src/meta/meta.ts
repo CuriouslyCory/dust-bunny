@@ -24,7 +24,7 @@ declare module '../core/events' {
     /**
      * Fluff for a finished Run. `pending`: the Run is credited by the Account's answer, not yet
      * (`amount` is what it will be; `total` the wallet without it): it fires again with `pending:
-     * false` once the credit lands, `amount: 0` if the server refused it (src/meta/accountRun.ts).
+     * false` once the credit lands, `amount: 0` if the server refused it (src/meta/savedRuns.ts).
      */
     fluffAwarded: { runKey: string; amount: number; total: number; reason: RunEndReason; pending: boolean };
     upgradePurchased: { upgradeId: string; level: number; cost: number; fluffLeft: number };
@@ -281,11 +281,6 @@ export class MetaProgress {
   /** The Universes count once `e` is credited: as it is now, plus one for a Universe victory still to land. */
   universesAfter(e: RunCreditInput): number {
     return this.store.data.universes + (endsUniverse(e) && !this.credited(e.runKey) ? 1 : 0);
-  }
-
-  /** Credits a saved Run the device lets go of (replaced in its slot, or abandoned) as a quit, with no Account (`QuitCreditor`, src/meta/suspendedRun.ts). */
-  creditQuit(s: { runKey: string; stats: CreditStats }): void {
-    this.awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats }, { ledger: false });
   }
 
   // --- Keepsakes ---

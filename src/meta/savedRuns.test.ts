@@ -1,27 +1,19 @@
 /**
- * The Account's saved Run (src/meta/accountRun.ts) and its credit (src/meta/runCredits.ts,
+ * The Account's saved Run (src/meta/savedRuns.ts) and its credit (src/meta/runCredits.ts,
  * docs/adr/0003): two devices (each its own storage, slot and progress copy), one server: the real
  * rules (server/accountRuns.ts) over the in-memory store, behind a simulated network (`TestServer`).
  */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { createRun } from '../game/assembly';
-import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
-import { createAccountRuns } from '../../server/accountRuns';
-import { MemoryAccountRunStore } from '../../server/accountRunsMemory';
-import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT, validateRunCreditClaim, type RunCredit } from '../shared/runCredit';
-import { validateSavedRunClaim, validateSavedRunUpload } from '../shared/savedRun';
-import { AccountRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION, SavedRunAuthError, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
+import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT } from '../shared/runCredit';
+import { SavedRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION } from './savedRuns';
 import { MetaProgress, type RunCreditInput } from './meta';
-import { RUN_CREDITS_KEY, RunCreditQueue, type ClaimResult, type CreditOutcome, type RunCreditApi } from './runCredits';
-import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
-
-const memStorage = () => {
-  const map = new Map<string, string>();
-  return { map, getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
-};
+import { RUN_CREDITS_KEY, type CreditOutcome } from './runCredits';
+import { SUSPENDED_RUN_KEY } from './suspendedRun';
+import { fakeEvents, memStorage, TestServer, USER, type Link } from './savedRunsTestServer';
 
 const snapshot = (seed = 'acct'): RunSnapshot => {
   const run = createRun(new EventBus(), { seed, characterId: 'zap' });
@@ -29,171 +21,43 @@ const snapshot = (seed = 'acct'): RunSnapshot => {
   return run.toSnapshot();
 };
 
-/** The Account the test devices sign in as unless a test says otherwise. */
-const USER = 'u1';
-
-/** A JSON round trip: what goes over the wire. */
-const wire = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v)) as T));
-
-/** A device's connection: whether it is offline, and who it is signed in as (`undefined`: u1). */
-interface Link {
-  offline: boolean;
-  user?: string | null;
-}
-
-/**
- * The real server rules (server/accountRuns.ts) over the in-memory store, behind the client's
- * `SavedRunApi` / `RunCreditApi`: each request is validated as api/saved-run.ts and
- * api/run-credit.ts validate it, and the module's answer is mapped as those handlers and the
- * client's HTTP callers map it. The network is simulated here: `offline`: every request fails.
- * `loseAnswer[what]`: the next such request is carried out but its answer is lost (a network error
- * after the server wrote). `calls`: what was asked. `row` and `ledger`: u1's slot and ledger as stored.
- */
-class TestServer {
-  /** The server's clock (ms). A 429 moves it past the wait it asks for: the client's backoff stands for that time. */
-  now = Date.now();
-  readonly store = new MemoryAccountRunStore({ now: () => this.now });
-  readonly runs = createAccountRuns(this.store, { now: () => this.now });
-  offline = false;
-  /** While set, every answer waits for it (a slow network). */
-  gate: Promise<void> | null = null;
-  /** Answers to one kind of request (`put`, `take`, `claim`, …) wait for its promise (that request is slow). */
-  hold: Partial<Record<string, Promise<void>>> = {};
-  loseAnswer: Partial<Record<string, boolean>> = {};
-  calls: string[] = [];
-
-  /** u1's saved Run slot as stored (`ended` once the Run is over), or null. */
-  get row(): { runKey: string; lease: string; snapshot: Record<string, unknown> | null; version: number | null; ended: boolean } | null {
-    const s = this.store.slotOf(USER);
-    return s ? { runKey: s.runKey, lease: s.lease, snapshot: s.snapshot, version: s.version, ended: s.ended } : null;
-  }
-
-  /** u1's ledger, oldest first. */
-  get ledger(): RunCredit[] {
-    return this.store.creditsOf(USER);
-  }
-
-  private async net(what: string, link: Link): Promise<string> {
-    // The session is the one signed in when the request leaves.
-    const user = link.user === undefined ? USER : link.user;
-    this.calls.push(what);
-    if (this.gate) await this.gate;
-    if (this.hold[what]) await this.hold[what];
-    if (this.offline || link.offline) throw new SavedRunNetError('offline');
-    if (user === null) throw new SavedRunAuthError('unauthorized');
-    return user;
-  }
-
-  private answer<T>(what: string, value: T): T {
-    if (this.loseAnswer[what]) {
-      this.loseAnswer[what] = false;
-      throw new SavedRunNetError('answer lost');
-    }
-    return wire(value);
-  }
-
-  /** `link.offline`: this device alone can't reach the server. `link.user`: who it is signed in as (default u1). */
-  api(link: Link = { offline: false }): SavedRunApi {
-    return {
-      get: async () => {
-        // Read as the request arrives; a slow answer (`gate`, `hold`) reports the row as it was then.
-        const row = this.runs.savedRun(link.user ?? USER);
-        await this.net('get', link);
-        return wire(await row);
-      },
-      put: async (body): Promise<PutResult> => {
-        const sent = wire(body);
-        const user = await this.net('put', link);
-        const v = validateSavedRunUpload(sent);
-        if (!v.ok) return { ok: false, reason: 'rejected' };
-        const res = await this.runs.store(user, v.value);
-        return this.answer('put', res.ok ? { ok: true, credits: res.credits } : { ok: false, reason: res.reason === 'newer_saved_run' ? 'newer' : 'carriedOn' });
-      },
-      take: async (body): Promise<TakeResult> => {
-        const sent = wire(body);
-        const user = await this.net('take', link);
-        const v = validateSavedRunClaim(sent, true);
-        if (!v.ok || v.value.newLease === undefined) throw new SavedRunNetError('saved-run 400');
-        const res = await this.runs.take(user, { runKey: v.value.runKey, lease: v.value.lease, newLease: v.value.newLease });
-        return this.answer('take', res.ok ? { taken: true, snapshot: res.snapshot } : { taken: false, savedRun: res.savedRun });
-      },
-    };
-  }
-
-  creditApi(link: Link = { offline: false }): RunCreditApi {
-    return {
-      claim: async (body): Promise<ClaimResult> => {
-        const sent = wire(body);
-        const user = await this.net('claim', link);
-        const v = validateRunCreditClaim(sent);
-        if (!v.ok) return { ok: false, reason: 'rejected' };
-        const res = await this.runs.claim(user, v.value);
-        if (!res.ok && res.reason === 'rate_limited') {
-          this.now += res.retryAfterSec * 1000;
-          throw new SavedRunNetError('run-credit 429');
-        }
-        return this.answer('claim', res.ok ? { ok: true, credit: res.credit, created: res.created } : { ok: false, reason: res.reason === 'run_ended' ? 'runEnded' : 'carriedOn' });
-      },
-      list: async (limit = RUN_CREDIT_LIST_LIMIT) => {
-        const user = await this.net('list', link);
-        return this.answer('list', await this.runs.credits(user, limit));
-      },
-    };
-  }
-}
-
-/** The browser's `storage` events between tabs that share one storage (fired by hand: `fire`). */
-const fakeEvents = () => {
-  const listeners = new Set<(e: { key: string | null }) => void>();
-  return {
-    addEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.add(fn),
-    removeEventListener: (_t: 'storage', fn: (e: { key: string | null }) => void) => void listeners.delete(fn),
-    fire: (key: string) => listeners.forEach((fn) => fn({ key })),
-  };
-};
-
-/** A device: its own storage, slot and progress copy, signed in as `user`. `tab`: another tab of a device (shares its storage and hears its `storage` events). */
+/** A device: its own storage, saved Run and progress copy, signed in as `user`. `tab`: another tab of a device (shares its storage and hears its `storage` events). */
 const device = (server: TestServer, user: string | null = 'u1', tab?: { storage: ReturnType<typeof memStorage>; events: ReturnType<typeof fakeEvents> }) => {
   const storage = tab?.storage ?? memStorage();
-  const store = new SuspendedRunStore(storage);
   const meta = new MetaProgress(storage);
   const link: Link = { offline: false, user };
-  const credits = new RunCreditQueue({ api: server.creditApi(link), storage, events: tab?.events ?? null, meta, retryMs: 1, maxRetryMs: 4 });
-  const runs = new AccountRuns({ api: server.api(link), store, meta, credits, storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+  const runs = new SavedRuns({ storage, meta, ...server.client(link), events: tab?.events ?? null, locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
   const outcomes: CreditOutcome[] = [];
-  credits.onCredit((o) => void outcomes.push(o));
+  runs.credits.onCredit((o) => void outcomes.push(o));
   runs.onUser((u) => void (link.user = u)); // the session cookie follows the Account
   runs.setUser(user);
   const lostRuns: string[] = [];
   runs.onLost((k) => void lostRuns.push(k));
   const lost: HandoffLoss[] = [];
-  const handoff = new RunHandoff({ store, credit: runs, onLost: (why) => void lost.push(why), locks: null, cloud: runs });
+  const handoff = new RunHandoff({ runs, onLost: (why) => void lost.push(why) });
   /** The Run keys this device's progress copy holds the credit for. */
   const credited = () => meta.data.creditedRuns;
   /** `runEnded` on this device, as src/meta/install.ts routes it. */
   const end = (s: RunSnapshot, reason: RunCreditInput['reason'] = 'died') => runs.ended({ runKey: s.runKey, reason, stats: s.stats });
-  return { storage, store, meta, runs, credits, handoff, lost, lostRuns, link, outcomes, credited, end };
+  /** Save & quit on this device (the Run in progress, not paused). */
+  const saveAndQuit = (s: RunSnapshot) => runs.save(s);
+  return { storage, store: runs.slot, meta, runs, credits: runs.credits, handoff, lost, lostRuns, link, outcomes, credited, end, saveAndQuit };
 };
 
 /** Lets queued server work (uploads, takes, claims, the sweep) and its retries run. */
-async function settle(...runs: AccountRuns[]): Promise<void> {
+async function settle(...runs: SavedRuns[]): Promise<void> {
   for (let i = 0; i < 200 && runs.some((r) => r.pending > 0 || r.credits.pending > 0); i++) await new Promise((r) => setTimeout(r, 2));
   await Promise.all(runs.map((r) => r.credits.idle()));
   await new Promise((r) => setTimeout(r, 0));
 }
-
-const fakeGame = () => {
-  const resumed: RunSnapshot[] = [];
-  return { resumed, game: { resumeRun: (r: RunSnapshot) => void resumed.push(r) } as unknown as Game };
-};
 
 /** Device `d`'s title: sync with the Account, then Resume run on what it shows. */
 async function resumeOn(d: ReturnType<typeof device>) {
   await d.runs.syncTitle();
   const shown = d.store.peek();
   if (!shown) return { res: 'none' as const, resumed: [] as RunSnapshot[] };
-  const { game, resumed } = fakeGame();
-  const res = await d.runs.resume(shown, () => resumeSuspendedRun(game, d.store, new MetaProgress(null), shown.runKey));
+  const resumed: RunSnapshot[] = [];
+  const res = await d.runs.resume(shown.runKey, (s) => void resumed.push(s));
   return { res, resumed };
 }
 
@@ -207,7 +71,8 @@ describe('Account saved Run (two devices, one server)', () => {
     await settle(a.runs);
     expect(server.row).toMatchObject({ runKey: s.runKey, version: SNAPSHOT_VERSION });
     expect(server.row?.snapshot).not.toHaveProperty('account'); // the device-only tag stays on the device
-    expect(a.store.peek()?.account).toMatchObject({ userId: 'u1', synced: true });
+    expect((await a.runs.syncTitle()).fromAccount).toBeNull(); // A's own copy, confirmed: nothing to mirror or upload
+    expect(server.calls.filter((c) => c === 'put')).toHaveLength(1);
 
     expect((await b.runs.syncTitle()).fromAccount).toBe(s.runKey);
     expect(b.store.peek()?.runKey).toBe(s.runKey);
@@ -357,7 +222,9 @@ describe('Account saved Run (two devices, one server)', () => {
     await a.runs.syncTitle();
     await settle(a.runs);
     expect(server.row?.runKey).toBe(local.runKey);
-    expect(a.store.peek()?.account?.synced).toBe(true);
+    await a.runs.syncTitle(); // confirmed now: synced again, it isn't uploaded again
+    await settle(a.runs);
+    expect(server.calls.filter((c) => c === 'put')).toHaveLength(1);
     // Resumed and ended elsewhere (by a client from before the ledger: no row, so nothing for the sweep).
     expect(await server.runs.take(USER, { runKey: local.runKey, lease: server.row!.lease, newLease: 'b-lease' })).toMatchObject({ ok: true });
     expect(await server.runs.end(USER, { runKey: local.runKey, lease: 'b-lease' })).toMatchObject({ deleted: true });
@@ -369,19 +236,23 @@ describe('Account saved Run (two devices, one server)', () => {
 
   it('a Run that replaces another on the server credits the replaced one once, from the ledger row the upload returns', async () => {
     const server = new TestServer();
-    const a = device(server);
+    // Two tabs of A's browser (one slot, one progress copy). Tab 2 started `second` while the slot was empty...
+    const shared = { storage: memStorage(), events: fakeEvents() };
+    const a = device(server, 'u1', shared);
+    const a2 = device(server, 'u1', shared);
+    expect(a2.runs.newRun()).toBe(false);
+    // ...then tab 1 Save & quits `first`.
     const first = snapshot('first');
     a.handoff.store(first, 'pause');
     await settle(a.runs);
     a.handoff.forget();
-    a.runs.newRun();
-    // The device slot still holds `first`, an Account copy: the slot's replace claims it, and the upload
-    // of `second` replaces it on the server, which records it as a quit. Two writers, one row, one credit.
-    a.handoff.store(snapshot('second'), 'pause');
-    await settle(a.runs);
+    // The device slot holds `first`, an Account copy: tab 2's pause replaces it there (a claim), and its
+    // upload of `second` replaces it on the server, which records it as a quit. Two writers, one row, one credit.
+    a2.handoff.store(snapshot('second'), 'pause');
+    await settle(a.runs, a2.runs);
     expect(server.ledger.map((c) => [c.runKey, c.reason])).toEqual([[first.runKey, 'quit']]);
-    expect(a.credited()).toEqual([first.runKey]);
-    expect(a.meta.data.stats.runs).toBe(1);
+    expect(a2.credited()).toEqual([first.runKey]);
+    expect(a2.meta.data.stats.runs).toBe(1);
     // Another device's Run replaced on the server (not in this device's slot) is credited from the row too.
     const second = server.row!.runKey;
     const c = device(server);
@@ -400,7 +271,7 @@ describe('Account saved Run (two devices, one server)', () => {
     a.runs.setUser('u2');
     expect(a.store.peek()).toBeNull();
     await a.runs.syncTitle();
-    expect(a.store.peekAny()?.account?.userId).toBe('u1'); // still there for u1
+    expect(a.store.peekAny()).not.toBeNull(); // still there, for u1 (below)
     a.runs.setUser(null);
     expect(a.store.peek()).toBeNull(); // nor signed out
     a.runs.setUser('u1');
@@ -495,7 +366,7 @@ describe('Account saved Run (two devices, one server)', () => {
     a.handoff.store(s, 'pause');
     a.handoff.forget(); // Save & quit: the title has it now
     const shown = a.store.peek()!;
-    const abandoning = a.runs.abandon(shown, () => abandonSuspendedRun(a.store, a.runs));
+    const abandoning = a.runs.abandon(shown.runKey);
     await new Promise((r) => setTimeout(r, 10));
     expect(server.calls).toEqual(['put']); // the claim waits for the upload
     open();
@@ -519,8 +390,8 @@ describe('Account saved Run (two devices, one server)', () => {
     a.handoff.store(s, 'pause');
     a.handoff.forget(); // Save & quit: the title has it now
     const shown = a.store.peek()!;
-    const { game, resumed } = fakeGame();
-    const resuming = a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey));
+    const resumed: RunSnapshot[] = [];
+    const resuming = a.runs.resume(shown.runKey, (s) => void resumed.push(s));
     await new Promise((r) => setTimeout(r, 10));
     expect(server.calls).toEqual(['put']); // the take waits for the upload
     open();
@@ -541,7 +412,7 @@ describe('Account saved Run (two devices, one server)', () => {
     a.handoff.store(theirs, 'pause'); // u1's upload is on its way...
     a.handoff.forget();
     a.runs.setUser('u2'); // ...when u2 signs in and pauses a Run
-    a.runs.newRun();
+    expect(a.runs.newRun()).toBe(false); // u1's saved Run isn't u2's to abandon
     const mine = snapshot('u2-run');
     a.handoff.store(mine, 'pause');
     open();
@@ -695,7 +566,7 @@ describe('Account saved Run (two devices, one server)', () => {
         const shown = a.store.peek()!;
         const open = held(server, 'take');
         let started = 0;
-        const resuming = a.runs.resume(shown, () => ++started > 0);
+        const resuming = a.runs.resume(shown.runKey, () => void ++started);
         await new Promise((r) => setTimeout(r, 5));
         a.link.offline = offline;
         a.runs.setUser('u2');
@@ -715,7 +586,7 @@ describe('Account saved Run (two devices, one server)', () => {
       a.handoff.forget();
       const shown = a.store.peek()!;
       let abandoned = 0;
-      const abandoning = a.runs.abandon(shown, () => ++abandoned > 0);
+      const abandoning = a.runs.abandon(shown.runKey, () => (++abandoned, true));
       await new Promise((r) => setTimeout(r, 5));
       a.runs.setUser('u2');
       open();
@@ -763,15 +634,14 @@ describe('Account saved Run (two devices, one server)', () => {
       await new Promise((r) => setTimeout(r, 5));
       expect(server.calls.at(-1)).toBe('get'); // read before New run, answered after it
       const shown = a.store.peek()!;
-      expect(await a.runs.abandon(shown, () => abandonSuspendedRun(a.store, a.runs))).toBe('done');
+      expect(await a.runs.abandon(shown.runKey)).toBe('done');
       await settle(a.runs);
       expect(a.credited()).toEqual([shown.runKey]);
       open();
       await syncing;
       expect(a.store.peek()).toBeNull();
       // The new Run starts: nothing left to abandon (and credit) again.
-      a.runs.newRun();
-      expect(abandonSuspendedRun(a.store, a.runs)).toBe(false);
+      expect(a.runs.newRun()).toBe(false);
       await settle(a.runs);
       expect(a.meta.data.stats.runs).toBe(1);
     });
@@ -788,8 +658,7 @@ describe('Account saved Run (two devices, one server)', () => {
       const syncing = a.runs.syncTitle();
       await new Promise((r) => setTimeout(r, 5));
       const shown = a.store.peek()!;
-      const { game } = fakeGame();
-      expect(await a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey))).toBe('mine');
+      expect(await a.runs.resume(shown.runKey, () => undefined)).toBe('mine');
       open();
       await syncing;
       expect(a.store.peek()).toBeNull();
@@ -806,8 +675,7 @@ describe('Account saved Run (two devices, one server)', () => {
       let open!: () => void;
       server.hold.take = new Promise((r) => (open = r));
       const shown = a.store.peek()!;
-      const { game } = fakeGame();
-      const resuming = a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey));
+      const resuming = a.runs.resume(shown.runKey, () => undefined);
       const syncing = a.runs.syncTitle();
       await new Promise((r) => setTimeout(r, 5));
       expect(server.calls.filter((c) => c === 'get')).toEqual([]);
@@ -825,24 +693,16 @@ describe('Account saved Run (two devices, one server)', () => {
     const r = snapshot('r');
     b.handoff.store(r, 'pause');
     await settle(b.runs);
-    // Another tab of A's browser (one slot, one progress copy) mirrors R from the server on its title.
-    const titleTab = new AccountRuns({
-      api: server.api(),
-      store: a.store,
-      meta: a.meta,
-      credits: new RunCreditQueue({ api: server.creditApi(), storage: a.storage, meta: a.meta, retryMs: 1, maxRetryMs: 4 }),
-      retryMs: 1,
-      maxRetryMs: 4,
-      hidden: () => false,
-    });
-    titleTab.setUser('u1');
-    await titleTab.syncTitle();
-    expect(a.store.peek()).toMatchObject({ runKey: r.runKey, account: { synced: true } });
+    // This tab of A has started S (the slot was empty then)...
+    expect(a.runs.newRun()).toBe(false);
+    // ...when another tab of A's browser (one slot, one progress copy) mirrors R from the server on its title.
+    const titleTab = device(server, 'u1', { storage: a.storage, events: fakeEvents() });
+    await titleTab.runs.syncTitle();
+    expect(a.store.peek()?.runKey).toBe(r.runKey);
     // B unpauses R: the server take moves R to B's new lease.
     expect(await b.handoff.takeBack()).toBe(true);
     await settle(b.runs);
-    // This tab of A plays S and pauses: S replaces the stale copy of R in the slot, and R is claimed...
-    a.runs.newRun();
+    // This tab of A pauses S: S replaces the stale copy of R in the slot, and R is claimed...
     a.handoff.store(snapshot('s'), 'pause');
     await settle(a.runs);
     // ...but R is B's Run in progress: the claim is refused, nothing is credited here.
@@ -863,9 +723,9 @@ describe('Account saved Run (two devices, one server)', () => {
     b.handoff.store(r, 'pause');
     await settle(b.runs);
     b.handoff.forget(); // B's Save & quit: R stays on the server
+    expect(a.runs.newRun()).toBe(false); // A plays S, started before its title mirrored R (another tab's, say)
     await a.runs.syncTitle();
     expect(a.store.peek()?.runKey).toBe(r.runKey);
-    a.runs.newRun();
     a.handoff.store(snapshot('s'), 'pause');
     expect(a.credited()).toEqual([]); // not by the slot's replace (the server decides)...
     await settle(a.runs);
@@ -884,7 +744,7 @@ describe('Account saved Run (two devices, one server)', () => {
       b.handoff.store(r, 'pause');
       await settle(b.runs);
       await a.runs.syncTitle(); // A's slot mirrors R from the Account
-      expect(a.store.peek()).toMatchObject({ runKey: r.runKey, account: { synced: true } });
+      expect(a.store.peek()?.runKey).toBe(r.runKey);
       return { server, a, b, r };
     };
 
@@ -892,8 +752,7 @@ describe('Account saved Run (two devices, one server)', () => {
       const { server, a, b, r } = await mirrored();
       expect(await b.handoff.takeBack()).toBe(true); // B unpauses R
       await settle(b.runs);
-      a.runs.newRun();
-      expect(abandonSuspendedRun(a.store, a.runs)).toBe(true);
+      expect(a.runs.newRun()).toBe(true);
       expect(a.store.peek()).toBeNull();
       await settle(a.runs);
       expect(a.credited()).toEqual([]);
@@ -906,8 +765,7 @@ describe('Account saved Run (two devices, one server)', () => {
     it('nobody took it: credited once, from the server’s answer', async () => {
       const { server, a, b, r } = await mirrored();
       b.handoff.forget(); // B's Save & quit: R stays on the server
-      a.runs.newRun();
-      expect(abandonSuspendedRun(a.store, a.runs)).toBe(true);
+      expect(a.runs.newRun()).toBe(true);
       expect(a.credited()).toEqual([]); // not on the device...
       await settle(a.runs);
       expect(a.credited()).toEqual([r.runKey]); // ...but once the server recorded it
@@ -926,8 +784,8 @@ describe('Account saved Run (two devices, one server)', () => {
       b.handoff.store(r, 'pause');
       await settle(b.runs);
       b.handoff.forget();
-      await a.runs.syncTitle(); // A mirrors R
-      a.runs.newRun();
+      expect(a.runs.newRun()).toBe(false); // A plays S...
+      await a.runs.syncTitle(); // ...and its title (another tab's, say) mirrors R
       server.loseAnswer.put = true; // the upload of S replaces R and records it, but A never hears the answer
       a.handoff.store(snapshot('s'), 'pause');
       await settle(a.runs);
@@ -945,7 +803,7 @@ describe('Account saved Run (two devices, one server)', () => {
       b.handoff.store(r, 'pause');
       await settle(b.runs);
       b.handoff.forget(); // R is on the server; A's slot never saw it (no mirror, so no claim of A's)
-      a.runs.newRun();
+      expect(a.runs.newRun()).toBe(false);
       server.loseAnswer.put = true;
       a.handoff.store(snapshot('s'), 'pause');
       await settle(a.runs);
@@ -1016,9 +874,9 @@ describe('Account saved Run (two devices, one server)', () => {
       a.handoff.store(r1, 'pause');
       await settle(a.runs);
       a.handoff.forget();
-      a.runs.newRun();
+      expect(a.runs.newRun()).toBe(true); // a new Run abandons R1: a quit in the ledger
       const r2 = snapshot('r2');
-      a.handoff.store(r2, 'pause'); // replaces R1 on the server: R1 is a quit in the ledger
+      a.handoff.store(r2, 'pause');
       await settle(a.runs);
       expect(await a.handoff.takeBack()).toBe(true);
       await settle(a.runs);
@@ -1044,9 +902,9 @@ describe('Account saved Run (two devices, one server)', () => {
       await settle(a.runs);
       a.link.offline = true;
       expect(await a.handoff.takeBack()).toBe(true); // A unpauses offline
-      await b.runs.syncTitle(); // B's title mirrors R...
-      b.runs.newRun();
-      b.handoff.store(snapshot('s'), 'pause'); // ...and B starts and pauses S: R is replaced and recorded as a quit
+      expect(b.runs.newRun()).toBe(false); // B plays S...
+      await b.runs.syncTitle(); // ...its title (another tab's, say) mirrors R...
+      b.handoff.store(snapshot('s'), 'pause'); // ...and B pauses S: R is replaced and recorded as a quit
       await settle(b.runs);
       expect(server.ledger.map((c) => [c.runKey, c.reason])).toEqual([[r.runKey, 'quit']]);
       expect(b.credited()).toEqual([r.runKey]); // B's copy holds it (the merge decides whose Fluff survives)
@@ -1093,10 +951,9 @@ describe('Account saved Run (two devices, one server)', () => {
     const storage = memStorage();
     const tab = () => {
       const meta = new MetaProgress(storage);
-      const credits = new RunCreditQueue({ api: server.creditApi(), storage, meta, retryMs: 1, maxRetryMs: 4 });
-      const runs = new AccountRuns({ api: server.api(), store: new SuspendedRunStore(storage), meta, credits, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+      const runs = new SavedRuns({ storage, meta, ...server.client(), locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
       runs.setUser('u1');
-      return { meta, runs, credits };
+      return { meta, runs, credits: runs.credits };
     };
     const t1 = tab();
     const t2 = tab();
@@ -1126,7 +983,7 @@ describe('Account saved Run (two devices, one server)', () => {
   });
 });
 
-describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 review)', () => {
+describe('SavedRuns: known Runs, Universes and claim stats (docs/adr/0003 review)', () => {
   it('a known Run stays known through a sign-out and back in mid-Run: its credit waits for the server, which refuses a Run another device took', async () => {
     const server = new TestServer();
     const a = device(server);
@@ -1160,7 +1017,7 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
     const r = snapshot('r');
     a.handoff.store(r, 'pause');
     await settle(a.runs);
-    const again = new AccountRuns({ api: server.api(), store: a.store, meta: a.meta, credits: a.credits, storage: a.storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    const again = new SavedRuns({ storage: a.storage, meta: a.meta, ...server.client(), locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
     again.setUser('u1');
     expect(again.knows(r.runKey)).toBe(true);
     const fresh = snapshot('fresh');
@@ -1216,7 +1073,7 @@ describe('AccountRuns: known Runs, Universes and claim stats (docs/adr/0003 revi
   });
 });
 
-describe('AccountRuns: the stale claim (docs/adr/0003, run_holders)', () => {
+describe('SavedRuns: the stale claim (docs/adr/0003, run_holders)', () => {
   it('a claim for a Run another device holds is refused with carriedOn after a new Run replaced it in the slot', async () => {
     const server = new TestServer();
     const a = device(server);
@@ -1240,7 +1097,7 @@ describe('AccountRuns: the stale claim (docs/adr/0003, run_holders)', () => {
   });
 });
 
-describe('AccountRuns: the second review round (docs/adr/0003)', () => {
+describe('SavedRuns: the second review round (docs/adr/0003)', () => {
   it('a known Run ended after a sign-out and back in mid-Run claims under the lease the server holds, so it is credited once', async () => {
     const server = new TestServer();
     const a = device(server);
@@ -1270,8 +1127,8 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
     await settle(a.runs);
     expect(await a.handoff.takeBack()).toBe(true);
     await settle(a.runs);
-    // A reload: a fresh page, the same storage and queue.
-    const again = new AccountRuns({ api: server.api(), store: a.store, meta: a.meta, credits: a.credits, storage: a.storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    // A reload: a fresh page over the same storage (its waiting claims included).
+    const again = new SavedRuns({ storage: a.storage, meta: a.meta, ...server.client(), locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
     again.setUser('u1');
     expect(again.ended({ runKey: r.runKey, reason: 'died', stats: r.stats })).toBeNull();
     await settle(again);
@@ -1285,9 +1142,8 @@ describe('AccountRuns: the second review round (docs/adr/0003)', () => {
     b.handoff.store(p, 'pause');
     await settle(b.runs);
     b.storage.setItem(KNOWN_RUNS_KEY, JSON.stringify({ version: KNOWN_RUNS_VERSION, known: [p.runKey] }));
-    const page = new AccountRuns({ api: server2.api(), store: b.store, meta: b.meta, credits: b.credits, storage: b.storage, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    const page = new SavedRuns({ storage: b.storage, meta: b.meta, ...server2.client(), locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
     page.setUser('u1');
-    expect(b.store.peek()?.account?.lease).toBe(server2.row!.lease);
     expect(page.ended({ runKey: p.runKey, reason: 'quit', stats: p.stats })).toBeNull();
     await settle(page);
     expect(server2.ledger.map((c) => c.runKey)).toEqual([p.runKey]);

@@ -23,7 +23,7 @@
  * may take the Run back on unpause; anyone else may pick it up (src/game/handoff.ts). Optional and
  * additive (docs/adr/0001): older snapshots and builds read it as absent.
  *
- * `account` tags a copy kept for a signed-in player (src/meta/accountRun.ts): whose Account holds
+ * `account` tags a copy kept for a signed-in player (src/meta/savedRuns.ts): whose Account holds
  * it, under which lease, and whether the server has confirmed it. Device-only: it is not uploaded.
  *
  * `parseRunSnapshot` never throws: anything unreadable or with a field of the wrong type is

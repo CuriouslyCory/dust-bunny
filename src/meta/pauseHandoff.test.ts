@@ -1,30 +1,16 @@
-/** Pause hand-off rules (src/meta/suspendedRun.ts): two tabs, two `SuspendedRunStore`s, one storage. */
+/**
+ * Pause hand-off rules (src/meta/savedRuns.ts over the slot in src/meta/suspendedRun.ts, and
+ * src/game/handoff.ts): two tabs, two `SavedRuns`, one storage. Signed out unless a test says so.
+ */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { createRun } from '../game/assembly';
-import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
-import { parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
+import { parseRunSnapshot, SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import { MetaProgress } from './meta';
-import {
-  abandonSuspendedRun,
-  pausedRunState,
-  resumeSuspendedRun,
-  SAVED_RUN_LOCK,
-  saveSuspendedRun,
-  storePausedRun,
-  SUSPENDED_RUN_KEY,
-  SuspendedRunStore,
-  takeBackPausedRun,
-  withSavedRunLock,
-  type LockManagerLike,
-  type QuitCreditor,
-} from './suspendedRun';
-
-const memStorage = () => {
-  const map = new Map<string, string>();
-  return { map, getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => void map.set(k, v), removeItem: (k: string) => void map.delete(k) };
-};
+import { SavedRuns, type SavedRunsMeta } from './savedRuns';
+import { memStorage, TestServer, USER } from './savedRunsTestServer';
+import { SAVED_RUN_LOCK, SUSPENDED_RUN_KEY, SuspendedRunStore, withSavedRunLock, type LockManagerLike } from './suspendedRun';
 
 const snapshot = (seconds = 1): RunSnapshot => {
   const run = createRun(new EventBus(), { seed: 'handoff', characterId: 'zap' });
@@ -48,132 +34,145 @@ const fifoLocks = (): LockManagerLike & { requests: string[] } => {
 };
 
 type Award = Parameters<MetaProgress['awardRun']>[0];
-/** A meta stand-in that records what it was credited. */
+/** A progress stand-in that records what it was credited. */
 const awards = () => {
   const calls: Award[] = [];
   const awardRun = (e: Award) => void calls.push(e);
-  return { calls, awardRun, creditQuit: (s: RunSnapshot) => awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats }) } as unknown as Pick<MetaProgress, 'awardRun' | 'creditQuit'> & { calls: Award[] };
+  return { calls, awardRun, credited: () => false, creditedRunsKnown: () => true, data: new MetaProgress(null).data } as unknown as SavedRunsMeta & { calls: Award[] };
 };
 
-const fakeGame = () => {
+/** A tab: its saved Run over `storage` (shared with the other tabs), signed out. */
+const tab = (storage: ReturnType<typeof memStorage>, meta = awards(), locks: LockManagerLike | null = null) => new SavedRuns({ storage, meta, ...new TestServer().client(), locks });
+
+/** Resume run in `t` for the Run keyed `runKey`; what it started. */
+async function resumeIn(t: SavedRuns, runKey: string) {
   const resumed: RunSnapshot[] = [];
-  return { resumed, game: { resumeRun: (r: RunSnapshot) => void resumed.push(r) } as unknown as Game };
-};
+  const res = await t.resume(runKey, (s) => void resumed.push(s));
+  return { res, resumed };
+}
 
 describe('Pause hand-off rules (two tabs, one storage)', () => {
-  it('pause then unpause in one tab leaves the slot empty and credits nothing', () => {
+  it('pause then unpause in one tab leaves the slot empty and credits nothing', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
     const meta = awards();
+    const tabA = tab(storage, meta);
     const s = snapshot();
-    expect(storePausedRun(tabA, s, 'h1', meta)).toBe(true);
+    tabA.pause(s, 'h1');
     expect(new SuspendedRunStore(storage).peek()?.handoffId).toBe('h1');
-    expect(pausedRunState(tabA, 'h1', s.runKey)).toBe('mine');
-    expect(takeBackPausedRun(tabA, 'h1', s.runKey)).toBe('mine');
+    expect(tabA.pausedState('h1', s.runKey)).toBe('mine');
+    expect(await tabA.takeBack('h1', s.runKey)).toBe('mine');
     expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
     expect(meta.calls).toEqual([]);
   });
 
-  it('a Run picked up in tab B is not tab A’s to take back (or end and credit)', () => {
+  it('a Run picked up in tab B is not tab A’s to take back (or end and credit)', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = awards();
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const s = snapshot();
-    storePausedRun(tabA, s, 'h1', meta);
-    const { game, resumed } = fakeGame();
-    expect(resumeSuspendedRun(game, tabB, new MetaProgress(null), s.runKey)).toBe(true);
+    tabA.pause(s, 'h1');
+    const { res, resumed } = await resumeIn(tabB, s.runKey);
+    expect(res).toBe('mine');
     expect(resumed[0]?.runKey).toBe(s.runKey);
-    expect(pausedRunState(tabA, 'h1', s.runKey)).toBe('carriedOn');
-    expect(takeBackPausedRun(tabA, 'h1', s.runKey)).toBe('carriedOn');
+    expect(tabA.pausedState('h1', s.runKey)).toBe('carriedOn');
+    expect(await tabA.takeBack('h1', s.runKey)).toBe('carriedOn');
     // B pauses it in turn: the same Run under B's hand-off is still not A's.
-    storePausedRun(tabB, structuredClone(s), 'h2', meta);
-    expect(takeBackPausedRun(tabA, 'h1', s.runKey)).toBe('carriedOn');
-    expect(tabB.peek()?.handoffId).toBe('h2');
+    tabB.pause(structuredClone(s), 'h2');
+    expect(await tabA.takeBack('h1', s.runKey)).toBe('carriedOn');
+    expect(tabB.slot.peek()?.handoffId).toBe('h2');
     expect(meta.calls).toEqual([]);
   });
 
-  it('New run in tab B credits the paused Run once; tab A finds it gone', () => {
+  it('New run in tab B credits the paused Run once; tab A finds it gone', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = awards();
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const s = snapshot();
-    storePausedRun(tabA, s, 'h1', meta);
-    expect(abandonSuspendedRun(tabB, meta, s.runKey)).toBe(true);
+    tabA.pause(s, 'h1');
+    expect(await tabB.abandon(s.runKey)).toBe('done');
     expect(meta.calls).toHaveLength(1);
-    expect(takeBackPausedRun(tabA, 'h1', s.runKey)).toBe('carriedOn');
+    expect(await tabA.takeBack('h1', s.runKey)).toBe('carriedOn');
     expect(meta.calls).toHaveLength(1);
   });
 
-  it('another Run stored over a paused one credits it once; the pausing tab reads it as replaced', () => {
+  it('another Run stored over a paused one credits it once; the pausing tab reads it as replaced', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const meta = awards();
+    const tabA = tab(storage, meta);
+    const tabB = tab(storage, meta);
     const a = snapshot();
-    storePausedRun(tabA, a, 'h1', meta);
+    tabA.pause(a, 'h1');
     const b = snapshot();
     expect(b.runKey).not.toBe(a.runKey);
-    storePausedRun(tabB, b, 'h2', meta);
+    tabB.pause(b, 'h2');
     expect(meta.calls.map((c) => c.reason)).toEqual(['quit']);
-    expect(takeBackPausedRun(tabA, 'h1', a.runKey)).toBe('replaced');
-    expect(tabB.peek()?.runKey).toBe(b.runKey);
+    expect(await tabA.takeBack('h1', a.runKey)).toBe('replaced');
+    expect(tabB.slot.peek()?.runKey).toBe(b.runKey);
   });
 
-  it('a replaced Account copy goes to the creditor with its tag, so a signed-in page can claim it from the server (Save & quit and pause)', () => {
-    const tag = (s: RunSnapshot): RunSnapshot => ({ ...s, account: { userId: 'u1', lease: 'l-' + s.runKey, synced: true } });
-    for (const replace of [
-      (store: SuspendedRunStore, s: RunSnapshot, credit: QuitCreditor) => saveSuspendedRun(store, s, credit),
-      (store: SuspendedRunStore, s: RunSnapshot, credit: QuitCreditor) => storePausedRun(store, s, 'h2', credit),
-    ]) {
-      const store = new SuspendedRunStore(memStorage());
-      store.setViewer('u1');
-      const quits: RunSnapshot[] = [];
-      const prev = tag(snapshot());
-      store.save(prev);
-      replace(store, tag(snapshot()), { creditQuit: (s) => void quits.push(s) });
-      expect(quits.map((s) => [s.runKey, s.account?.lease])).toEqual([[prev.runKey, prev.account!.lease]]);
+  it('a replaced Account copy is claimed from the server under its holder’s lease (Save & quit and pause)', async () => {
+    for (const replace of [(t: SavedRuns, s: RunSnapshot) => void t.save(s), (t: SavedRuns, s: RunSnapshot) => t.pause(s, 'h2')]) {
+      const server = new TestServer();
+      // Another device stored `prev` with the Account; this device's title mirrors it.
+      const prev = snapshot();
+      expect(await server.runs.store(USER, { runKey: prev.runKey, lease: 'l-prev', snapshot: prev as unknown as Record<string, unknown>, version: SNAPSHOT_VERSION, ledger: true })).toMatchObject({ ok: true });
+      const storage = memStorage();
+      const t = new SavedRuns({ storage, meta: new MetaProgress(storage), ...server.client(), locks: null, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+      t.setUser(USER);
+      await t.syncTitle();
+      expect(t.slot.peek()?.runKey).toBe(prev.runKey);
+      // The replacing upload is slow: the claim lands first, so only the mirrored copy's lease can win it.
+      let open!: () => void;
+      server.hold.put = new Promise((r) => (open = r));
+      replace(t, snapshot(2));
+      await t.credits.idle();
+      expect(server.ledger.map((c) => [c.runKey, c.reason])).toEqual([[prev.runKey, 'quit']]);
+      expect(t.creditOf(prev.runKey)).toMatchObject({ state: 'credited' });
+      open();
     }
   });
 
   it('pausing the same Run again credits nothing, and only the newest hand-off owns it', () => {
-    const store = new SuspendedRunStore(memStorage());
     const meta = awards();
+    const t = tab(memStorage(), meta);
     const s = snapshot();
-    storePausedRun(store, s, 'h1', meta);
-    storePausedRun(store, structuredClone(s), 'h2', meta);
+    t.pause(s, 'h1');
+    t.pause(structuredClone(s), 'h2');
     expect(meta.calls).toEqual([]);
-    expect(pausedRunState(store, 'h1', s.runKey)).toBe('carriedOn');
-    expect(pausedRunState(store, 'h2', s.runKey)).toBe('mine');
+    expect(t.pausedState('h1', s.runKey)).toBe('carriedOn');
+    expect(t.pausedState('h2', s.runKey)).toBe('mine');
   });
 
-  it('a slot this build can’t read is left alone and is not the pausing tab’s', () => {
+  it('a slot this build can’t read is left alone and is not the pausing tab’s', async () => {
     const storage = memStorage();
-    const store = new SuspendedRunStore(storage);
+    const t = tab(storage);
     const s = snapshot();
-    storePausedRun(store, s, 'h1', awards());
+    t.pause(s, 'h1');
     const newer = JSON.stringify({ ...s, version: 99 });
     storage.setItem(SUSPENDED_RUN_KEY, newer);
-    expect(takeBackPausedRun(store, 'h1', s.runKey)).toBe('carriedOn');
+    expect(await t.takeBack('h1', s.runKey)).toBe('carriedOn');
     expect(storage.getItem(SUSPENDED_RUN_KEY)).toBe(newer);
   });
 
-  it('a write that fails is reported, and the Run stays this page’s to take back', () => {
+  it('a write that fails is reported, and the Run stays this page’s to take back', async () => {
     const storage = memStorage();
-    const store = new SuspendedRunStore(storage);
     const meta = awards();
+    const t = tab(storage, meta);
+    const store = t.slot;
     const other = snapshot();
-    store.save(other);
+    store.save(other); // another tab's Run, already stored
     const s = snapshot();
     const setItem = storage.setItem;
     storage.setItem = () => {
       throw new Error('QuotaExceededError');
     };
-    expect(storePausedRun(store, s, 'h1', meta)).toBe(false);
+    t.pause(s, 'h1');
+    expect(store.unsaved).toBe(true); // only this page's memory holds it
     // The Run already in storage is still there: not credited.
     expect(meta.calls).toEqual([]);
-    expect(takeBackPausedRun(store, 'h1', s.runKey)).toBe('mine');
+    expect(await t.takeBack('h1', s.runKey)).toBe('mine');
     // Taking it back drops only this page's copy: the other Run, never replaced, is still stored
     // (removeItem would have worked even though setItem didn't) and this page sees it again.
     expect(parseRunSnapshot(JSON.parse(storage.getItem(SUSPENDED_RUN_KEY)!))?.runKey).toBe(other.runKey);
@@ -182,20 +181,21 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(other.runKey);
     // A pause write that sticks is taken back from storage as before.
     storage.setItem = setItem;
-    expect(storePausedRun(store, structuredClone(s), 'h2', meta)).toBe(true);
-    expect(takeBackPausedRun(store, 'h2', s.runKey)).toBe('mine');
+    t.pause(structuredClone(s), 'h2');
+    expect(store.unsaved).toBe(false);
+    expect(await t.takeBack('h2', s.runKey)).toBe('mine');
     expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
   });
 
-  it('a Perk draft pending when the Run was stored opens again where it is picked up', () => {
+  it('a Perk draft pending when the Run was stored opens again where it is picked up', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
+    const tabA = tab(storage);
+    const tabB = tab(storage);
     const run = createRun(new EventBus(), { seed: 'handoff', characterId: 'zap' });
     run.perkDraft.queue();
-    storePausedRun(tabA, run.toSnapshot(), 'h1', awards());
-    const { game, resumed } = fakeGame();
-    expect(resumeSuspendedRun(game, tabB, new MetaProgress(null))).toBe(true);
+    tabA.pause(run.toSnapshot(), 'h1');
+    const { res, resumed } = await resumeIn(tabB, run.runKey);
+    expect(res).toBe('mine');
     const s = resumed[0]!;
     const back = createRun(new EventBus(), { seed: s.seed, characterId: s.characterId, modifiers: s.modifiers, loadout: s.loadout, resume: s });
     expect(back.perkDraft.active).toBe(true);
@@ -211,39 +211,36 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
   });
 });
 
-describe('withSavedRunLock', () => {
+describe('the saved Run lock', () => {
   it('runs takes one at a time under dust-bunny:saved-run: of two racing tabs, one gets the Run', async () => {
     const storage = memStorage();
-    const tabA = new SuspendedRunStore(storage);
-    const tabB = new SuspendedRunStore(storage);
     const locks = fifoLocks();
+    const tabA = tab(storage, awards(), locks);
+    const tabB = tab(storage, awards(), locks);
     const s = snapshot();
-    storePausedRun(tabA, s, 'h1', awards());
-    const { game, resumed } = fakeGame();
-    const [b, a] = await Promise.all([
-      withSavedRunLock(() => resumeSuspendedRun(game, tabB, new MetaProgress(null), s.runKey), locks),
-      withSavedRunLock(() => takeBackPausedRun(tabA, 'h1', s.runKey), locks),
-    ]);
-    expect(b).toBe(true);
+    tabA.pause(s, 'h1');
+    await withSavedRunLock(() => undefined, locks); // A's store is written
+    const [b, a] = await Promise.all([resumeIn(tabB, s.runKey), tabA.takeBack('h1', s.runKey)]);
+    expect(b.res).toBe('mine');
     expect(a).toBe('carriedOn');
-    expect(resumed).toHaveLength(1);
-    expect(locks.requests).toEqual([SAVED_RUN_LOCK, SAVED_RUN_LOCK]);
+    expect(b.resumed).toHaveLength(1);
+    expect(locks.requests).toEqual([SAVED_RUN_LOCK, SAVED_RUN_LOCK, SAVED_RUN_LOCK, SAVED_RUN_LOCK]);
   });
 
   it('two tabs saving over the same Run at once credit it only once', async () => {
     const storage = memStorage();
-    const tabB = new SuspendedRunStore(storage);
-    const tabC = new SuspendedRunStore(storage);
     const locks = fifoLocks();
     const meta = awards();
+    const tabB = tab(storage, meta, locks);
+    const tabC = tab(storage, meta, locks);
     const old = snapshot();
     new SuspendedRunStore(storage).save(old);
     const b = snapshot();
     const c = snapshot();
-    await Promise.all([withSavedRunLock(() => saveSuspendedRun(tabB, b, meta), locks), withSavedRunLock(() => saveSuspendedRun(tabC, c, meta), locks)]);
+    await Promise.all([tabB.save(b), tabC.save(c)]);
     // The old Run once, then B's (replaced by C's): never the old one twice.
     expect(meta.calls.map((e) => e.stats)).toEqual([old.stats, b.stats]);
-    expect(tabB.peek()?.runKey).toBe(c.runKey);
+    expect(tabB.slot.peek()?.runKey).toBe(c.runKey);
   });
 
   it('without Web Locks it runs at once, synchronously (and a failing lock request rejects)', async () => {
@@ -257,12 +254,12 @@ describe('withSavedRunLock', () => {
 });
 
 describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
-  /** A page: its store, its hand-off and what it was told about losing the Run. */
+  /** A page: its saved Run, its hand-off and what it was told about losing the Run. */
   const page = (storage: ReturnType<typeof memStorage>, locks: LockManagerLike | null, meta = awards()) => {
-    const store = new SuspendedRunStore(storage);
+    const runs = tab(storage, meta, locks);
     const lost: HandoffLoss[] = [];
-    const handoff = new RunHandoff({ store, credit: meta, onLost: (why) => void lost.push(why), locks });
-    return { store, handoff, lost, meta };
+    const handoff = new RunHandoff({ runs, onLost: (why) => void lost.push(why) });
+    return { runs, store: runs.slot, handoff, lost, meta };
   };
 
   for (const [name, mkLocks] of [
@@ -294,8 +291,8 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
         a.handoff.store(s, 'pause');
         await withSavedRunLock(() => undefined, locks); // A's store is written
         expect(b.store.peek()?.handoffId).toBe(a.handoff.handoffId);
-        const { game, resumed } = fakeGame();
-        expect(await withSavedRunLock(() => resumeSuspendedRun(game, b.store, new MetaProgress(null)), locks)).toBe(true);
+        const { res, resumed } = await resumeIn(b.runs, s.runKey);
+        expect(res).toBe('mine');
         expect(resumed).toHaveLength(1);
         // The browser's storage event in A:
         a.store.storageChanged();
@@ -312,8 +309,10 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
         const locks = mkLocks();
         const a = page(storage, locks);
         const b = page(storage, locks);
-        a.handoff.store(snapshot(), 'pause');
-        await withSavedRunLock(() => b.store.take(), locks);
+        const s = snapshot();
+        a.handoff.store(s, 'pause');
+        await withSavedRunLock(() => undefined, locks); // A's store is written
+        expect((await resumeIn(b.runs, s.runKey)).res).toBe('mine');
         expect(await a.handoff.takeBack()).toBe(false);
         expect(a.lost).toEqual(['carriedOn']);
         expect(a.meta.calls).toEqual([]);
@@ -365,7 +364,7 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
         const a = page(storage, mkLocks());
         const s = snapshot();
         a.handoff.store(s, 'pause');
-        a.handoff.flush();
+        a.runs.flush();
         expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(s.runKey);
       });
     });
@@ -401,7 +400,7 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
     a.handoff.store(s, 'pause');
     a.handoff.leaveStored();
     a.handoff.forget();
-    a.handoff.flush();
+    a.runs.flush();
     expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(s.runKey);
   });
 

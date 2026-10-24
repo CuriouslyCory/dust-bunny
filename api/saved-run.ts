@@ -4,7 +4,7 @@
  * key, the lease of whoever holds it now (a random id per device and take), and the snapshot while
  * it is stored (null while a device is playing it). A Run that ended (or was abandoned) keeps its
  * row, marked `ended_at`, until another Run is stored: GET shows none, and a late upload of it from
- * a device that fell behind is refused instead of storing it again. src/meta/accountRun.ts is the
+ * a device that fell behind is refused instead of storing it again. src/meta/savedRuns.ts is the
  * client.
  *
  *   GET    /api/saved-run  -> 200 { savedRun: ServerSavedRun | null }
