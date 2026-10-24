@@ -3,7 +3,7 @@ import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
 import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
-import { type KeyValueStorage, SAVE_KEY, type SaveStorageEvent } from './save';
+import { type KeyValueStorage, parseSave, SAVE_KEY, type SaveStorageEvent } from './save';
 
 const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map: Map<string, string> } => {
   const map = new Map(Object.entries(init));
@@ -202,6 +202,28 @@ describe('cloud save', () => {
     tabA.buy('fast_feet');
     await vi.advanceTimersByTimeAsync(150);
     expect(server.rows.get('u1')).toMatchObject({ fluff: 40, upgrades: { wide_choice: 1, fast_feet: 1 } });
+  });
+
+  it("doesn't adopt a refused upload's copy over progress another tab saved meanwhile", async () => {
+    const shared = memStorage();
+    const tabA = new MetaProgress(shared);
+    tabA.store.update((d) => Object.assign(d, { fluff: 100, stats: prog(100, 100, 2).stats }));
+    const server = fakeServer();
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch: server.fetch, storage: memStorage(), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.runAllTimersAsync();
+    server.rows.set('u1', prog(500, 500, 10)); // another device got further
+    const release = server.hold();
+    tabA.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150); // the upload is in flight
+    // Tab B ends a big Run before tab A has heard of it (its storage event not delivered yet).
+    new MetaProgress(shared).store.update((d) => Object.assign(d, { fluff: 900, stats: prog(900, 900, 20).stats }));
+    release();
+    await vi.runAllTimersAsync();
+    expect(parseSave(shared.map.get(SAVE_KEY)).data.stats.totalFluffEarned).toBe(900);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 900, stats: { totalFluffEarned: 900, runs: 20 } });
   });
 
   it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {

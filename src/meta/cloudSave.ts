@@ -134,15 +134,20 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
    * Replaces the synced fields of the local save (the store's listeners see it as one change).
    * `universes` keeps the larger count unless `replace` (another account's save is being loaded).
    * Without `loadouts` in `p` the device's Loadouts stay; either way they are repaired against the
-   * adopted Hoards.
+   * adopted Hoards. Returns false when the freshly read save (another tab wrote since the caller
+   * compared) has more progress than `p`: it is kept, still unsynced, for the next upload.
    */
-  function adopt(p: Progress, replace = false): void {
+  function adopt(p: Progress, replace = false): boolean {
     lastSynced = p;
-    const universes = replace ? p.universes : mergeUniverses(meta.data.universes, p.universes);
-    if (sameProgress(progressOf(meta.data), { ...p, universes })) return;
-    meta.store.update((d) => {
-      // Re-merged against the freshly read save (another tab may have ended a Universe).
-      d.universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
+    let kept = false;
+    meta.store.updateIf((d) => {
+      if (!replace && compareProgress(progressOf(d), p) > 0) {
+        kept = true;
+        return false;
+      }
+      const universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
+      if (sameProgress(progressOf(d), { ...p, universes })) return false;
+      d.universes = universes;
       d.fluff = p.fluff;
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
@@ -155,7 +160,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
         const repaired = repairLoadout(id, l, d.characters[id]);
         if (repaired.length) d.lastLoadout[id] = repaired;
       }
+      return true;
     });
+    return !kept;
   }
 
   /**
@@ -176,10 +183,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       // A Run ended while the refused request was in flight: local is ahead again, so send it.
       lastSynced = res.progress;
       schedule(debounceMs);
-    } else {
-      adopt(res.progress);
-      setDirty(false);
-    }
+    } else if (adopt(res.progress)) setDirty(false);
+    else schedule(debounceMs);
   }
 
   /** Runs sync steps one at a time; a failure marks the status and schedules a retry. */
@@ -219,10 +224,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       const order = compareProgress(local, remote);
       const unsynced = storageGet(CLOUD_DIRTY_KEY) === id && !sameProgress(local, remote);
       if (order > 0 || (order === 0 && unsynced)) await upload(local);
-      else {
-        adopt(remote);
-        setDirty(false);
-      }
+      else if (adopt(remote)) setDirty(false);
     }
     storageSet(CLOUD_USER_KEY, id);
     if (userId !== id) return;
