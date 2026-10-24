@@ -14,6 +14,11 @@
  * Browser modules add their own fields while the snapshot is taken (`runSuspending`): the Keepsake
  * tracker's rarity salt and drops, the leaderboard's run id (so reposting is idempotent).
  *
+ * `runKey` names the Run itself: generated once when it starts (`newRunKey`) and kept through every
+ * save and resume, so two saves of the same Run can be told from two different Runs (the saved Run
+ * slot credits a Run it replaces, src/meta/suspendedRun.ts). Snapshots saved before it existed get
+ * one on read (`legacyRunKey`).
+ *
  * `parseRunSnapshot` never throws: anything unreadable, from another version or with a field of
  * the wrong type is rejected (null) rather than half-restored.
  */
@@ -33,6 +38,8 @@ export interface RunSnapshot {
   version: typeof SNAPSHOT_VERSION;
   /** Wall-clock ms when it was saved (the title's "saved … ago"). */
   savedAt: number;
+  /** The Run's identity: the same for every save of one Run, different for any other Run. */
+  runKey: string;
   seed: string;
   characterId: string;
   difficulty?: DifficultyId;
@@ -88,6 +95,21 @@ export interface RunSnapshot {
   startArea?: AreaId;
 }
 
+/** A fresh Run identity (random, so two Runs on the same seed and Character still differ). */
+export function newRunKey(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * The identity of a snapshot saved before `runKey` existed: its leaderboard run id when it has one
+ * (random per Run), else its seed and Character. A Run resumed from it keeps this key.
+ */
+export function legacyRunKey(s: { leaderboardRunId?: string; seed: string; characterId: string }): string {
+  return s.leaderboardRunId ? `lb:${s.leaderboardRunId}` : `seed:${s.seed}:${s.characterId}`;
+}
+
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
@@ -121,6 +143,7 @@ export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
   if (!isObj(raw) || raw.version !== SNAPSHOT_VERSION) return null;
   const s = raw;
   if (!isNum(s.savedAt) || !isStr(s.seed) || !isStr(s.characterId) || !CHARACTERS.some((c) => c.id === s.characterId)) return null;
+  if (s.runKey !== undefined && !(isStr(s.runKey) && s.runKey.length > 0)) return null;
   if (s.difficulty !== undefined && !isDifficultyId(s.difficulty)) return null;
   if (!Array.isArray(s.modifiers) || !s.modifiers.every((m) => isObj(m) && isStr(m.stat) && (m.op === 'add' || m.op === 'mul') && isNum(m.value) && isStr(m.source))) return null;
   if (!Array.isArray(s.loadout) || !s.loadout.every(isRef)) return null;
@@ -143,5 +166,7 @@ export function parseRunSnapshot(raw: unknown): RunSnapshot | null {
   if (s.leaderboardRunId !== undefined && !isStr(s.leaderboardRunId)) return null;
   if (s.unranked !== undefined && typeof s.unranked !== 'boolean') return null;
   if (s.startArea !== undefined && !isArea(s.startArea)) return null;
-  return structuredClone(s) as unknown as RunSnapshot;
+  const out = structuredClone(s) as unknown as RunSnapshot;
+  out.runKey ??= legacyRunKey(out);
+  return out;
 }

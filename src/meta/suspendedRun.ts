@@ -2,7 +2,11 @@
  * The suspended Run (Save & quit) on this device: one slot in localStorage under
  * `dust-bunny:suspended-run:v1`, holding a `RunSnapshot` (src/game/snapshot.ts).
  *
- * - Save & quit writes it (`save`); Resume reads it and clears it as the Run starts again (`take`),
+ * - Save & quit writes it (`saveSuspendedRun`). There is one slot, so the last save wins it: a
+ *   different Run already there (saved from another tab or window) is credited as a quit first,
+ *   as New run would. Runs are told apart by `RunSnapshot.runKey`; saving the same Run again
+ *   credits nothing.
+ * - Resume reads it and clears it as the Run starts again (`take`),
  *   so a snapshot is resumed at most once: dying after a resume can't be undone by resuming again.
  * - Starting a new Run instead abandons it (`abandonSuspendedRun`): its Fluff and stats are
  *   credited as a quit. The title does it as soon as New run is confirmed; any other new Run start
@@ -96,6 +100,20 @@ let instance: SuspendedRunStore | null = null;
 export function getSuspendedRuns(): SuspendedRunStore {
   instance ??= new SuspendedRunStore(browserStorage());
   return instance;
+}
+
+/**
+ * Save & quit: stores `snapshot` in the slot. A different Run already there (saved from another
+ * tab or window) is replaced and counted as a quit, as New run would (its Fluff and stats
+ * credited); the same Run saved again (same `runKey`) credits nothing. True when a different Run
+ * was replaced.
+ */
+export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot, meta: Pick<MetaProgress, 'awardRun'>): boolean {
+  const prev = store.peek();
+  const replaced = !!prev && prev.runKey !== snapshot.runKey;
+  if (prev && replaced) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  store.save(snapshot);
+  return replaced;
 }
 
 /**

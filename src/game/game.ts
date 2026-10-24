@@ -44,7 +44,8 @@ import { storyAvailable } from '../story/index';
 import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
-import { getSuspendedRuns } from '../meta/suspendedRun';
+import { getMeta } from '../meta/meta';
+import { getSuspendedRuns, saveSuspendedRun } from '../meta/suspendedRun';
 import { RunView } from './runView';
 
 /** Seconds between the last Area's victory and the ending (the last absorb lands first). */
@@ -306,7 +307,8 @@ export class Game {
 
   /**
    * Save & quit: stores the Run in progress on this device (src/meta/suspendedRun.ts; listeners of
-   * `runSuspended` add their own fields first), disposes it without ending it (no runEnded, no
+   * `runSuspended` add their own fields first; a different Run already in the slot, saved from
+   * another tab, is credited as a quit), disposes it without ending it (no runEnded, no
    * Fluff yet) and returns to the title. False, changing nothing, without a Run in progress.
    */
   saveAndQuit(): boolean {
@@ -314,7 +316,7 @@ export class Game {
     if (!run || run.ended) return false;
     const snapshot = run.toSnapshot();
     this.events.emit('runSuspended', { snapshot });
-    getSuspendedRuns().save(snapshot);
+    saveSuspendedRun(getSuspendedRuns(), snapshot, getMeta());
     this.disposeRun();
     this.go('title');
     return true;

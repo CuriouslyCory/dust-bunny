@@ -41,7 +41,7 @@ import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/ty
 import { canonicalX } from '../world/wrap';
 import type { AreaStats, RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
-import { SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
+import { legacyRunKey, newRunKey, SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
 
 export interface RunConfig {
   seed: string;
@@ -108,6 +108,8 @@ const exitSystem: System = {
 
 export class Run {
   readonly rng: Rng;
+  /** The Run's identity (see ./snapshot.ts): new for a fresh Run, the saved one's when resumed. */
+  readonly runKey: string;
   /** Difficulty tuning for this Run (Hazards, director, start stats, area heal, Fluff). */
   readonly difficulty: DifficultyDef;
   /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped; `tuckIn` fills an open slot). */
@@ -189,6 +191,7 @@ export class Run {
     readonly config: RunConfig,
   ) {
     this.rng = new Rng(config.seed);
+    this.runKey = config.resume ? config.resume.runKey || legacyRunKey(config.resume) : newRunKey();
     this.difficulty = getDifficulty(config.difficulty);
     this.tucked = config.loadout && isLoadoutFor(config.characterId, config.loadout) ? config.loadout.map((k) => ({ ...k })) : [];
     this.house = generateHouse(config.seed);
@@ -505,6 +508,7 @@ export class Run {
     return {
       version: SNAPSHOT_VERSION,
       savedAt: Date.now(),
+      runKey: this.runKey,
       seed: this.config.seed,
       characterId: this.config.characterId,
       difficulty: this.difficulty.id,
