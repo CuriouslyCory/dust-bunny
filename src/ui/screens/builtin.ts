@@ -4,7 +4,10 @@
  * which asks once before abandoning the saved Run. A paused Run is stored too, so another tab's
  * title offers Resume run for it; the pausing tab then steps aside to the title with a notice
  * (`TitleParams.notice`, src/game/handoff.ts). Resume and New run take the slot under the saved
- * Run Web Lock (`withSavedRunLock`).
+ * Run Web Lock (`withSavedRunLock`). Signed in, the title first syncs the slot with the Account's
+ * saved Run (`AccountRuns.syncTitle`, src/meta/accountRun.ts), so a Run paused on another device is
+ * offered here ("from another device"); Resume and New run then wait for the server. A saved Run
+ * from a newer build is left alone, and the title says an update is needed to resume it.
  * Replace one by re-registering the same id before it is first shown. The title menu shows
  * Shop / Leaderboard buttons and the account chip (top right), and Play routes through
  * 'characterSelect' when that screen is registered. (A first Run opens on the story's 'intro'
@@ -100,14 +103,23 @@ export function registerBuiltinScreens(): void {
       const outOfDate = (): boolean => (saved.peek()?.runKey ?? null) !== shownKey;
       const onTitle = (): boolean => game.screens.current?.id === 'title';
       /** Resumes the Run on screen, under the lock (a paused tab may be taking it back right now). */
+      /** Waiting for the server (Resume or New run, signed in): further presses do nothing. */
+      let waiting = false;
       const resumeShown = (): void => {
         const key = shownKey;
-        if (key === null) return;
-        const take = (): boolean => onTitle() && resumeSuspendedRun(game, saved, getMeta(), key);
+        const shown = saved.peek();
+        if (key === null || waiting || !shown || shown.runKey !== key) return;
+        waiting = true;
+        // The Account's copy is taken on the server first (src/meta/accountRun.ts): of two devices, one gets it.
+        const take = (): Promise<string> => game.accountRuns.resume(shown, () => onTitle() && resumeSuspendedRun(game, saved, getMeta(), key));
         void withSavedRunLock(take)
           .catch(take)
-          .then((ok) => {
-            if (!ok && onTitle()) refresh();
+          .then((res) => {
+            waiting = false;
+            if (res !== 'mine' && onTitle()) {
+              refresh();
+              sync();
+            }
           });
       };
       const resume = button('Resume run', resumeShown, { variant: 'primary', size: 'lg', icon: '▶' });
@@ -128,12 +140,18 @@ export function registerBuiltinScreens(): void {
           playFromMenu(game);
           return;
         }
-        const abandon = (): boolean => onTitle() && abandonSuspendedRun(saved, getMeta(), key);
+        const shown = saved.peek();
+        if (waiting || !shown) return;
+        waiting = true;
+        const abandonLocal = (): boolean => onTitle() && abandonSuspendedRun(saved, getMeta(), key);
+        // The Account's copy is deleted first, only if no other device has taken it meanwhile.
+        const abandon = (): Promise<string> => game.accountRuns.abandon(shown, abandonLocal);
         void withSavedRunLock(abandon)
           .catch(abandon)
-          .then((ok) => {
+          .then((res) => {
+            waiting = false;
             if (!onTitle()) return;
-            if (ok) playFromMenu(game);
+            if (res === 'done') playFromMenu(game);
             else refresh(); // taken back (or replaced) meanwhile: show the slot as it is
           });
       };
@@ -149,7 +167,12 @@ export function registerBuiltinScreens(): void {
         shownKey = key;
         if (!s && savedRun.contains(document.activeElement)) play.focus();
         savedRun.hidden = !s;
-        resumeInfo.textContent = s ? savedRunSummary(s) : '';
+        const elsewhere = !!s && game.accountRuns.title.fromAccount === s.runKey;
+        resumeInfo.textContent = s ? savedRunSummary(s) + (elsewhere ? ' · from another device' : '') : '';
+        // A newer build's saved Run, here or on the Account: kept, but this build can't resume it.
+        const newer = saved.newer || game.accountRuns.title.newerOnAccount;
+        updateNote.hidden = !newer;
+        updateNote.textContent = newer ? 'A saved run from a newer version of the game is waiting. Reload the page to update, then resume it.' : '';
         playLabel.textContent = !s ? 'Play' : confirmNew ? 'Abandon saved run?' : 'New run';
         play.classList.toggle('btn-primary', !s);
         play.classList.toggle('primary', !s);
@@ -163,6 +186,17 @@ export function registerBuiltinScreens(): void {
       saved.onChange(() => {
         if (game.screens.current?.id === 'title') refresh();
       });
+      /** Signed in: brings the slot in line with the Account's saved Run, then shows it. */
+      const sync = (): void => {
+        if (!game.accountRuns.signedIn) return;
+        void game.accountRuns.syncTitle().then(() => {
+          if (onTitle()) refresh();
+        });
+      };
+      // Signing in (or switching Account) on the title shows that Account's saved Run.
+      game.accountRuns.onUser(() => {
+        if (onTitle()) sync();
+      });
       const shop = button('Shop', () => game.go('shop', { back: 'title' }), { icon: '🛍' });
       const board = button('Leaderboard', () => game.go('leaderboard'), { icon: '🏆' });
       const howTo = button('How to play', () => game.go('howToPlay', { back: 'title' }), { icon: '?' });
@@ -175,6 +209,8 @@ export function registerBuiltinScreens(): void {
       /** Why the Run on screen went away (a paused Run picked up in another window). */
       const notice = h('p', { className: 'title-notice' });
       notice.setAttribute('role', 'status');
+      const updateNote = h('p', { className: 'title-notice' });
+      updateNote.hidden = true;
       const el = h(
         'div',
         { className: 'title-screen' },
@@ -187,6 +223,7 @@ export function registerBuiltinScreens(): void {
           logo(),
           tagline,
           notice,
+          updateNote,
           menu(savedRun, play, secondary),
           hint,
         ),
@@ -204,6 +241,7 @@ export function registerBuiltinScreens(): void {
           confirmNew = false;
           refresh();
           focusFirst(el, saved.has ? resume : play);
+          sync();
         },
         onKey(e) {
           if (handleMenuKeys(e, el)) return true;

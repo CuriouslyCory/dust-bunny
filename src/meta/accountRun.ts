@@ -185,6 +185,10 @@ export class AccountRuns {
   private attempt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lostListeners = new Set<(runKey: string) => void>();
+  private userListeners = new Set<(userId: string | null) => void>();
+  /** Runs this page was told it lost (for `confirmHeld`). */
+  private lostKeys = new Set<string>();
+  private waiters: (() => void)[] = [];
   private readonly api: SavedRunApi;
   private readonly store: SuspendedRunStore;
   private readonly meta: Pick<MetaProgress, 'awardRun'>;
@@ -223,6 +227,13 @@ export class AccountRuns {
     this.timer = null;
     this.title = { fromAccount: null, newerOnAccount: false, offline: false };
     this.store.setViewer(userId);
+    for (const fn of this.userListeners) fn(userId);
+  }
+
+  /** Called when the signed-in Account changes (the title syncs again). */
+  onUser(fn: (userId: string | null) => void): () => void {
+    this.userListeners.add(fn);
+    return () => this.userListeners.delete(fn);
   }
 
   /** Called with the Run's key when the server says another device holds the Run this page has. */
@@ -236,6 +247,7 @@ export class AccountRuns {
   /** A new Run started on this page: it isn't on the server until it is first stored. */
   newRun(): void {
     this.live = null;
+    this.lostKeys.clear();
   }
 
   /**
@@ -276,6 +288,38 @@ export class AccountRuns {
     // One take at a time: a second unpause before the first is heard back from reuses its lease.
     if (live.leases.length === 1) live.leases.push(newHandoffId());
     this.queue({ kind: 'take', runKey });
+  }
+
+  /**
+   * Before this page ends (and credits) the Run it took back (End run, Quit to title from pause):
+   * waits until the server take is settled. False when another device holds the Run (`onLost` was
+   * called). True when it is this page's, signed out, or offline after `timeoutMs` (the device's
+   * word is then all there is).
+   */
+  async confirmHeld(runKey: string, timeoutMs = 6000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const live = this.live;
+      if (!this.userId || !live || live.runKey !== runKey) return !this.lostKeys.has(runKey);
+      const busy = this.ops.has(runKey) || this.inFlight?.runKey === runKey || live.leases.length > 1;
+      if (!busy || live.localOnly) return true;
+      const left = deadline - Date.now();
+      if (left <= 0) return true;
+      await new Promise<void>((resolve) => {
+        const t = setTimeout(done, left);
+        function done(): void {
+          clearTimeout(t);
+          resolve();
+        }
+        this.waiters.push(done);
+      });
+    }
+  }
+
+  private wake(): void {
+    const ws = this.waiters;
+    this.waiters = [];
+    for (const w of ws) w();
   }
 
   /** The Run ended on this page (`runEnded`): its row goes, if this page still holds it. */
@@ -469,6 +513,7 @@ export class AccountRuns {
       .finally(() => {
         this.inFlight = null;
         if (userId === this.userId) this.pump();
+        this.wake();
       });
   }
 
@@ -521,7 +566,9 @@ export class AccountRuns {
     this.ops.delete(runKey);
     const local = this.store.peek();
     if (local?.runKey === runKey && local.account && leases.includes(local.account.lease)) this.store.clear();
+    this.lostKeys.add(runKey);
     for (const fn of this.lostListeners) fn(runKey);
+    this.wake();
   }
 
   /** The page is going away: uploads still waiting go now, with `keepalive` (pagehide). */

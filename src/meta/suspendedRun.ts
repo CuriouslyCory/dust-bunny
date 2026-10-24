@@ -11,7 +11,12 @@
  * - Starting a new Run instead abandons it (`abandonSuspendedRun`): its Fluff and stats are
  *   credited as a quit. The title does it as soon as New run is confirmed; any other new Run start
  *   does it on runStarted.
- * - It stays on the device, like settings and the Loadout: cloud saves don't carry it.
+ * - Not signed in, it stays on the device. Signed in, the slot mirrors the Account's saved Run
+ *   (src/meta/accountRun.ts, api/saved-run.ts; docs/adr/0002): every copy written then is tagged
+ *   with the Account (`RunSnapshot.account`) and uploaded, and the title takes the server's copy
+ *   over the device's, so a Run paused on one device can be resumed on another. A copy tagged for
+ *   another Account (or any, signed out) reads as empty (`setViewer`): it is never offered,
+ *   credited or taken here.
  * - Every tab shares the slot. The browser singleton hears other tabs' writes through `storage`
  *   events (`watchSuspendedRunStorage`) and tells its `onChange` listeners, marked `external`, so
  *   an open title shows the saved Run as it is. Resume and New run name the Run the screen showed
@@ -20,7 +25,10 @@
  *   (`storePausedRun`); unpausing takes it back only while the slot still holds that id
  *   (`takeBackPausedRun`). Until then any other tab may pick it up with Resume run, and the
  *   pausing page steps aside (src/game/handoff.ts). Takes run under a Web Lock (`withSavedRunLock`).
- * - An unreadable or outdated slot reads as empty (`parseRunSnapshot`) and is dropped.
+ * - An older snapshot is migrated as it is read (`parseRunSnapshot`). One from a newer build reads
+ *   as empty and is never overwritten or deleted (docs/adr/0001): this page keeps its own writes
+ *   in memory instead, and the title says an update is needed (`newer`). Anything else unreadable
+ *   reads as empty.
  */
 import type { Game } from '../game/game';
 import { isNewerSnapshot, parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
@@ -64,6 +72,17 @@ export class SuspendedRunStore {
     }
   }
 
+  /** What storage itself holds is a newer build's saved Run (whatever this page serves from memory). */
+  private storageHoldsNewer(): boolean {
+    if (!this.storage) return false;
+    try {
+      const raw = this.storage.getItem(SUSPENDED_RUN_KEY);
+      return !!raw && isNewerSnapshot(JSON.parse(raw));
+    } catch {
+      return false;
+    }
+  }
+
   /** The slot holds a saved Run from a newer build: kept as it is, unread (docs/adr/0001). */
   get newer(): boolean {
     return isNewerSnapshot(this.parsed());
@@ -81,7 +100,7 @@ export class SuspendedRunStore {
   private write(value: string | null): void {
     // A newer build's saved Run is never deleted or overwritten here: this page keeps its own copy
     // in memory instead, as when storage is full.
-    if (this.storage && !this.stale && this.newer) {
+    if (this.storageHoldsNewer()) {
       this.memory = value;
       this.stale = true;
       this.emit({ external: false });
