@@ -89,16 +89,33 @@ export function registerBuiltinScreens(): void {
       const saved = getSuspendedRuns();
       /** "New run" was pressed once while a Run is saved: the next press abandons it. */
       let confirmNew = false;
-      const resume = button('Resume run', () => resumeSuspendedRun(game, saved, getMeta()), { variant: 'primary', size: 'lg', icon: '▶' });
+      /**
+       * The `runKey` of the saved Run on screen (null: none shown). Resume and New run only act on
+       * that Run: if another tab has changed the slot since, they show the slot as it is instead.
+       */
+      let shownKey: string | null = null;
+      const outOfDate = (): boolean => (saved.peek()?.runKey ?? null) !== shownKey;
+      const resumeShown = (): boolean => shownKey !== null && resumeSuspendedRun(game, saved, getMeta(), shownKey);
+      const resume = button(
+        'Resume run',
+        () => {
+          if (!resumeShown()) refresh();
+        },
+        { variant: 'primary', size: 'lg', icon: '▶' },
+      );
       const resumeInfo = h('p', { className: 'saved-run-info' });
       const startNew = (): void => {
-        if (saved.has && !confirmNew) {
+        if (outOfDate()) {
+          refresh();
+          return;
+        }
+        if (shownKey !== null && !confirmNew) {
           confirmNew = true;
           refresh();
           return;
         }
         // Confirmed: the saved Run is gone now (a quit), even if Character select is left with Back.
-        abandonSuspendedRun(saved, getMeta());
+        if (shownKey !== null) abandonSuspendedRun(saved, getMeta(), shownKey);
         playFromMenu(game);
       };
       const play = button('Play', startNew, { variant: 'primary', size: 'lg', icon: '▶' });
@@ -107,9 +124,13 @@ export function registerBuiltinScreens(): void {
       /** Resume first while a Run is saved; Play becomes "New run" (asking before it abandons the saved one). */
       const refresh = (): void => {
         const s = saved.peek();
+        const key = s?.runKey ?? null;
+        // A different Run (or none) now: "Abandon saved run?" was about the one that was shown.
+        if (!s || key !== shownKey) confirmNew = false;
+        shownKey = key;
+        if (!s && savedRun.contains(document.activeElement)) play.focus();
         savedRun.hidden = !s;
         resumeInfo.textContent = s ? savedRunSummary(s) : '';
-        if (!s) confirmNew = false;
         playLabel.textContent = !s ? 'Play' : confirmNew ? 'Abandon saved run?' : 'New run';
         play.classList.toggle('btn-primary', !s);
         play.classList.toggle('primary', !s);
@@ -119,6 +140,7 @@ export function registerBuiltinScreens(): void {
         play.classList.toggle('btn-md', !!s);
         hint.textContent = !s ? 'Enter to play · WASD / arrows to roll · Space to dash' : confirmNew ? 'Press New run again to give up the saved run (it counts as quit)' : 'Enter to resume · WASD / arrows to roll · Space to dash';
       };
+      // Also fires for other tabs' Save & quit, Resume and New run (storage events), so the title stays current.
       saved.onChange(() => {
         if (game.screens.current?.id === 'title') refresh();
       });
@@ -160,7 +182,10 @@ export function registerBuiltinScreens(): void {
         onKey(e) {
           if (handleMenuKeys(e, el)) return true;
           if (isKey(e, 'Enter', 'Space') && !focusOnControl()) {
-            if (!resumeSuspendedRun(game, saved, getMeta())) playFromMenu(game);
+            // Only what the screen shows: a Run saved (or taken) by another tab since is shown first.
+            if (outOfDate()) refresh();
+            else if (shownKey === null) playFromMenu(game);
+            else if (!resumeShown()) refresh();
             return true;
           }
           return false;
