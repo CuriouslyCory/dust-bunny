@@ -11,7 +11,8 @@
  * Optional per-stat caps (a Character's `caps`) form a stage at `capPriority` (CAP_PRIORITY,
  * 250): modifiers below it (base + Shop + Keepsakes + Perks) are clamped to the cap, modifiers at
  * or above it (TIMED_PRIORITY: Pickups, Hazard slows, Ability-state effects) apply on top. The
- * global STAT_LIMITS clamp comes last.
+ * global STAT_LIMITS clamp comes last. `setCapBonus` raises a `max` cap at runtime (Lint's
+ * Well-Rounded) without granting the stat; `cap` and `atCap` read the raised cap.
  */
 
 export interface BunnyStatValues {
@@ -182,23 +183,46 @@ export class StatBlock {
   private mods: ActiveModifier[] = [];
   private nextHandle = 1;
   private cache: BunnyStatValues | null = null;
+  /** Added to each stat's `max` cap (setCapBonus). */
+  private readonly capBonus: Partial<Record<StatKey, number>> = {};
+  /** options.caps with capBonus applied (rebuilt when a bonus changes). */
+  private caps: StatCaps | undefined;
   /** Called whenever the computed values change. */
   onChange: ((values: Readonly<BunnyStatValues>) => void) | null = null;
 
   constructor(
     private base: BunnyStatValues,
     private readonly options: StatOptions = {},
-  ) {}
+  ) {
+    this.caps = options.caps;
+  }
 
   /** Computed values (cached until modifiers change). */
   get values(): Readonly<BunnyStatValues> {
-    if (!this.cache) this.cache = computeStats(this.base, this.mods, this.options);
+    if (!this.cache) this.cache = computeStats(this.base, this.mods, { ...this.options, caps: this.caps });
     return this.cache;
   }
 
-  /** The cap on a stat, if any. */
+  /** The cap on a stat, if any (a `max` cap includes its setCapBonus). */
   cap(key: StatKey): Readonly<StatCapRange> | undefined {
-    return this.options.caps?.[key];
+    return this.caps?.[key];
+  }
+
+  /**
+   * Raises the stat's `max` cap by `bonus` (replacing any earlier bonus; 0 removes it). It grants
+   * nothing by itself: only modifiers already past the old cap get through. No effect on floors
+   * or on stats without a `max` cap.
+   */
+  setCapBonus(key: StatKey, bonus: number): void {
+    if ((this.capBonus[key] ?? 0) === bonus) return;
+    this.capBonus[key] = bonus;
+    const caps: StatCaps = { ...this.options.caps };
+    for (const k of Object.keys(this.capBonus) as StatKey[]) {
+      const c = caps[k];
+      if (c?.max !== undefined) caps[k] = { ...c, max: c.max + (this.capBonus[k] ?? 0) };
+    }
+    this.caps = this.options.caps ? caps : undefined;
+    this.invalidate();
   }
 
   /**
@@ -206,7 +230,7 @@ export class StatBlock {
    * `max` cap: at or above; a `min` floor: at or below). Timed effects don't count.
    */
   atCap(key: StatKey): boolean {
-    const cap = this.options.caps?.[key];
+    const cap = this.caps?.[key];
     if (!cap) return false;
     const v = preCapValues(this.base, sortModifiers(this.mods), this.options.capPriority ?? DEFAULT_CAP_PRIORITY)[key];
     const eps = 1e-9;
