@@ -493,7 +493,7 @@ describe('the Sun', () => {
     boss.z = b.z;
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:the_sun', 'exitOpened:solar_system']);
-    expect(run.solarSystemCleared).toBe(true);
+    expect(run.isAreaCleared('solar_system')).toBe(true);
     expect(run.house.exit?.open).toBe(true);
     expect(run.ended).toBe(false);
     expect(run.canLeaveArea).toBe(true);

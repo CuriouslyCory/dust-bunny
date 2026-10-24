@@ -126,7 +126,7 @@ describe('city Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:garbage_truck', 'exitOpened:city']);
     expect(run.ended).toBe(false);
-    expect(run.cityCleared).toBe(true);
+    expect(run.isAreaCleared('city')).toBe(true);
     expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_scrubber')).toBe(0);
   });

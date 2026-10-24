@@ -347,7 +347,7 @@ describe('region Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:incinerator', 'exitOpened:region']);
     expect(run.ended).toBe(false);
-    expect(run.regionCleared).toBe(true);
+    expect(run.isAreaCleared('region')).toBe(true);
     expect(run.house.exit).toMatchObject({ open: true, dir: { x: -1, z: 0 } });
     expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_compactor')).toBe(0);

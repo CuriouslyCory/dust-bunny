@@ -115,7 +115,7 @@ describe('outdoor Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:street_sweeper', 'exitOpened:neighborhood']);
     expect(run.ended).toBe(false);
-    expect(run.neighborhoodCleared).toBe(true);
+    expect(run.isAreaCleared('neighborhood')).toBe(true);
     expect(run.house.exit?.open).toBe(true);
     expect(run.hazards.count('mini_mower')).toBe(0);
     // Rolling into the opened barrier moves the Run to the city.

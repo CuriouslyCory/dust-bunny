@@ -549,6 +549,6 @@ describe('the Orbital Sweeper', () => {
     expect(order).toEqual(['bossDefeated:orbital_sweeper', 'exitOpened:globe']);
     expect(run.ended).toBe(false);
     expect(run.house.exit?.open).toBe(true);
-    expect(run.globeCleared).toBe(true);
+    expect(run.isAreaCleared('globe')).toBe(true);
   });
 });

@@ -95,7 +95,7 @@ describe('difficulty in a Run', () => {
     ] as const) {
       const run = makeRun(difficulty, 'tumble');
       run.bunny.health = 2;
-      run.enterNeighborhood();
+      run.enterArea('neighborhood');
       expect(run.bunny.health).toBe(2 + healed);
     }
   });

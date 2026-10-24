@@ -480,7 +480,7 @@ describe('the Ice Sheet', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:ice_sheet', 'exitOpened:continent']);
     expect(run.ended).toBe(false);
-    expect(run.continentCleared).toBe(true);
+    expect(run.isAreaCleared('continent')).toBe(true);
     expect(run.house.exit?.open).toBe(true);
     expect(run.canLeaveArea).toBe(true);
   });

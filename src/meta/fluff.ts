@@ -1,8 +1,10 @@
 /** Fluff (meta currency) earned per Run. Formula from docs/design.md. */
 import { AREAS } from "../data/areas";
 import { getDifficulty } from "../data/difficulty";
+import { AreaProgress, type ClearedFlag } from "../game/areaProgress";
 import type { RunEndReason } from "../game/runStats";
 import type { CreditStats } from "../shared/runCredit";
+import type { AreaId } from "../world/types";
 
 export const VICTORY_FLUFF_MULTIPLIER = 1.75;
 /** Runs that beat the Robo-Vac 9000 (house cleared) but did not win. */
@@ -22,23 +24,40 @@ export const SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER = 1.65;
 /** Runs that also beat Sagittarius A* (made it to the universe) but did not win. */
 export const GALAXY_CLEARED_FLUFF_MULTIPLIER = 1.7;
 
+/**
+ * Multiplier for a Run whose furthest cleared Area is this one but that did not win. Null for the
+ * last Area: clearing it wins the Run (`VICTORY_FLUFF_MULTIPLIER`).
+ */
+export const CLEARED_FLUFF_MULTIPLIERS: Readonly<Record<AreaId, number | null>> = {
+  house: HOUSE_CLEARED_FLUFF_MULTIPLIER,
+  neighborhood: NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER,
+  city: CITY_CLEARED_FLUFF_MULTIPLIER,
+  region: REGION_CLEARED_FLUFF_MULTIPLIER,
+  continent: CONTINENT_CLEARED_FLUFF_MULTIPLIER,
+  globe: GLOBE_CLEARED_FLUFF_MULTIPLIER,
+  solar_system: SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER,
+  galaxy: GALAXY_CLEARED_FLUFF_MULTIPLIER,
+  universe: null,
+};
+
 /** What the formula reads: a full `RunStats`, or a ledger row's bounded `CreditStats` (docs/adr/0003). */
 type FluffStats = Pick<
   CreditStats,
-  | "maxRadius"
-  | "debrisAbsorbed"
-  | "tierReached"
-  | "difficulty"
-  | "areas"
-  | "houseCleared"
-  | "neighborhoodCleared"
-  | "cityCleared"
-  | "regionCleared"
-  | "continentCleared"
-  | "globeCleared"
-  | "solarSystemCleared"
-  | "galaxyCleared"
+  "maxRadius" | "debrisAbsorbed" | "tierReached" | "difficulty" | "areas" | ClearedFlag
 >;
+
+/**
+ * The furthest Area a Run that did not win cleared and its Fluff multiplier
+ * (`CLEARED_FLUFF_MULTIPLIERS`); null when it cleared none.
+ */
+export function clearedFluffBonus(
+  stats: Partial<Record<ClearedFlag, boolean>>,
+): { area: AreaId; multiplier: number } | null {
+  const area = AreaProgress.fromFlags(stats).furthestCleared(
+    (a) => CLEARED_FLUFF_MULTIPLIERS[a] !== null,
+  );
+  return area ? { area, multiplier: CLEARED_FLUFF_MULTIPLIERS[area]! } : null;
+}
 
 /**
  * Radius term: each Area's growth in its own unit × `AREAS[area].fluffPerUnit` (House 1/30 per
@@ -61,8 +80,8 @@ export function fluffRadiusTerm(
 
 /**
  * floor((tierReached × 4 + radius term + debrisAbsorbed / 1000) × multiplier × difficulty):
- * multiplier 1.75 on victory, 1.7 if the galaxy was cleared, 1.65 if the solar system was cleared, 1.6 if the globe was cleared, 1.55 if the continent was cleared, 1.5 if the region was cleared, 1.45 if the city was cleared, 1.35 if
- * the neighborhood was cleared, 1.25 if the house was cleared; difficulty 1 on Casual, 2 on Arcade, 5 on Hardcore
+ * multiplier 1.75 on victory, otherwise the furthest cleared Area's (`CLEARED_FLUFF_MULTIPLIERS`:
+ * 1.25 for the house up to 1.7 for the galaxy; 1 when none was cleared); difficulty 1 on Casual, 2 on Arcade, 5 on Hardcore
  * (`DifficultyDef.fluff`). Tier reached is the main term, so a Casual win pays about 100 and a
  * Hardcore win about 500.
  */
@@ -74,23 +93,7 @@ export function fluffForRun(reason: RunEndReason, stats: FluffStats): number {
   const mult =
     reason === "victory"
       ? VICTORY_FLUFF_MULTIPLIER
-      : stats.galaxyCleared
-        ? GALAXY_CLEARED_FLUFF_MULTIPLIER
-      : stats.solarSystemCleared
-        ? SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER
-        : stats.globeCleared
-        ? GLOBE_CLEARED_FLUFF_MULTIPLIER
-        : stats.continentCleared
-        ? CONTINENT_CLEARED_FLUFF_MULTIPLIER
-        : stats.regionCleared
-          ? REGION_CLEARED_FLUFF_MULTIPLIER
-          : stats.cityCleared
-            ? CITY_CLEARED_FLUFF_MULTIPLIER
-            : stats.neighborhoodCleared
-              ? NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER
-              : stats.houseCleared
-                ? HOUSE_CLEARED_FLUFF_MULTIPLIER
-                : 1;
+      : (clearedFluffBonus(stats)?.multiplier ?? 1);
   return Math.max(
     0,
     Math.floor(base * mult * getDifficulty(stats.difficulty).fluff),

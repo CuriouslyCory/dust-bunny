@@ -150,7 +150,7 @@ describe('absorbing Hazards', () => {
     expect(hits).toEqual(['1/3', '2/3', '3/3']);
     expect(boss.dead).toBe(true);
     expect(order).toEqual(['absorbed:robovac_9000', 'bossDefeated', 'exitOpened']);
-    expect(run.houseCleared).toBe(true);
+    expect(run.isAreaCleared('house')).toBe(true);
     expect(b.radius).toBeGreaterThan(40);
   });
 
@@ -236,7 +236,7 @@ describe('absorbing Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated', 'exitOpened']);
     expect(run.ended).toBe(false);
-    expect(run.houseCleared).toBe(true);
+    expect(run.isAreaCleared('house')).toBe(true);
     expect(run.house.obstacles.some((o) => o.id === run.house.exit!.obstacleId)).toBe(false);
 
     // Rolling into the open doorway leaves the house.

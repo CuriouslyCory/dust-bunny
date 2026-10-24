@@ -350,7 +350,7 @@ URL params: `?debug`, `?seed=<string>` (same seed → same house, neighborhood, 
 
 With `?debug`:
 - `window.__game`: the `Game` (`.run`, `.view`, `.events`, `.loop`, `.screens`…).
-- `window.__game.debugTools`: `grow(factor)`, `setRadius(r)`, `nextTier()`, `setTimeScale(s)`, `advance(seconds)` (simulates immediately), `openExit()`, `enterNeighborhood()`, `enterCity()`, `enterRegion()`, `enterContinent()`, `enterGlobe()`, `enterSolarSystem()`, `enterGalaxy()`, `enterUniverse()`, `setBunnyForm('dust' | 'black_hole')`, `nextArea()`, `playEnding(from?)` (ends the Run as a victory without `runEnded`, so nothing is saved, and plays the ending from shot `from`, then the results; the screen's `data-shot` / `data-t` say where it is), `spawnHazard(id)` (`setRadius` takes world units, `nextTier` converts).
+- `window.__game.debugTools`: `grow(factor)`, `setRadius(r)`, `nextTier()`, `setTimeScale(s)`, `advance(seconds)` (simulates immediately), `openExit()`, `enterArea(area)` (a later Area by id: `'city'`, `'universe'`, …), `setBunnyForm('dust' | 'black_hole')`, `nextArea()`, `playEnding(from?)` (ends the Run as a victory without `runEnded`, so nothing is saved, and plays the ending from shot `from`, then the results; the screen's `data-shot` / `data-t` say where it is), `spawnHazard(id)` (`setRadius` takes world units, `nextTier` converts).
 - Keys: `E` (or the right mouse button) uses the Ability, `G` grows the radius ×1.25 (`Shift+G` shrinks it), `T` jumps to the next Tier, `N` clears the current area and rolls on to the next, `]` / `[` doubles / halves sim speed.
 - The HUD bottom-left shows fps, draw calls, Debris count, and radius.
 

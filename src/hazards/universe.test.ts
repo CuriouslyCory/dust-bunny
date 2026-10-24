@@ -612,6 +612,6 @@ describe('the Expansion', () => {
     expect(boss.crunched).toBeGreaterThan(inView * 0.8);
     expect(run.debris.query(p.x, p.z, viewR * 0.5).length).toBe(0);
     expect(b.radius).toBeLessThan(r0 * 1.05);
-    expect(run.universeCleared).toBe(true);
+    expect(run.isAreaCleared('universe')).toBe(true);
   });
 });
