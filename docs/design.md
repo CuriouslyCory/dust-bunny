@@ -413,7 +413,7 @@ Each Character has a distinct colour and fur look.
 
 ### Abilities
 
-Every Character has its own Ability from the first Run (E, the right mouse button or the touch Ability button). An Ability can stun a boss at most once every 6 s, and landing a hit on a boss always needs contact. Only Keepsakes change how an Ability works; Perks and Shop Upgrades change the Character's stats within its caps.
+Every Character has its own Ability from the first Run (E, the right mouse button or the touch Ability button). An Ability can stun a boss at most once every 6 s, and landing a hit on a boss always needs contact. Keepsakes and Character Perks change how an Ability works; shared Perks and Shop Upgrades change the Character's stats within its caps.
 
 - **Decoy** (Lint, tap): a lint ball that Hazards aim at; a Hazard that touches it clogs.
 - **Amass** (Tumble, hold up to 2 s; cooldown 5 s + 3.5 s per second held, so a tap costs 5 s and a full hold 12 s): Tumble compacts its core into a gravity well.
@@ -441,6 +441,28 @@ Hazard speed covers every movement: patrols, boss hunts and charges, Broom sweep
 **Pickups (temporary, timed, glowing on the floor):** Static Charge (magnet pull, 10 s), Sugar Rush (+50 % speed, 8 s), Bubble Wrap (blocks one hit; stacks up to 3 charges), Glue Dab (×2 growth, 10 s), Crumb Cake (heal 1), Dust Cloud (Hazards ignore you, 6 s).
 
 **Perks (per Run, draft 1 of 3 at each Tier-up):** Thick Fur (+1 max health and heal), Aerodynamic (+10 % speed), Sticky Fibers (+0.05 absorb ratio), Static Field (small permanent magnet), Second Wind (revive once), Quick Dash (−30 % dash cooldown), Hoarder (+40 % Pickup duration), Slippery (25 % chance to dodge damage), Glutton (+15 % growth), Lucky Find (more Pickups), Regrowth (heal 1 every 45 s), Spiky Dash (dashing into a Hazard stuns it instead of hurting you). Perks may stack unless marked unique.
+
+**Character Perks:** each Character has five more Perks that only its drafts offer, mixed in with the shared ones. Every non-unique one has three stacks. Numbers live in `CHARACTER_PERK_EFFECTS` (`src/data/perks.ts`); r is the Bunny's radius.
+
+| Character | Perk | Stacks | Effect |
+|---|---|---:|---|
+| Lint | Well-Rounded | 3 | Each stack raises Lint's caps: speed +0.1, health +1, magnet +0.25, knockback resistance +0.1. Grants none of those stats. |
+| Lint | Smother | Unique | Touching a clogged non-boss Hazard up to 1.1× Lint's absorb limit absorbs it. |
+| Lint | Loose Threads | 3 | When a clog ends, the Hazard (bosses too) drops 1 / 2 / 3 absorbable fibre pieces (0.35 r), once per clog. |
+| Lint | Lint Trail | 3 | A Dash lays a fluff streak (1 r wide) that lasts 2 s after the Dash ends. The first non-boss Hazard to cross it is clogged for 0.6 / 0.8 / 1.0 s and the streak is used up. |
+| Lint | Unnoticed | 3 | After a clog ends, that non-boss Hazard ignores Lint for 1.5 / 2.0 / 2.5 s: it can't aim at Lint, chase it or hurt it by contact. Suction still pulls. |
+| Tumble | Snowballing | 3 | +0.1 acceleration per stack (0.7 → 1.0). Top speed unchanged. |
+| Tumble | Matted Coat | 3 | A fur shield blocks one hit and its knockback (before Bubble Wrap), then recharges after 20 / 15 / 10 s without damage. |
+| Tumble | Shedding | 3 | Each heart lost drops 2 / 3 / 4 absorbable hair clumps, each worth 0.5% of Tumble's volume. Tumble doesn't shrink for them. |
+| Tumble | Heavy Pull | 3 | While Amassing, magnet +1 / +2 / +3 r, within Tumble's magnet cap (0.75). |
+| Tumble | Heavy Landing | 3 | Ending a Dash sends a shockwave reaching 1.5 / 2.0 / 2.5 r from Tumble's surface that stuns non-boss Hazards for 0.6 / 0.8 / 1.0 s. |
+| Zap | Emergency Discharge | 3 | With a full meter, a hit from any source is negated and the whole meter spent: non-boss Hazards within 2 / 3 / 4 r are stunned 1 s, bosses 0.5 s (within the 6 s limit). Cooldown 6 / 5 / 4 s. |
+| Zap | Hyper Charge | 3 | Dashing fills the Static meter 3× / 4× / 5× (base 2×). |
+| Zap | Thunderstruck | 3 | Each non-boss Hazard destroyed by Discharge (Arc included) leaves a 3 s static patch of 1 / 1.5 / 2 r. A non-boss Hazard in it is stunned 0.8 s, once per patch. |
+| Zap | Recharge Snack | 3 | Each piece of Discharge scrap absorbed refunds 4 / 7 / 10% of the meter, up to 50% per Discharge. |
+| Zap | Capacitor | 3 | The meter only drains after 2 / 3 / 4 s below 20% of max speed. |
+
+A clog is a Hazard stunned by the Decoy or by Lint Trail; Lint's clog Perks act when it ends.
 
 **Upgrades (permanent, bought with Fluff in the Shop, saved in localStorage):** Extra Heart (+1 starting health, 2 levels), Fast Feet (+5 % speed, 3 levels), Head Start (+10 % starting radius, 3 levels), Wide Choice (4 Perk options instead of 3, 1 level), Magnetism (base magnet radius, 2 levels), Reroll (one Perk reroll per Run, 1 level), Pickup Luck (+Pickup spawn rate, 2 levels).
 
