@@ -11,7 +11,8 @@
  * Every write runs under the saved Run Web Lock (`withSavedRunLock`), in request order, so a store
  * and a later take back can't be overtaken by another tab's take. A store still waiting for the
  * lock when the page goes away is written at once by `flush()` (pagehide), so closing a paused tab
- * keeps its Run.
+ * keeps its Run. That unlocked write is best effort, for the page going away only: Save & quit
+ * lets go of a store still waiting and leaves it to be written under the lock.
  */
 import type { MetaProgress } from '../meta/meta';
 import {
@@ -51,6 +52,8 @@ interface Held {
 
 export class RunHandoff {
   private held: Held | null = null;
+  /** Let go of by Save & quit while still waiting for the lock: written under it all the same. */
+  private released: Held | null = null;
   private taking: Promise<boolean> | null = null;
   private readonly slot: SuspendedRunStore;
   private readonly meta: Pick<MetaProgress, 'awardRun'>;
@@ -100,14 +103,16 @@ export class RunHandoff {
   }
 
   private write(held: Held): void {
-    if (!held.pending || this.held !== held) return;
+    if (!held.pending || (this.held !== held && this.released !== held)) return;
     const snapshot = held.pending;
     held.pending = null;
+    if (this.released === held) this.released = null;
     storePausedRun(this.slot, snapshot, held.handoffId, this.meta);
   }
 
   /** The page is going away: writes a store still waiting for the lock now (pagehide). */
   flush(): void {
+    if (this.released) this.write(this.released);
     if (this.held) this.write(this.held);
   }
 
@@ -164,11 +169,13 @@ export class RunHandoff {
 
   /**
    * Save & quit from pause: the Run stays in the slot as an ordinary saved Run, and this page lets
-   * go of it. Returns why it already isn't this page's (null: it is, or none was held).
+   * go of it. Returns why it already isn't this page's (null: it is, none was held, or its store is
+   * still waiting for the lock: it is written under the lock as queued, not here outside it).
    */
   leaveStored(): HandoffLoss | null {
-    this.flush();
+    const h = this.held;
     const st = this.state();
+    if (h?.pending) this.released = h;
     this.held = null;
     return st === null || st === 'mine' ? null : st;
   }
