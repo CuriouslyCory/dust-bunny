@@ -23,7 +23,7 @@ import { CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_MAX, type Ru
 import { MAX_SAVED_RUN_BYTES, SNAPSHOT_VERSION } from '../src/shared/savedRun';
 import { authOptions, resetAuthForTests } from './auth';
 import { ensureSchema, query, resetDbForTests } from './db';
-import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './runCredits';
+import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './accountRuns';
 import { SCHEMA_PROBE } from './schema';
 
 const DB = process.env.TEST_DATABASE_URL;
@@ -525,7 +525,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       expect(first.status).toBe(200);
       expect(first.body.created).toBe(true);
       expect(first.body.credit).toMatchObject({ runKey: 'run-1', reason: 'died', stats });
-      expect((first.body.credit!.stats as Record<string, unknown>).seed).toBeUndefined();
+      expect((first.body.credit!.stats as unknown as Record<string, unknown>).seed).toBeUndefined();
       // The row is ended: a take or an upload of the Run is refused, GET shows none.
       expect((await savedRun(cookie, 'POST', { runKey: 'run-1', lease: 'a1', newLease: 'c1' })).status).toBe(409);
       const late = await savedRun(cookie, 'PUT', { runKey: 'run-1', lease: 'a1', snapshot: snap('run-1') });
