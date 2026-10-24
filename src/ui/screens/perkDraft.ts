@@ -4,6 +4,7 @@
  * `perkChoices` with keys 1–4, mouse or touch; R or the Reroll button rerolls if the Reroll
  * Upgrade is owned. Several Tier-ups queue several drafts; the modal closes once none are left.
  */
+import { getCharacter } from '../../data/characters';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { captions, narrate } from '../../story';
@@ -62,15 +63,19 @@ export function registerPerkDraftScreen(): void {
           ...perks.map((p, i) => {
             const stacks = run.perkStacks(p.id);
             const tag = p.unique ? 'Unique' : stacks > 0 ? `Owned ×${stacks}` : p.maxStacks ? `Stacks ×${p.maxStacks}` : 'Stackable';
+            // A Character Perk names its Character and wears its fur colour.
+            const owner = p.character ? getCharacter(p.character) : null;
             const card = h(
               'button',
-              { className: 'perk-card', type: 'button' },
+              { className: owner ? 'perk-card perk-card-character' : 'perk-card', type: 'button' },
+              ...(owner ? [h('span', { className: 'perk-owner', textContent: `${owner.name} only` })] : []),
               h('span', { className: 'perk-key', textContent: String(i + 1) }),
               h('span', { className: 'perk-icon', textContent: p.icon ?? '✦' }),
               h('span', { className: 'perk-name', textContent: p.name }),
               h('span', { className: 'perk-desc', textContent: p.description }),
               h('span', { className: 'perk-tag', textContent: tag }),
             );
+            if (owner) card.style.setProperty('--perk-owner', owner.color);
             card.onclick = () => {
               // The serial and Run check make a stale card (older offer, replaced Run) a no-op.
               if (armed <= 0 && game.run?.perkDraft === draft && draft.choose(p.id, serial)) sync();
