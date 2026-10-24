@@ -19,6 +19,7 @@ import type { InputState } from '../core/input';
 import type { Rng } from '../core/rng';
 import { getAbility, type AbilityData, type AbilityId } from '../data/abilities';
 import { getCharacter } from '../data/characters';
+import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import type { Hazard } from '../hazards';
@@ -72,6 +73,8 @@ export interface AbilityHooks {
   bossStunned?(run: Run, boss: RoboVac9000, cause: BossStunCause, seconds: number): void;
   /** A Discharge hit these Hazards (first target first). */
   discharged?(run: Run, targets: readonly Hazard[]): void;
+  /** The scrap one Discharge left (every target's pieces) (Recharge Snack). */
+  dischargeScrap?(run: Run, pieces: readonly Debris[]): void;
 }
 
 export type ControllerFactory = (system: AbilitySystem) => AbilityController;

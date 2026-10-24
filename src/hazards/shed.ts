@@ -5,6 +5,7 @@
  */
 import type { Rng } from '../core/rng';
 import type { DebrisType } from '../data/debris';
+import type { Debris } from '../entities/debris';
 import { TUNING } from '../data/tuning';
 import type { Run } from '../game/run';
 import type { AreaId } from '../world/types';
@@ -65,17 +66,23 @@ export function pickShedType(types: readonly DebrisType[], size: number, tier: n
 
 /** Scatters `count` Debris of about `size` in a ring [inner, outer] around (x, z). Returns how many landed. */
 export function scatterDebris(run: Run, rng: Rng, x: number, z: number, count: number, size: number, inner: number, outer: number, type = pickShedType(run.debris.types, size, run.tier, run.area)): number {
-  if (!type || count <= 0 || size <= 0) return 0;
+  return scatterDebrisPieces(run, rng, x, z, count, size, inner, outer, type).length;
+}
+
+/** scatterDebris, returning the Debris that landed (Recharge Snack tags Discharge scrap). */
+export function scatterDebrisPieces(run: Run, rng: Rng, x: number, z: number, count: number, size: number, inner: number, outer: number, type = pickShedType(run.debris.types, size, run.tier, run.area)): Debris[] {
+  const placed: Debris[] = [];
+  if (!type || count <= 0 || size <= 0) return placed;
   const index = run.debris.types.indexOf(type);
-  let placed = 0;
-  for (let tries = 0; placed < count && tries < count * 8; tries++) {
+  for (let tries = 0; placed.length < count && tries < count * 8; tries++) {
     const a = rng.range(0, Math.PI * 2);
     const d = rng.range(inner, outer);
     const px = x + Math.cos(a) * d;
     const pz = z + Math.sin(a) * d;
     const s = size * rng.range(0.85, 1.1);
     if (!isFloorFree(run.house, px, pz, s)) continue;
-    if (run.debris.spawn(index, px, pz, rng, { size: s })) placed++;
+    const piece = run.debris.spawn(index, px, pz, rng, { size: s });
+    if (piece) placed.push(piece);
   }
   return placed;
 }
