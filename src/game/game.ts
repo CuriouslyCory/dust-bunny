@@ -2,6 +2,8 @@
  * Game: owns the renderer, scene, loop, input, event bus, screens and the current Run.
  * State machine = the active screen (see ui/screens.ts): title → playing ↔ paused → results,
  * or paused → Save & quit → title → Resume → playing (`saveAndQuit` / `resumeRun`).
+ * Pausing stores the Run too (`checkpointRun`), so another tab can pick it up; unpausing takes it
+ * back, or steps aside to the title if it carried on elsewhere (`handoff`, ./handoff.ts).
  */
 import {
   ACESFilmicToneMapping,
@@ -44,7 +46,10 @@ import { storyAvailable } from '../story/index';
 import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
-import { getSuspendedRuns } from '../meta/suspendedRun';
+import { getMeta } from '../meta/meta';
+import { gateRunEnding, getAccountRuns } from '../meta/accountRun';
+import { creditsReplacedOnDevice, getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
+import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
 
 /** Seconds between the last Area's victory and the ending (the last absorb lands first). */
@@ -52,6 +57,18 @@ const ENDING_LEAD_SECONDS = 0.8;
 
 export interface GameOptions {
   debug?: boolean;
+}
+
+/** What the title screen is opened with (`Game.go('title', params)`). */
+export interface TitleParams {
+  /** A short line shown on the title, e.g. why the Run on screen went away. */
+  notice?: string;
+}
+
+/** The title's notice when this page's paused Run went on elsewhere (`Game.stepAside`). */
+export function handoffNotice(why: HandoffLoss): string {
+  if (why === 'otherDevice') return 'This Run carried on on another device. What you played here since you last unpaused it is lost.';
+  return why === 'replaced' ? 'Another window saved its Run over this one. It counted as quit.' : 'This Run carried on in another window.';
 }
 
 const BACKGROUND = '#3b2f2a';
@@ -112,6 +129,18 @@ export class Game {
   private readonly lensing = new LensingPass();
   /** Screen that paused the Run, if it is paused mid-Run. */
   private pausedBy: string | null = null;
+  /**
+   * Who owns the paused Run (./handoff.ts): pausing stores it in the saved Run slot, playing takes
+   * it back. Another tab picking it up meanwhile makes this page step aside.
+   */
+  /** The Account's copy of the saved Run for a signed-in player (src/meta/accountRun.ts). */
+  readonly accountRuns = getAccountRuns({ awardRun: (e) => getMeta().awardRun(e) });
+  readonly handoff = new RunHandoff({
+    store: getSuspendedRuns(),
+    meta: { awardRun: (e) => getMeta().awardRun(e) },
+    onLost: (why) => this.stepAside(why),
+    cloud: this.accountRuns,
+  });
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
 
@@ -165,8 +194,20 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       if (this.screens.handleKey(e)) e.preventDefault();
     });
+    // Hidden: playing pauses (which stores the Run); any other in-Run screen (Perk draft, boss
+    // intro, Keepsake reveal, story) stores it as it is, and takes it back once the tab is shown.
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.simulating) this.go('paused');
+      if (document.hidden) {
+        if (this.simulating) this.go('paused');
+        else if (this.canSaveRun && !this.handoff.busy) this.checkpointRun('hidden');
+      } else if (this.handoff.holding === 'hidden') this.takeBackRun();
+    });
+    // Closing or reloading the tab keeps a paused Run stored (as Save & quit would).
+    window.addEventListener('pagehide', () => this.handoff.flush());
+    // The Account says another device has the Run this page has (src/meta/accountRun.ts).
+    this.accountRuns.onLost((runKey) => {
+      if (this.run && !this.run.ended && this.run.runKey === runKey) this.stepAside('otherDevice');
+      else if (!this.run && this.screens.current?.id === 'title') this.go('title', { notice: handoffNotice('otherDevice') } satisfies TitleParams);
     });
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -215,7 +256,8 @@ export class Game {
 
   /** True if the active screen lets the Run simulate. */
   get simulating(): boolean {
-    return !!this.run && !this.run.ended && !!this.screens.current?.simulate;
+    // Not while the paused Run is being taken back: it may turn out to be another tab's.
+    return !!this.run && !this.run.ended && !!this.screens.current?.simulate && !this.handoff.busy;
   }
 
   start(initialScreen = 'title'): void {
@@ -229,7 +271,17 @@ export class Game {
     const prev = this.screens.go(id, params);
     const def = this.screens.current!;
     this.hud.visible = !!def.hud && !!this.run;
+    if (this.run && !this.run.ended) {
+      // A paused Run is a saved Run: the paused screen stores it, play takes it back (./handoff.ts).
+      if (id === 'paused' && !this.handoff.busy) this.checkpointRun('pause');
+      else if (def.simulate && this.handoff.holding) this.takeBackRun();
+    }
     this.events.emit('screenChanged', { from: prev?.id ?? null, to: id });
+    this.syncPaused(wasSim, id);
+  }
+
+  /** Emits paused / resumed when simulation stopped or started (`wasSim`: before the change). */
+  private syncPaused(wasSim: boolean, id: string): void {
     const nowSim = this.simulating;
     if (this.run && !this.run.ended) {
       if (wasSim && !nowSim) {
@@ -279,11 +331,20 @@ export class Game {
   }
 
   private launch(full: RunConfig): Run {
+    // A Run this page had stored on pause stays in the slot: a new Run abandons it (credited as a
+    // quit, src/meta/install.ts) and a resumed one replaced it.
     this.disposeRun();
     this.pausedBy = null;
     const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
+    // Dying or winning while the server take back is unconfirmed: credited once the Account agrees.
+    gateRunEnding(run, this.accountRuns, {
+      waiting: () => this.hud.toast('Checking your Run with your Account…', { tone: 'info' }),
+      lost: () => {
+        if (this.run === run) this.stepAside('otherDevice');
+      },
+    });
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
@@ -294,9 +355,33 @@ export class Game {
     return run;
   }
 
-  /** Ends the current Run as quit (→ results). */
+  /** Ends the current Run as quit (→ results). Doesn't check the hand-off: see `endRun` for the pause menu. */
   quitRun(): void {
     this.run?.end('quit');
+  }
+
+  /**
+   * End run / Quit to title from the pause menu: takes the paused Run back first, and ends it as
+   * quit (results, or the title with `toTitle`) only if it is still this page's. If another tab
+   * picked it up meanwhile it is not ended or credited here: the page steps aside instead. Resolves
+   * true when the Run was ended; false otherwise (also while a take back is already in flight).
+   */
+  endRun(toTitle = false): Promise<boolean> {
+    const run = this.run;
+    if (!run || run.ended || this.handoff.busy) return Promise.resolve(false);
+    // Ending credits the Run, so for a signed-in player the server take is waited for first.
+    return this.handoff
+      .takeBack()
+      .then((ok) => ok && this.accountRuns.confirmHeld(run.runKey))
+      .then((ok) => {
+        if (!ok || this.run !== run || run.ended) return false;
+        run.end('quit'); // emits runEnded so meta progress still records the Run
+        if (toTitle) {
+          this.disposeRun();
+          this.go('title');
+        }
+        return true;
+      });
   }
 
   /** True while there is a Run in progress that Save & quit can keep. */
@@ -305,22 +390,91 @@ export class Game {
   }
 
   /**
-   * Save & quit: stores the Run in progress on this device (src/meta/suspendedRun.ts; listeners of
-   * `runSuspended` add their own fields first), disposes it without ending it (no runEnded, no
-   * Fluff yet) and returns to the title. False, changing nothing, without a Run in progress.
+   * Stores the Run in progress in the saved Run slot without disposing it, so another tab can
+   * pick it up (`runSuspended` listeners add their fields first). Called on pause, and with
+   * `hidden` when the tab is hidden on another in-Run screen. The copy carries a fresh `handoffId`
+   * this page remembers (./handoff.ts); already holding one, it does nothing. False without a Run
+   * in progress.
+   */
+  checkpointRun(by: HandoffReason = 'pause'): boolean {
+    const run = this.run;
+    if (!run || run.ended) return false;
+    if (this.handoff.holding) return true;
+    const snapshot = run.toSnapshot();
+    this.events.emit('runSuspended', { snapshot });
+    this.handoff.store(snapshot, by);
+    return true;
+  }
+
+  /** Takes the stored Run back as play goes on (or the tab is shown again); see `syncPaused`. */
+  private takeBackRun(): void {
+    const run = this.run;
+    void this.handoff.takeBack().then((ok) => {
+      if (!ok || !run || this.run !== run || run.ended) return;
+      const cur = this.screens.current;
+      if (this.simulating) {
+        if (document.hidden) this.go('paused');
+        else this.syncPaused(false, cur?.id ?? 'playing');
+      } else if (cur?.id === 'paused') this.checkpointRun('pause');
+      else if (document.hidden) this.checkpointRun('hidden');
+    });
+  }
+
+  /**
+   * This page's paused Run carried on elsewhere (or was replaced): its copy is disposed without
+   * `runEnded` (nothing is credited twice) and the title says why.
+   */
+  private stepAside(why: HandoffLoss): void {
+    if (!this.run) return;
+    this.handoff.forget();
+    // Exit the in-Run screen first, while its Run and view still exist: its exit() may use them
+    // (the story intro finishes its shots on game.view). The title then opens with no Run.
+    this.screens.leave();
+    this.disposeRun();
+    this.go('title', { notice: handoffNotice(why) } satisfies TitleParams);
+  }
+
+  /**
+   * Save & quit: keeps the Run in progress on this device (src/meta/suspendedRun.ts) and returns to
+   * the title, disposing it without ending it (no runEnded, no Fluff yet). From pause it is already
+   * stored (`checkpointRun`), so it is only let go of; if another tab picked it up meanwhile the
+   * title says so. Otherwise it is stored now (`runSuspended` listeners add their own fields first;
+   * a different Run already in the slot, saved from another tab, is credited as a quit), under
+   * the saved Run lock so two tabs saving at once can't credit it twice. False, changing nothing,
+   * without a Run in progress or while a take back is in flight.
    */
   saveAndQuit(): boolean {
     const run = this.run;
-    if (!run || run.ended) return false;
+    if (!run || run.ended || this.handoff.busy) return false;
+    if (this.handoff.holding) {
+      const lost = this.handoff.leaveStored();
+      this.disposeRun();
+      this.go('title', (lost ? { notice: handoffNotice(lost) } : {}) satisfies TitleParams);
+      return true;
+    }
     const snapshot = run.toSnapshot();
     this.events.emit('runSuspended', { snapshot });
-    getSuspendedRuns().save(snapshot);
+    const store = getSuspendedRuns();
+    const meta = getMeta();
+    const save = (): boolean => {
+      // The device first, then the Account (src/meta/accountRun.ts).
+      this.accountRuns.tag(snapshot);
+      // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
+      const prev = store.peek();
+      const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
+      const replaced = saveSuspendedRun(store, snapshot, meta);
+      this.accountRuns.stored(snapshot, credited);
+      return replaced;
+    };
+    void withSavedRunLock(save).catch(save);
     this.disposeRun();
     this.go('title');
     return true;
   }
 
   disposeRun(): void {
+    // A Run stored on pause stays in the slot, as Save & quit leaves it.
+    this.handoff.forget();
     if (this.resultsTimer !== null) window.clearTimeout(this.resultsTimer);
     this.resultsTimer = null;
     this.solarSky.attach(null);

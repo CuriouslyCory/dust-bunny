@@ -4,7 +4,8 @@
  * results "Kept" section; feeds owned Upgrades, the last Character and Difficulty and that
  * Character's last Loadout into game.nextRunConfig; opens the Perk draft modal on tierUp; awards
  * Fluff on runEnded and Keepsakes on bossDefeated; remembers a Keepsake tucked in mid-Run in the
- * Loadout; adds HUD widgets and the Keepsake reward moment.
+ * Loadout; keeps the Account's saved Run in step with Run starts and ends (src/meta/accountRun.ts);
+ * adds HUD widgets and the Keepsake reward moment.
  * Pickup / Perk content and the per-Run combat hooks and Pickup director are the Run assembly's
  * job (src/game/assembly.ts).
  */
@@ -22,7 +23,8 @@ import { registerShopScreen } from '../ui/screens/shop';
 import { registerUnderTheCouchScreen } from '../ui/screens/underTheCouch';
 import { KeepsakeTracker, setKeepsakeTracker } from './keepsakes';
 import { getMeta } from './meta';
-import { abandonSuspendedRun, getSuspendedRuns } from './suspendedRun';
+import { abandonSavedRun } from './accountRun';
+import { getSuspendedRuns } from './suspendedRun';
 
 export function installRoguelike(game: Game): void {
   registerGameplayContent();
@@ -55,8 +57,12 @@ export function installRoguelike(game: Game): void {
     const resumed = e.resumed ? run?.config.resume?.keepsakes : undefined;
     tracker.start({ seed: e.seed, characterId: e.characterId, difficulty: run?.difficulty.id, ranked: isRankedRun(game.debug, run?.config) }, resumed);
     draftOnPlay = !!e.resumed;
-    // A new Run replaces a saved one (the title asks first): it counts as quit.
-    if (!e.resumed) abandonSuspendedRun(getSuspendedRuns(), meta);
+    // A new Run replaces a saved one (the title asks first): it counts as quit, and the Account's
+    // copy goes too (src/meta/accountRun.ts). The new Run isn't on the server until it is stored.
+    if (!e.resumed) {
+      game.accountRuns.newRun();
+      abandonSavedRun(getSuspendedRuns(), meta, game.accountRuns);
+    }
   });
   // A Run saved with a Perk draft waiting opens it again once play is on screen.
   let draftOnPlay = false;
@@ -74,6 +80,10 @@ export function installRoguelike(game: Game): void {
   // A Keepsake tucked in mid-Run (the Keepsake reveal) stays in the remembered Loadout for the next Run.
   game.events.on('keepsakeTuckedIn', (e) => meta.setLastLoadout(e.characterId, e.loadout));
   game.events.on('runEnded', (e) => tracker.finish(e));
+  // An ended Run leaves the Account's saved Run slot (only if this page still holds it there).
+  game.events.on('runEnded', () => {
+    if (game.run) game.accountRuns.ended(game.run.runKey);
+  });
   installKeepsakeHud(game);
 
   // The Run queues the draft itself (run.perkDraft); this only opens the modal.

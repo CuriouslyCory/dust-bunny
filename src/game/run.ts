@@ -42,7 +42,7 @@ import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/ty
 import { canonicalX } from '../world/wrap';
 import type { AreaStats, RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
-import { SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
+import { legacyRunKey, newRunKey, SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
 
 export interface RunConfig {
   seed: string;
@@ -109,6 +109,8 @@ const exitSystem: System = {
 
 export class Run {
   readonly rng: Rng;
+  /** The Run's identity (see ./snapshot.ts): new for a fresh Run, the saved one's when resumed. */
+  readonly runKey: string;
   /** Difficulty tuning for this Run (Hazards, director, start stats, area heal, Fluff). */
   readonly difficulty: DifficultyDef;
   /** Keepsakes tucked in for this Run (an illegal config Loadout is dropped; `tuckIn` fills an open slot). */
@@ -177,6 +179,13 @@ export class Run {
   readonly tierTimes: Record<number, number> = { 1: 0 };
   ended = false;
   endReason: RunEndReason | null = null;
+  /**
+   * Asked when the Run ends: a promise holds `runEnded` (which credits the Run) until it resolves,
+   * and drops it on false; null emits it at once. Set by the Game for the Account's saved Run
+   * (src/meta/accountRun.ts `gateRunEnding`).
+   */
+  endGate: ((reason: RunEndReason) => Promise<boolean> | null) | null = null;
+  private disposed = false;
 
   private systems: System[] = [];
   private readonly tucked: KeepsakeRef[];
@@ -190,6 +199,7 @@ export class Run {
     readonly config: RunConfig,
   ) {
     this.rng = new Rng(config.seed);
+    this.runKey = config.resume ? config.resume.runKey || legacyRunKey(config.resume) : newRunKey();
     this.difficulty = getDifficulty(config.difficulty);
     this.tucked = config.loadout && isLoadoutFor(config.characterId, config.loadout) ? config.loadout.map((k) => ({ ...k })) : [];
     this.house = generateHouse(config.seed);
@@ -562,6 +572,7 @@ export class Run {
     return {
       version: SNAPSHOT_VERSION,
       savedAt: Date.now(),
+      runKey: this.runKey,
       seed: this.config.seed,
       characterId: this.config.characterId,
       difficulty: this.difficulty.id,
@@ -715,10 +726,19 @@ export class Run {
     if (this.ended) return;
     this.ended = true;
     this.endReason = reason;
-    this.events.emit('runEnded', { reason, stats: this.getStats() });
+    const e = { reason, stats: this.getStats() };
+    const gate = this.endGate?.(reason) ?? null;
+    if (!gate) {
+      this.events.emit('runEnded', e);
+      return;
+    }
+    void gate.then((ok) => {
+      if (ok && !this.disposed) this.events.emit('runEnded', e);
+    });
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const s of this.systems) s.dispose?.();
     this.systems = [];
     this.disposables.dispose();
