@@ -50,6 +50,7 @@ import { createJsonCaller, SavedRunAuthError, SavedRunNetError, type JsonCallerO
 import type { MetaProgress, RunAward, RunCreditInput } from './meta';
 import { createRunCreditApi, RunCreditQueue, type CreditOutcome } from './runCredits';
 import { browserStorage, browserStorageEvents, type KeyValueStorage } from './save';
+import { type VersionedFormat, VersionedStore } from './versionedStore';
 import { getSuspendedRuns, type QuitCreditor, type SuspendedRunStore } from './suspendedRun';
 
 export { SavedRunAuthError, SavedRunNetError } from './accountHttp';
@@ -138,6 +139,25 @@ export interface KnownRun {
   leases: string[];
 }
 
+/** The known Runs file (./versionedStore.ts: a newer build's file is read, never written; refused writes stay in memory). */
+const KNOWN_RUNS_FORMAT: VersionedFormat<KnownRun[]> = {
+  key: KNOWN_RUNS_KEY,
+  version: KNOWN_RUNS_VERSION,
+  empty: () => [],
+  parse: (file) => {
+    const known: KnownRun[] = [];
+    for (const k of Array.isArray(file.known) ? (file.known as unknown[]) : []) {
+      if (typeof k === 'string') known.push({ runKey: k, leases: [] }); // a key alone (an earlier shape of this file)
+      else if (typeof k === 'object' && k !== null && typeof (k as KnownRun).runKey === 'string') {
+        const leases = Array.isArray((k as KnownRun).leases) ? (k as KnownRun).leases.filter((l): l is string => typeof l === 'string') : [];
+        known.push({ runKey: (k as KnownRun).runKey, leases });
+      }
+    }
+    return known;
+  },
+  serialize: (known) => ({ known }),
+};
+
 /** What the title shows about the Account's saved Run (`syncTitle`). */
 export interface TitleSync {
   /** The server copy was mirrored from another device (or another page) just now. */
@@ -211,9 +231,8 @@ export class AccountRuns implements QuitCreditor {
   private refused = new Map<string, 'carriedOn' | 'elsewhere' | 'rejected'>();
   /** Runs credited, but not by this page's own `awardRun` (another tab's, or before the claim): `creditOf` reads `credited` with no award. */
   private already = new Set<string>();
-  /** Known Runs this page keeps in memory when `storage` is null or holds a newer build's file. */
-  private knownMemory: KnownRun[] | null = null;
-  private readonly storage: KeyValueStorage | null;
+  /** The known Runs (`KNOWN_RUNS_KEY`). */
+  private readonly known: VersionedStore<KnownRun[]>;
   private waiters: (() => void)[] = [];
   /**
    * Title actions that change who holds the Account's Run (`resume`, `abandon`) send their take or
@@ -243,7 +262,7 @@ export class AccountRuns implements QuitCreditor {
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
     this.hidden = opts.hidden ?? (() => typeof document !== 'undefined' && document.hidden);
-    this.storage = opts.storage ?? null;
+    this.known = new VersionedStore(opts.storage ?? null, KNOWN_RUNS_FORMAT);
     this.credits.onCredit((o) => this.settle(o));
   }
 
@@ -263,26 +282,7 @@ export class AccountRuns implements QuitCreditor {
   // the holder's lease once `live` is gone (a fresh lease would read as another device's: 409).
 
   private readKnown(): KnownRun[] {
-    if (this.knownMemory) return this.knownMemory;
-    if (!this.storage) return (this.knownMemory = []);
-    try {
-      const raw = this.storage.getItem(KNOWN_RUNS_KEY);
-      const parsed: unknown = raw ? JSON.parse(raw) : null;
-      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return [];
-      const file = parsed as { version?: unknown; known?: unknown };
-      const known: KnownRun[] = [];
-      for (const k of Array.isArray(file.known) ? (file.known as unknown[]) : []) {
-        if (typeof k === 'string') known.push({ runKey: k, leases: [] }); // a key alone (an earlier shape of this file)
-        else if (typeof k === 'object' && k !== null && typeof (k as KnownRun).runKey === 'string') {
-          const leases = Array.isArray((k as KnownRun).leases) ? (k as KnownRun).leases.filter((l): l is string => typeof l === 'string') : [];
-          known.push({ runKey: (k as KnownRun).runKey, leases });
-        }
-      }
-      if (typeof file.version === 'number' && file.version > KNOWN_RUNS_VERSION) return (this.knownMemory = known); // a newer build's: read, never written
-      return known;
-    } catch {
-      return [];
-    }
+    return this.known.read().value;
   }
 
   /** Remembers that the server knows `runKey` from this device, under `leases` (the newest ones replace what was remembered). */
@@ -290,16 +290,7 @@ export class AccountRuns implements QuitCreditor {
     const known = this.readKnown();
     const have = known.find((k) => k.runKey === runKey);
     if (have && have.leases.length === leases.length && have.leases.every((l, i) => l === leases[i])) return;
-    const next = [...known.filter((k) => k.runKey !== runKey), { runKey, leases: [...leases] }].slice(-KNOWN_RUNS_MAX);
-    if (this.knownMemory) {
-      this.knownMemory = next;
-      return;
-    }
-    try {
-      this.storage?.setItem(KNOWN_RUNS_KEY, JSON.stringify({ version: KNOWN_RUNS_VERSION, known: next }));
-    } catch {
-      this.knownMemory = next;
-    }
+    this.known.write([...known.filter((k) => k.runKey !== runKey), { runKey, leases: [...leases] }].slice(-KNOWN_RUNS_MAX));
   }
 
   /** `live`'s leases changed for a Run the server knows: the durable record follows. */
