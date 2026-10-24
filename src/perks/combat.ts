@@ -7,11 +7,10 @@
  *      → revives (Second Wind, lethal hits only).
  *    Blocked hits grant i-frames so continuous contact does not burn every charge at once.
  * 2. The `combat` System (order 290, before Hazards): Regrowth heals, Spiky Dash stuns
- *    (sets `hazard.stunnedFor`, calls `hazard.stun?.(s)`, emits hazardStunned) and counts
- *    stun timers down.
+ *    (run.hazards.status.stun with cause 'spiky', emits hazardStunned).
  *
  * Hazards must respect: damage only via bunny.damage(); skip targeting/suction while
- * bunny.hiddenFromHazards; skip movement/attacks while hazard.stunnedFor > 0.
+ * bunny.hiddenFromHazards; skip movement/attacks while stunned (src/hazards/status.ts).
  */
 import type { Rng } from '../core/rng';
 import { PERK_EFFECTS as FX } from '../data/perks';
@@ -19,15 +18,7 @@ import { TUNING } from '../data/tuning';
 import type { Run } from '../game/run';
 import type { System } from '../game/system';
 import { HazardManager } from '../hazards';
-
-declare module '../hazards' {
-  interface Hazard {
-    /** Seconds of remaining stun (Spiky Dash). Hazards should not move or attack while > 0. */
-    stunnedFor?: number;
-    /** Optional custom stun reaction (visual wobble etc.). */
-    stun?(seconds: number): void;
-  }
-}
+import { isStunned } from '../hazards/status';
 
 declare module '../core/events' {
   interface GameEvents {
@@ -78,11 +69,9 @@ export class CombatSystem implements System {
     }
 
     for (const h of run.hazards.hazards) {
-      if (h.stunnedFor && h.stunnedFor > 0) h.stunnedFor = Math.max(0, h.stunnedFor - dt);
-      if (!b.spikyDash || !b.dashing || h.dead || (h.stunnedFor ?? 0) > 0) continue;
+      if (!b.spikyDash || !b.dashing || h.dead || isStunned(h)) continue;
       if (!HazardManager.touches(run, h)) continue;
-      h.stunnedFor = FX.spikyStun;
-      h.stun?.(FX.spikyStun);
+      run.hazards.status.stun(h, FX.spikyStun, 'spiky');
       b.invulnerable = Math.max(b.invulnerable, SPIKY_IFRAMES);
       run.events.emit('hazardStunned', { hazardId: h.id, defId: h.def.id, seconds: FX.spikyStun });
     }

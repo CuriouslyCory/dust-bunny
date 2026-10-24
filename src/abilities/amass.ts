@@ -292,7 +292,7 @@ export class AmassAbility implements AbilityController {
     if (isBoss(h)) {
       if (!h.charging || h.stunned || bunnySheltered(run, h.cfg.height)) return false;
       // Inside the 6 s Ability-stun limit it hits Tumble as usual.
-      if (!this.system.stunBoss(h, h.cfg.stunTime, 'amass')) return false;
+      if (!run.hazards.status.stun(h, h.cfg.stunTime, 'amass')) return false;
       run.events.emit('bossCrashedIntoAmass', { hazardId: h.id });
       h.hitBonus = { hold: 0, pieces: this.p.bossHitParts };
       // Stunned now, so this contact lands the hit.
@@ -319,7 +319,7 @@ export class AmassAbility implements AbilityController {
     for (const o of run.hazards.hazards) {
       if (o.dead || o.intangible || isBoss(o) || o.size > b.radius * p.pullRatio) continue;
       if (Math.hypot(o.x - b.x, o.z - b.z) - b.radius - hazardRadius(o) > reach) continue;
-      this.system.stunHazard(o, p.shockwaveStun);
+      run.hazards.status.stun(o, p.shockwaveStun, 'amass');
       stunned++;
     }
     run.events.emit('hazardSwallowed', { hazardId: h.id, defId: h.def.id, x, z, stunned });
@@ -338,10 +338,10 @@ export class AmassAbility implements AbilityController {
       const d = Math.hypot(dx, dz);
       if (d - b.radius - hazardRadius(h) > reach) continue;
       if (isBoss(h)) {
-        if (this.system.stunBoss(h, p.collapseStun * p.collapseBossStun, 'amass')) hit++;
+        if (run.hazards.status.stun(h, p.collapseStun * p.collapseBossStun, 'amass')) hit++;
         continue;
       }
-      this.system.stunHazard(h, p.collapseStun);
+      run.hazards.status.stun(h, p.collapseStun, 'amass');
       hit++;
       if (h.ranged || !(h instanceof BaseHazard) || p.collapseKnockback <= 0) continue;
       const dist = p.collapseKnockback * b.radius;

@@ -299,11 +299,11 @@ describe('Tumble · Amass', () => {
     small.x = b.x + b.radius * 6;
     small.z = b.z;
     const boss = run.hazards.spawn('robovac_9000', b.x - b.radius * 4 - ROBOVAC_9000.contactRadius, b.z) as RoboVac9000;
-    boss.state = 'stunned';
+    run.hazards.status.stun(boss, 5, 'wall');
     const [bossX, bossZ] = [boss.x, boss.z];
     const d0 = Math.hypot(small.x - b.x, small.z - b.z);
     amass(run, input);
-    small.stunnedFor = 5; // hold it still so only the pull moves it
+    run.hazards.status.stun(small, 5, 'perk'); // hold it still so only the pull moves it
     step(run, 0.6);
     // Just past the core: almost full strength after the ramp, so about pullSpeed × (0.6 − ramp / 2) r.
     expect(Math.hypot(small.x - b.x, small.z - b.z)).toBeLessThan(d0 - b.radius * AMASS.pullSpeed * 0.4);
@@ -330,6 +330,7 @@ describe('Tumble · Amass', () => {
     // Again inside the 6 s limit (and past the post-hit grace): a normal hit, 30% lighter.
     step(run, 0.5);
     boss.hitGrace = 0;
+    run.hazards.status.clear(boss);
     boss.state = 'charge';
     boss.x = b.x + ROBOVAC_9000.contactRadius * boss.scale + b.radius - 3;
     boss.z = b.z;
@@ -432,8 +433,7 @@ describe('Zap · Discharge', () => {
     const b = run.bunny;
     b.setRadius(20);
     const boss = run.hazards.spawn('robovac_9000', b.x + 300, b.z) as RoboVac9000;
-    boss.stunnedFor = 2.5;
-    boss.stun(2.5);
+    run.hazards.status.stun(boss, 2.5, 'spiky');
     expect(boss.stunCause).toBe('spiky');
     expect(sys.canStunBoss(boss)).toBe(true);
   });

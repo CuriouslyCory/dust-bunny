@@ -10,8 +10,8 @@
  *                        meter is spent (DischargeAbility.spend) to negate the hit with the usual
  *                        i-frames. Tangible Hazards whose edge is within the reach of Zap's
  *                        surface are stunned: non-boss for emergencyStun s, bosses for
- *                        emergencyBossStunShare of it through AbilitySystem.stunBoss (the 6 s
- *                        limit; cause 'discharge'). Emits emergencyDischarge.
+ *                        emergencyBossStunShare of it (run.hazards.status, cause 'discharge':
+ *                        the 6 s Ability limit applies). Emits emergencyDischarge.
  *   Hyper Charge         a params modifier: discharge.dashMultiplier = max(current, per stack).
  *   Thunderstruck        each non-boss hazardShorted (Arc targets too) leaves a static patch at
  *                        the Hazard: thunderstruckDuration s, radius per stack × Zap's radius at
@@ -172,8 +172,8 @@ export class ZapPerks implements System {
       const hr = hazardRadius(h);
       if (Math.hypot(h.x - b.x, h.z - b.z) - b.radius - hr > reach) continue;
       if (h.def.boss) {
-        if (!isBoss(h) || !sys.stunBoss(h, FX.emergencyStun * FX.emergencyBossStunShare, 'discharge')) continue;
-      } else sys.stunHazard(h, FX.emergencyStun);
+        if (!isBoss(h) || !run.hazards.status.stun(h, FX.emergencyStun * FX.emergencyBossStunShare, 'discharge')) continue;
+      } else run.hazards.status.stun(h, FX.emergencyStun, 'perk');
       stunned++;
       const bolt = new BoltView(sys.rng, b.x, b.z, b.radius, h.x, h.z, Math.min(hr, b.radius * 2), Math.max(0.6, b.radius * 0.1));
       run.entityRoot.add(bolt.root);
@@ -200,16 +200,11 @@ export class ZapPerks implements System {
 
   private stunEntering(patch: StaticPatch): void {
     const run = this.run;
-    const sys = this.ability;
     for (const h of run.hazards.hazards) {
       if (h.dead || h.intangible || h.def.boss || patch.hit.has(h)) continue;
       if (Math.hypot(h.x - patch.x, h.z - patch.z) > patch.radius + hazardRadius(h)) continue;
       patch.hit.add(h);
-      if (sys) sys.stunHazard(h, FX.thunderstruckStun);
-      else {
-        h.stunnedFor = Math.max(h.stunnedFor ?? 0, FX.thunderstruckStun);
-        h.stun?.(FX.thunderstruckStun);
-      }
+      run.hazards.status.stun(h, FX.thunderstruckStun, 'perk');
       run.events.emit('staticPatchStunned', { hazardId: h.id, defId: h.def.id, seconds: FX.thunderstruckStun });
     }
   }

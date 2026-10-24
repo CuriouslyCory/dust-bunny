@@ -200,7 +200,7 @@ describe('Zap · Thunderstruck', () => {
     tick(run);
     expect(stuns).toHaveLength(1);
     expect(bystander.stunnedFor).toBeGreaterThan(0);
-    bystander.stunnedFor = 0;
+    run.hazards.status.clear(bystander);
     bystander.x = patch.x;
     bystander.z = patch.z;
     tick(run);
