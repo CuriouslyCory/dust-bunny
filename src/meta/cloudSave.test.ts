@@ -226,6 +226,31 @@ describe('cloud save', () => {
     expect(server.rows.get('u1')).toMatchObject({ fluff: 900, stats: { totalFluffEarned: 900, runs: 20 } });
   });
 
+  it("keeps another tab's purchase made while connecting, even on a tie with the account copy", async () => {
+    const shared = memStorage();
+    const tabA = new MetaProgress(shared);
+    tabA.store.update((d) => Object.assign(d, { fluff: 200, stats: prog(200, 200, 5).stats }));
+    const server = fakeServer();
+    server.rows.set('u1', prog(150, 200, 5, { magnetism: 1 })); // another device spent: same counters
+    let releaseGet!: () => void;
+    const getGate = new Promise<void>((r) => (releaseGet = r));
+    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (!init?.method) await getGate;
+      return server.fetch(url, init);
+    }) as typeof globalThis.fetch;
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch, storage: memStorage({ [CLOUD_USER_KEY]: 'u1' }), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.advanceTimersByTimeAsync(0); // the download is in flight
+    // Tab B buys before tab A has heard of it: a change neither counter shows.
+    expect(new MetaProgress(shared).buy('fast_feet').ok).toBe(true);
+    releaseGet();
+    await vi.runAllTimersAsync();
+    expect(parseSave(shared.map.get(SAVE_KEY)).data.upgrades).toEqual({ fast_feet: 1 });
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 160, upgrades: { fast_feet: 1 } });
+  });
+
   it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {
     const s = setup(prog(1000, 1000, 5));
     await s.signIn('u1');

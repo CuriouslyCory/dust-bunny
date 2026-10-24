@@ -134,19 +134,25 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
    * Replaces the synced fields of the local save (the store's listeners see it as one change).
    * `universes` keeps the larger count unless `replace` (another account's save is being loaded).
    * Without `loadouts` in `p` the device's Loadouts stay; either way they are repaired against the
-   * adopted Hoards. Returns false when the freshly read save (another tab wrote since the caller
-   * compared) has more progress than `p`: it is kept, still unsynced, for the next upload.
+   * adopted Hoards. Returns false when another tab wrote since the caller compared (the freshly
+   * read save differs from what it saw) and that save has more progress than `p`, or as much (a
+   * purchase changes no counter: like a dirty device on a tie, it wins). It is kept, still
+   * unsynced, for the next upload.
    */
   function adopt(p: Progress, replace = false): boolean {
     lastSynced = p;
+    // What the caller compared against (it calls in the same synchronous step).
+    const seen = progressOf(meta.data);
     let kept = false;
     meta.store.updateIf((d) => {
-      if (!replace && compareProgress(progressOf(d), p) > 0) {
+      const fresh = progressOf(d);
+      const universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
+      if (sameProgress(fresh, { ...p, universes })) return false;
+      const order = compareProgress(fresh, p);
+      if (!replace && (order > 0 || (order === 0 && !sameProgress(fresh, seen)))) {
         kept = true;
         return false;
       }
-      const universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
-      if (sameProgress(progressOf(d), { ...p, universes })) return false;
       d.universes = universes;
       d.fluff = p.fluff;
       d.upgrades = { ...p.upgrades };
