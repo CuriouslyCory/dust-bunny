@@ -154,7 +154,8 @@ interface Live {
 type Op =
   | { kind: 'put'; runKey: string; snapshot: RunSnapshot; prevLocalKey: string | null }
   | { kind: 'take'; runKey: string }
-  | { kind: 'end'; runKey: string; leases: string[] };
+  /** `credit`: the abandoned Run's stats, credited as a quit only if the server confirms the delete. */
+  | { kind: 'end'; runKey: string; leases: string[]; credit?: RunSnapshot['stats'] };
 
 /** What the title shows about the Account's saved Run (`syncTitle`). */
 export interface TitleSync {
@@ -584,10 +585,24 @@ export class AccountRuns {
     return now.account?.userId === this.userId ? now.account : shown.account!;
   }
 
-  /** A device abandon outside the title (any new Run start): the server row goes too. */
-  abandoned(s: RunSnapshot): void {
+  /**
+   * A device abandon outside the title (any new Run start): the server row goes too. `credit`: the
+   * device didn't credit it (a copy the server had confirmed, `creditsOnServer`), so it is credited
+   * as a quit once the server confirms it deleted the row under the copy's lease; refused (another
+   * device took it, or it ended elsewhere), nothing is credited here.
+   */
+  abandoned(s: RunSnapshot, credit = false): void {
     if (!this.userId || s.account?.userId !== this.userId) return;
-    this.queue({ kind: 'end', runKey: s.runKey, leases: leasesOf(s.account) });
+    this.queue({ kind: 'end', runKey: s.runKey, leases: leasesOf(s.account), ...(credit ? { credit: s.stats } : {}) });
+  }
+
+  /**
+   * Whether abandoning `s` outside the title is credited from the server's answer rather than on
+   * the device: a copy of this Account's Run the server confirmed, which another device may be
+   * playing by now (the rule `creditsReplacedOnDevice` applies to a replace).
+   */
+  creditsOnServer(s: RunSnapshot): boolean {
+    return !!this.userId && s.account?.userId === this.userId && s.account.synced;
   }
 
   // --- sending ---------------------------------------------------------------------------------
@@ -639,7 +654,8 @@ export class AccountRuns {
   private async send(op: Op, gen: number): Promise<void> {
     if (op.kind === 'end') {
       const leases = op.leases;
-      await this.api.end({ runKey: op.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) });
+      const res = await this.api.end({ runKey: op.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) });
+      if (gen === this.gen && res.deleted && op.credit) this.meta.awardRun({ reason: 'quit', stats: op.credit });
       return;
     }
     const live = this.live?.runKey === op.runKey ? this.live : null;
@@ -748,9 +764,17 @@ export function installAccountRuns(runs: AccountRuns, account: AccountClient): v
   if (typeof window !== 'undefined') window.addEventListener('pagehide', () => runs.flush());
 }
 
-/** `abandonSuspendedRun` for a new Run start, deleting the Account's copy too. */
+/**
+ * `abandonSuspendedRun` for a new Run start, deleting the Account's copy too. A copy the server had
+ * confirmed is credited only once the server confirms the delete (`creditsOnServer`).
+ */
 export function abandonSavedRun(store: SuspendedRunStore, meta: Pick<MetaProgress, 'awardRun'>, runs: AccountRuns | null): boolean {
   const s = store.peek();
+  if (s && runs?.creditsOnServer(s)) {
+    if (!store.take()) return false;
+    runs.abandoned(s, true);
+    return true;
+  }
   if (!abandonSuspendedRun(store, meta)) return false;
   if (s && runs) runs.abandoned(s);
   return true;

@@ -816,4 +816,43 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(a.meta.calls).toHaveLength(1); // ...but by the server's, which handed R back
     expect(b.meta.calls).toEqual([]);
   });
+  describe('a new Run start abandoning a mirrored Account copy credits it only once the server confirms the delete', () => {
+    const mirrored = async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const b = device(server);
+      const r = snapshot('r');
+      b.handoff.store(r, 'pause');
+      await settle(b.runs);
+      await a.runs.syncTitle(); // A's slot mirrors R from the Account
+      expect(a.store.peek()).toMatchObject({ runKey: r.runKey, account: { synced: true } });
+      return { server, a, b, r };
+    };
+
+    it('taken by another device meanwhile: not credited here (the holder credits it when it ends)', async () => {
+      const { server, a, b, r } = await mirrored();
+      expect(await b.handoff.takeBack()).toBe(true); // B unpauses R
+      await settle(b.runs);
+      a.runs.newRun();
+      expect(abandonSavedRun(a.store, a.meta, a.runs)).toBe(true);
+      expect(a.store.peek()).toBeNull();
+      await settle(a.runs);
+      expect(a.meta.calls).toEqual([]);
+      expect(server.row?.runKey).toBe(r.runKey);
+      expect(server.row?.ended).toBeFalsy(); // still B's Run in progress
+      expect(b.lostRuns).toEqual([]);
+    });
+
+    it('nobody took it: credited once, from the server’s delete', async () => {
+      const { server, a, b, r } = await mirrored();
+      b.handoff.forget(); // B's Save & quit: R stays on the server
+      a.runs.newRun();
+      expect(abandonSavedRun(a.store, a.meta, a.runs)).toBe(true);
+      expect(a.meta.calls).toEqual([]); // not on the device...
+      await settle(a.runs);
+      expect(a.meta.calls.map((c) => c.reason)).toEqual(['quit']); // ...but once the server deleted it
+      expect(server.row).toMatchObject({ runKey: r.runKey, ended: true });
+      expect(b.meta.calls).toEqual([]);
+    });
+  });
 });
