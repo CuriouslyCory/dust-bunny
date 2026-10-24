@@ -640,6 +640,11 @@
   .char-panes > .inactive {
     visibility: hidden;
   }
+  .char-panes > :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 4px;
+    border-radius: 8px;
+  }
   .char-detail {
     display: grid;
     gap: 8px 18px;

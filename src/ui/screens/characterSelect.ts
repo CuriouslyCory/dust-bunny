@@ -83,6 +83,9 @@ export function registerCharacterSelectScreen(): void {
       const statsPane = h('div', { className: 'char-detail char-stats' });
       const abilityPane = h('div', { className: 'char-ability' });
       const panes: Record<SheetTab, HTMLElement> = { about: aboutPane, stats: statsPane, ability: abilityPane };
+      // About and Stats hold no controls, so the panels take focus themselves (Ability has buttons).
+      aboutPane.tabIndex = 0;
+      statsPane.tabIndex = 0;
       let tab: SheetTab = 'about';
       const tabButtons = {} as Record<SheetTab, HTMLButtonElement>;
       const tabsEl = h('div', { className: 'char-tabs' });
