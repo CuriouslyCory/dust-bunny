@@ -143,6 +143,12 @@
 .ks-couch {
   grid-column: 1 / -1;
   justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ks-couch-short {
+  display: none;
 }
 
 .char-select {
@@ -489,17 +495,68 @@
   .ks-ability-desc {
     display: none;
   }
+  /* Icon beside the name only; the numbers and Keepsake effects use the full width. */
+  .ks-ability {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 2px 8px;
+  }
+  .ks-ability-text {
+    display: contents;
+  }
+  .ks-ability-text > :not(.ks-ability-name) {
+    grid-column: 1 / -1;
+  }
   .ks-ability-icon {
-    width: 32px;
-    height: 32px;
-    font-size: 18px;
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+    border-radius: 9px;
+  }
+  .ks-slot .ks-chip-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 14px;
+  }
+  .ks-slot .ks-chip {
+    gap: 6px;
+  }
+  .ks-slot .ks-chip-name {
+    font-size: 13px;
+    line-height: 1.1;
   }
   .ks-slot {
     min-height: 44px;
     padding: 4px 6px;
   }
-  .ks-slot .ks-chip-desc {
+  .ks-slot .ks-chip-desc,
+  .ks-slot .ks-pip {
     display: none;
+  }
+  /* Couch beside the two slots, icon over a short label. */
+  .ks-slots {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+  .btn.ks-couch {
+    grid-column: auto;
+    justify-self: stretch;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-height: 44px;
+    padding: 4px 10px 6px;
+    font-size: var(--fs-xs);
+    line-height: 1.1;
+  }
+  .ks-couch-icon {
+    font-size: 18px;
+  }
+  .ks-couch-long {
+    display: none;
+  }
+  .ks-couch-short {
+    display: inline;
   }
   .ks-picker {
     inset: 4px;

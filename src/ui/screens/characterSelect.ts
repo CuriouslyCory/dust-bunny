@@ -8,10 +8,12 @@
  * a tick at the Character's cap, with the cap's reason on hover.
  * Keys: ←/→ (A/D) or 1–3 to choose, ↑/↓ for the Difficulty, Enter/Space to start, S for the
  * Shop, U for Under the Couch, Esc for the title.
- * Phone-sized viewports show the cards as small picker chips plus one detail card for the
- * selected Character (.char-detail). There the Ability card and Keepsake slots move into the
- * scrolling body, so the details keep their height on short (landscape) screens.
+ * Phone-sized viewports show the cards as small picker chips plus a tabbed sheet for the
+ * selected Character: About (description, strengths, weaknesses), Stats (bars) and the Ability
+ * (Ability card and Keepsake slots). The tabs share one grid cell, so switching never moves the
+ * footer, and the screen fits a phone without scrolling. ←/→ on a focused tab moves between tabs.
  */
+import { getAbility } from '../../data/abilities';
 import { CHARACTERS, DEFAULT_CHARACTER_ID, type CharacterDef } from '../../data/characters';
 import { getRarity, keepsakeLabel, LOADOUT_SLOTS, type KeepsakeRef } from '../../data/keepsakes';
 import { DIFFICULTIES, DIFFICULTY_IDS, difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../../data/difficulty';
@@ -33,6 +35,9 @@ interface Bar {
   /** Stat whose per-Character cap gets a tick on the bar. */
   cap?: StatKey;
 }
+
+type SheetTab = 'about' | 'stats' | 'ability';
+const SHEET_TABS: SheetTab[] = ['about', 'stats', 'ability'];
 
 const BARS: Bar[] = [
   { label: 'Speed', value: (s) => s.speed, norm: (v) => v / 1.6, fmt: (v) => `×${v.toFixed(2)}`, cap: 'speed' },
@@ -72,8 +77,43 @@ export function registerCharacterSelectScreen(): void {
     create(game: Game) {
       const meta = getMeta();
       const cardsEl = h('div', { className: 'char-cards' });
-      const detailEl = h('div', { className: 'char-detail' });
-      detailEl.setAttribute('aria-live', 'polite');
+      // Compact layouts: About / Stats / Ability tabs over the selected Character's details.
+      const aboutPane = h('div', { className: 'char-detail char-about' });
+      aboutPane.setAttribute('aria-live', 'polite');
+      const statsPane = h('div', { className: 'char-detail char-stats' });
+      const abilityPane = h('div', { className: 'char-ability' });
+      const panes: Record<SheetTab, HTMLElement> = { about: aboutPane, stats: statsPane, ability: abilityPane };
+      let tab: SheetTab = 'about';
+      const tabButtons = {} as Record<SheetTab, HTMLButtonElement>;
+      const tabsEl = h('div', { className: 'char-tabs' });
+      tabsEl.setAttribute('role', 'tablist');
+      tabsEl.setAttribute('aria-label', 'Bunny details');
+      for (const t of SHEET_TABS) {
+        const id = `char-tab-${t}`;
+        const b = h('button', { className: 'char-tab', type: 'button', id });
+        b.setAttribute('role', 'tab');
+        b.setAttribute('aria-controls', `${id}-panel`);
+        b.onclick = () => setTab(t);
+        tabButtons[t] = b;
+        panes[t].id = `${id}-panel`;
+        panes[t].setAttribute('role', 'tabpanel');
+        panes[t].setAttribute('aria-labelledby', id);
+        tabsEl.append(b);
+      }
+      tabButtons.about.textContent = 'About';
+      tabButtons.stats.textContent = 'Stats';
+      const setTab = (t: SheetTab) => {
+        tab = t;
+        for (const k of SHEET_TABS) {
+          const on = k === t;
+          tabButtons[k].setAttribute('aria-selected', String(on));
+          tabButtons[k].tabIndex = on ? 0 : -1;
+          panes[k].classList.toggle('inactive', !on);
+          panes[k].setAttribute('aria-hidden', String(!on));
+        }
+      };
+      setTab(tab);
+      const sheet = h('div', { className: 'char-sheet' }, tabsEl, h('div', { className: 'char-panes' }, aboutPane, statsPane, abilityPane));
       const start = h('button', { className: 'btn primary char-start', type: 'button' });
       const back = h('button', { className: 'btn', type: 'button', textContent: 'Back' });
       const shop = h('button', { className: 'btn', type: 'button' });
@@ -162,7 +202,15 @@ export function registerCharacterSelectScreen(): void {
           b.onclick = () => openPicker(i, b);
           return b;
         });
-        const couch = h('button', { className: 'btn btn-sm ks-couch', type: 'button', textContent: '🛋 Under the Couch' });
+        // Phones show a stacked "🛋 Couch" beside the slots; the aria-label keeps the full name.
+        const couch = h(
+          'button',
+          { className: 'btn btn-sm ks-couch', type: 'button' },
+          h('span', { className: 'ks-couch-icon', textContent: '🛋' }),
+          h('span', { className: 'ks-couch-long', textContent: 'Under the Couch' }),
+          h('span', { className: 'ks-couch-short', textContent: 'Couch' }),
+        );
+        couch.setAttribute('aria-label', 'Under the Couch');
         couch.onclick = () => game.go('underTheCouch', { back: 'characterSelect', characterId: c.id });
         loadoutEl.replaceChildren(abilityCard(c.ability, l), h('div', { className: 'ks-slots' }, ...slots, couch));
       };
@@ -198,7 +246,9 @@ export function registerCharacterSelectScreen(): void {
           el.setAttribute('aria-pressed', String(j === index));
         });
         start.textContent = `Start as ${c.name}`;
-        detailEl.replaceChildren(...details(c));
+        const a = getAbility(c.ability);
+        tabButtons.ability.replaceChildren(h('span', { className: 'char-tab-icon', textContent: a.icon }), a.name);
+        fillSheet(c);
         renderLoadout();
       };
 
@@ -207,7 +257,7 @@ export function registerCharacterSelectScreen(): void {
         game.startRun();
       };
 
-      /** Description, stat bars and traits: inside each card, and in the compact detail card. */
+      /** Description, stat bars and traits: inside each card, and in the compact sheet's About and Stats tabs. */
       const details = (c: CharacterDef): HTMLElement[] => {
         const s = characterStats(c, difficulty);
         const bars = BARS.map((b) => {
@@ -235,7 +285,13 @@ export function registerCharacterSelectScreen(): void {
       /** Hearts depend on the Difficulty: re-render the stats in place (keeps focus on the cards). */
       const refreshDetails = () => {
         cardsEl.querySelectorAll('.char-card-details').forEach((el, i) => el.replaceChildren(...details(CHARACTERS[i]!)));
-        detailEl.replaceChildren(...details(CHARACTERS[index]!));
+        fillSheet(CHARACTERS[index]!);
+      };
+
+      const fillSheet = (c: CharacterDef) => {
+        const [desc, bars, traits] = details(c);
+        aboutPane.replaceChildren(desc!, traits!);
+        statsPane.replaceChildren(bars!);
       };
 
       const build = () => {
@@ -256,8 +312,8 @@ export function registerCharacterSelectScreen(): void {
         );
       };
 
-      const body = scrollArea('char-body', cardsEl, detailEl);
-      const placeLoadout = () => (isCompact() ? body.append(loadoutEl) : body.after(loadoutEl));
+      const body = scrollArea('char-body', cardsEl, sheet);
+      const placeLoadout = () => (isCompact() ? abilityPane.append(loadoutEl) : body.after(loadoutEl));
       if (typeof matchMedia === 'function') matchMedia(COMPACT_QUERY).addEventListener('change', placeLoadout);
 
       start.onclick = play;
@@ -305,6 +361,12 @@ export function registerCharacterSelectScreen(): void {
           // and ←/→ move along the Difficulty switch instead of changing the Character.
           const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           const onSegment = !!focused?.closest('.char-diff');
+          if (focused?.closest('.char-tabs') && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+            const i = SHEET_TABS.indexOf(tab) + (e.code === 'ArrowLeft' ? -1 : 1);
+            setTab(SHEET_TABS[(i + SHEET_TABS.length) % SHEET_TABS.length]!);
+            tabButtons[tab].focus();
+            return true;
+          }
           if ((e.code === 'Enter' || e.code === 'Space') && focused?.matches('button:not(.char-card):not(.char-start)')) return false;
           if (onSegment && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
             cycleDifficulty(e.code === 'ArrowLeft' ? -1 : 1);
