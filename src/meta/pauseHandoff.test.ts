@@ -145,8 +145,10 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     const storage = memStorage();
     const store = new SuspendedRunStore(storage);
     const meta = awards();
-    store.save(snapshot());
+    const other = snapshot();
+    store.save(other);
     const s = snapshot();
+    const setItem = storage.setItem;
     storage.setItem = () => {
       throw new Error('QuotaExceededError');
     };
@@ -154,6 +156,17 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     // The Run already in storage is still there: not credited.
     expect(meta.calls).toEqual([]);
     expect(takeBackPausedRun(store, 'h1', s.runKey)).toBe('mine');
+    // Taking it back drops only this page's copy: the other Run, never replaced, is still stored
+    // (removeItem would have worked even though setItem didn't) and this page sees it again.
+    expect(parseRunSnapshot(JSON.parse(storage.getItem(SUSPENDED_RUN_KEY)!))?.runKey).toBe(other.runKey);
+    expect(store.unsaved).toBe(false);
+    expect(store.peek()?.runKey).toBe(other.runKey);
+    expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(other.runKey);
+    // A pause write that sticks is taken back from storage as before.
+    storage.setItem = setItem;
+    expect(storePausedRun(store, structuredClone(s), 'h2', meta)).toBe(true);
+    expect(takeBackPausedRun(store, 'h2', s.runKey)).toBe('mine');
+    expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
   });
 
   it('a Perk draft pending when the Run was stored opens again where it is picked up', () => {
@@ -324,6 +337,7 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
         expect(a.handoff.handoffId).toBe(id);
         expect(a.handoff.leaveStored()).toBeNull();
         expect(a.handoff.holding).toBeNull();
+        a.handoff.forget(); // disposeRun
         await withSavedRunLock(() => undefined, locks);
         expect(a.store.peek()?.runKey).toBe(s.runKey);
       });
@@ -338,6 +352,40 @@ describe('RunHandoff (src/game/handoff.ts): two pages, one storage', () => {
       });
     });
   }
+
+  it('Save & quit with the store still waiting for the lock writes it under the lock, not outside it', async () => {
+    const storage = memStorage();
+    const locks = fifoLocks();
+    const a = page(storage, locks);
+    const b = page(storage, locks);
+    const s = snapshot();
+    let release!: () => void;
+    // Another tab holds the lock: A's store waits behind it.
+    const other = withSavedRunLock(() => new Promise<void>((res) => (release = res)), locks);
+    a.handoff.store(s, 'pause');
+    await Promise.resolve();
+    expect(a.handoff.leaveStored()).toBeNull();
+    a.handoff.forget(); // disposeRun
+    expect(storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
+    release();
+    await other;
+    await withSavedRunLock(() => undefined, locks);
+    expect(b.store.peek()?.runKey).toBe(s.runKey);
+    expect(b.store.peek()?.handoffId).toBeTruthy();
+  });
+
+  it('flush still writes a store Save & quit let go of while it waited (the tab closing)', () => {
+    const storage = memStorage();
+    const locks = fifoLocks();
+    const a = page(storage, locks);
+    void withSavedRunLock(() => new Promise<void>(() => {}), locks); // never released
+    const s = snapshot();
+    a.handoff.store(s, 'pause');
+    a.handoff.leaveStored();
+    a.handoff.forget();
+    a.handoff.flush();
+    expect(new SuspendedRunStore(storage).peek()?.runKey).toBe(s.runKey);
+  });
 
   it('a take back in flight is shared, and a forgotten one resolves false without onLost', async () => {
     const storage = memStorage();

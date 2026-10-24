@@ -405,6 +405,10 @@ export class Game {
    */
   private stepAside(why: HandoffLoss): void {
     if (!this.run) return;
+    this.handoff.forget();
+    // Exit the in-Run screen first, while its Run and view still exist: its exit() may use them
+    // (the story intro finishes its shots on game.view). The title then opens with no Run.
+    this.screens.leave();
     this.disposeRun();
     this.go('title', { notice: handoffNotice(why) } satisfies TitleParams);
   }

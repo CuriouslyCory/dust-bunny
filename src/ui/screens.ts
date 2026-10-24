@@ -58,6 +58,18 @@ export class ScreenManager {
     return inst;
   }
 
+  /**
+   * Exits and hides the current screen now, ahead of the next `go` (which then reports it as the
+   * previous one). For tearing down what its `exit()` still uses right after (`Game.stepAside`).
+   */
+  leave(): void {
+    if (!this.currentScreen) return;
+    this.currentScreen.exit?.();
+    this.currentWrapper!.hidden = true;
+    this.currentScreen = null;
+    this.currentWrapper = null;
+  }
+
   /** Switches screen; returns the previous def. */
   go(id: string, params?: unknown): ScreenDef | null {
     const def = screenRegistry.require(id);
