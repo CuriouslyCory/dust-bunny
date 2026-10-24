@@ -434,6 +434,159 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(server.row?.runKey).toBe(mine.runKey);
   });
 
+  it('the title syncs after this page’s own upload lands, so a Run it is storing is neither credited nor replaced', async () => {
+    const server = new FakeServer();
+    const other = device(server);
+    const there = snapshot('there');
+    other.handoff.store(there, 'pause'); // another device's Run is the Account's saved Run
+    await settle(other.runs);
+    const a = device(server);
+    server.calls = [];
+    let open!: () => void;
+    server.hold.put = new Promise((r) => (open = r));
+    const mine = snapshot('mine');
+    a.handoff.store(mine, 'pause');
+    a.handoff.forget(); // Save & quit: the title syncs at once
+    const syncing = a.runs.syncTitle();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(server.calls).toEqual(['put']); // the GET waits for the upload
+    open();
+    expect((await syncing).fromAccount).toBeNull();
+    expect(server.calls).toEqual(['put', 'get']);
+    expect(server.row?.runKey).toBe(mine.runKey);
+    expect(a.store.peek()?.runKey).toBe(mine.runKey);
+    expect(a.meta.calls).toHaveLength(1); // the Run it replaced on the server, once; not its own
+    expect(a.meta.calls[0]?.stats.seed).toBe('there');
+  });
+
+  it('an upload that can’t settle leaves the title as it is, as offline', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    a.link.offline = true;
+    const mine = snapshot('mine');
+    a.handoff.store(mine, 'pause');
+    a.handoff.forget();
+    expect((await a.runs.syncTitle(30)).offline).toBe(true);
+    expect(server.calls).not.toContain('get');
+    expect(a.store.peek()?.runKey).toBe(mine.runKey);
+  });
+
+  describe('an answer that arrives after an Account switch touches nothing', () => {
+    const held = (server: FakeServer, what: string) => {
+      let open!: () => void;
+      server.hold[what] = new Promise((r) => (open = r));
+      return () => open();
+    };
+
+    it('an upload: a Run it replaced isn’t credited to the new Account', async () => {
+      const server = new FakeServer();
+      const other = device(server);
+      const there = snapshot('there');
+      other.handoff.store(there, 'pause');
+      await settle(other.runs);
+      const a = device(server, 'u1');
+      const open = held(server, 'put');
+      a.handoff.store(snapshot('mine'), 'pause');
+      a.runs.setUser('u2');
+      open();
+      await settle(a.runs);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(server.row?.runKey).not.toBe(there.runKey); // u1's upload did land...
+      expect(a.meta.calls).toEqual([]); // ...but its replaced Run isn't u2's to credit
+    });
+
+    it('a background take: a refusal doesn’t make the new Account’s page step aside', async () => {
+      const server = new FakeServer();
+      const a = device(server, 'u1');
+      const s = snapshot();
+      a.handoff.store(s, 'pause');
+      await settle(a.runs);
+      server.row = { ...server.row!, lease: 'b-lease', snapshot: null, version: null }; // another device took it
+      const open = held(server, 'take');
+      expect(await a.handoff.takeBack()).toBe(true);
+      a.runs.setUser('u2');
+      a.runs.setUser('u1'); // even back to the same Account: its state was dropped
+      open();
+      await settle(a.runs);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(a.lostRuns).toEqual([]);
+    });
+
+    it('a failed request isn’t retried for the Account signed in now', async () => {
+      const server = new FakeServer();
+      const a = device(server, 'u1');
+      const open = held(server, 'put');
+      a.link.offline = true;
+      a.handoff.store(snapshot(), 'pause');
+      a.runs.setUser('u2');
+      a.runs.setUser('u1');
+      open();
+      await new Promise((r) => setTimeout(r, 30));
+      expect(server.calls.filter((c) => c === 'put')).toHaveLength(1);
+      expect(a.runs.pending).toBe(0);
+    });
+
+    it('the title sync: another Account’s row isn’t mirrored into the slot', async () => {
+      const server = new FakeServer();
+      const other = device(server);
+      other.handoff.store(snapshot('u1-run'), 'pause');
+      await settle(other.runs);
+      const a = device(server, 'u1');
+      const open = held(server, 'get');
+      const syncing = a.runs.syncTitle();
+      await new Promise((r) => setTimeout(r, 5));
+      a.runs.setUser('u2');
+      a.runs.setUser('u1');
+      open();
+      await syncing;
+      expect(a.store.peekAny()).toBeNull();
+      expect(a.runs.title.fromAccount).toBeNull();
+    });
+
+    it('Resume: not started, online or offline', async () => {
+      for (const offline of [false, true]) {
+        const server = new FakeServer();
+        const a = device(server, 'u1');
+        a.handoff.store(snapshot(), 'pause');
+        await settle(a.runs);
+        a.handoff.forget();
+        const shown = a.store.peek()!;
+        const open = held(server, 'take');
+        let started = 0;
+        const resuming = a.runs.resume(shown, () => ++started > 0);
+        await new Promise((r) => setTimeout(r, 5));
+        a.link.offline = offline;
+        a.runs.setUser('u2');
+        a.runs.setUser('u1');
+        open();
+        expect(await resuming).toBe('failed');
+        expect(started).toBe(0);
+        expect(a.runs.pending).toBe(0);
+      }
+    });
+
+    it('New run: not abandoned (nor credited) on the device, online or offline', async () => {
+      for (const offline of [false, true]) {
+        const server = new FakeServer();
+        const a = device(server, 'u1');
+        a.handoff.store(snapshot(), 'pause');
+        await settle(a.runs);
+        a.handoff.forget();
+        const shown = a.store.peek()!;
+        const open = held(server, 'end');
+        let abandoned = 0;
+        const abandoning = a.runs.abandon(shown, () => ++abandoned > 0);
+        await new Promise((r) => setTimeout(r, 5));
+        a.link.offline = offline;
+        a.runs.setUser('u2');
+        open();
+        expect(await abandoning).toBe('failed');
+        expect(abandoned).toBe(0);
+        expect(a.runs.pending).toBe(0);
+      }
+    });
+  });
+
   it('a device that fell behind can’t store a Run that ended elsewhere again', async () => {
     const server = new FakeServer();
     const a = device(server);

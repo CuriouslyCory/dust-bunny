@@ -20,15 +20,18 @@
  *   (`takenBack`), retried with backoff while offline; never awaited. If the server says another
  *   device holds the Run (a refused take, or a 409 on a later upload) the page is told (`onLost`):
  *   it disposes its copy without `runEnded`, so nothing is credited twice, and says so.
- * - Title: `syncTitle` reads the server copy, which wins over the device slot: it is mirrored into
- *   the slot (a different Run that only this device had is credited as a quit first). A device copy
- *   the server never confirmed is uploaded instead. One from a newer build is left alone, on both
+ * - Title: `syncTitle` waits until this page's own uploads have landed, then reads the server copy,
+ *   which wins over the device slot: it is mirrored into the slot (a different Run that only this
+ *   device had is credited as a quit first). A device copy the server never confirmed is uploaded
+ *   instead. One from a newer build is left alone, on both
  *   sides, and the title says an update is needed (docs/adr/0001).
  * - Resume (`resume`) waits for the server take: of two devices racing, one gets the Run and the
  *   other's title refreshes. Offline, it resumes and takes in the background, as unpausing does.
  * - New run (`abandon`) and the Run ending (`ended`) end the row, only for this page's lease (the
  *   server keeps it, marked ended, so a late upload of the Run is refused). `abandon` and `resume`
  *   first wait out an upload of the Run still on its way, so the delete or take can't land before it.
+ * - An answer that arrives after an Account switch is dropped (`gen`): it never credits, or touches
+ *   the device slot, for the Account signed in now.
  */
 import type { RunSnapshot, SnapshotAccountTag } from '../game/snapshot';
 import { isNewerSnapshot, newHandoffId, parseRunSnapshot } from '../game/snapshot';
@@ -180,6 +183,12 @@ function leasesOf(tag: SnapshotAccountTag): string[] {
 
 export class AccountRuns {
   private userId: string | null = null;
+  /**
+   * Bumped on every Account change (`setUser`). Each answer from the server is applied only under
+   * the generation it was asked under: one that arrives after a switch (even back to the same
+   * Account, whose state was dropped) touches nothing here, in the device slot or in MetaProgress.
+   */
+  private gen = 0;
   private live: Live | null = null;
   /** Waiting server work, one per Run (a later one supersedes an earlier one), sent one at a time. */
   private ops = new Map<string, Op>();
@@ -222,6 +231,7 @@ export class AccountRuns {
   setUser(userId: string | null): void {
     if (userId === this.userId) return;
     this.userId = userId;
+    this.gen++;
     this.live = null;
     this.ops.clear();
     this.attempt = 0;
@@ -307,23 +317,37 @@ export class AccountRuns {
       if (!busy || live.localOnly) return true;
       const left = deadline - Date.now();
       if (left <= 0) return true;
-      await new Promise<void>((resolve) => {
-        const t = setTimeout(done, left);
-        function done(): void {
-          clearTimeout(t);
-          resolve();
-        }
-        this.waiters.push(done);
-      });
+      await this.nextWake(left);
     }
   }
 
-  /** Drops waiting work for `runKey` and waits out a request for it already sent (and any retry it queued). */
-  private async settled(runKey: string): Promise<void> {
-    this.ops.delete(runKey);
-    while (this.inFlight?.runKey === runKey) {
-      await new Promise<void>((resolve) => this.waiters.push(resolve));
-      this.ops.delete(runKey);
+  /** Resolves when a request settles (or the page loses a Run), or after `ms`. */
+  private nextWake(ms = Infinity): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const t = Number.isFinite(ms) ? setTimeout(done, ms) : null;
+      function done(): void {
+        if (t) clearTimeout(t);
+        resolve();
+      }
+      this.waiters.push(done);
+    });
+  }
+
+  /**
+   * The one wait every title action (`syncTitle`, `resume`, `abandon`) goes through, so what it
+   * reads or writes on the server lands after this page's own uploads instead of racing them.
+   * Waits until no work for `runKey` (for any Run: null) is waiting or on its way, retries included.
+   * `drop`: waiting work for `runKey` is dropped rather than sent (the caller supersedes it). False
+   * when still unsettled at `deadline` (offline).
+   */
+  private async settled(runKey: string | null, drop: boolean, deadline = Infinity): Promise<boolean> {
+    for (;;) {
+      if (drop && runKey !== null) this.ops.delete(runKey);
+      const busy = runKey === null ? this.pending > 0 : this.ops.has(runKey) || this.inFlight?.runKey === runKey;
+      if (!busy) return true;
+      const left = deadline - Date.now();
+      if (left <= 0) return false;
+      await this.nextWake(left);
     }
   }
 
@@ -347,16 +371,26 @@ export class AccountRuns {
    * Brings the device slot in line with the Account's saved Run (the title calls it on entry).
    * Resolves what the title should say; never throws.
    */
-  async syncTitle(): Promise<TitleSync> {
+  async syncTitle(timeoutMs = 6000): Promise<TitleSync> {
     const userId = this.userId;
+    const gen = this.gen;
     if (!userId) return (this.title = { fromAccount: null, newerOnAccount: false, offline: false });
+    const offline = (): TitleSync => (gen === this.gen ? (this.title = { ...this.title, offline: true }) : this.title);
+    // This page's uploads land first (Save & quit's, say): reconciling against a row they are about
+    // to change could credit, or replace, the Run they store. Still unsettled: as offline.
+    const deadline = Date.now() + timeoutMs;
     let row: ServerSavedRun | null;
-    try {
-      row = await this.api.get();
-    } catch {
-      return userId === this.userId ? (this.title = { ...this.title, offline: true }) : this.title;
+    for (;;) {
+      if (!(await this.settled(null, false, deadline))) return offline();
+      if (gen !== this.gen) return this.title;
+      try {
+        row = await this.api.get();
+      } catch {
+        return offline();
+      }
+      if (gen !== this.gen) return this.title;
+      if (this.pending === 0) break; // nothing new went out while it was on its way
     }
-    if (userId !== this.userId) return this.title;
     const view: TitleSync = { fromAccount: null, newerOnAccount: false, offline: false };
     const local = this.store.peek();
     const mine = local?.account?.userId === userId ? local.account : null;
@@ -419,14 +453,14 @@ export class AccountRuns {
       this.live = null;
       return 'mine';
     }
-    const userId = this.userId;
-    const settled = await this.settledTag(shown, userId);
+    const gen = this.gen;
+    const settled = await this.settledTag(shown, gen);
     if (typeof settled === 'string') return settled;
     const leases = leasesOf(settled);
     const take = { runKey: shown.runKey, lease: leases[0]!, newLease: leases[1] ?? newHandoffId() };
     try {
       const res = await this.api.take(take);
-      if (userId !== this.userId) return 'failed';
+      if (gen !== this.gen) return 'failed';
       if (!res.taken && !(settled.synced === false && (!res.savedRun || res.savedRun.runKey !== shown.runKey))) {
         if (this.store.peek()?.runKey === shown.runKey) this.store.clear();
         return 'lost';
@@ -439,7 +473,7 @@ export class AccountRuns {
       this.live = { runKey: shown.runKey, leases: [take.newLease], confirmed: true, localOnly: false };
       return 'mine';
     } catch (err) {
-      if (err instanceof SavedRunAuthError) return 'failed';
+      if (err instanceof SavedRunAuthError || gen !== this.gen) return 'failed';
       // Offline: play it, and take it in the background, as an unpause does.
       if (!start()) return 'failed';
       this.live = { runKey: shown.runKey, leases: [take.lease, take.newLease], confirmed: settled.synced, localOnly: false };
@@ -464,19 +498,21 @@ export class AccountRuns {
   async abandon(shown: RunSnapshot, abandonLocal: () => boolean): Promise<'done' | 'lost' | 'failed'> {
     const tag = shown.account;
     if (!this.userId || !tag || tag.userId !== this.userId) return abandonLocal() ? 'done' : 'failed';
-    const nowTag = await this.settledTag(shown, this.userId);
+    const gen = this.gen;
+    const nowTag = await this.settledTag(shown, gen);
     if (typeof nowTag === 'string') return nowTag;
     const leases = leasesOf(nowTag);
     const body = { runKey: shown.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) };
     try {
       const res = await this.api.end(body);
+      if (gen !== this.gen) return 'failed'; // another Account's now: nothing to credit here
       // Not deleted: another device holds it now, unless the server never had it.
       if (!res.deleted && nowTag.synced) {
         if (this.store.peek()?.runKey === shown.runKey) this.store.clear();
         return 'lost';
       }
     } catch (err) {
-      if (err instanceof SavedRunAuthError) return 'failed';
+      if (err instanceof SavedRunAuthError || gen !== this.gen) return 'failed';
       this.queue({ kind: 'end', runKey: shown.runKey, leases });
     }
     return abandonLocal() ? 'done' : 'failed';
@@ -488,12 +524,12 @@ export class AccountRuns {
    * the Run's tag as that left it in the device slot; `lost` when the slot lost it (a 409 on that
    * upload: another device has it), `failed` when the Account changed meanwhile.
    */
-  private async settledTag(shown: RunSnapshot, userId: string): Promise<SnapshotAccountTag | 'lost' | 'failed'> {
-    await this.settled(shown.runKey);
-    if (userId !== this.userId) return 'failed';
+  private async settledTag(shown: RunSnapshot, gen: number): Promise<SnapshotAccountTag | 'lost' | 'failed'> {
+    await this.settled(shown.runKey, true);
+    if (gen !== this.gen) return 'failed';
     const now = this.store.peek();
     if (now?.runKey !== shown.runKey) return 'lost';
-    return now.account?.userId === userId ? now.account : shown.account!;
+    return now.account?.userId === this.userId ? now.account : shown.account!;
   }
 
   /** A device abandon outside the title (any new Run start): the server row goes too. */
@@ -523,13 +559,13 @@ export class AccountRuns {
     const op = next.value;
     this.ops.delete(op.runKey);
     this.inFlight = op;
-    const userId = this.userId;
-    void this.send(op)
+    const gen = this.gen;
+    void this.send(op, gen)
       .then(() => {
-        this.attempt = 0;
+        if (gen === this.gen) this.attempt = 0;
       })
       .catch((err: unknown) => {
-        if (userId !== this.userId) return;
+        if (gen !== this.gen) return; // asked for another Account (or before a switch back): dropped
         if (err instanceof SavedRunAuthError) return; // signed out elsewhere: the Account client will say so
         // Retry later, unless something newer for the Run superseded it meanwhile.
         if (!this.ops.has(op.runKey)) this.ops.set(op.runKey, op);
@@ -547,7 +583,8 @@ export class AccountRuns {
       });
   }
 
-  private async send(op: Op): Promise<void> {
+  /** Sends `op`; its answer is applied only if the Account hasn't changed since (`gen`). */
+  private async send(op: Op, gen: number): Promise<void> {
     if (op.kind === 'end') {
       const leases = op.leases;
       await this.api.end({ runKey: op.runKey, lease: leases[leases.length - 1]!, ...(leases.length > 1 ? { prevLease: leases[0] } : {}) });
@@ -558,7 +595,7 @@ export class AccountRuns {
       if (!live || live.leases.length < 2) return; // settled meanwhile (an upload confirmed it, or the Run is gone)
       const [lease, newLease] = live.leases as [string, string];
       const res = await this.api.take({ runKey: op.runKey, lease, newLease });
-      if (this.live !== live) return;
+      if (gen !== this.gen || this.live !== live) return;
       if (res.taken || (!live.confirmed && (!res.savedRun || res.savedRun.runKey !== op.runKey))) {
         // Taken; or the server never had this Run from here, so nobody else can have it.
         live.leases = [newLease];
@@ -572,6 +609,7 @@ export class AccountRuns {
     const leases = live ? [...live.leases] : leasesOf(tag);
     const lease = leases[leases.length - 1]!;
     const res = await this.api.put({ runKey: op.runKey, lease, ...(leases.length > 1 ? { prevLease: leases[0] } : {}), snapshot: uploadable(op.snapshot) }, this.hidden());
+    if (gen !== this.gen) return; // a replaced Run it returns was another Account's: not credited here
     if (res.ok) {
       if (live && this.live === live) {
         // The server holds `lease` now. A lease added since this was sent (an unpause) is kept: its
