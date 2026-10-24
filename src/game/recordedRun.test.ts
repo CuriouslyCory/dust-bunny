@@ -82,7 +82,8 @@ describe('a recorded Run', () => {
 
   it('keeps its snapshots, RunStats and CreditStats byte-identical', () => {
     const now = record();
-    if (process.env.RECORD || !existsSync(FIXTURE)) writeFileSync(FIXTURE, `${JSON.stringify(now, null, 1)}\n`);
+    if (process.env.RECORD) writeFileSync(FIXTURE, `${JSON.stringify(now, null, 1)}\n`);
+    else if (!existsSync(FIXTURE)) throw new Error('recordedRun.json is missing: run with RECORD=1 only for a change meant to alter saved data');
     const was = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Recording;
     for (const k of Object.keys(was.snapshots)) expect(json(now.snapshots[k]), `snapshot ${k}`).toBe(json(was.snapshots[k]));
     expect(json(now.stats)).toBe(json(was.stats));
