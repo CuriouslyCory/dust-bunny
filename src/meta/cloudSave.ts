@@ -141,7 +141,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     const universes = replace ? p.universes : mergeUniverses(meta.data.universes, p.universes);
     if (sameProgress(progressOf(meta.data), { ...p, universes })) return;
     meta.store.update((d) => {
-      d.universes = universes;
+      // Re-merged against the freshly read save (another tab may have ended a Universe).
+      d.universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
       d.fluff = p.fluff;
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
@@ -168,7 +169,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       lastSynced = res.progress;
       // The server keeps the larger Universes count (another device may have ended more).
       const { universes } = res.progress;
-      if (universes > meta.data.universes) meta.store.update((d) => void (d.universes = universes));
+      if (universes > meta.data.universes) meta.store.update((d) => void (d.universes = Math.max(d.universes, universes)));
       if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
       else schedule(debounceMs);
     } else if (compareProgress(progressOf(meta.data), res.progress) > 0) {

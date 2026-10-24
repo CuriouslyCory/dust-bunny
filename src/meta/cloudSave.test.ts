@@ -3,7 +3,7 @@ import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
 import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
-import type { KeyValueStorage } from './save';
+import { type KeyValueStorage, SAVE_KEY, type SaveStorageEvent } from './save';
 
 const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map: Map<string, string> } => {
   const map = new Map(Object.entries(init));
@@ -178,6 +178,30 @@ describe('cloud save', () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(s.server.puts).toHaveLength(1);
     expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1, magnetism: 1 });
+  });
+
+  it("uploads another tab's changes merged with this tab's, not a stale copy", async () => {
+    const shared = memStorage();
+    const listeners = new Set<(e: SaveStorageEvent) => void>();
+    const events = { addEventListener: (_t: 'storage', l: (e: SaveStorageEvent) => void) => void listeners.add(l), removeEventListener: () => undefined };
+    const tabA = new MetaProgress(shared, events);
+    tabA.store.update((d) => Object.assign(d, { fluff: 300, stats: prog(300, 300, 5).stats }));
+    const tabB = new MetaProgress(shared);
+    const server = fakeServer();
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch: server.fetch, storage: memStorage(), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.runAllTimersAsync();
+    // Tab B (no cloud save of its own here) buys; tab A hears of it and uploads it.
+    tabB.buy('wide_choice');
+    for (const l of listeners) l({ key: SAVE_KEY, storageArea: shared });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 80, upgrades: { wide_choice: 1 } });
+    // Tab A's own change builds on it.
+    tabA.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 40, upgrades: { wide_choice: 1, fast_feet: 1 } });
   });
 
   it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {
