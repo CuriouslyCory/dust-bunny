@@ -1,21 +1,16 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
-import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, BROOM, CITY_DIRECTOR, DIRECTOR, DIRECTOR_EXCLUDE, GARBAGE_TRUCK, LEAF_BLOWER, MINI_SCRUBBER, NEIGHBORHOOD_DIRECTOR, STREET_FLUSHER, tierValue } from '../data/hazards';
+import { BROOM, GARBAGE_TRUCK, LEAF_BLOWER, STREET_FLUSHER, tierValue } from '../data/hazards';
 import { getTier } from '../data/tiers';
-import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
-import type { AreaId } from '../world/types';
 import { CITY } from '../world/city';
 import { absorbRadiusFor, hazardFloorFree } from './common';
-import { spawnWeights } from './director';
-import { hazardRegistry } from './index';
 import type { Mop } from './mop';
 import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
-
-const CITY_HAZARDS = ['floor_scrubber', 'pressure_washer', 'litter_vacuum', 'street_flusher'];
-const BOSS_IDS = ['garbage_truck', 'mini_scrubber'];
+import './content';
 
 const makeRun = (seed = 'city-hazards') => {
   const events = new EventBus();
@@ -35,77 +30,13 @@ function moveToAvenue(run: Run): void {
   throw new Error('no open avenue');
 }
 
-/** First Tier whose spawn table lists `id` (the tables decide when a Hazard first appears). */
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
-}
-
 describe('city Hazards', () => {
-  it('are a threat on arrival in the city and absorbable by Tier 9 (except the boss)', () => {
-    const tier9 = getTier(9).minRadius;
-    for (const id of CITY_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      moveToAvenue(run);
-      const h = run.hazards.spawn(id, run.bunny.x + 1200, run.bunny.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, 0.7);
-      expect(need, id).toBeGreaterThan(CITY.debugStartRadius);
-      expect(need, id).toBeGreaterThan(getTier(firstTableTier(id, 'city')).minRadius);
-      expect(need, id).toBeLessThan(tier9);
-    }
-    // The boss's mini scrubbers are food for a Tier 9 Bunny; the boss itself is not (yet).
-    expect(absorbRadiusFor(MINI_SCRUBBER.size, 0.7)).toBeLessThan(tier9);
-    expect(absorbRadiusFor(GARBAGE_TRUCK.size, 0.7)).toBeGreaterThan(tier9);
-    expect(hazardRegistry.require('garbage_truck').boss).toBe(true);
-  });
-
-
-  it('city spawn tables only list city Hazards, Street Flushers from Tier 8, and never the boss or its minis', () => {
-    for (let t = CITY_DIRECTOR.firstTier; t <= 9; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'city'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(CITY_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(7, {}, 'city'))).not.toContain('street_flusher');
-    expect(Object.keys(spawnWeights(8, {}, 'city'))).toContain('street_flusher');
-    for (const id of BOSS_IDS) expect(DIRECTOR_EXCLUDE).toContain(id);
-    for (const t of [...DIRECTOR.tiers, ...NEIGHBORHOOD_DIRECTOR.tiers]) for (const id of CITY_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-  });
-
   it('per-Tier values stay valid at Tiers 8–9 for every area', () => {
     // House tables (5 entries) and outdoor ones (7) clamp to their last Tier.
     expect(tierValue(BROOM.telegraph, 9)).toBe(BROOM.telegraph[4]);
     expect(tierValue(LEAF_BLOWER.speed, 9)).toBe(LEAF_BLOWER.speed[6]);
     expect(tierValue(STREET_FLUSHER.speed, 7)).toBe(STREET_FLUSHER.speed[0]);
     expect(tierValue(STREET_FLUSHER.speed, 9)).toBe(STREET_FLUSHER.speed[8]);
-  });
-
-  it('the director spawns city Hazards (never house or outdoor ones) and brings the Garbage Truck at its arrival size', () => {
-    const { run, events } = makeRun('city-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    const step = (seconds: number) => {
-      for (let i = 0; i < 60 * seconds && !run.ended; i++) run.update(1 / 60);
-    };
-    step(40);
-    expect(run.tier).toBe(7);
-    run.bunny.setRadius(bossArrivalRadius('city', run.bunny.stats.get('absorbRatio')) * 0.95);
-    step(30);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-
-    run.bunny.setRadius(bossArrivalRadius('city', run.bunny.stats.get('absorbRatio')) * 1.02);
-    step(AREA_BOSSES.city.arrivalDelay + 1);
-    expect(bosses).toEqual(['Garbage Truck']);
-    expect(run.hazards.count('garbage_truck')).toBe(1);
-    for (const id of spawned) expect([...CITY_HAZARDS, ...BOSS_IDS]).toContain(id);
   });
 
   it('absorbing the Garbage Truck opens the highway on-ramp (bossDefeated → exitOpened) and clears its minis', () => {
@@ -126,7 +57,7 @@ describe('city Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:garbage_truck', 'exitOpened:city']);
     expect(run.ended).toBe(false);
-    expect(run.cityCleared).toBe(true);
+    expect(run.isAreaCleared('city')).toBe(true);
     expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_scrubber')).toBe(0);
   });

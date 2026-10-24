@@ -74,8 +74,8 @@ describe('road to the city', () => {
   it('a Run can start in the city (debug), keeping its Tier', () => {
     const run = new Run(new EventBus(), { seed: 'city-start', characterId: 'lint', area: 'city' });
     expect(run.area).toBe('city');
-    expect(run.houseCleared).toBe(true);
-    expect(run.neighborhoodCleared).toBe(true);
+    expect(run.isAreaCleared('house')).toBe(true);
+    expect(run.isAreaCleared('neighborhood')).toBe(true);
     expect(run.bunny.radius).toBeGreaterThanOrEqual(CITY.debugStartRadius);
     expect(run.tier).toBe(7);
     expect(run.debris.count).toBeGreaterThan(500);

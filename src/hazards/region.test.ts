@@ -1,22 +1,17 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
 import { rect } from '../core/math';
-import { bossArrivalRadius, AREA_BOSSES, AREA_DIRECTORS, CITY_DIRECTOR, CROP_DUSTER, DIRECTOR, DIRECTOR_EXCLUDE, FREIGHT_TRAIN, INCINERATOR, MINI_COMPACTOR, NEIGHBORHOOD_DIRECTOR, REGION_DIRECTOR, RIVER_BARGE, tierValue } from '../data/hazards';
+import { CROP_DUSTER, INCINERATOR, RIVER_BARGE, tierValue } from '../data/hazards';
 import { getTier } from '../data/tiers';
 import { getHazardDirector, installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
-import { REGION } from '../world/region';
-import type { AreaId } from '../world/types';
 import { absorbRadiusFor, setLure, type Lure } from './common';
-import { spawnWeights } from './director';
 import { hazardRegistry, type Hazard } from './index';
 import type { Mop } from './mop';
 import { type RoboVac9000 } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
-
-const REGION_HAZARDS = ['landfill_compactor', 'snowplow', 'freight_train', 'crop_duster', 'river_barge', 'water_bomber'];
-const BOSS_IDS = ['incinerator', 'mini_compactor'];
 
 /** A Run in the Region (placeholder field, 200 × 150 units of 10 m); the Bunny starts at r ≈ 0.9 units. */
 const makeRun = (seed = 'region-hazards') => {
@@ -34,89 +29,7 @@ function moveToCentre(run: Run): void {
   run.bunny.teleport((bd.minX + bd.maxX) / 2, (bd.minZ + bd.maxZ) / 2);
 }
 
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
-}
-
-const step = (run: Run, seconds: number) => {
-  for (let i = 0; i < 60 * seconds && !run.ended; i++) run.update(1 / 60);
-};
-
 describe('region Hazards', () => {
-  it('run in Region units (1 = 10 m)', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(1000);
-    expect(run.bunny.radius).toBeCloseTo(REGION.debugStartRadius);
-  });
-
-  it('are a threat on arrival in the region and absorbable before the Incinerator is', () => {
-    const tier11 = getTier(11).minRadius / 1000;
-    const boss = absorbRadiusFor(INCINERATOR.size, 0.7);
-    for (const id of REGION_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      moveToCentre(run);
-      const h = run.hazards.spawn(id, run.bunny.x + 12, run.bunny.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, 0.7);
-      expect(need, id).toBeGreaterThan(REGION.debugStartRadius);
-      const first = firstTableTier(id, 'region');
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      expect(need, id).toBeLessThan(boss);
-      // Tier 10 Hazards are food by early Tier 11; the Tier 11 newcomers before the boss.
-      if (first === 10) expect(need, id).toBeLessThan(tier11 * 1.1);
-    }
-    expect(absorbRadiusFor(MINI_COMPACTOR.size, 0.7)).toBeLessThan(tier11);
-    expect(hazardRegistry.require('incinerator').boss).toBe(true);
-  });
-
-
-  it('region spawn tables only list region Hazards, trains and water bombers from Tier 11, and never the boss or its minis', () => {
-    for (let t = REGION_DIRECTOR.firstTier; t <= 11; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'region'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(REGION_HAZARDS).toContain(id);
-    }
-    // The Bunny arrives at Tier 9 and uses the Tier 10 table.
-    expect(Object.keys(spawnWeights(9, {}, 'region'))).toEqual(Object.keys(spawnWeights(10, {}, 'region')));
-    for (const id of ['freight_train', 'water_bomber']) {
-      expect(Object.keys(spawnWeights(10, {}, 'region'))).not.toContain(id);
-      expect(Object.keys(spawnWeights(11, {}, 'region'))).toContain(id);
-    }
-    for (const id of BOSS_IDS) expect(DIRECTOR_EXCLUDE).toContain(id);
-    for (const t of [...DIRECTOR.tiers, ...NEIGHBORHOOD_DIRECTOR.tiers, ...CITY_DIRECTOR.tiers]) for (const id of REGION_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(FREIGHT_TRAIN.speed, 9)).toBe(FREIGHT_TRAIN.speed[9]);
-    expect(tierValue(FREIGHT_TRAIN.speed, 11)).toBe(FREIGHT_TRAIN.speed[10]);
-  });
-
-  it('the director spawns region Hazards (never earlier areas’ ones) and brings the Incinerator at its arrival size', () => {
-    const { run, events } = makeRun('region-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    step(run, 30);
-    expect(spawned.length).toBeGreaterThan(0);
-    // Late in Tier 10 the alive budget is up to 4 (2 at its start).
-    run.bunny.setRadius(bossArrivalRadius('region', run.bunny.stats.get('absorbRatio')) * 0.95);
-    step(run, 60);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-
-    run.bunny.setRadius(bossArrivalRadius('region', run.bunny.stats.get('absorbRatio')) * 1.02);
-    step(run, AREA_BOSSES.region.arrivalDelay + 1);
-    expect(bosses).toEqual(['Incinerator']);
-    expect(run.hazards.count('incinerator')).toBe(1);
-    for (const id of spawned) expect([...REGION_HAZARDS, ...BOSS_IDS]).toContain(id);
-    // Hazards spawn just outside the view: in Region units, not hundreds of units away.
-    const b = run.bunny;
-    for (const h of run.hazards.hazards) expect(Math.hypot(h.x - b.x, h.z - b.z), h.def.id).toBeLessThan(150);
-  });
-
   it('places the River Barge in river zones when the map has one', () => {
     const { run } = makeRun('barge-zone');
     installGameplay(run);
@@ -347,7 +260,7 @@ describe('region Hazards', () => {
     run.update(1 / 60);
     expect(order).toEqual(['bossDefeated:incinerator', 'exitOpened:region']);
     expect(run.ended).toBe(false);
-    expect(run.regionCleared).toBe(true);
+    expect(run.isAreaCleared('region')).toBe(true);
     expect(run.house.exit).toMatchObject({ open: true, dir: { x: -1, z: 0 } });
     expect(run.canLeaveArea).toBe(true);
     expect(run.hazards.count('mini_compactor')).toBe(0);

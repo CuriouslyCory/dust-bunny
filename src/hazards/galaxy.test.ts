@@ -1,33 +1,20 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
-import { AREAS } from '../data/areas';
 import {
-  bossAbsorbRadius,
-  bossArrivalRadius,
-  AREA_BOSSES,
-  AREA_DIRECTORS,
   BLACK_HOLE,
-  DIRECTOR_EXCLUDE,
-  GALAXY_DIRECTOR,
-  GLOBULAR_CLUSTER,
   PULSAR,
   SAGITTARIUS_A,
-  SOLAR_DIRECTOR,
   SUPERNOVA,
   SUPERNOVA_REMNANT,
   tierValue,
 } from '../data/hazards';
 import { peakRarityForBoss } from '../data/keepsakes';
-import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
-import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { galacticCentre } from '../world/galaxy';
 import { createModel } from '../world/models';
-import type { AreaId } from '../world/types';
 import { absorbRadiusFor } from './common';
-import { spawnWeights } from './director';
-import { hazardRegistry } from './index';
 import type { LintRoller } from './lintRoller';
 import { HAZARD_MODEL_SIZES } from './models';
 import type { Mop } from './mop';
@@ -35,11 +22,9 @@ import { beamLead, inBeam, type Pulsar } from './pulsar';
 import type { Roomba } from './roomba';
 import type { SagittariusA } from './sagittariusA';
 import type { UprightVacuum } from './uprightVacuum';
+import './content';
 
-const GALAXY_HAZARDS = ['black_hole', 'globular_cluster', 'pulsar', 'supernova_remnant', 'supernova'];
-const TUNINGS = { black_hole: BLACK_HOLE, globular_cluster: GLOBULAR_CLUSTER, pulsar: PULSAR, supernova_remnant: SUPERNOVA_REMNANT, supernova: SUPERNOVA } as const;
 const CLUSTERS = Object.keys(SAGITTARIUS_A.clusters.meals);
-const ratio = 0.7;
 const STEP = 1 / 60;
 
 /** A Run in the Galaxy (360 × 360 units of 100 ly, Sagittarius A*'s seat at the centre); the Bunny arrives at 0.85 units. */
@@ -49,21 +34,11 @@ const makeRun = (seed = 'galaxy-hazards') => {
   return { events, run };
 };
 
-/** Bunny radius (Galaxy units) at the start of a Tier. */
-const tierRadius = (run: Run, tier: number) => getTier(tier).minRadius / run.unit;
-
 /** The spawn: open space on an arm (the Galaxy has no obstacles). */
 function moveToOpen(run: Run): { x: number; z: number } {
   const p = { x: run.house.spawn.x, z: run.house.spawn.z };
   run.bunny.teleport(p.x, p.z);
   return p;
-}
-
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
 }
 
 function typeIndex(run: Run, id: string): number {
@@ -84,83 +59,17 @@ function clearAround(run: Run, x: number, z: number, radius: number): void {
 }
 
 describe('galaxy Hazards', () => {
-  it('arrives short of its absorb radius (about a minute of growth) and 5 hits break it', () => {
-    expect(absorbRadiusFor(SAGITTARIUS_A.size, ratio)).toBeCloseTo(4, 1);
-    expect(bossArrivalRadius('galaxy', ratio)).toBeLessThan(bossAbsorbRadius('galaxy', ratio));
-    expect(bossAbsorbRadius('galaxy', ratio)).toBeCloseTo(absorbRadiusFor(SAGITTARIUS_A.size, ratio));
-    expect(AREA_BOSSES.galaxy).toMatchObject({ id: 'sagittarius_a', hits: 5 });
-    expect(hazardRegistry.require('sagittarius_a').boss).toBe(true);
-    expect(SAGITTARIUS_A.miniId).toBeUndefined();
+  it("Sagittarius A*'s Keepsake drop peaks at rarity 4", () => {
     expect(peakRarityForBoss('sagittarius_a')).toBe(4);
   });
 
-  it('run in Galaxy units (1 = 100 ly) with their own models, whose fallbacks carry the GLB node names', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(AREAS.galaxy.unit);
-    expect(run.bunny.radius).toBeCloseTo(AREAS.galaxy.arrivalRadius!);
-    for (const [id, cfg] of Object.entries(TUNINGS)) {
-      expect(cfg.modelId, id).toBe(id);
-      expect(hazardRegistry.require(id).modelId, id).toBe(id);
-    }
-    expect(hazardRegistry.require('sagittarius_a').modelId).toBe('sagittarius_a');
+  it('its models\' fallbacks carry the GLB node names', () => {
     const nodes: Record<string, string[]> = { black_hole: ['disk'], globular_cluster: ['swarm'], pulsar: ['head'], supernova_remnant: ['shell'], supernova: ['core'], sagittarius_a: ['disk', 'jet_n', 'jet_s'] };
     for (const [id, names] of Object.entries(nodes)) {
       const m = createModel(id, { ...HAZARD_MODEL_SIZES[id as keyof typeof HAZARD_MODEL_SIZES] });
       for (const n of names) expect(m.getObjectByName(n), `${id} ${n}`).toBeTruthy();
     }
     expect(HAZARD_MODEL_SIZES.sagittarius_a).toEqual({ w: 6.4, d: 6.4, h: 5.39 });
-  });
-
-  it('are a threat on arrival and absorbable before Sagittarius A* is; Tier 18 ones are food by early Tier 19', () => {
-    const tier19 = tierRadius(makeRun().run, 19);
-    const boss = absorbRadiusFor(SAGITTARIUS_A.size, ratio);
-    for (const id of GALAXY_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      const p = moveToOpen(run);
-      const h = run.hazards.spawn(id, p.x + 8, p.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, ratio);
-      expect(need, id).toBeGreaterThan(AREAS.galaxy.arrivalRadius!);
-      const first = firstTableTier(id, 'galaxy');
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      expect(need, id).toBeLessThan(boss);
-      if (first === 18) expect(need, id).toBeLessThan(tier19 * 1.1);
-    }
-  });
-
-
-  it('galaxy spawn tables list only galaxy Hazards, Supernovae from Tier 19, never Sagittarius A*', () => {
-    for (let t = GALAXY_DIRECTOR.firstTier; t <= 19; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'galaxy'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(GALAXY_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(18, {}, 'galaxy'))).not.toContain('supernova');
-    expect(Object.keys(spawnWeights(19, {}, 'galaxy'))).toContain('supernova');
-    expect(DIRECTOR_EXCLUDE).toContain('sagittarius_a');
-    for (const t of SOLAR_DIRECTOR.tiers) for (const id of GALAXY_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(PULSAR.range, 18)).toBe(PULSAR.range[17]);
-    expect(tierValue(PULSAR.range, 19)).toBe(PULSAR.range[18]);
-  });
-
-  it('the director spawns galaxy Hazards (placed clear of the map) and brings Sagittarius A* at its arrival size', () => {
-    const { run, events } = makeRun('galaxy-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    for (let i = 0; i < 60 * 30 && !run.ended; i++) run.update(STEP);
-    run.bunny.setRadius(bossArrivalRadius('galaxy', run.bunny.stats.get('absorbRatio')) * 0.95);
-    for (let i = 0; i < 60 * 60 && !run.ended; i++) run.update(STEP);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-    run.bunny.setRadius(bossArrivalRadius('galaxy', run.bunny.stats.get('absorbRatio')) * 1.02);
-    for (let i = 0; i < 60 * (AREA_BOSSES.galaxy.arrivalDelay + 1) && !run.ended; i++) run.update(STEP);
-    expect(bosses).toEqual(['Sagittarius A*']);
-    expect(run.hazards.count('sagittarius_a')).toBe(1);
-    for (const id of spawned) expect([...GALAXY_HAZARDS, 'sagittarius_a']).toContain(id);
   });
 
   it("the Black Hole's pull drags the Bunny in, spirals loose Debris in and swallows it; its disc turns", () => {

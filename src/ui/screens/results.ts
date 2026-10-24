@@ -20,8 +20,10 @@ import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
 import { creditStatsOf } from '../../meta/savedRuns';
 import { endsUniverse, getMeta } from '../../meta/meta';
-import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, fluffForRun, GALAXY_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { clearedFluffBonus, fluffForRun, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
+import { AreaProgress } from '../../game/areaProgress';
+import { AREA_ORDER, type AreaId } from '../../world/types';
 import { formatSize } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
 import { h, registerScreen, screenRegistry } from '../screens';
@@ -57,19 +59,35 @@ export function storyResultLine(e: RunResult): { lead: string; text: string } | 
   return { lead: `${e.reason === 'died' ? 'Swept up' : 'Stopped'} in Chapter ${chapter.number} · `, text: chapter.title };
 }
 
+/** "Galaxy", "Solar System", …: an Area's name without its article (`AREAS[area].name`). */
+function areaLabel(area: AreaId): string {
+  return AREAS[area].name.replace(/^The /, '');
+}
+
+/**
+ * Results copy per Area. `movedOn`: the note on its "Cleared" row when the Run ended in the next
+ * Area (`anyLater`: in any later one). `diedHere`: the subtitle for a death in it. `soClose`: the
+ * subtitle for a death after clearing it, still in it.
+ */
+const AREA_RESULTS: Readonly<Record<AreaId, { icon: string; movedOn?: { note: string; anyLater?: true }; diedHere?: string; soClose?: string }>> = {
+  house: { icon: '🏠', movedOn: { note: 'made it outside', anyLater: true }, soClose: 'So close to the front door!' },
+  neighborhood: { icon: '🌳', movedOn: { note: 'made it downtown' }, diedHere: 'Swept off the street. The house was yours, at least.', soClose: 'So close to the city!' },
+  city: { icon: '🏙️', movedOn: { note: 'took the highway' }, diedHere: 'Hosed off the avenue. The whole neighborhood was yours, at least.', soClose: 'So close to the highway!' },
+  region: { icon: '🗺️', movedOn: { note: 'rolled west' }, diedHere: 'Burnt down at the landfill. The whole city was yours, at least.', soClose: 'So close to the continent!' },
+  continent: { icon: '🌍', movedOn: { note: 'reached orbit' }, diedHere: 'Frozen out on the ice. The whole region was yours, at least.', soClose: 'So close to orbit!' },
+  globe: { icon: '🌐', movedOn: { note: 'escaped orbit' }, diedHere: 'Netted in orbit. The whole continent was yours, at least.', soClose: 'So close to the Solar System!' },
+  solar_system: { icon: '☀️', movedOn: { note: 'crossed the heliopause' }, diedHere: 'Blown out of the ecliptic. The whole planet was yours, at least.', soClose: 'So close to the Galaxy!' },
+  galaxy: { icon: '🌌', movedOn: { note: 'left the Milky Way' }, diedHere: 'Lost in the galactic dark. The whole solar system was yours, at least.', soClose: 'So close to the Universe!' },
+  universe: { icon: '✨', diedHere: 'Spread out thin across the void. The whole galaxy was yours, at least.' },
+};
+
 /** "Victory ×1.5 · Hardcore ×1.6 · " etc.: the Fluff multipliers the Run earned (see meta/fluff.ts). */
 function fluffBonusLabel(e: RunResult): string {
   const difficulty = getDifficulty(e.stats.difficulty);
   const diff = difficulty.fluff !== 1 ? `${difficulty.name} ×${difficulty.fluff} · ` : '';
   if (e.reason === 'victory') return `Victory ×${VICTORY_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.galaxyCleared) return `Galaxy cleared ×${GALAXY_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.solarSystemCleared) return `Solar System cleared ×${SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.globeCleared) return `Globe cleared ×${GLOBE_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.continentCleared) return `Continent cleared ×${CONTINENT_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.regionCleared) return `Region cleared ×${REGION_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.cityCleared) return `City cleared ×${CITY_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.neighborhoodCleared) return `Neighborhood cleared ×${NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
-  if (e.stats.houseCleared) return `House cleared ×${HOUSE_CLEARED_FLUFF_MULTIPLIER} · ${diff}`;
+  const bonus = clearedFluffBonus(e.stats);
+  if (bonus) return `${areaLabel(bonus.area)} cleared ×${bonus.multiplier} · ${diff}`;
   return diff;
 }
 
@@ -77,25 +95,31 @@ export function registerResultsSection(section: ResultsSection): void {
   sections.set(section.id, section);
 }
 
-/** Results subtitle for a Run that died: where it was swept up, or how close it came to the next Area. */
+/**
+ * Results subtitle for a Run that died: where it was swept up, or, once it had cleared that Area,
+ * how close it came to the next one.
+ */
 function diedLine(s: RunResult['stats']): string | null {
-  if (s.area === 'universe') return 'Spread out thin across the void. The whole galaxy was yours, at least.';
-  if (s.galaxyCleared) return 'So close to the Universe!';
-  if (s.area === 'galaxy') return 'Lost in the galactic dark. The whole solar system was yours, at least.';
-  if (s.solarSystemCleared) return 'So close to the Galaxy!';
-  if (s.area === 'solar_system') return 'Blown out of the ecliptic. The whole planet was yours, at least.';
-  if (s.globeCleared) return 'So close to the Solar System!';
-  if (s.area === 'globe') return 'Netted in orbit. The whole continent was yours, at least.';
-  if (s.continentCleared) return 'So close to orbit!';
-  if (s.area === 'continent') return 'Frozen out on the ice. The whole region was yours, at least.';
-  if (s.regionCleared) return 'So close to the continent!';
-  if (s.area === 'region') return 'Burnt down at the landfill. The whole city was yours, at least.';
-  if (s.cityCleared) return 'So close to the highway!';
-  if (s.area === 'city') return 'Hosed off the avenue. The whole neighborhood was yours, at least.';
-  if (s.neighborhoodCleared) return 'So close to the city!';
-  if (s.area !== 'house') return 'Swept off the street. The house was yours, at least.';
-  if (s.houseCleared) return 'So close to the front door!';
+  const progress = AreaProgress.fromFlags(s);
+  for (let i = AREA_ORDER.length - 1; i > 0; i--) {
+    const here = AREA_ORDER[i]!;
+    const before = AREA_ORDER[i - 1]!;
+    if (s.area === here) return AREA_RESULTS[here].diedHere ?? null;
+    if (progress.isCleared(before)) return AREA_RESULTS[before].soClose ?? null;
+  }
   return null;
+}
+
+/** A stats row ([icon, label, value]) for each Area the Run cleared, in `AREA_ORDER`. */
+function clearedRows(s: RunResult['stats']): Array<[string, string, string]> {
+  const progress = AreaProgress.fromFlags(s);
+  const at = AREA_ORDER.indexOf(s.area);
+  return AREA_ORDER.flatMap((area, i): Array<[string, string, string]> => {
+    if (!progress.isCleared(area)) return [];
+    const { icon, movedOn } = AREA_RESULTS[area];
+    const shown = movedOn && (movedOn.anyLater ? at > i : at === i + 1);
+    return [[icon, areaLabel(area), shown ? `Cleared · ${movedOn.note}` : 'Cleared']];
+  });
 }
 
 const VARIANTS = {
@@ -215,14 +239,6 @@ export function registerResultsScreen(): void {
           lastResult = e;
           const v = VARIANTS[e.reason] ?? VARIANTS.quit;
           const s = e.stats;
-          const outside = s.area !== 'house';
-          const inCity = s.area === 'city';
-          const inRegion = s.area === 'region';
-          const inContinent = s.area === 'continent';
-          const inGlobe = s.area === 'globe';
-          const inSolarSystem = s.area === 'solar_system';
-          const inGalaxy = s.area === 'galaxy';
-          const inUniverse = s.area === 'universe';
           card.dataset.variant = e.reason;
           badge.textContent = v.badge;
           title.textContent = v.title;
@@ -237,16 +253,8 @@ export function registerResultsScreen(): void {
             ['📏', 'Max radius', formatSize(s.maxRadius, s.tierReached, AREAS[s.area]?.readout)],
             ['✦', 'Debris absorbed', s.debrisAbsorbed.toLocaleString()],
             ['⭐', 'Tier reached', `${s.tierReached} · ${tier.name}`],
+            ...clearedRows(s),
           ];
-          if (s.houseCleared) rows.push(['🏠', 'House', outside ? 'Cleared · made it outside' : 'Cleared']);
-          if (s.neighborhoodCleared) rows.push(['🌳', 'Neighborhood', inCity ? 'Cleared · made it downtown' : 'Cleared']);
-          if (s.cityCleared) rows.push(['🏙️', 'City', inRegion ? 'Cleared · took the highway' : 'Cleared']);
-          if (s.regionCleared) rows.push(['🗺️', 'Region', inContinent ? 'Cleared · rolled west' : 'Cleared']);
-          if (s.continentCleared) rows.push(['🌍', 'Continent', inGlobe ? 'Cleared · reached orbit' : 'Cleared']);
-          if (s.globeCleared) rows.push(['🌐', 'Globe', inSolarSystem ? 'Cleared · escaped orbit' : 'Cleared']);
-          if (s.solarSystemCleared) rows.push(['☀️', 'Solar System', inGalaxy ? 'Cleared · crossed the heliopause' : 'Cleared']);
-          if (s.galaxyCleared) rows.push(['🌌', 'Galaxy', inUniverse ? 'Cleared · left the Milky Way' : 'Cleared']);
-          if (s.universeCleared) rows.push(['✨', 'Universe', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
           // The player's count once this Run is credited (it may still be pending with the Account).
           const universes = getMeta().universesAfter(e);

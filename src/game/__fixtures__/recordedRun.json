@@ -1,0 +1,2218 @@
+{
+ "snapshots": {
+  "houseCleared": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "house",
+   "areaCleared": true,
+   "time": 1.9999999999999978,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {},
+   "areasDone": [],
+   "areaStart": {
+    "area": "house",
+    "startSec": 0,
+    "radiusIn": 1.2,
+    "maxRadiusIn": 1.2,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 845.6899036678485,
+    "z": 83,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 1.9999999999999978,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "house",
+    "houseCleared": true,
+    "neighborhoodCleared": false,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "neighborhood": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "neighborhood",
+   "areaCleared": false,
+   "time": 3.9999999999999907,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "neighborhood",
+    "startSec": 1.9999999999999978,
+    "radiusIn": 1.2,
+    "maxRadiusIn": 1.2,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 6672,
+    "z": 2590,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 3.9999999999999907,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "neighborhood",
+    "houseCleared": true,
+    "neighborhoodCleared": false,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "region": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "region",
+   "areaCleared": false,
+   "time": 5.999999999999984,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 3.9999999999999907,
+    "region": 4.999999999999988
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 3.9999999999999907,
+     "timeSec": 0.9999999999999969,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "region",
+    "startSec": 4.999999999999988,
+    "radiusIn": 0.0012,
+    "maxRadiusIn": 0.0012,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 8,
+    "z": 76,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 5.999999999999984,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "region",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 3.9999999999999907,
+      "timeSec": 0.9999999999999969,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "region",
+      "startSec": 4.999999999999988,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 0.0012,
+      "maxRadius": 0.0012,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "rewound": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "city",
+   "areaCleared": false,
+   "time": 6.9999999999999805,
+   "tier": 5,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "city",
+    "startSec": 5.999999999999984,
+    "radiusIn": 50,
+    "maxRadiusIn": 50,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 900,
+    "z": 12000,
+    "realRadius": 50,
+    "maxRealRadius": 50,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 4,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 6.9999999999999805,
+    "maxRadius": 50,
+    "finalRadius": 50,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 5,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651
+    },
+    "perks": [],
+    "area": "city",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 50,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "universe": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "universe",
+   "areaCleared": false,
+   "time": 7.999999999999977,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "universe": 6.9999999999999805
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "universe",
+    "startSec": 6.9999999999999805,
+    "radiusIn": 0.85,
+    "maxRadiusIn": 0.85,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 175.24,
+    "z": 169.61,
+    "realRadius": 8.04185e+24,
+    "maxRealRadius": 8.04185e+24,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "black_hole",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 7.999999999999977,
+    "maxRadius": 8.04185e+24,
+    "finalRadius": 8.04185e+24,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "universe",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": true,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "universe",
+      "startSec": 6.9999999999999805,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 0.85,
+      "maxRadius": 0.85,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "galaxy": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "galaxy",
+   "areaCleared": false,
+   "time": 9.000000000000027,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "galaxy": 7.999999999999977
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "galaxy",
+    "startSec": 7.999999999999977,
+    "radiusIn": 1,
+    "maxRadiusIn": 1,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 183.55,
+    "z": 291.94,
+    "realRadius": 94610000000000000000,
+    "maxRealRadius": 94610000000000000000,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 9.000000000000027,
+    "maxRadius": 94610000000000000000,
+    "finalRadius": 94610000000000000000,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "galaxy",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "galaxy",
+      "startSec": 7.999999999999977,
+      "timeSec": 1.0000000000000497,
+      "radiusIn": 1,
+      "maxRadius": 1,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "galaxyCleared": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "galaxy",
+   "areaCleared": true,
+   "time": 9.000000000000027,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "galaxy": 7.999999999999977
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "galaxy",
+    "startSec": 7.999999999999977,
+    "radiusIn": 1,
+    "maxRadiusIn": 1,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 183.55,
+    "z": 291.94,
+    "realRadius": 94610000000000000000,
+    "maxRealRadius": 94610000000000000000,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "black_hole",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 9.000000000000027,
+    "maxRadius": 94610000000000000000,
+    "finalRadius": 94610000000000000000,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "galaxy",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": true,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "galaxy",
+      "startSec": 7.999999999999977,
+      "timeSec": 1.0000000000000497,
+      "radiusIn": 1,
+      "maxRadius": 1,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  }
+ },
+ "stats": {
+  "seed": "recorded-run",
+  "characterId": "tumble",
+  "difficulty": "arcade",
+  "timeSec": 10.000000000000076,
+  "maxRadius": 8.04185e+24,
+  "finalRadius": 8.04185e+24,
+  "debrisAbsorbed": 0,
+  "hazardsAbsorbed": 0,
+  "tierReached": 19,
+  "tierTimes": {
+   "1": 0,
+   "2": 6.016666666666651,
+   "3": 6.016666666666651,
+   "4": 6.016666666666651,
+   "5": 6.016666666666651,
+   "6": 7.016666666666647,
+   "7": 7.016666666666647,
+   "8": 7.016666666666647,
+   "9": 7.016666666666647,
+   "10": 7.016666666666647,
+   "11": 7.016666666666647,
+   "12": 7.016666666666647,
+   "13": 7.016666666666647,
+   "14": 7.016666666666647,
+   "15": 7.016666666666647,
+   "16": 7.016666666666647,
+   "17": 7.016666666666647,
+   "18": 7.016666666666647,
+   "19": 7.016666666666647
+  },
+  "perks": [],
+  "area": "universe",
+  "houseCleared": true,
+  "neighborhoodCleared": true,
+  "cityCleared": true,
+  "regionCleared": true,
+  "continentCleared": true,
+  "globeCleared": true,
+  "solarSystemCleared": true,
+  "galaxyCleared": true,
+  "universeCleared": true,
+  "areas": [
+   {
+    "area": "house",
+    "startSec": 0,
+    "timeSec": 1.9999999999999978,
+    "radiusIn": 1.2,
+    "maxRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "cleared": true,
+    "loadout": []
+   },
+   {
+    "area": "neighborhood",
+    "startSec": 1.9999999999999978,
+    "timeSec": 1.999999999999993,
+    "radiusIn": 1.2,
+    "maxRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "cleared": true,
+    "loadout": []
+   },
+   {
+    "area": "city",
+    "startSec": 5.999999999999984,
+    "timeSec": 0.9999999999999964,
+    "radiusIn": 50,
+    "maxRadius": 378440000000000000000,
+    "debrisAbsorbed": 0,
+    "cleared": true,
+    "loadout": []
+   },
+   {
+    "area": "galaxy",
+    "startSec": 7.999999999999977,
+    "timeSec": 1.0000000000000497,
+    "radiusIn": 1,
+    "maxRadius": 1,
+    "debrisAbsorbed": 0,
+    "cleared": true,
+    "loadout": []
+   },
+   {
+    "area": "universe",
+    "startSec": 9.000000000000027,
+    "timeSec": 1.0000000000000497,
+    "radiusIn": 0.85,
+    "maxRadius": 0.85,
+    "debrisAbsorbed": 0,
+    "cleared": true,
+    "loadout": []
+   }
+  ],
+  "loadout": []
+ },
+ "credit": {
+  "maxRadius": 8.04185e+24,
+  "debrisAbsorbed": 0,
+  "tierReached": 19,
+  "characterId": "tumble",
+  "difficulty": "arcade",
+  "area": "universe",
+  "houseCleared": true,
+  "neighborhoodCleared": true,
+  "cityCleared": true,
+  "regionCleared": true,
+  "continentCleared": true,
+  "globeCleared": true,
+  "solarSystemCleared": true,
+  "galaxyCleared": true,
+  "universeCleared": true,
+  "areas": [
+   {
+    "area": "house",
+    "radiusIn": 1.2,
+    "maxRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "cleared": true
+   },
+   {
+    "area": "neighborhood",
+    "radiusIn": 1.2,
+    "maxRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "cleared": true
+   },
+   {
+    "area": "city",
+    "radiusIn": 50,
+    "maxRadius": 378440000000000000000,
+    "debrisAbsorbed": 0,
+    "cleared": true
+   },
+   {
+    "area": "galaxy",
+    "radiusIn": 1,
+    "maxRadius": 1,
+    "debrisAbsorbed": 0,
+    "cleared": true
+   },
+   {
+    "area": "universe",
+    "radiusIn": 0.85,
+    "maxRadius": 0.85,
+    "debrisAbsorbed": 0,
+    "cleared": true
+   }
+  ]
+ },
+ "resumed": {
+  "houseCleared": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "house",
+   "areaCleared": true,
+   "time": 2.9999999999999942,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {},
+   "areasDone": [],
+   "areaStart": {
+    "area": "house",
+    "startSec": 0,
+    "radiusIn": 1.2,
+    "maxRadiusIn": 1.2,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 845.6899036678485,
+    "z": 83,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 2.9999999999999942,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "house",
+    "houseCleared": true,
+    "neighborhoodCleared": false,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 2.9999999999999942,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "neighborhood": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "neighborhood",
+   "areaCleared": false,
+   "time": 4.999999999999988,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "neighborhood",
+    "startSec": 1.9999999999999978,
+    "radiusIn": 1.2,
+    "maxRadiusIn": 1.2,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 6672,
+    "z": 2590,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 4.999999999999988,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "neighborhood",
+    "houseCleared": true,
+    "neighborhoodCleared": false,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 2.99999999999999,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "region": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "region",
+   "areaCleared": false,
+   "time": 6.9999999999999805,
+   "tier": 1,
+   "tierTimes": {
+    "1": 0
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 3.9999999999999907,
+    "region": 4.999999999999988
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 3.9999999999999907,
+     "timeSec": 0.9999999999999969,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "region",
+    "startSec": 4.999999999999988,
+    "radiusIn": 0.0012,
+    "maxRadiusIn": 0.0012,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 8,
+    "z": 76,
+    "realRadius": 1.2,
+    "maxRealRadius": 1.2,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 0,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 6.9999999999999805,
+    "maxRadius": 1.2,
+    "finalRadius": 1.2,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 1,
+    "tierTimes": {
+     "1": 0
+    },
+    "perks": [],
+    "area": "region",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 3.9999999999999907,
+      "timeSec": 0.9999999999999969,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "region",
+      "startSec": 4.999999999999988,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 0.0012,
+      "maxRadius": 0.0012,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "rewound": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "city",
+   "areaCleared": false,
+   "time": 7.999999999999977,
+   "tier": 5,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "city",
+    "startSec": 5.999999999999984,
+    "radiusIn": 50,
+    "maxRadiusIn": 50,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 900,
+    "z": 12000,
+    "realRadius": 50,
+    "maxRealRadius": 50,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 4,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 7.999999999999977,
+    "maxRadius": 50,
+    "finalRadius": 50,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 5,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651
+    },
+    "perks": [],
+    "area": "city",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": false,
+    "regionCleared": false,
+    "continentCleared": false,
+    "globeCleared": false,
+    "solarSystemCleared": false,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 50,
+      "maxRadius": 50,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "universe": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "universe",
+   "areaCleared": false,
+   "time": 9.000000000000027,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "universe": 6.9999999999999805
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "universe",
+    "startSec": 6.9999999999999805,
+    "radiusIn": 0.85,
+    "maxRadiusIn": 0.85,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 175.24,
+    "z": 169.61,
+    "realRadius": 8.04185e+24,
+    "maxRealRadius": 8.04185e+24,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "black_hole",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 9.000000000000027,
+    "maxRadius": 8.04185e+24,
+    "finalRadius": 8.04185e+24,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "universe",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": true,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "universe",
+      "startSec": 6.9999999999999805,
+      "timeSec": 2.000000000000046,
+      "radiusIn": 0.85,
+      "maxRadius": 0.8500000000000001,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "galaxy": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "galaxy",
+   "areaCleared": false,
+   "time": 10.000000000000076,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "galaxy": 7.999999999999977
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "galaxy",
+    "startSec": 7.999999999999977,
+    "radiusIn": 1,
+    "maxRadiusIn": 1,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 183.55,
+    "z": 291.94,
+    "realRadius": 94610000000000000000,
+    "maxRealRadius": 94610000000000000000,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "dust",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 10.000000000000076,
+    "maxRadius": 94610000000000000000,
+    "finalRadius": 94610000000000000000,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "galaxy",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": false,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "galaxy",
+      "startSec": 7.999999999999977,
+      "timeSec": 2.0000000000000995,
+      "radiusIn": 1,
+      "maxRadius": 1,
+      "debrisAbsorbed": 0,
+      "cleared": false,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  },
+  "galaxyCleared": {
+   "version": 1,
+   "savedAt": 1760000000000,
+   "runKey": "00000000-0000-4000-8000-000000000067",
+   "seed": "recorded-run",
+   "characterId": "tumble",
+   "difficulty": "arcade",
+   "modifiers": [],
+   "loadout": [],
+   "area": "galaxy",
+   "areaCleared": true,
+   "time": 10.000000000000076,
+   "tier": 19,
+   "tierTimes": {
+    "1": 0,
+    "2": 6.016666666666651,
+    "3": 6.016666666666651,
+    "4": 6.016666666666651,
+    "5": 6.016666666666651,
+    "6": 7.016666666666647,
+    "7": 7.016666666666647,
+    "8": 7.016666666666647,
+    "9": 7.016666666666647,
+    "10": 7.016666666666647,
+    "11": 7.016666666666647,
+    "12": 7.016666666666647,
+    "13": 7.016666666666647,
+    "14": 7.016666666666647,
+    "15": 7.016666666666647,
+    "16": 7.016666666666647,
+    "17": 7.016666666666647,
+    "18": 7.016666666666647,
+    "19": 7.016666666666647
+   },
+   "debrisAbsorbed": 0,
+   "hazardsAbsorbed": 0,
+   "areaTimes": {
+    "neighborhood": 1.9999999999999978,
+    "city": 5.999999999999984,
+    "galaxy": 7.999999999999977
+   },
+   "areasDone": [
+    {
+     "area": "house",
+     "startSec": 0,
+     "timeSec": 1.9999999999999978,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "neighborhood",
+     "startSec": 1.9999999999999978,
+     "timeSec": 1.999999999999993,
+     "radiusIn": 1.2,
+     "maxRadius": 1.2,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    },
+    {
+     "area": "city",
+     "startSec": 5.999999999999984,
+     "timeSec": 0.9999999999999964,
+     "radiusIn": 50,
+     "maxRadius": 378440000000000000000,
+     "debrisAbsorbed": 0,
+     "cleared": true,
+     "loadout": []
+    }
+   ],
+   "areaStart": {
+    "area": "galaxy",
+    "startSec": 7.999999999999977,
+    "radiusIn": 1,
+    "maxRadiusIn": 1,
+    "debris": 0
+   },
+   "bunny": {
+    "x": 183.55,
+    "z": 291.94,
+    "realRadius": 94610000000000000000,
+    "maxRealRadius": 94610000000000000000,
+    "health": 5,
+    "shield": 0,
+    "revives": 0,
+    "form": "black_hole",
+    "heading": 3.141592653589793
+   },
+   "perks": {},
+   "perkDraft": {
+    "pending": 18,
+    "rerollsUsed": 0
+   },
+   "pickups": [],
+   "placementsGone": [],
+   "stats": {
+    "seed": "recorded-run",
+    "characterId": "tumble",
+    "difficulty": "arcade",
+    "timeSec": 10.000000000000076,
+    "maxRadius": 94610000000000000000,
+    "finalRadius": 94610000000000000000,
+    "debrisAbsorbed": 0,
+    "hazardsAbsorbed": 0,
+    "tierReached": 19,
+    "tierTimes": {
+     "1": 0,
+     "2": 6.016666666666651,
+     "3": 6.016666666666651,
+     "4": 6.016666666666651,
+     "5": 6.016666666666651,
+     "6": 7.016666666666647,
+     "7": 7.016666666666647,
+     "8": 7.016666666666647,
+     "9": 7.016666666666647,
+     "10": 7.016666666666647,
+     "11": 7.016666666666647,
+     "12": 7.016666666666647,
+     "13": 7.016666666666647,
+     "14": 7.016666666666647,
+     "15": 7.016666666666647,
+     "16": 7.016666666666647,
+     "17": 7.016666666666647,
+     "18": 7.016666666666647,
+     "19": 7.016666666666647
+    },
+    "perks": [],
+    "area": "galaxy",
+    "houseCleared": true,
+    "neighborhoodCleared": true,
+    "cityCleared": true,
+    "regionCleared": true,
+    "continentCleared": true,
+    "globeCleared": true,
+    "solarSystemCleared": true,
+    "galaxyCleared": true,
+    "universeCleared": false,
+    "areas": [
+     {
+      "area": "house",
+      "startSec": 0,
+      "timeSec": 1.9999999999999978,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "neighborhood",
+      "startSec": 1.9999999999999978,
+      "timeSec": 1.999999999999993,
+      "radiusIn": 1.2,
+      "maxRadius": 1.2,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "city",
+      "startSec": 5.999999999999984,
+      "timeSec": 0.9999999999999964,
+      "radiusIn": 50,
+      "maxRadius": 378440000000000000000,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     },
+     {
+      "area": "galaxy",
+      "startSec": 7.999999999999977,
+      "timeSec": 2.0000000000000995,
+      "radiusIn": 1,
+      "maxRadius": 1,
+      "debrisAbsorbed": 0,
+      "cleared": true,
+      "loadout": []
+     }
+    ],
+    "loadout": []
+   }
+  }
+ }
+}

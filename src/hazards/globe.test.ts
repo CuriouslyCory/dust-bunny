@@ -1,34 +1,17 @@
+/** This Area's own Hazard behaviour. The contract every Area keeps (units, sizes, spawn tables, director, boss arrival) is checked over AREA_ORDER in areaContract.test.ts. */
 import { describe, expect, it } from 'vitest';
 import { EventBus } from '../core/events';
-import { AREAS } from '../data/areas';
 import {
-  bossAbsorbRadius,
-  bossArrivalRadius,
-  AREA_BOSSES,
-  AREA_DIRECTORS,
-  ASAT_LASER,
-  CONTINENT_DIRECTOR,
-  DEBRIS_SATELLITE,
-  DIRECTOR,
-  DIRECTOR_EXCLUDE,
-  GLOBE_DIRECTOR,
-  GLOBE_HURRICANE,
-  MINI_SWEEPER,
   ORBITAL_SWEEPER,
   REENTRY_BURN,
-  REGION_DIRECTOR,
   SPACE_STATION,
   tierValue,
 } from '../data/hazards';
-import { getTier } from '../data/tiers';
 import type { Debris } from '../entities/debris';
-import { installGameplay } from '../game/assembly';
 import { Run } from '../game/run';
 import { roomAt } from '../world/house';
 import { canonicalX } from '../world/wrap';
-import type { AreaId } from '../world/types';
 import { absorbRadiusFor } from './common';
-import { spawnWeights } from './director';
 import { hazardRegistry, type Hazard } from './index';
 import { orbitLane } from './lintRoller';
 import type { Mop } from './mop';
@@ -36,9 +19,9 @@ import { OrbitalSweeper, blockingMoonAt, isBlockingMoon } from './orbitalSweeper
 import { type BossState } from './robovac';
 import type { SprayBottle } from './sprayBottle';
 import type { UprightVacuum } from './uprightVacuum';
+import './content';
 
 const GLOBE_HAZARDS = ['debris_satellite', 'space_station', 'asat_laser', 'reentry_burn', 'globe_hurricane'];
-const TUNINGS = { debris_satellite: DEBRIS_SATELLITE, space_station: SPACE_STATION, asat_laser: ASAT_LASER, reentry_burn: REENTRY_BURN, globe_hurricane: GLOBE_HURRICANE, mini_sweeper: MINI_SWEEPER } as const;
 const ratio = 0.7;
 /** The orbit lanes on the placeholder map run along these z (src/world/globe.ts). */
 const MOON = ORBITAL_SWEEPER.moon.typeId;
@@ -50,21 +33,11 @@ const makeRun = (seed = 'globe-hazards') => {
   return { events, run };
 };
 
-/** Bunny radius (Globe units) at the start of a Tier. */
-const tierRadius = (run: Run, tier: number) => getTier(tier).minRadius / run.unit;
-
 /** The spawn: open ocean in the middle of the map (the Globe has no obstacles). */
 function moveToOpen(run: Run): { x: number; z: number } {
   const p = { x: run.house.spawn.x, z: run.house.spawn.z };
   run.bunny.teleport(p.x, p.z);
   return p;
-}
-
-function firstTableTier(id: string, area: AreaId): number {
-  const { firstTier, tiers } = AREA_DIRECTORS[area];
-  const i = tiers.findIndex((t) => id in t.types);
-  if (i < 0) throw new Error(`${id} is not in the ${area} spawn tables`);
-  return firstTier + i;
 }
 
 function moonIndex(run: Run): number {
@@ -85,84 +58,6 @@ function clearMoons(run: Run): void {
 }
 
 describe('globe Hazards', () => {
-  it('arrives short of its absorb radius (about a minute of growth) and 3 hits break it', () => {
-    expect(absorbRadiusFor(ORBITAL_SWEEPER.size, ratio)).toBeCloseTo(4, 1);
-    expect(bossArrivalRadius('globe', ratio)).toBeLessThan(bossAbsorbRadius('globe', ratio));
-    expect(bossAbsorbRadius('globe', ratio)).toBeCloseTo(absorbRadiusFor(ORBITAL_SWEEPER.size, ratio));
-    expect(AREA_BOSSES.globe).toMatchObject({ id: 'orbital_sweeper', hits: 3 });
-    expect(hazardRegistry.require('orbital_sweeper').boss).toBe(true);
-    expect(ORBITAL_SWEEPER.miniId).toBe('mini_sweeper');
-  });
-
-  it('run in Globe units (1 = 1,000 km) with their own Blender models', () => {
-    const { run } = makeRun();
-    expect(run.unit).toBe(1e8);
-    expect(run.bunny.radius).toBeCloseTo(AREAS.globe.arrivalRadius!);
-    for (const [id, cfg] of Object.entries(TUNINGS)) {
-      expect(cfg.modelId, id).toBe(id);
-      expect(hazardRegistry.require(id).modelId, id).toBe(id);
-    }
-    expect(hazardRegistry.require('orbital_sweeper').modelId).toBe('orbital_sweeper');
-  });
-
-  it('are a threat on arrival and absorbable before the Orbital Sweeper is; Tier 14 ones are food by early Tier 15', () => {
-    const tier15 = tierRadius(makeRun().run, 15);
-    const boss = absorbRadiusFor(ORBITAL_SWEEPER.size, ratio);
-    for (const id of GLOBE_HAZARDS) {
-      const { run } = makeRun(`absorb-${id}`);
-      const p = moveToOpen(run);
-      const h = run.hazards.spawn(id, p.x + 8, p.z);
-      expect(h.dead, id).toBeFalsy();
-      const need = absorbRadiusFor(h.size, ratio);
-      expect(need, id).toBeGreaterThan(AREAS.globe.arrivalRadius!);
-      const first = firstTableTier(id, 'globe');
-      expect(need, id).toBeGreaterThan(tierRadius(run, first));
-      expect(need, id).toBeLessThan(boss);
-      if (first === 14) expect(need, id).toBeLessThan(tier15 * 1.1);
-    }
-    // The Kessler swarm is food at Tier 15.
-    expect(absorbRadiusFor(MINI_SWEEPER.size, ratio)).toBeLessThan(tier15);
-  });
-
-
-  it('globe spawn tables list only globe Hazards, Hurricanes from Tier 15, never the boss or its swarm', () => {
-    for (let t = GLOBE_DIRECTOR.firstTier; t <= 15; t++) {
-      const ids = Object.keys(spawnWeights(t, {}, 'globe'));
-      expect(ids.length).toBeGreaterThan(0);
-      for (const id of ids) expect(GLOBE_HAZARDS).toContain(id);
-    }
-    expect(Object.keys(spawnWeights(13, {}, 'globe'))).toEqual(Object.keys(spawnWeights(14, {}, 'globe')));
-    expect(Object.keys(spawnWeights(14, {}, 'globe'))).not.toContain('globe_hurricane');
-    expect(Object.keys(spawnWeights(15, {}, 'globe'))).toContain('globe_hurricane');
-    expect(DIRECTOR_EXCLUDE).toContain('orbital_sweeper');
-    expect(DIRECTOR_EXCLUDE).toContain('mini_sweeper');
-    for (const t of [...DIRECTOR.tiers, ...REGION_DIRECTOR.tiers, ...CONTINENT_DIRECTOR.tiers]) for (const id of GLOBE_HAZARDS) expect(Object.keys(t.types)).not.toContain(id);
-    expect(tierValue(DEBRIS_SATELLITE.speed, 14)).toBe(DEBRIS_SATELLITE.speed[13]);
-    expect(tierValue(DEBRIS_SATELLITE.speed, 15)).toBe(DEBRIS_SATELLITE.speed[14]);
-  });
-
-  it('the director spawns globe Hazards and brings the Orbital Sweeper at its arrival size', () => {
-    const { run, events } = makeRun('globe-director');
-    installGameplay(run);
-    const spawned: string[] = [];
-    const bosses: string[] = [];
-    events.on('hazardSpawned', (e) => spawned.push(e.defId));
-    events.on('bossSpawned', (e) => bosses.push(e.name));
-    run.bunny.health = 999;
-    for (let i = 0; i < 60 * 30 && !run.ended; i++) run.update(1 / 60);
-    run.bunny.setRadius(bossArrivalRadius('globe', run.bunny.stats.get('absorbRatio')) * 0.95);
-    for (let i = 0; i < 60 * 60 && !run.ended; i++) run.update(1 / 60);
-    expect(spawned.length).toBeGreaterThan(2);
-    expect(bosses).toEqual([]);
-    run.bunny.setRadius(bossArrivalRadius('globe', run.bunny.stats.get('absorbRatio')) * 1.02);
-    for (let i = 0; i < 60 * (AREA_BOSSES.globe.arrivalDelay + 1) && !run.ended; i++) run.update(1 / 60);
-    expect(bosses).toEqual(['Orbital Sweeper']);
-    expect(run.hazards.count('orbital_sweeper')).toBe(1);
-    for (const id of spawned) expect([...GLOBE_HAZARDS, 'orbital_sweeper', 'mini_sweeper']).toContain(id);
-    const b = run.bunny;
-    for (const h of run.hazards.hazards) expect(Math.hypot(h.x - b.x, h.z - b.z), h.def.id).toBeLessThan(150);
-  });
-
   it('the Debris-Field Satellite pulls the Bunny in and spins its panels', () => {
     const { run } = makeRun('satellite');
     moveToOpen(run);
@@ -549,6 +444,6 @@ describe('the Orbital Sweeper', () => {
     expect(order).toEqual(['bossDefeated:orbital_sweeper', 'exitOpened:globe']);
     expect(run.ended).toBe(false);
     expect(run.house.exit?.open).toBe(true);
-    expect(run.globeCleared).toBe(true);
+    expect(run.isAreaCleared('globe')).toBe(true);
   });
 });

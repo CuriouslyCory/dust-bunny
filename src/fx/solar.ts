@@ -13,7 +13,7 @@
  * - Jupiter (`lockedUntilTier: 17`): a dashed amber ring turns slowly round it while it is an
  *   Obstacle (before Tier 17, or still too big), and turns green and pulses once the Bunny can
  *   absorb it; toasts say when it stops being an Obstacle and when it can be absorbed.
- * - The light goes out (`run.solarSystemCleared`): over `OUT_SECONDS` the Sun's glare, every light,
+ * - The light goes out (`run.isAreaCleared('solar_system')`): over `OUT_SECONDS` the Sun's glare, every light,
  *   the painted floor and the orbit lanes fade to near black and the Bunny's plasma flares
  *   (`BunnyView.plasmaBoost`), so only the Bunny's own glow is left, under the narrator's cleared
  *   line (the exit's cleared banner, ui/areaHud.ts). The heliopause gate opens at the same time
@@ -194,7 +194,7 @@ export class SolarSky {
     // The light goes out once the Sun is absorbed.
     // (The heliopause opens with it: the cleared banner and the narrator's line come from the
     // exit, ui/areaHud.ts.)
-    if (run.solarSystemCleared) this.outT = Math.min(1, this.outT + Math.max(dt, 1e-4) / OUT_SECONDS);
+    if (run.isAreaCleared('solar_system')) this.outT = Math.min(1, this.outT + Math.max(dt, 1e-4) / OUT_SECONDS);
     const out = this.outT * this.outT * (3 - 2 * this.outT);
     const lit = 1 - out;
 
@@ -205,7 +205,7 @@ export class SolarSky {
     const size = boss ? Math.max(1, boss.size) : SUN.radius;
     // The boss dims its own glow while stunned (an eclipse, src/hazards/theSun.ts); the scene dims with it.
     const eclipse = boss && 'glow' in boss && typeof boss.glow === 'number' ? boss.glow : 1;
-    this.sun.visible = !boss && !run.solarSystemCleared;
+    this.sun.visible = !boss && !run.isAreaCleared('solar_system');
     if (this.sunCorona) this.sunCorona.rotation.y += dt * 0.25;
     this.lighting.setSolar(at);
     this.lighting.setLit(lit * (0.3 + 0.7 * eclipse));

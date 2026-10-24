@@ -60,13 +60,13 @@ describe('Run snapshot', () => {
     const back = resume(snap);
 
     expect(back.area).toBe('neighborhood');
-    expect(back.houseCleared).toBe(true);
-    expect(back.neighborhoodCleared).toBe(false);
+    expect(back.isAreaCleared('house')).toBe(true);
+    expect(back.isAreaCleared('neighborhood')).toBe(false);
     expect(back.config.characterId).toBe('tumble');
     expect(back.difficulty.id).toBe('arcade');
     expect(back.loadout).toEqual(run.loadout);
     expect(back.time).toBeCloseTo(run.time);
-    expect(back.neighborhoodAt).toBeCloseTo(run.neighborhoodAt!);
+    expect(back.areaProgress.timeEntered('neighborhood')).toBeCloseTo(run.areaProgress.timeEntered('neighborhood')!);
     expect(back.perkStacks('aerodynamic')).toBe(2);
     expect(back.perkStacks('thick_fur')).toBe(1);
     expect(back.bunny.stats.get('speed')).toBeCloseTo(run.bunny.stats.get('speed'));
@@ -87,7 +87,7 @@ describe('Run snapshot', () => {
     // The Area's stats carry on: the house as done, the neighborhood from when it was entered.
     const stats = back.getStats();
     expect(stats.areas?.map((a) => a.area)).toEqual(['house', 'neighborhood']);
-    expect(stats.areas?.[1]?.startSec).toBeCloseTo(run.neighborhoodAt!);
+    expect(stats.areas?.[1]?.startSec).toBeCloseTo(run.areaProgress.timeEntered('neighborhood')!);
     expect(stats.perks.filter((p) => p === 'aerodynamic')).toHaveLength(2);
     expect(tierForRadius(back.bunny.realRadius).index).toBe(back.tier);
   });
@@ -116,7 +116,7 @@ describe('Run snapshot', () => {
     step(run, 1);
     run.openExit();
     const back = resume(stored(run.toSnapshot()));
-    expect(back.neighborhoodCleared).toBe(true);
+    expect(back.isAreaCleared('neighborhood')).toBe(true);
     expect(back.house.exit?.open).toBe(true);
     expect(back.canLeaveArea).toBe(true);
     // Even at boss size the director doesn't bring the absorbed boss back.

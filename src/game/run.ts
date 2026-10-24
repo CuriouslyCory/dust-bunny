@@ -42,6 +42,7 @@ import { AREA_ORDER, nextArea, type AreaId, type HouseLayout } from '../world/ty
 import { canonicalX } from '../world/wrap';
 import type { AreaStats, RunEndReason, RunStats } from './runStats';
 import { SYSTEM_ORDER, type System } from './system';
+import { AreaProgress, type AreaProgressView } from './areaProgress';
 import { legacyRunKey, newRunKey, SNAPSHOT_VERSION, type RunSnapshot } from './snapshot';
 
 export interface RunConfig {
@@ -120,40 +121,6 @@ export class Run {
   /** Current area's layout: the house floor, the neighborhood, the city, the region, the continent, the globe, the solar system, the galaxy, the universe (swapped by enterArea). */
   house: HouseLayout;
   area: AreaId = 'house';
-  /** The Robo-Vac 9000 has been absorbed and the front door is open. */
-  houseCleared = false;
-  /** The Street Sweeper has been absorbed and the road to the city is open. */
-  neighborhoodCleared = false;
-  /** The Garbage Truck has been absorbed and the highway on-ramp to the region is open. */
-  cityCleared = false;
-  /** The Incinerator has been absorbed and the motorway west to the continent is open. */
-  regionCleared = false;
-  /** The Ice Sheet has been absorbed and the launch corridor up to orbit is open. */
-  continentCleared = false;
-  /** The Orbital Sweeper has been absorbed and the escape trajectory over the North Pole is open. */
-  globeCleared = false;
-  /** The Sun has been absorbed and the heliopause gate to the galaxy is open. */
-  solarSystemCleared = false;
-  /** Sagittarius A* has been absorbed and the intergalactic gate out of the halo is open. */
-  galaxyCleared = false;
-  /** The Expansion has collapsed (the last Area: the Run is won). */
-  universeCleared = false;
-  /** Simulated second at which the Run entered the neighborhood (null while in the house). */
-  neighborhoodAt: number | null = null;
-  /** Simulated second at which the Run entered the city (null before). */
-  cityAt: number | null = null;
-  /** Simulated second at which the Run entered the region (null before). */
-  regionAt: number | null = null;
-  /** Simulated second at which the Run entered the continent (null before). */
-  continentAt: number | null = null;
-  /** Simulated second at which the Run entered the globe (null before). */
-  globeAt: number | null = null;
-  /** Simulated second at which the Run entered the solar system (null before). */
-  solarSystemAt: number | null = null;
-  /** Simulated second at which the Run entered the galaxy (null before). */
-  galaxyAt: number | null = null;
-  /** Simulated second at which the Run entered the universe (null before). */
-  universeAt: number | null = null;
   readonly bunny: Bunny;
   readonly debris: DebrisField;
   readonly hazards: HazardManager;
@@ -181,6 +148,8 @@ export class Run {
   endReason: RunEndReason | null = null;
 
   private systems: System[] = [];
+  /** Which Areas are cleared and when each was entered (`areaProgress`; changed only through `changeAreas`). */
+  private readonly areaState = new AreaProgress();
   private readonly tucked: KeepsakeRef[];
   private perks = new Map<string, number>();
   /** Areas already left, and where the current one started (null only during a debug-area start). */
@@ -231,8 +200,6 @@ export class Run {
       this.bunny.setRadius(Math.max(this.bunny.radius, areaStartRadius(config.area)));
       this.tier = tierForRadius(this.bunny.realRadius).index;
       for (let t = 2; t <= this.tier; t++) this.tierTimes[t] = 0;
-      // Past the Galaxy the Bunny has absorbed Sagittarius A*: a black hole with fur.
-      if (AREA_ORDER.indexOf(config.area) > AREA_ORDER.indexOf('galaxy')) this.bunny.form = 'black_hole';
       this.enterArea(config.area);
     }
   }
@@ -252,42 +219,24 @@ export class Run {
       this.openExit();
       return;
     }
-    this.markCleared(this.area);
+    this.changeAreas((p) => p.clear(this.area));
     this.events.emit('victory', { timeSec: this.time, radius: this.bunny.realRadius });
     this.end('victory');
   }
 
-  private markCleared(area: AreaId): void {
-    if (area === 'house') this.houseCleared = true;
-    if (area === 'neighborhood') this.neighborhoodCleared = true;
-    if (area === 'city') this.cityCleared = true;
-    if (area === 'region') this.regionCleared = true;
-    if (area === 'continent') this.continentCleared = true;
-    if (area === 'globe') this.globeCleared = true;
-    if (area === 'solar_system') this.solarSystemCleared = true;
-    if (area === 'galaxy') {
-      this.galaxyCleared = true;
-      // It has absorbed the thing that absorbs things: a black hole with fur from now on.
-      this.bunny.form = 'black_hole';
-    }
-    if (area === 'universe') this.universeCleared = true;
-  }
-
-  private unmarkCleared(area: AreaId): void {
-    if (area === 'house') this.houseCleared = false;
-    if (area === 'neighborhood') this.neighborhoodCleared = false;
-    if (area === 'city') this.cityCleared = false;
-    if (area === 'region') this.regionCleared = false;
-    if (area === 'continent') this.continentCleared = false;
-    if (area === 'globe') this.globeCleared = false;
-    if (area === 'solar_system') this.solarSystemCleared = false;
-    if (area === 'galaxy') this.galaxyCleared = false;
-    if (area === 'universe') this.universeCleared = false;
+  /**
+   * Applies a change to the Area progress. The black-hole Form follows it: the Bunny turns into a
+   * black hole when Sagittarius A* counts as absorbed, and back to dust when the cheats undo that.
+   */
+  private changeAreas(change: (p: AreaProgress) => void): void {
+    const was = this.areaState.blackHole;
+    change(this.areaState);
+    if (this.areaState.blackHole !== was) this.bunny.form = this.areaState.blackHole ? 'black_hole' : 'dust';
   }
 
   /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */
   openExit(): void {
-    this.markCleared(this.area);
+    this.changeAreas((p) => p.clear(this.area));
     const exit = this.house.exit;
     if (!exit || !openExit(this.house)) return;
     this.events.emit('exitOpened', { area: this.area, x: (exit.rect.minX + exit.rect.maxX) / 2, z: (exit.rect.minZ + exit.rect.maxZ) / 2 });
@@ -315,46 +264,6 @@ export class Run {
     return true;
   }
 
-  /** Leaves the house for the neighborhood (debug / tests; same as enterArea('neighborhood')). */
-  enterNeighborhood(): void {
-    this.enterArea('neighborhood');
-  }
-
-  /** Leaves the neighborhood for the city (debug / tests). */
-  enterCity(): void {
-    this.enterArea('city');
-  }
-
-  /** Leaves the city for the region (debug / tests). */
-  enterRegion(): void {
-    this.enterArea('region');
-  }
-
-  /** Leaves the region for the continent (debug / tests). */
-  enterContinent(): void {
-    this.enterArea('continent');
-  }
-
-  /** Leaves the continent for the globe (debug / tests). */
-  enterGlobe(): void {
-    this.enterArea('globe');
-  }
-
-  /** Leaves the globe for the solar system (debug / tests). */
-  enterSolarSystem(): void {
-    this.enterArea('solar_system');
-  }
-
-  /** Leaves the solar system for the galaxy (debug / tests). */
-  enterGalaxy(): void {
-    this.enterArea('galaxy');
-  }
-
-  /** Leaves the galaxy for the universe (debug / tests). */
-  enterUniverse(): void {
-    this.enterArea('universe');
-  }
-
   /**
    * Moves the Run to a later area: swaps in its layout, clears Debris, Hazards and floor
    * Pickups, re-bases the Bunny into the new Area's unit (same real size, see `Bunny.rebase`) and,
@@ -370,16 +279,8 @@ export class Run {
       this.areasDone.push(done);
       this.events.emit('areaCompleted', { stats: done, characterId: this.config.characterId, difficulty: this.difficulty.id });
     }
-    for (const a of AREA_ORDER.slice(0, AREA_ORDER.indexOf(area))) this.markCleared(a);
+    this.changeAreas((p) => p.enter(area, this.time));
     this.area = area;
-    if (area === 'neighborhood') this.neighborhoodAt = this.time;
-    if (area === 'city') this.cityAt = this.time;
-    if (area === 'region') this.regionAt = this.time;
-    if (area === 'continent') this.continentAt = this.time;
-    if (area === 'globe') this.globeAt = this.time;
-    if (area === 'solar_system') this.solarSystemAt = this.time;
-    if (area === 'galaxy') this.galaxyAt = this.time;
-    if (area === 'universe') this.universeAt = this.time;
     this.arrive(area);
   }
 
@@ -397,14 +298,9 @@ export class Run {
       this.enterArea(area);
       return;
     }
-    for (const a of AREA_ORDER.slice(to)) {
-      this.unmarkCleared(a);
-      if (a !== area) this.setAreaTime(a, null);
-    }
+    this.changeAreas((p) => p.rewindTo(area, this.time));
     this.areasDone = this.areasDone.filter((s) => AREA_ORDER.indexOf(s.area) < to);
-    if (to <= AREA_ORDER.indexOf('galaxy')) this.bunny.form = 'dust';
     this.area = area;
-    this.setAreaTime(area, this.time);
     this.arrive(area, radius);
   }
 
@@ -452,15 +348,12 @@ export class Run {
 
   /** `area`'s boss has been absorbed (for the last Area: the Run was won). */
   isAreaCleared(area: AreaId): boolean {
-    if (area === 'house') return this.houseCleared;
-    if (area === 'neighborhood') return this.neighborhoodCleared;
-    if (area === 'city') return this.cityCleared;
-    if (area === 'region') return this.regionCleared;
-    if (area === 'continent') return this.continentCleared;
-    if (area === 'globe') return this.globeCleared;
-    if (area === 'solar_system') return this.solarSystemCleared;
-    if (area === 'galaxy') return this.galaxyCleared;
-    return this.universeCleared;
+    return this.areaState.isCleared(area);
+  }
+
+  /** Which Areas are cleared, when each was entered, the furthest cleared. */
+  get areaProgress(): AreaProgressView {
+    return this.areaState;
   }
 
   /** The current Area's boss has been absorbed. */
@@ -527,41 +420,9 @@ export class Run {
     if (!silent) this.events.emit('perkApplied', { perkId: id, stacks });
   }
 
-  /** Run second `area` was entered (null before; the house has none). */
-  private areaTime(area: AreaId): number | null {
-    const at: Record<AreaId, number | null> = {
-      house: null,
-      neighborhood: this.neighborhoodAt,
-      city: this.cityAt,
-      region: this.regionAt,
-      continent: this.continentAt,
-      globe: this.globeAt,
-      solar_system: this.solarSystemAt,
-      galaxy: this.galaxyAt,
-      universe: this.universeAt,
-    };
-    return at[area];
-  }
-
-  private setAreaTime(area: AreaId, sec: number | null): void {
-    if (area === 'neighborhood') this.neighborhoodAt = sec;
-    if (area === 'city') this.cityAt = sec;
-    if (area === 'region') this.regionAt = sec;
-    if (area === 'continent') this.continentAt = sec;
-    if (area === 'globe') this.globeAt = sec;
-    if (area === 'solar_system') this.solarSystemAt = sec;
-    if (area === 'galaxy') this.galaxyAt = sec;
-    if (area === 'universe') this.universeAt = sec;
-  }
-
   /** What Save & quit keeps of the Run (see ./snapshot.ts). The Run itself is left untouched. */
   toSnapshot(): RunSnapshot {
     const b = this.bunny;
-    const areaTimes: Partial<Record<AreaId, number>> = {};
-    for (const a of AREA_ORDER) {
-      const t = this.areaTime(a);
-      if (t !== null) areaTimes[a] = t;
-    }
     return {
       version: SNAPSHOT_VERSION,
       savedAt: Date.now(),
@@ -579,7 +440,7 @@ export class Run {
       tierTimes: { ...this.tierTimes },
       debrisAbsorbed: this.debrisAbsorbed,
       hazardsAbsorbed: this.hazardsAbsorbed,
-      areaTimes,
+      areaTimes: this.areaState.entryTimes(),
       areasDone: this.areasDone.map((a) => ({ ...a })),
       areaStart: this.areaStart ? { ...this.areaStart } : null,
       bunny: {
@@ -613,9 +474,8 @@ export class Run {
     this.time = s.time;
     this.debrisAbsorbed = s.debrisAbsorbed;
     this.hazardsAbsorbed = s.hazardsAbsorbed;
-    for (const a of AREA_ORDER.slice(0, AREA_ORDER.indexOf(s.area))) this.markCleared(a);
+    this.changeAreas((p) => p.resume(s.area, s.areaTimes));
     this.area = s.area;
-    for (const [a, t] of Object.entries(s.areaTimes) as [AreaId, number][]) this.setAreaTime(a, t);
     const world = AREA_WORLDS[s.area];
     this.house = world.generate(this.config.seed);
     this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
@@ -660,7 +520,7 @@ export class Run {
     if (s.areaStart?.area === s.area) this.areaStart = { ...s.areaStart };
     else this.beginArea();
     if (s.areaCleared && nextArea(this.area) !== null) {
-      this.markCleared(this.area);
+      this.changeAreas((p) => p.clear(this.area));
       openExit(this.house);
     }
     this.perkDraft.rerollsUsed = Math.max(0, s.perkDraft.rerollsUsed);
@@ -681,15 +541,7 @@ export class Run {
       tierTimes: { ...this.tierTimes },
       perks: [...this.perks.entries()].flatMap(([id, n]) => Array<string>(n).fill(id)),
       area: this.area,
-      houseCleared: this.houseCleared,
-      neighborhoodCleared: this.neighborhoodCleared,
-      cityCleared: this.cityCleared,
-      regionCleared: this.regionCleared,
-      continentCleared: this.continentCleared,
-      globeCleared: this.globeCleared,
-      solarSystemCleared: this.solarSystemCleared,
-      galaxyCleared: this.galaxyCleared,
-      universeCleared: this.universeCleared,
+      ...this.areaState.clearedFlags(),
       areas: this.areaStart ? [...this.areasDone, this.currentAreaStats(this.areaCleared)] : [...this.areasDone],
       loadout: this.loadout.map((k) => ({ ...k })),
     };

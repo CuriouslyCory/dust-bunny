@@ -294,9 +294,9 @@ export class GalaxySky {
     const boss = run.hazards.hazards.find((h) => h.def.id === 'sagittarius_a' && !h.dead);
     const c = galacticCentre(run.house);
     const at = boss ? { x: boss.x, z: boss.z } : c;
-    const gone = run.galaxyCleared && !boss;
+    const gone = run.isAreaCleared('galaxy') && !boss;
     const size = boss ? Math.max(1, boss.size) : HOLE.footprint * 0.6;
-    if (this.hole) this.hole.visible = !boss && !run.galaxyCleared;
+    if (this.hole) this.hole.visible = !boss && !run.isAreaCleared('galaxy');
     if (this.holeDisk) this.holeDisk.rotation.y += dt * 0.35;
     this.lighting.setSolar(at);
     const flicker = 1 + Math.sin(this.time * 2.3) * 0.03 + Math.sin(this.time * 5.9) * 0.015;

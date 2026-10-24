@@ -22,22 +22,11 @@ export interface DebugTools {
   advance(seconds: number): void;
   /** Opens the current area's exit (as if its boss was absorbed). */
   openExit(): void;
-  /** Clears the house and moves the Run to the neighborhood, growing the Bunny to boss-beaten size. */
-  enterNeighborhood(): void;
-  /** Moves the Run to the city (via the neighborhood), growing the Bunny to boss-beaten size. */
-  enterCity(): void;
-  /** Moves the Run to the region, growing the Bunny to Garbage-Truck-beaten size. */
-  enterRegion(): void;
-  /** Moves the Run to the continent, growing the Bunny to Incinerator-beaten size (then the arrival leap). */
-  enterContinent(): void;
-  /** Moves the Run to the globe, growing the Bunny to Ice-Sheet-beaten size (then the arrival leap). */
-  enterGlobe(): void;
-  /** Moves the Run to the solar system, growing the Bunny to Orbital-Sweeper-beaten size (then the arrival leap). */
-  enterSolarSystem(): void;
-  /** Moves the Run to the galaxy, growing the Bunny to Sun-beaten size (then the arrival leap). */
-  enterGalaxy(): void;
-  /** Moves the Run to the universe, growing the Bunny to Sagittarius-A*-beaten size (then the arrival leap). */
-  enterUniverse(): void;
+  /**
+   * Moves the Run to a later Area (`'city'`, `'universe'`, …), clearing the current one and growing
+   * the Bunny to the size it would have after the previous Area's boss (then any arrival leap).
+   */
+  enterArea(area: AreaId): void;
   /** Switches the Bunny's look (`black_hole`: as after Sagittarius A*), without ending the Run. */
   setBunnyForm(form: BunnyForm): void;
   /** Clears the current area and rolls on to the next one. */
@@ -83,29 +72,8 @@ export function installDebug(game: Game): DebugTools {
     openExit() {
       game.run?.openExit();
     },
-    enterNeighborhood() {
-      goTo('neighborhood');
-    },
-    enterCity() {
-      goTo('city');
-    },
-    enterRegion() {
-      goTo('region');
-    },
-    enterContinent() {
-      goTo('continent');
-    },
-    enterGlobe() {
-      goTo('globe');
-    },
-    enterSolarSystem() {
-      goTo('solar_system');
-    },
-    enterGalaxy() {
-      goTo('galaxy');
-    },
-    enterUniverse() {
-      goTo('universe');
+    enterArea(area) {
+      goTo(area);
     },
     setBunnyForm(form) {
       if (game.run) game.run.bunny.form = form;
