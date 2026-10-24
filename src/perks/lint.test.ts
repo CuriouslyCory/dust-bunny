@@ -5,7 +5,7 @@ import { CHARACTER_PERK_EFFECTS as FX } from '../data/perks';
 import { createRun, installGameplay } from '../game/assembly';
 import type { Run } from '../game/run';
 import { parseRunSnapshot } from '../game/snapshot';
-import type { Hazard } from '../hazards';
+import { HazardManager, type Hazard } from '../hazards';
 import { aimTarget, hazardFloorFree } from '../hazards/common';
 import { draftablePerks } from './draft';
 import { getLintPerks, installLintPerks } from './lint';
@@ -249,18 +249,22 @@ describe('Unnoticed', () => {
     step(run, 0.25);
     expect(h.ignoresBunnyFor).toBeGreaterThan(FX.unnoticedFor[0] - 0.1);
     expect(aimTarget(run, h.x, h.z, 1e6, h)).toBeNull();
-    let contacts = 0;
-    h.onContact = () => contacts++;
-    h.stunnedFor = 5;
-    b.teleport(h.x, h.z);
-    step(run, 0.5);
-    expect(contacts).toBe(0);
+    // Contact while ignored: no damage (or knockback), but the body still pushes Lint out.
+    const health = b.health;
+    b.invulnerable = 0;
+    b.teleport(h.x + h.size * 0.5, h.z);
+    run.hazards.update(DT, run);
+    expect(b.health).toBe(health);
+    expect(b.harmless).toBe(false);
+    expect(HazardManager.touches(run, h)).toBe(false);
     step(run, FX.unnoticedFor[0]);
     expect(h.ignoresBunnyFor).toBe(0);
     expect(aimTarget(run, h.x, h.z, 1e6, h)).not.toBeNull();
-    b.teleport(h.x, h.z);
-    step(run, DT * 2);
-    expect(contacts).toBeGreaterThan(0);
+    b.invulnerable = 0;
+    h.stunnedFor = 0;
+    b.teleport(h.x + h.size * 0.5, h.z);
+    run.hazards.update(DT, run);
+    expect(b.health).toBeLessThan(health);
   });
 
   it('skips bosses (Loose Threads still drops from them)', () => {

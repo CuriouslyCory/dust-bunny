@@ -9,8 +9,9 @@
  *     hazard.onAbsorbed, hazardRemoved {absorbed: true})
  *   - otherwise, if `manager.contactOverride` is set and returns true for it, that handled the
  *     contact (src/abilities: Tumble's Amass swallows small Hazards and stops charging bosses)
- *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call), unless
- *     the Hazard ignores the Bunny for now (`ignoresBunnyFor`, counted down here; ignoresBunny)
+ *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call); while the
+ *     Hazard ignores the Bunny (`ignoresBunnyFor`, counted down here; ignoresBunny) it runs with
+ *     `bunny.harmless` set, so it still separates its body but its hit lands nothing
  *   An `intangible` Hazard (the Expansion) never touches, so none of these apply to it.
  * Spawning policy is pluggable via `manager.director`.
  */
@@ -166,8 +167,15 @@ export class HazardManager implements System {
       if (canAbsorb(b.radius, b.stats.get('absorbRatio'), h.size)) {
         this.absorb(h);
         if (run.ended) break;
-      } else if (!this.contactOverride?.(run, h) && !ignoresBunny(h)) {
-        h.onContact?.(run);
+      } else if (!this.contactOverride?.(run, h)) {
+        // A Hazard ignoring the Bunny still collides with it, but its hit lands nothing (no
+        // damage, so no knockback, sticking or recoil either).
+        b.harmless = ignoresBunny(h);
+        try {
+          h.onContact?.(run);
+        } finally {
+          b.harmless = false;
+        }
         // A boss's last hit can end the Run (the last Area's boss).
         if (run.ended) break;
       }
