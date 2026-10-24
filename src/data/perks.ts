@@ -62,11 +62,14 @@ export const CHARACTER_PERK_EFFECTS = {
   wellRoundedCaps: { speed: 0.1, maxHealth: 1, magnetRadius: 0.25, knockbackResistance: 0.1 },
   /** Smother: a clogged non-boss Hazard up to this × Lint's absorb limit is absorbed on touch. */
   smotherRatio: 1.1,
-  /** Loose Threads: fibre pieces a Hazard drops when its clog ends. */
+  /** Loose Threads: fibre pieces a Hazard drops when its clog ends, each this size (r), landing up to looseThreadsSpread r beyond its edge. */
   looseThreadsPieces: [1, 2, 3],
-  /** Lint Trail: seconds the streak lasts, and the clog it gives (s). */
+  looseThreadsSize: 0.35,
+  looseThreadsSpread: 1.5,
+  /** Lint Trail: seconds the streak lasts after the Dash ends, the clog it gives (s), and its width (r). */
   lintTrailDuration: 2,
   lintTrailClog: [0.6, 0.8, 1.0],
+  lintTrailWidth: 1,
   /** Unnoticed: seconds a Hazard ignores Lint after its clog ends. */
   unnoticedFor: [1.5, 2.0, 2.5],
   /** Snowballing: acceleration added per stack. */

@@ -74,7 +74,7 @@ export class SprayBottle extends BaseHazard {
     if (c.spinNode) this.spin(c.spinNode, dt * (c.spinRate ?? 0), 'z');
     const range = tierValue(c.range, run.tier);
     // The Bunny, or the Decoy while it is in range.
-    const t = aimTarget(run, this.x, this.z, range);
+    const t = aimTarget(run, this.x, this.z, range, this);
     const dx = (t?.x ?? this.x) - this.x;
     const dz = (t?.z ?? this.z) - this.z;
     const dist = Math.hypot(dx, dz);

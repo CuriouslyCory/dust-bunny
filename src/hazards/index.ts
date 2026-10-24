@@ -9,7 +9,8 @@
  *     hazard.onAbsorbed, hazardRemoved {absorbed: true})
  *   - otherwise, if `manager.contactOverride` is set and returns true for it, that handled the
  *     contact (src/abilities: Tumble's Amass swallows small Hazards and stops charging bosses)
- *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call)
+ *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call), unless
+ *     the Hazard ignores the Bunny for now (`ignoresBunnyFor`, counted down here; ignoresBunny)
  *   An `intangible` Hazard (the Expansion) never touches, so none of these apply to it.
  * Spawning policy is pluggable via `manager.director`.
  */
@@ -20,6 +21,7 @@ import type { Rng } from '../core/rng';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from '../systems/absorb';
+import { ignoresBunny } from './common';
 import type { RoomType } from '../world/types';
 import './events';
 
@@ -49,6 +51,11 @@ export interface Hazard {
    * false), so it is never absorbed or contacted, and Abilities and Spiky Dash ignore it.
    */
   readonly intangible?: boolean;
+  /**
+   * Seconds this Hazard ignores the Bunny (Lint's Unnoticed): no aiming at it (aimTarget), no
+   * chasing it and no contact damage. Counted down by the manager; read through ignoresBunny.
+   */
+  ignoresBunnyFor?: number;
   /** Bunny touches the Hazard and is too small to absorb it. */
   onContact?(run: Run): void;
   onAbsorbed?(run: Run): void;
@@ -153,12 +160,13 @@ export class HazardManager implements System {
     absorbed.clear();
     for (const h of [...this.hazards]) {
       if (h.dead) continue;
+      if (h.ignoresBunnyFor) h.ignoresBunnyFor = Math.max(0, h.ignoresBunnyFor - dt);
       h.update(dt, run);
       if (h.dead || !HazardManager.touches(run, h)) continue;
       if (canAbsorb(b.radius, b.stats.get('absorbRatio'), h.size)) {
         this.absorb(h);
         if (run.ended) break;
-      } else if (!this.contactOverride?.(run, h)) {
+      } else if (!this.contactOverride?.(run, h) && !ignoresBunny(h)) {
         h.onContact?.(run);
         // A boss's last hit can end the Run (the last Area's boss).
         if (run.ended) break;
