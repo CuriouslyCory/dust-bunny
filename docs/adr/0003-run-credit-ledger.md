@@ -99,6 +99,17 @@ Vercel swaps the build under open tabs (ADR 0001). A tab from before the ledger 
 - The save and the cloud save grow by at most ~4 KB (`creditedRuns`).
 - Out of scope: Fluff arithmetic on the server; gating leaderboard posts on credit; migrating Runs ended before the ledger (their tombstones stay); Keepsake credits.
 
+## Implementation notes
+
+The client (src/meta) follows the spec above, with these small additions, none of which change a rule:
+
+- **Who hands a saved copy to its creditor.** `saveSuspendedRun`, `storePausedRun` and `abandonSuspendedRun` take a `QuitCreditor` (`creditQuit(snapshot)`) instead of `MetaProgress`: `MetaProgress.creditQuit` credits at once (signed out), `AccountRuns.creditQuit` claims an Account copy with its tag's leases (or the page's, for the Run it plays). The snapshot's tag is what tells the two apart, so passing the snapshot rather than its stats keeps the lease out of `MetaProgress`.
+- **`runEnded` carries `runKey`.** `awardRun` is keyed by it, so the event is the one place it comes from.
+- **The sweep also follows a lost upload answer.** The spec runs it after the *claim* queue drains following a network error; the saved Run queue does the same, since a lost answer to a replace is the case the sweep exists for (race 1b in the tests). Both are cheap: one `GET` of 20 rows.
+- **A refused claim** fires `fluffAwarded` with `pending: false, amount: 0`; the results screen then reads "Not added: this Run carried on on another device." `AccountRuns.creditOf(runKey)` (`credited` / `pending` / `refused`) is what the results screen renders from, since it may open before or after the `runEnded` listener that credits.
+- **A pre-ledger cloud row** (no `creditedRuns`) adopted into a device keeps the device's set rather than wiping it (missing means unknown); when it is another Account's save being loaded (`replace`), the set starts empty.
+- **Any copy applies any row.** A device that lost a Run to another device still applies that Run's ledger row to its own copy at the next sweep (one credit per copy, the key alongside the Fluff); the cloud save's whole-copy merge keeps one of them. The tests state this where it shows.
+
 ## Test plan
 
 Server (`server/api.test.ts`, against a throwaway `postgres:16` via `TEST_DATABASE_URL`): claim by the holder (200, `created`, row ended, picked stats); a retry and another lease's claim return the same row; another device's claim while held → 409 and nothing written; a never-uploaded Run → 200 without touching a stored Run; a Run an old client ended → 409 `run_ended`; replace with and without `ledger`; a ledgered Run refused on PUT whatever the row holds; racing claims create one row; the list's order and bounds; body validation and the 8 KB cap; `credited_runs` kept when an upload omits it; the schema probe false → DDL → true.
