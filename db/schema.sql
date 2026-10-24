@@ -139,3 +139,20 @@ CREATE TABLE IF NOT EXISTS player_progress (
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS characters jsonb NOT NULL DEFAULT '{}';
 -- Tables created before Act 9.
 ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0);
+
+-- The Account's saved Run (api/saved-run.ts): one per player, held by one device at a time.
+-- run_key names the Run (RunSnapshot.runKey); lease is whoever holds it now (the device that last
+-- stored or took it); snapshot (a RunSnapshot, with its version) is NULL while a device is playing
+-- it. Taking it moves the lease; ending the Run sets ended_at, and the row stays (no snapshot) until
+-- another Run is stored, so a late upload of the ended Run from a device that fell behind is refused.
+CREATE TABLE IF NOT EXISTS saved_runs (
+  user_id    text        PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
+  run_key    text        NOT NULL,
+  lease      text        NOT NULL,
+  snapshot   jsonb,
+  version    integer,
+  ended_at   timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+-- Tables created before ended Runs kept their row.
+ALTER TABLE saved_runs ADD COLUMN IF NOT EXISTS ended_at timestamptz;

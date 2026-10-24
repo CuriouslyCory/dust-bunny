@@ -47,7 +47,8 @@ import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
 import { getMeta } from '../meta/meta';
-import { getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
+import { gateRunEnding, getAccountRuns } from '../meta/accountRun';
+import { creditsReplacedOnDevice, getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
 import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
 
@@ -66,6 +67,7 @@ export interface TitleParams {
 
 /** The title's notice when this page's paused Run went on elsewhere (`Game.stepAside`). */
 export function handoffNotice(why: HandoffLoss): string {
+  if (why === 'otherDevice') return 'This Run carried on on another device. What you played here since you last unpaused it is lost.';
   return why === 'replaced' ? 'Another window saved its Run over this one. It counted as quit.' : 'This Run carried on in another window.';
 }
 
@@ -131,10 +133,13 @@ export class Game {
    * Who owns the paused Run (./handoff.ts): pausing stores it in the saved Run slot, playing takes
    * it back. Another tab picking it up meanwhile makes this page step aside.
    */
+  /** The Account's copy of the saved Run for a signed-in player (src/meta/accountRun.ts). */
+  readonly accountRuns = getAccountRuns({ awardRun: (e) => getMeta().awardRun(e) });
   readonly handoff = new RunHandoff({
     store: getSuspendedRuns(),
     meta: { awardRun: (e) => getMeta().awardRun(e) },
     onLost: (why) => this.stepAside(why),
+    cloud: this.accountRuns,
   });
   private readonly raycaster = new Raycaster();
   private readonly floorPlane = new Plane(new Vector3(0, 1, 0), 0);
@@ -199,6 +204,11 @@ export class Game {
     });
     // Closing or reloading the tab keeps a paused Run stored (as Save & quit would).
     window.addEventListener('pagehide', () => this.handoff.flush());
+    // The Account says another device has the Run this page has (src/meta/accountRun.ts).
+    this.accountRuns.onLost((runKey) => {
+      if (this.run && !this.run.ended && this.run.runKey === runKey) this.stepAside('otherDevice');
+      else if (!this.run && this.screens.current?.id === 'title') this.go('title', { notice: handoffNotice('otherDevice') } satisfies TitleParams);
+    });
     window.addEventListener('resize', () => this.resize());
     this.resize();
 
@@ -328,6 +338,13 @@ export class Game {
     const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
+    // Dying or winning while the server take back is unconfirmed: credited once the Account agrees.
+    gateRunEnding(run, this.accountRuns, {
+      waiting: () => this.hud.toast('Checking your Run with your Account…', { tone: 'info' }),
+      lost: () => {
+        if (this.run === run) this.stepAside('otherDevice');
+      },
+    });
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
@@ -352,15 +369,19 @@ export class Game {
   endRun(toTitle = false): Promise<boolean> {
     const run = this.run;
     if (!run || run.ended || this.handoff.busy) return Promise.resolve(false);
-    return this.handoff.takeBack().then((ok) => {
-      if (!ok || this.run !== run || run.ended) return false;
-      run.end('quit'); // emits runEnded so meta progress still records the Run
-      if (toTitle) {
-        this.disposeRun();
-        this.go('title');
-      }
-      return true;
-    });
+    // Ending credits the Run, so for a signed-in player the server take is waited for first.
+    return this.handoff
+      .takeBack()
+      .then((ok) => ok && this.accountRuns.confirmHeld(run.runKey))
+      .then((ok) => {
+        if (!ok || this.run !== run || run.ended) return false;
+        run.end('quit'); // emits runEnded so meta progress still records the Run
+        if (toTitle) {
+          this.disposeRun();
+          this.go('title');
+        }
+        return true;
+      });
   }
 
   /** True while there is a Run in progress that Save & quit can keep. */
@@ -435,7 +456,16 @@ export class Game {
     this.events.emit('runSuspended', { snapshot });
     const store = getSuspendedRuns();
     const meta = getMeta();
-    const save = (): boolean => saveSuspendedRun(store, snapshot, meta);
+    const save = (): boolean => {
+      // The device first, then the Account (src/meta/accountRun.ts).
+      this.accountRuns.tag(snapshot);
+      // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
+      const prev = store.peek();
+      const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
+      const replaced = saveSuspendedRun(store, snapshot, meta);
+      this.accountRuns.stored(snapshot, credited);
+      return replaced;
+    };
     void withSavedRunLock(save).catch(save);
     this.disposeRun();
     this.go('title');

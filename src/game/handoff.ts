@@ -6,7 +6,10 @@
  * (`onLost`): it disposes its copy without `runEnded`, so nothing is played or credited twice.
  *
  * All of "is this paused Run still mine" lives here, so Game (src/game/game.ts) only says when to
- * store and when to take back. The server copy (#54) extends this class: the lease is `handoffId`.
+ * store and when to take back. For a signed-in player every store is also uploaded to the Account
+ * and every take back also takes the Run on the server, in the background (`cloud`,
+ * src/meta/accountRun.ts); a server that says another device has the Run makes the page step aside
+ * too (`otherDevice`).
  *
  * Every write runs under the saved Run Web Lock (`withSavedRunLock`), in request order, so a store
  * and a later take back can't be overtaken by another tab's take. A store still waiting for the
@@ -16,6 +19,7 @@
  */
 import type { MetaProgress } from '../meta/meta';
 import {
+  creditsReplacedOnDevice,
   pausedRunState,
   storePausedRun,
   takeBackPausedRun,
@@ -26,8 +30,18 @@ import {
 } from '../meta/suspendedRun';
 import { newHandoffId, type RunSnapshot } from './snapshot';
 
-/** Why a paused Run is no longer this page's (see `PausedRunState`). */
-export type HandoffLoss = Exclude<PausedRunState, 'mine'>;
+/** Why a paused Run is no longer this page's (see `PausedRunState`; `otherDevice`: the Account's copy, src/meta/accountRun.ts). */
+export type HandoffLoss = Exclude<PausedRunState, 'mine'> | 'otherDevice';
+
+/** The Account's copy of the saved Run (`AccountRuns`, src/meta/accountRun.ts); no-ops when signed out. */
+export interface HandoffCloud {
+  /** Tags a copy about to be written to the device slot with the Account and lease. */
+  tag(snapshot: RunSnapshot): void;
+  /** The copy is in the device slot (whose replace credited `prevLocalKey` on the device; null: none): upload it. */
+  stored(snapshot: RunSnapshot, prevLocalKey: string | null): void;
+  /** The device took the Run back: take it on the server too, in the background. */
+  takenBack(runKey: string): void;
+}
 
 /** What stored the Run: the paused screen, or the tab being hidden on another in-Run screen. */
 export type HandoffReason = 'pause' | 'hidden';
@@ -40,6 +54,8 @@ export interface RunHandoffOptions {
   onLost(why: HandoffLoss): void;
   /** Web Locks (default: `navigator.locks` where available; null: none, everything synchronous). */
   locks?: LockManagerLike | null;
+  /** The Account's copy (none: the device slot only). */
+  cloud?: HandoffCloud | null;
 }
 
 interface Held {
@@ -59,12 +75,14 @@ export class RunHandoff {
   private readonly meta: Pick<MetaProgress, 'awardRun'>;
   private readonly onLost: (why: HandoffLoss) => void;
   private readonly locks: LockManagerLike | null | undefined;
+  private readonly cloud: HandoffCloud | null;
 
   constructor(opts: RunHandoffOptions) {
     this.slot = opts.store;
     this.meta = opts.meta;
     this.onLost = opts.onLost;
     this.locks = opts.locks;
+    this.cloud = opts.cloud ?? null;
     // Another tab took (or replaced) it: step aside at once rather than on Resume.
     this.slot.onChange((c) => {
       if (c.external) this.check();
@@ -107,7 +125,13 @@ export class RunHandoff {
     const snapshot = held.pending;
     held.pending = null;
     if (this.released === held) this.released = null;
+    this.cloud?.tag(snapshot);
+    // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
+    const prev = this.slot.peek();
+    const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
+    // The device first (synchronously), then the Account.
     storePausedRun(this.slot, snapshot, held.handoffId, this.meta);
+    this.cloud?.stored(snapshot, credited);
   }
 
   /** The page is going away: writes a store still waiting for the lock now (pagehide). */
@@ -162,7 +186,11 @@ export class RunHandoff {
     this.taking = null;
     if (this.held !== h) return false;
     this.held = null;
-    if (st === 'mine') return true;
+    if (st === 'mine') {
+      // Optimistic: the page plays on now; the server take only reports back if it is refused.
+      this.cloud?.takenBack(h.runKey);
+      return true;
+    }
     this.onLost(st);
     return false;
   }

@@ -11,7 +11,12 @@
  * - Starting a new Run instead abandons it (`abandonSuspendedRun`): its Fluff and stats are
  *   credited as a quit. The title does it as soon as New run is confirmed; any other new Run start
  *   does it on runStarted.
- * - It stays on the device, like settings and the Loadout: cloud saves don't carry it.
+ * - Not signed in, it stays on the device. Signed in, the slot mirrors the Account's saved Run
+ *   (src/meta/accountRun.ts, api/saved-run.ts; docs/adr/0002): every copy written then is tagged
+ *   with the Account (`RunSnapshot.account`) and uploaded, and the title takes the server's copy
+ *   over the device's, so a Run paused on one device can be resumed on another. A copy tagged for
+ *   another Account (or any, signed out) reads as empty (`setViewer`): it is never offered,
+ *   credited or taken here.
  * - Every tab shares the slot. The browser singleton hears other tabs' writes through `storage`
  *   events (`watchSuspendedRunStorage`) and tells its `onChange` listeners, marked `external`, so
  *   an open title shows the saved Run as it is. Resume and New run name the Run the screen showed
@@ -20,10 +25,13 @@
  *   (`storePausedRun`); unpausing takes it back only while the slot still holds that id
  *   (`takeBackPausedRun`). Until then any other tab may pick it up with Resume run, and the
  *   pausing page steps aside (src/game/handoff.ts). Takes run under a Web Lock (`withSavedRunLock`).
- * - An unreadable or outdated slot reads as empty (`parseRunSnapshot`) and is dropped.
+ * - An older snapshot is migrated as it is read (`parseRunSnapshot`). One from a newer build reads
+ *   as empty and is never overwritten or deleted (docs/adr/0001): this page keeps its own writes
+ *   in memory instead, and the title says an update is needed (`newer`). Anything else unreadable
+ *   reads as empty.
  */
 import type { Game } from '../game/game';
-import { parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
+import { isNewerSnapshot, parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
 import { repairLoadout } from './hoard';
 import type { MetaProgress } from './meta';
 import { browserStorage, type KeyValueStorage } from './save';
@@ -42,8 +50,43 @@ export class SuspendedRunStore {
   /** The last write didn't reach storage: `memory` is the truth for this page from then on. */
   private stale = false;
   private listeners = new Set<(change: SuspendedRunChange) => void>();
+  /** The signed-in Account (null: none). A copy tagged with another Account (or any, signed out) reads as empty. */
+  private viewer: string | null = null;
 
   constructor(private readonly storage: Storage | null) {}
+
+  /** Sets who is signed in (src/meta/accountRun.ts); tells listeners when it changes what the slot shows. */
+  setViewer(userId: string | null): void {
+    if (userId === this.viewer) return;
+    this.viewer = userId;
+    this.emit({ external: false });
+  }
+
+  private parsed(): unknown {
+    const raw = this.read();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as unknown;
+    } catch {
+      return null;
+    }
+  }
+
+  /** What storage itself holds is a newer build's saved Run (whatever this page serves from memory). */
+  private storageHoldsNewer(): boolean {
+    if (!this.storage) return false;
+    try {
+      const raw = this.storage.getItem(SUSPENDED_RUN_KEY);
+      return !!raw && isNewerSnapshot(JSON.parse(raw));
+    } catch {
+      return false;
+    }
+  }
+
+  /** The slot holds a saved Run from a newer build: kept as it is, unread (docs/adr/0001). */
+  get newer(): boolean {
+    return isNewerSnapshot(this.parsed());
+  }
 
   private read(): string | null {
     if (!this.storage || this.stale) return this.memory;
@@ -55,6 +98,14 @@ export class SuspendedRunStore {
   }
 
   private write(value: string | null): void {
+    // A newer build's saved Run is never deleted or overwritten here: this page keeps its own copy
+    // in memory instead, as when storage is full.
+    if (this.storageHoldsNewer()) {
+      this.memory = value;
+      this.stale = true;
+      this.emit({ external: false });
+      return;
+    }
     this.memory = value;
     if (this.storage) {
       try {
@@ -110,15 +161,19 @@ export class SuspendedRunStore {
     this.emit({ external: false });
   }
 
-  /** The saved Run, or null (none, or one that can't be resumed). */
+  /**
+   * The saved Run, or null (none, one that can't be resumed, or one kept for an Account other than
+   * the signed-in one: another player's Runs are never offered, credited or taken).
+   */
   peek(): RunSnapshot | null {
-    const raw = this.read();
-    if (!raw) return null;
-    try {
-      return parseRunSnapshot(JSON.parse(raw));
-    } catch {
-      return null;
-    }
+    const s = this.peekAny();
+    if (s?.account && s.account.userId !== this.viewer) return null;
+    return s;
+  }
+
+  /** The saved Run whoever's Account it is kept for (null: none, or unreadable). */
+  peekAny(): RunSnapshot | null {
+    return parseRunSnapshot(this.parsed());
   }
 
   get has(): boolean {
@@ -131,10 +186,22 @@ export class SuspendedRunStore {
     return !this.stale;
   }
 
+  /**
+   * Marks the copy in the slot as confirmed by the server, if it still is `runKey` stored under
+   * `lease` (src/meta/accountRun.ts). False when the slot holds something else by now.
+   */
+  markSynced(runKey: string, lease: string): boolean {
+    const s = this.peek();
+    if (!s?.account || s.runKey !== runKey || s.account.lease !== lease || s.account.synced) return false;
+    s.account = { userId: s.account.userId, lease, synced: true };
+    this.write(JSON.stringify(s));
+    return !this.stale;
+  }
+
   /** Reads and clears the saved Run (Resume). */
   take(): RunSnapshot | null {
     const s = this.peek();
-    if (this.read() !== null) this.write(null);
+    if (s) this.write(null);
     return s;
   }
 
@@ -185,6 +252,19 @@ function savedRunIf(store: SuspendedRunStore, runKey: string | undefined): RunSn
 }
 
 /**
+ * Whether saving `next` over `prev` credits `prev` here, on the device: a different Run, unless
+ * `prev` is a copy of the Account's saved Run the server confirmed (mirrored from the server, say,
+ * by any tab) and `next` goes to the same Account. The server's copy of that Run may have been
+ * taken by another device since, which will credit it when it ends; so it is credited only from
+ * the server's answer to `next`'s upload, which hands back a stored copy it really replaced
+ * (src/meta/accountRun.ts, `stored`; docs/adr/0002).
+ */
+export function creditsReplacedOnDevice(prev: RunSnapshot, next: RunSnapshot): boolean {
+  if (prev.runKey === next.runKey) return false;
+  return !(prev.account?.synced && next.account?.userId === prev.account.userId);
+}
+
+/**
  * Save & quit: stores `snapshot` in the slot. A different Run already there (saved from another
  * tab or window) is replaced and counted as a quit, as New run would (its Fluff and stats
  * credited); the same Run saved again (same `runKey`) credits nothing. A write that doesn't reach
@@ -196,7 +276,7 @@ export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot
   const replaced = !!prev && prev.runKey !== snapshot.runKey;
   // Credited only once it is really gone: after a failed write the old Run is still in storage, and
   // another tab or a reload can still resume or abandon it (and be credited then).
-  if (store.save(snapshot) && prev && replaced) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (store.save(snapshot) && prev && replaced && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
   return replaced;
 }
 
@@ -258,7 +338,7 @@ export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, 
   snapshot.handoffId = handoffId;
   const prev = store.peek();
   const stored = store.save(snapshot);
-  if (stored && prev && prev.runKey !== snapshot.runKey) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (stored && prev && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
   return stored;
 }
 

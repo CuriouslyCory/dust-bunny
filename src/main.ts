@@ -15,6 +15,7 @@ import { showLoading } from './fx/loading';
 import { Game } from './game/game';
 import { installHazards } from './hazards/install';
 import { installTouchControls } from './input/touch';
+import { installAccountRuns } from './meta/accountRun';
 import { installCloudSave } from './meta/cloudSave';
 import { installRoguelike } from './meta/install';
 import { getMeta } from './meta/meta';
@@ -53,6 +54,7 @@ async function boot(): Promise<void> {
   if (area !== 'house' && AREA_ORDER.includes(area as AreaId)) game.nextRunConfig.area = area as AreaId;
   installRoguelike(game);
   installCloudSave(getMeta(), account);
+  installAccountRuns(game.accountRuns, account);
   installLeaderboardPosting(game);
   installUi(game);
   installTouchControls(game);
