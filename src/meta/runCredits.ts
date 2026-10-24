@@ -33,6 +33,7 @@ import { createJsonCaller, SavedRunAuthError, type JsonCallerOptions } from './a
 import { fluffForRun } from './fluff';
 import type { MetaProgress, RunAward } from './meta';
 import type { KeyValueStorage, SaveStorageEvent, StorageEventSource } from './save';
+import { type VersionedFormat, VersionedStore } from './versionedStore';
 
 export const RUN_CREDITS_KEY = 'dust-bunny:run-credits:v1';
 export const RUN_CREDITS_VERSION = 1;
@@ -184,14 +185,32 @@ function readSettled(raw: unknown): SettledClaim | null {
   };
 }
 
-const sameClaim = (a: Pick<PendingClaim, 'userId' | 'runKey'>, b: Pick<PendingClaim, 'userId' | 'runKey'>): boolean => a.userId === b.userId && a.runKey === b.runKey;
+/**
+ * The claims file (./versionedStore.ts: refused writes stay in memory). A newer build's file is
+ * never written, and reads as empty here: its claims are that build's to send.
+ */
+const CLAIMS_FORMAT: VersionedFormat<ClaimsFile> = {
+  key: RUN_CREDITS_KEY,
+  version: RUN_CREDITS_VERSION,
+  empty: () => ({ claims: [], settled: [] }),
+  parse: (o, version) =>
+    version > RUN_CREDITS_VERSION
+      ? { claims: [], settled: [] }
+      : {
+          claims: Array.isArray(o.claims) ? (o.claims as unknown[]).map(readClaim).filter((c): c is PendingClaim => c !== null) : [],
+          settled: Array.isArray(o.settled) ? (o.settled as unknown[]).map(readSettled).filter((s): s is SettledClaim => s !== null) : [],
+        },
+  serialize: (file): StoredClaims => ({ version: RUN_CREDITS_VERSION, claims: file.claims, settled: file.settled.slice(-SETTLED_CLAIMS_MAX) }),
+};
+
+const sameClaim =(a: Pick<PendingClaim, 'userId' | 'runKey'>, b: Pick<PendingClaim, 'userId' | 'runKey'>): boolean => a.userId === b.userId && a.runKey === b.runKey;
 
 export class RunCreditQueue {
   private userId: string | null = null;
   /** Bumped on every Account change: an answer asked under an older generation is left alone. */
   private gen = 0;
-  /** This build's claims when the stored file is from a newer build (never written there). */
-  private memory: ClaimsFile | null = null;
+  /** The claims file (`RUN_CREDITS_KEY`). */
+  private readonly file: VersionedStore<ClaimsFile>;
   private sending = false;
   /** The session is gone (401): nothing goes out until the Account signs in again (`setUser`) or `replay`. */
   private stopped = false;
@@ -216,6 +235,7 @@ export class RunCreditQueue {
   constructor(opts: RunCreditQueueOptions) {
     this.api = opts.api;
     this.storage = opts.storage;
+    this.file = new VersionedStore(opts.storage, CLAIMS_FORMAT);
     this.meta = opts.meta;
     this.retryMs = opts.retryMs ?? 1000;
     this.maxRetryMs = opts.maxRetryMs ?? 30_000;
@@ -243,35 +263,11 @@ export class RunCreditQueue {
 
   /** The stored file; this build's memory when the stored one is from a newer build (left untouched) or storage is unavailable. */
   private read(): ClaimsFile {
-    if (this.memory) return this.memory;
-    if (!this.storage) return (this.memory = { claims: [], settled: [] });
-    let parsed: unknown;
-    try {
-      const raw = this.storage.getItem(RUN_CREDITS_KEY);
-      if (!raw) return { claims: [], settled: [] };
-      parsed = JSON.parse(raw);
-    } catch {
-      return { claims: [], settled: [] };
-    }
-    if (!isObj(parsed)) return { claims: [], settled: [] };
-    if (typeof parsed.version === 'number' && parsed.version > RUN_CREDITS_VERSION) return (this.memory = { claims: [], settled: [] });
-    return {
-      claims: Array.isArray(parsed.claims) ? (parsed.claims as unknown[]).map(readClaim).filter((c): c is PendingClaim => c !== null) : [],
-      settled: Array.isArray(parsed.settled) ? (parsed.settled as unknown[]).map(readSettled).filter((s): s is SettledClaim => s !== null) : [],
-    };
+    return this.file.read().value;
   }
 
   private write(file: ClaimsFile): void {
-    if (this.memory) {
-      this.memory = file;
-      return;
-    }
-    const stored: StoredClaims = { version: RUN_CREDITS_VERSION, claims: file.claims, settled: file.settled.slice(-SETTLED_CLAIMS_MAX) };
-    try {
-      this.storage?.setItem(RUN_CREDITS_KEY, JSON.stringify(stored));
-    } catch {
-      this.memory = file; // storage full or refused: this page keeps them in memory
-    }
+    this.file.write(file);
   }
 
   /** Read-modify-write, so two tabs' claims don't overwrite each other's. */
@@ -404,7 +400,7 @@ export class RunCreditQueue {
    */
   private heard(): void {
     const userId = this.userId;
-    if (!userId || this.memory) return;
+    if (!userId || this.file.inMemory) return;
     const file = this.read();
     for (const [runKey, reason] of this.watching) {
       if (this.announced.has(runKey) || file.claims.some((c) => c.userId === userId && c.runKey === runKey)) continue;
