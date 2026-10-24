@@ -9,7 +9,7 @@ import { registerPerks } from '../perks/perks';
 import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
 import { AREA_ORDER } from '../world/types';
 import { endsUniverse, MetaProgress } from './meta';
-import { defaultSave, type KeyValueStorage, parseSave, SAVE_KEY, SAVE_VERSION, SaveStore } from './save';
+import { defaultSave, type KeyValueStorage, parseSave, SAVE_KEY, SAVE_VERSION, type SaveStorageEvent, SaveStore } from './save';
 import { upgradeCost, upgradeModifiers } from './upgrades';
 
 registerPerks();
@@ -209,6 +209,114 @@ describe('save data', () => {
     const store = new SaveStore(broken);
     expect(store.data).toEqual(defaultSave());
     expect(store.save()).toBe(false);
+  });
+});
+
+/** Stands in for `window`: `fire` delivers a `storage` event as another tab's write would. */
+const tabEvents = () => {
+  const listeners = new Set<(e: SaveStorageEvent) => void>();
+  return {
+    addEventListener: (_type: 'storage', l: (e: SaveStorageEvent) => void) => void listeners.add(l),
+    removeEventListener: (_type: 'storage', l: (e: SaveStorageEvent) => void) => void listeners.delete(l),
+    fire: (e: SaveStorageEvent) => listeners.forEach((l) => l(e)),
+    get count() {
+      return listeners.size;
+    },
+  };
+};
+
+describe('save shared between tabs', () => {
+  it("keeps both tabs' changes: each write starts from what is stored", () => {
+    const storage = memStorage();
+    const a = new SaveStore(storage);
+    const b = new SaveStore(storage);
+    a.update((d) => {
+      d.fluff += 50;
+      d.upgrades.fast_feet = 1;
+    });
+    b.update((d) => {
+      d.settings.masterVolume = 0.3;
+    });
+    const stored = parseSave(storage.map.get(SAVE_KEY)).data;
+    expect(stored.fluff).toBe(50);
+    expect(stored.upgrades).toEqual({ fast_feet: 1 });
+    expect(stored.settings.masterVolume).toBe(0.3);
+    expect(b.data).toEqual(stored);
+  });
+
+  it("follows another tab's write from its storage event and notifies listeners", () => {
+    const storage = memStorage();
+    const events = tabEvents();
+    const a = new SaveStore(storage, SAVE_KEY, events);
+    const seen: number[] = [];
+    a.onChange((d) => seen.push(d.fluff));
+    new SaveStore(storage).update((d) => (d.fluff = 75));
+    events.fire({ key: 'something-else', storageArea: storage });
+    expect(seen).toEqual([]);
+    events.fire({ key: SAVE_KEY, storageArea: storage });
+    expect(a.data.fluff).toBe(75);
+    expect(seen).toEqual([75]);
+    // Nothing new stored (or another storage area): no change, no notification.
+    events.fire({ key: SAVE_KEY, storageArea: storage });
+    events.fire({ key: SAVE_KEY, storageArea: memStorage() });
+    expect(seen).toEqual([75]);
+    a.dispose();
+    expect(events.count).toBe(0);
+  });
+
+  it("backs up another tab's unreadable value like one found at load", () => {
+    const storage = memStorage();
+    const events = tabEvents();
+    const a = new SaveStore(storage, SAVE_KEY, events);
+    a.update((d) => (d.fluff = 10));
+    storage.map.set(SAVE_KEY, '{"fluff": 3,');
+    events.fire({ key: null });
+    expect(a.data).toEqual(defaultSave());
+    expect(a.status).toBe('empty');
+    expect(storage.map.get(`${SAVE_KEY}:corrupt`)).toBe('{"fluff": 3,');
+  });
+
+  it('keeps an unsaved change when storage refuses the write', () => {
+    let full = false;
+    const map = new Map<string, string>();
+    const storage: KeyValueStorage = {
+      getItem: (k) => map.get(k) ?? null,
+      setItem: (k, v) => {
+        if (full) throw new Error('quota');
+        map.set(k, v);
+      },
+    };
+    const store = new SaveStore(storage);
+    store.update((d) => (d.fluff = 5));
+    full = true;
+    store.update((d) => (d.fluff += 1));
+    store.update((d) => (d.fluff += 1));
+    expect(store.data.fluff).toBe(7);
+  });
+
+  it("refuses a purchase the other tab's spending made unaffordable, and never buys a level twice", () => {
+    const storage = memStorage({ [SAVE_KEY]: JSON.stringify({ ...defaultSave(), fluff: 260 }) });
+    const tabA = new MetaProgress(storage);
+    const tabB = new MetaProgress(storage);
+    expect(tabA.buy('wide_choice')).toEqual({ ok: true, level: 1, cost: 220 });
+    expect(tabB.fluff).toBe(260); // stale until it next reads
+    expect(tabB.buy('wide_choice')).toEqual({ ok: false, reason: 'maxed' });
+    expect(tabB.fluff).toBe(40);
+    expect(tabB.buy('fast_feet')).toEqual({ ok: true, level: 1, cost: 40 });
+    expect(tabA.buy('fast_feet')).toEqual({ ok: false, reason: 'poor' });
+    const stored = parseSave(storage.map.get(SAVE_KEY)).data;
+    expect(stored.fluff).toBe(0);
+    expect(stored.upgrades).toEqual({ wide_choice: 1, fast_feet: 1 });
+  });
+
+  it("credits a Run in one tab on top of the other tab's purchase", () => {
+    const storage = memStorage({ [SAVE_KEY]: JSON.stringify({ ...defaultSave(), fluff: 220 }) });
+    const tabA = new MetaProgress(storage);
+    const tabB = new MetaProgress(storage);
+    tabA.buy('wide_choice');
+    const award = tabB.awardRun({ reason: 'died', stats: stats() });
+    expect(award.total).toBe(award.fluff);
+    expect(new MetaProgress(storage).data).toMatchObject({ fluff: award.fluff, upgrades: { wide_choice: 1 }, stats: { runs: 1 } });
   });
 });
 

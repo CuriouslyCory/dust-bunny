@@ -23,7 +23,8 @@
 - **Quiet** — an Area that has stopped spawning: once the Bunny is close to the next Area's boss arrival size, no more Debris tops up and no more Hazards arrive (the boss's summons still do).
 - **Health** — whole hit points shown as hearts. Reaching zero ends the Run.
 - **Pickup** — a temporary, timed power-up found on the floor during a Run (Static Charge, Sugar Rush, Bubble Wrap, Glue Dab, Crumb Cake, Dust Cloud).
-- **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends.
+- **Perk** — a run-long upgrade chosen from a draft of three at each Tier-up. Lost when the Run ends. A **Character Perk** is one only that Character's drafts offer (five each).
+- **Clog** — a Hazard stunned by touching Lint's Decoy or crossing a Lint Trail streak. Lint's Smother, Loose Threads and Unnoticed act on clogged Hazards or when the clog ends.
 - **Upgrade** — a permanent meta-progression improvement bought in the Shop with Fluff. Persists across Runs.
 - **Fluff** — the meta currency earned at the end of each Run.
 - **Universes** — how many times the player has won the Universe (ended the story); every ending counts one more. The title then reads *Universe N · Roll. Absorb. Grow.* (N = Universes + 1, the Universe being played), and the results screen and Run board show the count. It never goes down, on the device or in the cloud save.

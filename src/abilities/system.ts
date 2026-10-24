@@ -5,7 +5,8 @@
  *
  * Shared rules owned here:
  *   - every tunable comes from `params` (resolveAbilityParams, see ./params.ts; resolved again
- *     on keepsakeTuckedIn, so controllers read it each time rather than keeping a copy);
+ *     on keepsakeTuckedIn and whenever a Perk is applied, so controllers read it each time rather
+ *     than keeping a copy);
  *   - the boss limit: a boss can be stunned by an Ability at most once per
  *     params.bossStunInterval seconds (stunBoss). Wall crashes and Spiky Dash don't count;
  *   - Grounded: `hazard.groundedFor` (set by Discharge) counts down here.
@@ -18,6 +19,7 @@ import type { InputState } from '../core/input';
 import type { Rng } from '../core/rng';
 import { getAbility, type AbilityData, type AbilityId } from '../data/abilities';
 import { getCharacter } from '../data/characters';
+import type { Debris } from '../entities/debris';
 import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import type { Hazard } from '../hazards';
@@ -71,6 +73,8 @@ export interface AbilityHooks {
   bossStunned?(run: Run, boss: RoboVac9000, cause: BossStunCause, seconds: number): void;
   /** A Discharge hit these Hazards (first target first). */
   discharged?(run: Run, targets: readonly Hazard[]): void;
+  /** The scrap one Discharge left (every target's pieces) (Recharge Snack). */
+  dischargeScrap?(run: Run, pieces: readonly Debris[]): void;
 }
 
 export type ControllerFactory = (system: AbilitySystem) => AbilityController;
@@ -102,10 +106,13 @@ export class AbilitySystem implements System {
   private readonly lastBossStun = new Map<number, number>();
   private area: string;
   private resolved: AbilityParams;
+  /** run.perkVersion the params were last resolved at (Character Perks edit them too). */
+  private resolvedPerks: number;
 
   constructor(readonly run: Run) {
     this.data = getAbility(getCharacter(run.config.characterId).ability);
     this.resolved = resolveAbilityParams(run);
+    this.resolvedPerks = run.perkVersion;
     // A Keepsake tucked in mid-Run changes the numbers from the next read on.
     run.disposables.add(run.events.on('keepsakeTuckedIn', () => (this.resolved = resolveAbilityParams(run))));
     this.rng = run.rng.fork('ability');
@@ -115,8 +122,13 @@ export class AbilitySystem implements System {
     this.controller = factory(this);
   }
 
-  /** Every tunable the Ability reads (re-resolved when a Keepsake is tucked in mid-Run). */
+  /** Every tunable the Ability reads (re-resolved when a Keepsake is tucked in mid-Run or a Perk is taken, resumed ones included). */
   get params(): AbilityParams {
+    const perks = this.run.perkVersion;
+    if (perks !== this.resolvedPerks) {
+      this.resolvedPerks = perks;
+      this.resolved = resolveAbilityParams(this.run);
+    }
     return this.resolved;
   }
 

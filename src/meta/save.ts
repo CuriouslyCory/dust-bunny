@@ -5,6 +5,10 @@
  * defaults field by field, and an unversioned legacy object is migrated. When the stored value
  * is corrupt, SaveStore copies it to `<key>:corrupt` before overwriting it on the next save.
  *
+ * Several tabs share the one key: SaveStore.update re-reads it before each write (read-modify-write,
+ * never an overwrite with a copy from page load), and with a `storage` event source it follows
+ * other tabs' writes as they happen.
+ *
  * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
  * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`) don't need a bump.
  */
@@ -172,53 +176,137 @@ export function browserStorage(): KeyValueStorage | null {
   }
 }
 
+/** A `storage` event as SaveStore reads it (the browser's StorageEvent, or a fake in tests). */
+export interface SaveStorageEvent {
+  /** The changed key; null when another tab cleared the whole storage. */
+  readonly key: string | null;
+  readonly storageArea?: unknown;
+}
+
+/** Where other tabs' `storage` events arrive (`window` in the browser). */
+export interface StorageEventSource {
+  addEventListener(type: 'storage', listener: (e: SaveStorageEvent) => void): void;
+  removeEventListener(type: 'storage', listener: (e: SaveStorageEvent) => void): void;
+}
+
+/** `window`, when there is one (null in node tests and the sim). */
+export function browserStorageEvents(): StorageEventSource | null {
+  return typeof window !== 'undefined' && typeof window.addEventListener === 'function' ? window : null;
+}
+
+/**
+ * The save, shared with every other tab of the game on the same storage. Each write starts from
+ * what is stored (`update` re-reads it first), so a change from another tab is built on rather
+ * than overwritten, and with `events` another tab's write is picked up as it happens (listeners
+ * are notified, as for a local change).
+ */
 export class SaveStore {
   data: SaveData;
+  /** How the save read at load (a later unreadable value from another tab is backed up the same way). */
   readonly status: SaveStatus;
   private listeners = new Set<(data: SaveData) => void>();
+  /** The stored value `data` was last read from or written as (undefined: never read). */
+  private raw: string | null | undefined;
+  private readonly offEvents: () => void = () => undefined;
 
   constructor(
     private readonly storage: KeyValueStorage | null,
     readonly key = SAVE_KEY,
+    events: StorageEventSource | null = null,
   ) {
-    let raw: string | null = null;
-    try {
-      raw = storage?.getItem(key) ?? null;
-    } catch {
-      raw = null;
-    }
-    const { data, status } = parseSave(raw);
+    const raw = this.readRaw();
+    const { data, status } = raw === undefined ? parseSave(null) : this.load(raw);
     this.data = data;
     this.status = status;
-    if (status === 'corrupt' && raw != null) {
+    if (events) {
+      const onStorage = (e: SaveStorageEvent) => {
+        if (e.key !== null && e.key !== this.key) return;
+        if (e.storageArea != null && e.storageArea !== this.storage) return;
+        if (this.refresh()) this.notify();
+      };
+      events.addEventListener('storage', onStorage);
+      this.offEvents = () => events.removeEventListener('storage', onStorage);
+    }
+  }
+
+  /** The stored value, or undefined when storage is unavailable or throws. */
+  private readRaw(): string | null | undefined {
+    try {
+      return this.storage ? this.storage.getItem(this.key) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Parses a stored value, backing a corrupt one up to `<key>:corrupt` (it is overwritten on the next save). */
+  private load(raw: string | null): { data: SaveData; status: SaveStatus } {
+    this.raw = raw;
+    const parsed = parseSave(raw);
+    if (parsed.status === 'corrupt' && raw != null) {
       try {
-        storage?.setItem(`${key}:corrupt`, raw);
+        this.storage?.setItem(`${this.key}:corrupt`, raw);
       } catch {
         /* ignore */
       }
     }
+    return parsed;
+  }
+
+  /**
+   * Re-reads `data` if the stored value changed since this store last read or wrote it (another
+   * tab wrote). Unreadable storage, or a write of ours that failed, keeps `data`. True if replaced.
+   */
+  refresh(): boolean {
+    const raw = this.readRaw();
+    if (raw === undefined || raw === this.raw) return false;
+    this.data = this.load(raw).data;
+    return true;
   }
 
   /** Writes to storage; returns false if storage is unavailable or full. */
   save(): boolean {
     try {
       if (!this.storage) return false;
-      this.storage.setItem(this.key, serializeSave(this.data));
+      const raw = serializeSave(this.data);
+      this.storage.setItem(this.key, raw);
+      this.raw = raw;
       return true;
     } catch {
       return false;
     }
   }
 
-  /** Mutate, persist and notify listeners. */
+  /** Mutate the latest stored data, persist and notify listeners. */
   update(fn: (data: SaveData) => void): void {
-    fn(this.data);
-    this.save();
-    for (const l of this.listeners) l(this.data);
+    this.updateIf((d) => {
+      fn(d);
+      return true;
+    });
+  }
+
+  /**
+   * Like `update`, but only writes and notifies when `fn` returns true: put checks (can this be
+   * afforded?) inside `fn`, so they see another tab's changes. Returns what `fn` returned.
+   */
+  updateIf(fn: (data: SaveData) => boolean): boolean {
+    const refreshed = this.refresh();
+    const changed = fn(this.data);
+    if (changed) this.save();
+    if (changed || refreshed) this.notify();
+    return changed;
   }
 
   onChange(cb: (data: SaveData) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  /** Stops following other tabs. */
+  dispose(): void {
+    this.offEvents();
+  }
+
+  private notify(): void {
+    for (const l of this.listeners) l(this.data);
   }
 }

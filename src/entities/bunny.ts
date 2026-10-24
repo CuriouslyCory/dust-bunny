@@ -61,6 +61,11 @@ export class Bunny {
   shield = 0;
   /** Dust Cloud: while true, Hazards must not target, chase, pull or damage the Bunny. */
   hiddenFromHazards = false;
+  /**
+   * While true, damage() lands nothing and runs no filters: set by the HazardManager around the
+   * contact of a Hazard that ignores the Bunny (Unnoticed), so its body still pushes the Bunny out.
+   */
+  harmless = false;
   /** Second Wind charges; a lethal hit restores full health instead (combat damage filter). */
   revives = 0;
   /** Spiky Dash: while `dashing`, Hazard contact stuns the Hazard instead of hurting the Bunny. */
@@ -182,7 +187,7 @@ export class Bunny {
 
   /** Returns true if damage was applied. Grants TUNING.invulnerability seconds of i-frames. */
   damage(amount: number, source: string): boolean {
-    if (!this.alive || this.invulnerable > 0 || amount <= 0) return false;
+    if (!this.alive || this.harmless || this.invulnerable > 0 || amount <= 0) return false;
     for (const f of this.damageFilters) {
       amount = f(amount, source);
       if (amount <= 0) return false;

@@ -84,6 +84,8 @@ export interface DischargeParams {
   drainSpeedFraction: number;
   /** Fraction of the meter drained per second while slow. */
   drainPerSec: number;
+  /** Seconds below drainSpeedFraction before the drain starts (Capacitor; 0 = at once). */
+  drainDelay: number;
   /** Target range from the Bunny's surface (r) (Long Reach: +1 → +4). */
   range: number;
   /** Boss stun (s), then Grounded (immune to Discharge) for groundedFor seconds. */
@@ -160,6 +162,7 @@ export function baseAbilityParams(): AbilityParams {
       dashMultiplier: DISCHARGE.dashMultiplier,
       drainSpeedFraction: DISCHARGE.drainSpeedFraction,
       drainPerSec: DISCHARGE.drainPerSec,
+      drainDelay: 0,
       range: DISCHARGE.range,
       bossStun: DISCHARGE.bossStun,
       groundedFor: DISCHARGE.groundedFor,

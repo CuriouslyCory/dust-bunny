@@ -3,7 +3,7 @@ import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
 import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
-import type { KeyValueStorage } from './save';
+import { type KeyValueStorage, parseSave, SAVE_KEY, type SaveStorageEvent } from './save';
 
 const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map: Map<string, string> } => {
   const map = new Map(Object.entries(init));
@@ -178,6 +178,77 @@ describe('cloud save', () => {
     await vi.advanceTimersByTimeAsync(150);
     expect(s.server.puts).toHaveLength(1);
     expect(s.server.rows.get('u1')?.upgrades).toEqual({ fast_feet: 1, magnetism: 1 });
+  });
+
+  it("uploads another tab's changes merged with this tab's, not a stale copy", async () => {
+    const shared = memStorage();
+    const listeners = new Set<(e: SaveStorageEvent) => void>();
+    const events = { addEventListener: (_t: 'storage', l: (e: SaveStorageEvent) => void) => void listeners.add(l), removeEventListener: () => undefined };
+    const tabA = new MetaProgress(shared, events);
+    tabA.store.update((d) => Object.assign(d, { fluff: 300, stats: prog(300, 300, 5).stats }));
+    const tabB = new MetaProgress(shared);
+    const server = fakeServer();
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch: server.fetch, storage: memStorage(), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.runAllTimersAsync();
+    // Tab B (no cloud save of its own here) buys; tab A hears of it and uploads it.
+    tabB.buy('wide_choice');
+    for (const l of listeners) l({ key: SAVE_KEY, storageArea: shared });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 80, upgrades: { wide_choice: 1 } });
+    // Tab A's own change builds on it.
+    tabA.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 40, upgrades: { wide_choice: 1, fast_feet: 1 } });
+  });
+
+  it("doesn't adopt a refused upload's copy over progress another tab saved meanwhile", async () => {
+    const shared = memStorage();
+    const tabA = new MetaProgress(shared);
+    tabA.store.update((d) => Object.assign(d, { fluff: 100, stats: prog(100, 100, 2).stats }));
+    const server = fakeServer();
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch: server.fetch, storage: memStorage(), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.runAllTimersAsync();
+    server.rows.set('u1', prog(500, 500, 10)); // another device got further
+    const release = server.hold();
+    tabA.buy('fast_feet');
+    await vi.advanceTimersByTimeAsync(150); // the upload is in flight
+    // Tab B ends a big Run before tab A has heard of it (its storage event not delivered yet).
+    new MetaProgress(shared).store.update((d) => Object.assign(d, { fluff: 900, stats: prog(900, 900, 20).stats }));
+    release();
+    await vi.runAllTimersAsync();
+    expect(parseSave(shared.map.get(SAVE_KEY)).data.stats.totalFluffEarned).toBe(900);
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 900, stats: { totalFluffEarned: 900, runs: 20 } });
+  });
+
+  it("keeps another tab's purchase made while connecting, even on a tie with the account copy", async () => {
+    const shared = memStorage();
+    const tabA = new MetaProgress(shared);
+    tabA.store.update((d) => Object.assign(d, { fluff: 200, stats: prog(200, 200, 5).stats }));
+    const server = fakeServer();
+    server.rows.set('u1', prog(150, 200, 5, { magnetism: 1 })); // another device spent: same counters
+    let releaseGet!: () => void;
+    const getGate = new Promise<void>((r) => (releaseGet = r));
+    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (!init?.method) await getGate;
+      return server.fetch(url, init);
+    }) as typeof globalThis.fetch;
+    const acct = fakeAccount();
+    createCloudSave(tabA, acct.client, { fetch, storage: memStorage({ [CLOUD_USER_KEY]: 'u1' }), debounceMs: 100, retryMs: 1000 });
+    server.signIn('u1');
+    acct.signIn('u1');
+    await vi.advanceTimersByTimeAsync(0); // the download is in flight
+    // Tab B buys before tab A has heard of it: a change neither counter shows.
+    expect(new MetaProgress(shared).buy('fast_feet').ok).toBe(true);
+    releaseGet();
+    await vi.runAllTimersAsync();
+    expect(parseSave(shared.map.get(SAVE_KEY)).data.upgrades).toEqual({ fast_feet: 1 });
+    expect(server.rows.get('u1')).toMatchObject({ fluff: 160, upgrades: { fast_feet: 1 } });
   });
 
   it('syncs Keepsake Hoards, and Felting / shedding upload like spending (marked dirty, no counter change)', async () => {

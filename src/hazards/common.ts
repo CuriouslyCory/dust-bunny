@@ -248,17 +248,23 @@ export interface AimTarget {
   lure: boolean;
 }
 
+/** True while this Hazard ignores the Bunny (`ignoresBunnyFor`, Lint's Unnoticed): no aim, chase or contact damage. */
+export function ignoresBunny(h: Hazard | undefined): boolean {
+  return (h?.ignoresBunnyFor ?? 0) > 0;
+}
+
 /**
  * The point a Hazard at (fromX, fromZ) with aggro / trigger range `range` (cm) aims at: the Lure
  * while it is within range × lure.rangeMul (plus its radius), otherwise the Bunny unless it is
- * hidden (Dust Cloud), else null. The Bunny is returned at any distance: callers keep their own
- * range checks for it. Suction and contact still act on the Bunny by distance; only aim changes.
+ * hidden (Dust Cloud) or `hazard` ignores it for now (ignoresBunny), else null. The Bunny is
+ * returned at any distance: callers keep their own range checks for it. Suction and contact still
+ * act on the Bunny by distance; only aim changes.
  */
-export function aimTarget(run: Run, fromX: number, fromZ: number, range: number): AimTarget | null {
+export function aimTarget(run: Run, fromX: number, fromZ: number, range: number, hazard?: Hazard): AimTarget | null {
   const lure = lures.get(run);
   if (lure && Math.hypot(lure.x - fromX, lure.z - fromZ) <= range * lure.rangeMul + lure.radius) return { x: lure.x, z: lure.z, radius: lure.radius, lure: true };
   const b = run.bunny;
-  if (b.hiddenFromHazards) return null;
+  if (b.hiddenFromHazards || ignoresBunny(hazard)) return null;
   return { x: b.x, z: b.z, radius: b.radius, lure: false };
 }
 

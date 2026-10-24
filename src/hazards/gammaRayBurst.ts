@@ -85,7 +85,7 @@ export class GammaRayBurst extends BaseHazard {
     const c = this.cfg;
     const range = tierValue(c.range, run.tier);
     const reach = c.muzzle + range;
-    const t = aimTarget(run, this.x, this.z, reach);
+    const t = aimTarget(run, this.x, this.z, reach, this);
     this.timer -= dt;
     switch (this.state) {
       case 'idle': {

@@ -71,8 +71,8 @@ export class RunPosts {
     private readonly client: LeaderboardClient,
     readonly characterId: string,
     readonly difficulty: DifficultyId | undefined,
-    /** False for debug / later-Area starts: entries are shown but never posted. */
-    readonly ranked = true,
+    /** False for debug / later-Area starts (or once cheats are on, `unrank`): entries are shown but never posted. */
+    public ranked = true,
     /** Keepsakes tucked in for the Run (`run.loadout`, which can grow mid-Run). An Area entry sends the Loadout it was left with (`AreaStats.loadout`), else a copy of this as it is when the entry is added. */
     readonly loadout: Loadout = [],
     /** The player's Universes count after the Run (sent with the Run board entry; omitted when absent). */
@@ -83,9 +83,24 @@ export class RunPosts {
     this.runId = runId;
   }
 
+  private unrankedWhy = 'runs played with debug tools or started past the house are not ranked.';
+
   /** Initial state of a new entry. */
   private fresh(): Pick<BoardPost, 'state' | 'error'> {
-    return this.ranked ? { state: 'unsent' } : { state: 'invalid', error: 'runs played with debug tools or started past the house are not ranked.' };
+    return this.ranked ? { state: 'unsent' } : { state: 'invalid', error: this.unrankedWhy };
+  }
+
+  /** Cheats came on mid-Run: entries still waiting become `invalid` (posted ones stay), and so does every later one. */
+  unrank(why: string): void {
+    if (!this.ranked) return;
+    this.ranked = false;
+    this.unrankedWhy = why;
+    for (const p of this.posts.values()) {
+      if (p.state !== 'unsent' && p.state !== 'failed') continue;
+      p.state = 'invalid';
+      p.error = why;
+    }
+    this.changed();
   }
 
   /** In board order: Run board first, then Areas in Run order. */
@@ -236,6 +251,10 @@ export function installLeaderboardPosting(
     if (!current) return;
     e.snapshot.leaderboardRunId = current.runId;
     if (!current.ranked) e.snapshot.unranked = true;
+  });
+  game.events.on('cheatsUnlocked', () => {
+    ranked = false;
+    current?.unrank('runs played with cheats are not ranked.');
   });
   game.events.on('areaCompleted', (e) => {
     if (!current) return;

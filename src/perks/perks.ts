@@ -7,6 +7,9 @@ import { PERK_EFFECTS as FX, PERKS, type PerkData } from '../data/perks';
 import type { StatKey } from '../entities/stats';
 import type { Run } from '../game/run';
 import { perkRegistry, type PerkDef } from './index';
+import { LINT_PERK_DEFS } from './lint';
+import { TUMBLE_PERK_DEFS } from './tumble';
+import { ZAP_PERK_DEFS } from './zap';
 
 const stat =
   (id: string, key: StatKey, op: 'add' | 'mul', value: number) =>
@@ -43,6 +46,9 @@ export const PERK_DEFS: PerkDef[] = [
   }),
 ];
 
+/** Character Perks (drafted only by their Character): ./lint.ts, ./tumble.ts, ./zap.ts. */
+export const CHARACTER_PERK_DEFS: PerkDef[] = [...LINT_PERK_DEFS, ...TUMBLE_PERK_DEFS, ...ZAP_PERK_DEFS];
+
 export function registerPerks(): void {
-  for (const d of PERK_DEFS) perkRegistry.register(d);
+  for (const d of [...PERK_DEFS, ...CHARACTER_PERK_DEFS]) perkRegistry.register(d);
 }

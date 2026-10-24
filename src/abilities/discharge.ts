@@ -3,7 +3,8 @@
  *
  * Static meter (bunny.staticCharge, 0..1): rolling faster than minSpeedFraction of max speed adds
  * the distance rolled (in Bunny radii, × dashMultiplier while dashing, × fillRate) over
- * fillDistance; below drainSpeedFraction of max speed it drains drainPerSec per second.
+ * fillDistance; below drainSpeedFraction of max speed it drains drainPerSec per second, once Zap has
+ * been that slow for longer than drainDelay seconds (Capacitor; 0 = at once).
  *
  * When full, the nearest Hazard whose edge is within `range` Bunny radii of the Bunny's surface
  * is the target (spark marker). Intangible Hazards (the Expansion), absorbable Hazards, Grounded
@@ -14,11 +15,14 @@
  *     Hazards within arcRange r of the first (Arc);
  *   - boss: stunned for bossStun (no hit: Zap still has to touch it), then Grounded for
  *     groundedFor seconds.
+ * The scrap of one Discharge (Arc targets included) is reported to hooks.dischargeScrap
+ * (Recharge Snack). spend() empties the meter without firing (Emergency Discharge).
  */
 import type { InputState } from '../core/input';
+import type { Debris } from '../entities/debris';
 import type { Hazard } from '../hazards';
 import { bunnyCanAbsorb } from '../hazards/common';
-import { scatterDebris } from '../hazards/shed';
+import { scatterDebrisPieces } from '../hazards/shed';
 import { maxSpeedFor } from '../systems/movement';
 import { AbilitySystem, hazardRadius, isBoss, registerAbilityController, type AbilityController } from './system';
 import { BoltView, SparkMarkerView } from './view';
@@ -36,6 +40,8 @@ export class DischargeAbility implements AbilityController {
   private readonly bolts: BoltView[] = [];
   private time = 0;
   private full = false;
+  /** Seconds Zap has been below drainSpeedFraction of max speed (Capacitor's drainDelay). */
+  private slowFor = 0;
   /** Static Cling's and Grounding's installed values (0 / 1 = not installed). */
   private cling = 0;
   private grounding = 1;
@@ -77,9 +83,11 @@ export class DischargeAbility implements AbilityController {
     if (max > 0 && speed > p.minSpeedFraction * max) {
       const radii = (speed * dt) / Math.max(b.radius, 1e-3);
       this.charge += ((radii * (b.dashing ? p.dashMultiplier : 1)) / p.fillDistance) * p.fillRate;
-    } else if (speed < p.drainSpeedFraction * max) {
-      this.charge -= p.drainPerSec * dt;
     }
+    if (speed < p.drainSpeedFraction * max) {
+      this.slowFor += dt;
+      if (this.slowFor > p.drainDelay) this.charge -= p.drainPerSec * dt;
+    } else this.slowFor = 0;
     const full = this.ready;
     if (full && !this.full) run.events.emit('staticFull', { x: b.x, z: b.z });
     this.full = full;
@@ -146,22 +154,29 @@ export class DischargeAbility implements AbilityController {
         .sort((a, c) => Math.hypot(a.x - first.x, a.z - first.z) - Math.hypot(c.x - first.x, c.z - first.z));
       targets.push(...near.slice(0, Math.round(this.p.extraTargets)));
     }
-    this.charge = 0;
-    this.full = false;
-    this.syncStats();
-    this.target = null;
+    this.spend();
     run.events.emit('abilityUsed', { ability: 'discharge', x: b.x, z: b.z });
     let fromX = b.x;
     let fromZ = b.z;
+    const scrap: Debris[] = [];
     for (const h of targets) {
-      this.short(h, fromX, fromZ);
+      this.short(h, fromX, fromZ, scrap);
       fromX = h.x;
       fromZ = h.z;
     }
     this.system.hooks.discharged?.(run, targets);
+    if (scrap.length > 0) this.system.hooks.dischargeScrap?.(run, scrap);
   }
 
-  private short(h: Hazard, fromX: number, fromZ: number): void {
+  /** Empties the meter without firing (Emergency Discharge), keeping the charged-state effects in step. */
+  spend(): void {
+    this.charge = 0;
+    this.full = false;
+    this.syncStats();
+    this.target = null;
+  }
+
+  private short(h: Hazard, fromX: number, fromZ: number, scrap: Debris[]): void {
     const run = this.system.run;
     const b = run.bunny;
     const p = this.p;
@@ -174,7 +189,7 @@ export class DischargeAbility implements AbilityController {
       h.groundedFor = p.groundedFor;
     } else {
       h.dead = true;
-      scatterDebris(run, this.system.rng, h.x, h.z, p.scrapPieces, p.scrapSize * b.radius, hr * 0.3, hr + b.radius * 1.5);
+      scrap.push(...scatterDebrisPieces(run, this.system.rng, h.x, h.z, p.scrapPieces, p.scrapSize * b.radius, hr * 0.3, hr + b.radius * 1.5));
     }
     run.events.emit('hazardShorted', { hazardId: h.id, defId: h.def.id, boss: !!h.def.boss, x: h.x, z: h.z, fromX, fromZ });
   }

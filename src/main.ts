@@ -10,6 +10,7 @@
 import './styles.css';
 import { installAudio } from './audio';
 import { isDifficultyId } from './data/difficulty';
+import { registerCheatsScreen } from './cheats/screen';
 import { installDebug } from './debug/debug';
 import { showLoading } from './fx/loading';
 import { Game } from './game/game';
@@ -36,6 +37,7 @@ async function boot(): Promise<void> {
   const ui = document.getElementById('ui') as HTMLElement;
 
   registerBuiltinScreens();
+  registerCheatsScreen();
   registerLeaderboardScreen();
   registerAccountScreen();
   // Accounts load in the background; without a server everyone simply plays anonymously.
