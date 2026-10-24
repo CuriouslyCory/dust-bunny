@@ -12,14 +12,16 @@
  * check whatever a schema change adds.
  */
 export const SCHEMA_PROBE = `SELECT to_regclass('public.player_progress') IS NOT NULL
+  AND to_regclass('public.saved_runs') IS NOT NULL
   AND to_regclass('public.account_provider_account_idx') IS NOT NULL
   AND to_regclass('public.leaderboard_scores_run_idx') IS NOT NULL
   AND to_regclass('public.area_scores_user_idx') IS NOT NULL
-  AND (SELECT count(*) = 6 FROM information_schema.columns
+  AND (SELECT count(*) = 7 FROM information_schema.columns
         WHERE table_schema = 'public'
           AND ((table_name = 'player_progress' AND column_name IN ('characters', 'loadouts', 'universes'))
             OR (table_name = 'leaderboard_scores' AND column_name IN ('loadout', 'universes'))
-            OR (table_name = 'area_scores' AND column_name = 'loadout'))) AS ready`;
+            OR (table_name = 'area_scores' AND column_name = 'loadout')
+            OR (table_name = 'saved_runs' AND column_name = 'ended_at'))) AS ready`;
 
 export const SCHEMA: readonly string[] = [
   // --- Better Auth (accounts and sessions) ---
@@ -145,4 +147,20 @@ export const SCHEMA: readonly string[] = [
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS universes integer NOT NULL DEFAULT 0 CHECK (universes >= 0)`,
   // Tables created before Loadouts synced: each Character's remembered Loadout (NULL until a client sends them).
   `ALTER TABLE player_progress ADD COLUMN IF NOT EXISTS loadouts jsonb`,
+
+  // --- The Account's saved Run (api/saved-run.ts): one per player, held by one device at a time ---
+  // run_key names the Run (RunSnapshot.runKey); lease is whoever holds it now; snapshot (with its
+  // version) is NULL while a device is playing it. Taking it moves the lease; ending it sets ended_at
+  // (the row stays until another Run is stored, so a late upload of the ended Run is refused).
+  `CREATE TABLE IF NOT EXISTS saved_runs (
+    user_id text PRIMARY KEY REFERENCES "user" ("id") ON DELETE CASCADE,
+    run_key text NOT NULL,
+    lease text NOT NULL,
+    snapshot jsonb,
+    version integer,
+    ended_at timestamptz,
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`,
+  // Tables created before ended Runs kept their row.
+  `ALTER TABLE saved_runs ADD COLUMN IF NOT EXISTS ended_at timestamptz`,
 ];
