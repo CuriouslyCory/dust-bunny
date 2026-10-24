@@ -217,8 +217,8 @@ export function installLeaderboardPosting(
 ): LeaderboardPosting {
   const client = opts.client ?? defaultClient;
   const account = opts.account ?? defaultAccount;
-  // awardRun is idempotent per Run and counts a Universe victory, so the count is current whichever runEnded listener runs first.
-  const universes = opts.universes ?? ((e: GameEvents['runEnded']) => getMeta().awardRun(e).universes);
+  // The count once this Run is credited (it may be already, or still pending with the Account), whichever runEnded listener runs first.
+  const universes = opts.universes ?? ((e: GameEvents['runEnded']) => getMeta().universesAfter(e));
   let current: RunPosts | null = null;
   /** Whether the current Run counts (see RunPosts.ranked). */
   let ranked = true;
@@ -261,14 +261,31 @@ export function installLeaderboardPosting(
     current.addArea(e.stats);
     void autoPost(current, [e.stats.area]);
   });
+  /**
+   * Runs whose credit the Account's server is still deciding (docs/adr/0003): their Run board
+   * entry waits for the answer. A Run refused as carried on elsewhere (another device plays it on)
+   * must not take the board's one slot per Run id from the fork that counts.
+   */
+  const awaitingCredit = new Map<string, RunPosts>();
+  const runs = (game as Partial<Game>).accountRuns;
   game.events.on('runEnded', (e) => {
     if (!current) return;
     current.finish(e);
-    void autoPost(current);
+    if (runs?.deferred(e.runKey)) awaitingCredit.set(e.runKey, current);
+    else void autoPost(current);
+  });
+  // Every definite answer resolves the wait (an answer another tab got arrives here through the
+  // queue's storage listener): the Run posts, unless another device plays it on.
+  runs?.credits.onCredit((o) => {
+    const posts = awaitingCredit.get(o.runKey);
+    if (!posts) return;
+    awaitingCredit.delete(o.runKey);
+    if (o.refused === 'carriedOn') posts.unrank('this Run carried on on another device.');
+    else void autoPost(posts); // credited (here or in another tab), already credited by an older client, or refused as malformed: it ended here all the same
   });
   // Signing in (say from the results screen's inline buttons) posts what is still waiting.
   account.subscribe((s) => {
-    if (s.status === 'signedIn' && current?.pending) void autoPost(current);
+    if (s.status === 'signedIn' && current?.pending && !(current.result && awaitingCredit.has(current.result.runKey))) void autoPost(current);
   });
 
   installed = {

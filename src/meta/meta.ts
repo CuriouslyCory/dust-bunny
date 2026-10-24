@@ -6,12 +6,14 @@
  * Every check that decides a write (can this be afforded? is the Keepsake still there?) runs inside
  * the store's update callback, on the freshly read save, so another tab's spend is never undone.
  */
-import type { GameEvents } from '../core/events';
 import type { DifficultyId } from '../data/difficulty';
 import { FELT_INPUT, feltCeiling, feltCost, getKeepsakeType, HOARD_STACK_MAX, MAX_RARITY, shedValue, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { getUpgrade } from '../data/upgrades';
 import type { StatModifier } from '../entities/stats';
+import type { RunEndReason } from '../game/runStats';
+import { CREDITED_RUNS_MAX, type CreditStats } from '../shared/runCredit';
 import { AREA_ORDER } from '../world/types';
+import { CreditedRunsMirrorStore } from './creditedRuns';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
 import { browserStorage, browserStorageEvents, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore, type StorageEventSource } from './save';
@@ -19,10 +21,21 @@ import { levelOf, upgradeCost, upgradeModifiers } from './upgrades';
 
 declare module '../core/events' {
   interface GameEvents {
-    /** Fluff credited for a finished Run (after the save is written). */
-    fluffAwarded: { amount: number; total: number; reason: GameEvents['runEnded']['reason'] };
+    /**
+     * Fluff for a finished Run. `pending`: the Run is credited by the Account's answer, not yet
+     * (`amount` is what it will be; `total` the wallet without it): it fires again with `pending:
+     * false` once the credit lands, `amount: 0` if the server refused it (src/meta/accountRun.ts).
+     */
+    fluffAwarded: { runKey: string; amount: number; total: number; reason: RunEndReason; pending: boolean };
     upgradePurchased: { upgradeId: string; level: number; cost: number; fluffLeft: number };
   }
+}
+
+/** What crediting a Run reads: the `runEnded` payload, or a ledger row (docs/adr/0003). */
+export interface RunCreditInput {
+  runKey: string;
+  reason: RunEndReason;
+  stats: CreditStats;
 }
 
 export interface RunAward {
@@ -33,11 +46,28 @@ export interface RunAward {
   universes: number;
 }
 
+/** How a credit reached this copy (docs/adr/0003, "Implementation notes"). */
+export interface AwardOptions {
+  /**
+   * The Account's ledger has, or will get, a row for this key (default): it is remembered in the
+   * synced `creditedRuns`. False for a Run credited with no Account: no row will ever exist for it,
+   * so it is remembered on this device only and takes no slot from keys the sweep can bring back.
+   */
+  ledger?: boolean;
+  /**
+   * Count a Universe victory in `universes` (default). False for a ledger row that reached this
+   * copy by the sweep or an upload's answer: another device's Run (its copy counted it, and the
+   * cloud save's merge keeps the larger count), or this copy's own Run whose key a merge dropped
+   * while the larger count survived. Only the device that ended the Run counts it.
+   */
+  countUniverse?: boolean;
+}
+
 /** The Area whose `victory` ends the story (the Universe; the only Area that emits one). */
 const LAST_AREA = AREA_ORDER[AREA_ORDER.length - 1]!;
 
 /** True for a Run that won the last Area: it counts one more Universe. */
-export function endsUniverse(e: Pick<GameEvents['runEnded'], 'reason' | 'stats'>): boolean {
+export function endsUniverse(e: Pick<RunCreditInput, 'reason' | 'stats'>): boolean {
   return e.reason === 'victory' && e.stats.area === LAST_AREA;
 }
 
@@ -82,11 +112,66 @@ function feltCheckOn(d: SaveData, characterId: string, ref: KeepsakeRef): FeltCh
 
 export class MetaProgress {
   readonly store: SaveStore;
-  private awarded = new WeakMap<object, RunAward>();
+  /** The device's own record of `creditedRuns` (./creditedRuns.ts): repairs a save another build rewrote without it. */
+  private readonly mirror: CreditedRunsMirrorStore;
+  /** Keys `creditedRuns` keeps beyond its cap: those a claim is still out for (`pinCreditedRuns`). */
+  private pins: () => readonly string[] = () => [];
 
   /** `events`: where other tabs' `storage` events arrive (see SaveStore). */
   constructor(storage: KeyValueStorage | null, events: StorageEventSource | null = null) {
-    this.store = new SaveStore(storage, undefined, events);
+    this.mirror = new CreditedRunsMirrorStore(storage);
+    this.store = new SaveStore(storage, undefined, events, (d, read) => this.repairCreditedRuns(d, read));
+  }
+
+  /**
+   * Names the Run keys whose claim is still waiting for the server's answer (the claim queue
+   * registers this, src/meta/runCredits.ts). A Run credited on the device before its claim went
+   * out (`local`) holds its Fluff under its key; were the key to age out of `creditedRuns` while the
+   * claim is pending, the answer would credit the Run again. So the cap never evicts a pinned key
+   * (`trimCreditedRuns`); a key an adopt replaced the whole set without is still gone, so the
+   * answer still restores a credit the adopted copy lacks (docs/adr/0003).
+   */
+  pinCreditedRuns(source: () => readonly string[]): void {
+    this.pins = source;
+  }
+
+  /**
+   * `creditedRuns` as a write leaves it: the newest `CREDITED_RUNS_MAX` keys, plus any older key
+   * still pinned. Over the cap only while claims are out for the older keys; the cloud save waits
+   * for them to land before uploading (the server accepts at most `CREDITED_RUNS_MAX`).
+   */
+  trimCreditedRuns(keys: readonly string[]): string[] {
+    if (keys.length <= CREDITED_RUNS_MAX) return [...keys];
+    const pinned = new Set(this.pins());
+    const older = keys.slice(0, keys.length - CREDITED_RUNS_MAX).filter((k) => pinned.has(k));
+    return [...older, ...keys.slice(-CREDITED_RUNS_MAX)];
+  }
+
+  /**
+   * A save read from storage that lacks keys the mirror says this copy's set held (a tab from before
+   * the ledger rewrote it) gets them back, oldest first. Its Fluff is left as it is: a key without
+   * its Fluff can only under-credit, never double credit. A save with no `creditedRuns` field at all
+   * on a device that has used the ledger (its mirror exists) may also have lost keys the mirror
+   * never knew (another device's, adopted from the cloud): the set is marked unknown until a cloud
+   * adopt restores one (`creditedRunsKnown`).
+   */
+  private repairCreditedRuns(d: SaveData, read: { lostCreditedRuns: boolean }): void {
+    const mirror = this.mirror.read();
+    if (read.lostCreditedRuns && !mirror.unknown && this.mirror.exists()) this.mirror.write({ ...mirror, unknown: true });
+    const missing = mirror.keys.filter((k) => !d.creditedRuns.includes(k));
+    // Not cut back to the cap here: which older keys are pinned isn't known until the claim queue
+    // registers them (after this runs at load). A set over the cap only holds credits; the next write trims it.
+    if (missing.length) d.creditedRuns = [...missing, ...d.creditedRuns];
+  }
+
+  /**
+   * Whether `creditedRuns` is known to be the whole set this copy's Fluff accounts for. False after a
+   * build from before the ledger rewrote the save (above): the sweep holds off, uploads omit the
+   * field (the server keeps its stored set) and a claim's answer for a row that already existed is
+   * not applied, since losing the field must never create Fluff (docs/adr/0003).
+   */
+  creditedRunsKnown(): boolean {
+    return !this.mirror.read().unknown;
   }
 
   get data() {
@@ -137,15 +222,16 @@ export class MetaProgress {
 
   /**
    * Credits Fluff and records stats for a finished Run, and counts a Universe victory in
-   * `universes`. Idempotent per runEnded payload, so both the results screen and the event
-   * listener may call it.
+   * `universes`. Once per Run key: null when `creditedRuns` already lists it. The check and the
+   * write share one update, so two tabs applying the same credit can't both add it, and the key
+   * is remembered in the same write as the Fluff (docs/adr/0003).
    */
-  awardRun(e: GameEvents['runEnded']): RunAward {
-    const prev = this.awarded.get(e);
-    if (prev) return prev;
+  awardRun(e: RunCreditInput, opts: AwardOptions = {}): RunAward | null {
     const fluff = fluffForRun(e.reason, e.stats);
     let newBestRadius = false;
-    this.store.update((d) => {
+    const added = this.store.updateIf((d) => {
+      const mirror = this.mirror.read();
+      if (d.creditedRuns.includes(e.runKey) || mirror.local.includes(e.runKey)) return false;
       newBestRadius = e.stats.maxRadius > d.stats.bestRadius;
       d.fluff += fluff;
       d.stats.runs++;
@@ -153,11 +239,44 @@ export class MetaProgress {
       d.stats.bestRadius = Math.max(d.stats.bestRadius, e.stats.maxRadius);
       d.stats.bestTier = Math.max(d.stats.bestTier, e.stats.tierReached);
       d.stats.totalFluffEarned += fluff;
-      if (endsUniverse(e)) d.universes++;
+      if ((opts.countUniverse ?? true) && endsUniverse(e)) d.universes++;
+      if (opts.ledger ?? true) {
+        d.creditedRuns = this.trimCreditedRuns([...d.creditedRuns, e.runKey]);
+        this.mirror.write({ ...mirror, keys: [...d.creditedRuns] });
+      } else this.mirror.write({ ...mirror, local: [...mirror.local, e.runKey] });
+      return true;
     });
-    const award = { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
-    this.awarded.set(e, award);
-    return award;
+    if (!added) return null;
+    return { fluff, total: this.store.data.fluff, newBestRadius, universes: this.store.data.universes };
+  }
+
+  /** Whether this copy holds the credit for the Run (in the synced set, or credited on this device without an Account). */
+  credited(runKey: string): boolean {
+    return this.store.data.creditedRuns.includes(runKey) || this.mirror.read().local.includes(runKey);
+  }
+
+  /**
+   * Inside the cloud save's adopt (`d` is the save being written): the adopted copy's set replaces
+   * this one's, in the same write as its Fluff. Unknown on a row from before the ledger: this
+   * copy's set stays (missing means unknown), or starts empty when another Account's save is being
+   * loaded (`replace`). The device's mirror follows, so the keys the adopted copy lacks are what
+   * the sweep may bring back; an adopted set (or another Account's fresh start) is known again.
+   */
+  adoptCreditedRuns(d: SaveData, keys: readonly string[] | undefined, replace: boolean): void {
+    if (keys) d.creditedRuns = [...keys];
+    else if (replace) d.creditedRuns = [];
+    const mirror = this.mirror.read();
+    this.mirror.write({ ...mirror, keys: [...d.creditedRuns], unknown: keys || replace ? false : mirror.unknown });
+  }
+
+  /** The Universes count once `e` is credited: as it is now, plus one for a Universe victory still to land. */
+  universesAfter(e: RunCreditInput): number {
+    return this.store.data.universes + (endsUniverse(e) && !this.credited(e.runKey) ? 1 : 0);
+  }
+
+  /** Credits a saved Run the device lets go of (replaced in its slot, or abandoned) as a quit, with no Account (`QuitCreditor`, src/meta/suspendedRun.ts). */
+  creditQuit(s: { runKey: string; stats: CreditStats }): void {
+    this.awardRun({ runKey: s.runKey, reason: 'quit', stats: s.stats }, { ledger: false });
   }
 
   // --- Keepsakes ---

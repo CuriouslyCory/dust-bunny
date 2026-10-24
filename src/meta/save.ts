@@ -10,10 +10,12 @@
  * other tabs' writes as they happen.
  *
  * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
- * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`) don't need a bump.
+ * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`,
+ * `creditedRuns`) don't need a bump.
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
+import { isRunKey } from '../shared/runCredit';
 import { hasKeepsakes, repairLoadout, sanitizeCharacterHoard, type CharacterHoard } from './hoard';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
@@ -58,6 +60,12 @@ export interface SaveData {
   lastLoadout: Record<string, KeepsakeRef[]>;
   /** Universe victories (endings) so far; the title reads "Universe N" with N = universes + 1. */
   universes: number;
+  /**
+   * The newest Run keys whose credit (Fluff and stats) this save holds, oldest first, at most
+   * `CREDITED_RUNS_MAX` (docs/adr/0003). Written in the same update as the Fluff it accounts for and
+   * synced with it, so a Run is credited at most once per progress copy.
+   */
+  creditedRuns: string[];
 }
 
 export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'corrupt';
@@ -74,6 +82,7 @@ export function defaultSave(): SaveData {
     characters: {},
     lastLoadout: {},
     universes: 0,
+    creditedRuns: [],
   };
 }
 
@@ -122,6 +131,11 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
     }
   }
   d.universes = int(o.universes);
+  // Not capped here: the set may hold older keys beyond `CREDITED_RUNS_MAX` while claims are out
+  // for them, and only MetaProgress knows which (`trimCreditedRuns`, applied as the set is written).
+  if (Array.isArray(o.creditedRuns)) {
+    for (const k of o.creditedRuns as unknown[]) if (isRunKey(k) && !d.creditedRuns.includes(k)) d.creditedRuns.push(k);
+  }
   return d;
 }
 
@@ -145,17 +159,28 @@ export function migrate(o: Record<string, unknown>): { data: SaveData; migrated:
   return { data: sanitizeV1(o), migrated: version !== SAVE_VERSION };
 }
 
-export function parseSave(raw: string | null | undefined): { data: SaveData; status: SaveStatus } {
-  if (raw == null || raw === '') return { data: defaultSave(), status: 'empty' };
+export interface ParsedSave {
+  data: SaveData;
+  status: SaveStatus;
+  /**
+   * A readable save that has no `creditedRuns` field at all: a build from before the ledger wrote
+   * it last (its sanitiser drops the field), or it is from before the ledger. `MetaProgress` tells
+   * the two apart by its mirror (docs/adr/0003). False for an empty or corrupt value.
+   */
+  lostCreditedRuns: boolean;
+}
+
+export function parseSave(raw: string | null | undefined): ParsedSave {
+  if (raw == null || raw === '') return { data: defaultSave(), status: 'empty', lostCreditedRuns: false };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { data: defaultSave(), status: 'corrupt' };
+    return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
   }
-  if (!isObj(parsed)) return { data: defaultSave(), status: 'corrupt' };
+  if (!isObj(parsed)) return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
   const { data, migrated } = migrate(parsed);
-  return { data, status: migrated ? 'migrated' : 'ok' };
+  return { data, status: migrated ? 'migrated' : 'ok', lostCreditedRuns: !Array.isArray(parsed.creditedRuns) };
 }
 
 export function serializeSave(data: SaveData): string {
@@ -209,10 +234,17 @@ export class SaveStore {
   private raw: string | null | undefined;
   private readonly offEvents: () => void = () => undefined;
 
+  /**
+   * `repair`: run on every value read from storage (at load and when another tab wrote), before it
+   * becomes `data`: puts back what a write by another build may have dropped (MetaProgress uses it
+   * for `creditedRuns`, told by `lostCreditedRuns` whether the stored value had the field). It
+   * changes `data` in memory; the next write persists it.
+   */
   constructor(
     private readonly storage: KeyValueStorage | null,
     readonly key = SAVE_KEY,
     events: StorageEventSource | null = null,
+    private readonly repair: ((data: SaveData, read: Pick<ParsedSave, 'status' | 'lostCreditedRuns'>) => void) | null = null,
   ) {
     const raw = this.readRaw();
     const { data, status } = raw === undefined ? parseSave(null) : this.load(raw);
@@ -249,6 +281,7 @@ export class SaveStore {
         /* ignore */
       }
     }
+    this.repair?.(parsed.data, parsed);
     return parsed;
   }
 

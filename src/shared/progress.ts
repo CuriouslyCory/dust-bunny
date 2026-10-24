@@ -15,6 +15,7 @@
  * (`mergeUniverses`), whichever copy wins otherwise.
  */
 import { KEEPSAKE_STACK_MAX, keepsakeTypesForCharacter, parseLoadout, parseSharedHoardKey, sharedHoardKey, type SharedKeepsakeRef } from './keepsakes.js';
+import { sameCreditedRuns, validateCreditedRuns } from './runCredit.js';
 import { SCORE_TIER_MIN_RADII } from './score.js';
 
 export interface ProgressStats {
@@ -47,6 +48,12 @@ export interface Progress {
   stats: ProgressStats;
   /** Universe victories (missing on older bundles: 0, and the stored count is kept). */
   universes: number;
+  /**
+   * The newest Run keys whose credit this copy holds (docs/adr/0003; at most `CREDITED_RUNS_MAX`).
+   * It travels with the Fluff it accounts for, so whichever copy wins a merge keeps the right set.
+   * Missing (a bundle or stored row from before the ledger) means unknown: the other copy's is kept.
+   */
+  creditedRuns?: string[];
 }
 
 /** Generous sanity bounds: they stop garbage, not determined cheating (the game runs on the client). */
@@ -160,8 +167,12 @@ export function validateProgress(body: unknown): ProgressValidation {
   const universes = body.universes ?? 0;
   if (!isCount(universes, PROGRESS_BOUNDS.count)) return fail('universes', 'universes must be a non-negative integer.');
 
+  const creditedRuns = validateCreditedRuns(body.creditedRuns);
+  if (!creditedRuns.ok) return fail('creditedRuns', creditedRuns.message);
+
   const value: Progress = { fluff: body.fluff, upgrades, characters: characters.value, stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned }, universes };
   if (loadouts.value) value.loadouts = loadouts.value;
+  if (creditedRuns.value) value.creditedRuns = creditedRuns.value;
   return { ok: true, value };
 }
 
@@ -220,6 +231,7 @@ export function sameProgress(a: Progress, b: Progress): boolean {
   if (ka.length !== Object.keys(b.upgrades).length || ka.some((k) => a.upgrades[k] !== b.upgrades[k])) return false;
   if (!sameCharacters(a.characters, b.characters)) return false;
   if (!sameLoadouts(a.loadouts, b.loadouts)) return false;
+  if (!sameCreditedRuns(a.creditedRuns, b.creditedRuns)) return false;
   const sa = a.stats;
   const sb = b.stats;
   return (

@@ -18,10 +18,14 @@
  *   when it stores an upload (except when loading another account's save, which replaces it).
  * - An adopted Loadout is repaired against the adopted Hoard. A server copy without `loadouts`
  *   (stored before Loadouts synced) keeps the device's, which then upload.
+ * - `creditedRuns` (the Run credits a copy's Fluff accounts for, docs/adr/0003) travels with the
+ *   Fluff: adopted in the same write, so whichever copy wins carries the right set, and the credit
+ *   ledger's sweep (src/meta/runCredits.ts) can re-apply any credit the losing copy held alone.
  */
 import type { KeepsakeRef } from '../data/keepsakes';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, isEmptyProgress, mergeUniverses, sameProgress, validateProgress, type Progress } from '../shared/progress';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import type { MetaProgress } from './meta';
 import { repairLoadout } from './hoard';
 import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from './save';
@@ -43,7 +47,12 @@ export interface CloudSaveOptions {
   retryMs?: number;
 }
 
-export function progressOf(d: SaveData): Progress {
+/**
+ * The synced copy of a save. `creditedRunsKnown: false` leaves `creditedRuns` out (the device can't
+ * say which credits the Fluff accounts for, docs/adr/0003): the server then keeps its stored set,
+ * and `sameProgress` reads a missing set as the same.
+ */
+export function progressOf(d: SaveData, creditedRunsKnown = true): Progress {
   const { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned } = d.stats;
   const characters: Progress['characters'] = {};
   for (const [id, c] of Object.entries(d.characters)) characters[id] = { hoard: { ...c.hoard }, bossesBeaten: [...c.bossesBeaten] };
@@ -56,6 +65,7 @@ export function progressOf(d: SaveData): Progress {
     loadouts,
     stats: { runs, wins, bestRadius, bestTier, totalFluffEarned, keepsakesEarned },
     universes: d.universes,
+    ...(creditedRunsKnown ? { creditedRuns: [...d.creditedRuns] } : {}),
   };
 }
 
@@ -78,6 +88,18 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   const storage = opts.storage === undefined ? browserStorage() : opts.storage;
   const debounceMs = opts.debounceMs ?? 1500;
   const retryMs = opts.retryMs ?? 30_000;
+  /**
+   * This device's copy as the server should see it (without `creditedRuns` while the set is
+   * unknown). The set is trimmed as a write would leave it, so keys unpinned since the last write
+   * don't hold an upload back (`upload`).
+   */
+  const current = (d: SaveData = meta.data): Progress => {
+    const p = progressOf(d, meta.creditedRunsKnown());
+    if (p.creditedRuns) p.creditedRuns = meta.trimCreditedRuns(p.creditedRuns);
+    return p;
+  };
+  /** The upload is waiting for `creditedRuns` to fit the server's cap (see `upload`): the status stays `syncing`. */
+  let waiting = false;
 
   let status: CloudSaveStatus = 'off';
   const listeners = new Set<(s: CloudSaveStatus) => void>();
@@ -142,12 +164,19 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   function adopt(p: Progress, replace = false): boolean {
     lastSynced = p;
     // What the caller compared against (it calls in the same synchronous step).
-    const seen = progressOf(meta.data);
+    const seen = current();
     let kept = false;
     meta.store.updateIf((d) => {
-      const fresh = progressOf(d);
+      const fresh = current(d);
       const universes = replace ? p.universes : mergeUniverses(d.universes, p.universes);
-      if (sameProgress(fresh, { ...p, universes })) return false;
+      if (sameProgress(fresh, { ...p, universes })) {
+        // The same copy. If this device can't say which credits it holds, the server's set is its set.
+        if (!fresh.creditedRuns && p.creditedRuns) {
+          meta.adoptCreditedRuns(d, p.creditedRuns, replace);
+          return true;
+        }
+        return false;
+      }
       const order = compareProgress(fresh, p);
       if (!replace && (order > 0 || (order === 0 && !sameProgress(fresh, seen)))) {
         kept = true;
@@ -155,6 +184,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       }
       d.universes = universes;
       d.fluff = p.fluff;
+      // The credits this Fluff accounts for come with it (docs/adr/0003); unknown on an older copy: the device's set stays.
+      meta.adoptCreditedRuns(d, p.creditedRuns, replace);
       d.upgrades = { ...p.upgrades };
       // Device-only stats (feltings) survive; the synced ones come from the server.
       d.stats = { ...d.stats, ...p.stats };
@@ -176,6 +207,17 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
    * flight stay local and upload next. Refused (the server holds more progress): adopt its copy.
    */
   async function upload(p: Progress): Promise<void> {
+    // More keys than the server accepts: claims of this device are still out for the older ones
+    // (MetaProgress.trimCreditedRuns). Sending the copy without them would let another device
+    // adopt their Fluff without their keys and credit those Runs again from the sweep (docs/adr/0003),
+    // so the upload waits for the claims to land; the copy stays dirty meanwhile.
+    if (p.creditedRuns && p.creditedRuns.length > CREDITED_RUNS_MAX) {
+      waiting = true;
+      setDirty(true);
+      schedule(retryMs);
+      return;
+    }
+    waiting = false;
     const res = await call({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) });
     if (!res.progress) return;
     if (res.accepted) {
@@ -183,9 +225,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       // The server keeps the larger Universes count (another device may have ended more).
       const { universes } = res.progress;
       if (universes > meta.data.universes) meta.store.update((d) => void (d.universes = Math.max(d.universes, universes)));
-      if (sameProgress(progressOf(meta.data), res.progress)) setDirty(false);
+      if (sameProgress(current(), res.progress)) setDirty(false);
       else schedule(debounceMs);
-    } else if (compareProgress(progressOf(meta.data), res.progress) > 0) {
+    } else if (compareProgress(current(), res.progress) > 0) {
       // A Run ended while the refused request was in flight: local is ahead again, so send it.
       lastSynced = res.progress;
       schedule(debounceMs);
@@ -201,7 +243,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       setStatus('syncing');
       try {
         await step();
-        if (userId === forUser) setStatus('synced');
+        if (userId === forUser) setStatus(waiting ? 'syncing' : 'synced');
       } catch (err) {
         console.warn('[cloudSave]', err);
         if (userId !== forUser) return;
@@ -217,7 +259,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   async function connect(id: string): Promise<void> {
     const remote = (await call()).progress;
     if (userId !== id) return;
-    const local = progressOf(meta.data);
+    const local = current();
     const previous = storageGet(CLOUD_USER_KEY);
     if (previous && previous !== id) {
       // This device's save belongs to another account: start from this account's copy.
@@ -236,12 +278,12 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
     if (userId !== id) return;
     connected = true;
     // Changes made while connecting were not scheduled (see onChange): pick them up now.
-    if (lastSynced && !sameProgress(progressOf(meta.data), lastSynced)) schedule(debounceMs);
+    if (lastSynced && !sameProgress(current(), lastSynced)) schedule(debounceMs);
   }
 
   function pushIfChanged(): Promise<void> {
     return enqueue(async () => {
-      const p = progressOf(meta.data);
+      const p = current();
       if (lastSynced && sameProgress(p, lastSynced)) return;
       await upload(p);
     });
@@ -274,16 +316,18 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
 
   const offStore = meta.store.onChange(() => {
     if (!userId) return;
-    if (lastSynced && sameProgress(progressOf(meta.data), lastSynced)) return;
+    if (lastSynced && sameProgress(current(), lastSynced)) return;
     setDirty(true);
     if (connected) schedule(debounceMs); // not connected yet: connect() reconciles everything
   });
   const offAccount = account.subscribe(onAccount);
 
   const onPageHide = () => {
-    if (!userId || !connected || !lastSynced || sameProgress(progressOf(meta.data), lastSynced)) return;
+    if (!userId || !connected || !lastSynced) return;
+    const p = current();
+    if (sameProgress(p, lastSynced) || (p.creditedRuns && p.creditedRuns.length > CREDITED_RUNS_MAX)) return; // the latter waits (see `upload`)
     // keepalive lets the upload finish after the tab closes.
-    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(progressOf(meta.data)) }).catch(() => undefined);
+    void doFetch(baseUrl, { method: 'PUT', keepalive: true, credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }).catch(() => undefined);
   };
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') window.addEventListener('pagehide', onPageHide);
 
@@ -305,7 +349,7 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
       if (timer) clearTimeout(timer);
       timer = null;
       await (connected ? pushIfChanged() : enqueue(() => connect(userId!)));
-      return connected && status === 'synced' && lastSynced !== null && sameProgress(progressOf(meta.data), lastSynced);
+      return connected && status === 'synced' && lastSynced !== null && sameProgress(current(), lastSynced);
     },
     dispose(): void {
       offStore();

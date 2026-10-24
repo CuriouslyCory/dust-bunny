@@ -59,7 +59,8 @@ export interface GameEvents {
   bunnyHealed: { amount: number; health: number; maxHealth: number };
   bunnyDied: { source: string };
   dashStarted: { cooldown: number };
-  runEnded: { reason: RunEndReason; stats: RunStats };
+  /** The Run is over. `runKey` tells Runs apart: a Run is credited once per key (src/meta/meta.ts). */
+  runEnded: { runKey: string; reason: RunEndReason; stats: RunStats };
   /** Simulation stopped (user pause, modal screen, tab hidden). `reason` is the screen id. */
   paused: { reason: string };
   resumed: { reason: string };

@@ -26,6 +26,8 @@ The device slot stays and is written first, so pausing and Save & quit never wai
 
 ## Known limits
 
+**Superseded by [ADR 0003](0003-run-credit-ledger.md):** crediting is now decided by the server's `run_credits` ledger, once per Run key, and applied once per progress copy through `creditedRuns`. The four races below are closed there (the last as "credited, not dropped"). The rest of this section describes the client-side rules as they stood before the ledger.
+
 Crediting is decided by several local rules on the client: the Account generation (`gen`), waiting out this page's own uploads (`settledTag`), the take confirmation before an ending (`confirmHeld` / `gateRunEnding`), the title read epoch, and the synced-copy rule above. No single server-side rule enforces it. Each rule closes one race, but a new interleaving of them can open another, and the known ones left are these narrow races:
 
 - **A lost answer leaves a Run uncredited.** If the answer to an upload that replaces a server-confirmed copy never arrives, the replaced Run goes uncredited: one Run's Fluff is lost rather than credited twice. The same applies to a delete that abandons one. Both happen when the tab closes with the request still on its way, or when a retry lands after the first attempt already did.

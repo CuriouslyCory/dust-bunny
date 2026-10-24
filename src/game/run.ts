@@ -179,13 +179,6 @@ export class Run {
   readonly tierTimes: Record<number, number> = { 1: 0 };
   ended = false;
   endReason: RunEndReason | null = null;
-  /**
-   * Asked when the Run ends: a promise holds `runEnded` (which credits the Run) until it resolves,
-   * and drops it on false; null emits it at once. Set by the Game for the Account's saved Run
-   * (src/meta/accountRun.ts `gateRunEnding`).
-   */
-  endGate: ((reason: RunEndReason) => Promise<boolean> | null) | null = null;
-  private disposed = false;
 
   private systems: System[] = [];
   private readonly tucked: KeepsakeRef[];
@@ -726,19 +719,10 @@ export class Run {
     if (this.ended) return;
     this.ended = true;
     this.endReason = reason;
-    const e = { reason, stats: this.getStats() };
-    const gate = this.endGate?.(reason) ?? null;
-    if (!gate) {
-      this.events.emit('runEnded', e);
-      return;
-    }
-    void gate.then((ok) => {
-      if (ok && !this.disposed) this.events.emit('runEnded', e);
-    });
+    this.events.emit('runEnded', { runKey: this.runKey, reason, stats: this.getStats() });
   }
 
   dispose(): void {
-    this.disposed = true;
     for (const s of this.systems) s.dispose?.();
     this.systems = [];
     this.disposables.dispose();

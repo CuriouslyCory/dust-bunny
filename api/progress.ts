@@ -19,6 +19,9 @@
  * rows on read and in uploads on write.
  * `universes` never goes down: the stored count becomes the larger of the two even when the upload
  * is refused (a body without it, from before Act 9, reads as 0 and keeps the stored count).
+ * `creditedRuns` (docs/adr/0003) is stored and returned with the copy it accounts for; a body
+ * without it (a bundle from before the ledger) keeps the stored one, and a row without one leaves
+ * it out of the response.
  */
 import { validateProgress, type Progress } from '../src/shared/progress.js';
 import { sessionUser } from '../server/auth.js';
@@ -28,7 +31,7 @@ import { errorResponse, HttpError, json, readJson } from '../server/http.js';
 /** Up to 3 Characters × 50 Hoard cells fit in about 4 KB; the rest is headroom. */
 const MAX_BODY_BYTES = 16_384;
 
-const COLUMNS = 'fluff, upgrades, stats, characters, loadouts, universes, updated_at';
+const COLUMNS = 'fluff, upgrades, stats, characters, loadouts, universes, credited_runs, updated_at';
 
 interface Row {
   fluff: number;
@@ -37,12 +40,21 @@ interface Row {
   characters: unknown;
   loadouts: unknown;
   universes: number | null;
+  credited_runs: unknown;
   updated_at: Date | string;
 }
 
 /** Rows were validated on the way in; re-check anyway so a bad row can't break clients. */
 function toProgress(row: Row): { progress: Progress | null; updatedAt: string } {
-  const v = validateProgress({ fluff: row.fluff, upgrades: row.upgrades, stats: row.stats, characters: row.characters ?? {}, loadouts: row.loadouts ?? undefined, universes: row.universes ?? 0 });
+  const v = validateProgress({
+    fluff: row.fluff,
+    upgrades: row.upgrades,
+    stats: row.stats,
+    characters: row.characters ?? {},
+    loadouts: row.loadouts ?? undefined,
+    universes: row.universes ?? 0,
+    creditedRuns: row.credited_runs ?? undefined,
+  });
   return { progress: v.ok ? v.value : null, updatedAt: new Date(row.updated_at).toISOString() };
 }
 
@@ -70,13 +82,15 @@ async function put(request: Request): Promise<Response> {
   const keepCharacters = (body as Record<string, unknown>).characters === undefined;
   // ...nor (before Loadouts synced) about Loadouts: keep the stored ones.
   const keepLoadouts = p.loadouts === undefined;
+  // ...nor (before the credit ledger, docs/adr/0003) about credited Runs: keep the stored set.
+  const keepCredited = p.creditedRuns === undefined;
 
   // Accept when the upload has at least as much lifetime progress as the stored copy.
   const total = `(player_progress.stats->>'totalFluffEarned')::bigint`;
   const runs = `(player_progress.stats->>'runs')::bigint`;
   const [stored] = await query<Row>(
-    `INSERT INTO player_progress AS player_progress (user_id, fluff, upgrades, stats, characters, loadouts, universes, updated_at)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $8::jsonb, $7, now())
+    `INSERT INTO player_progress AS player_progress (user_id, fluff, upgrades, stats, characters, loadouts, universes, credited_runs, updated_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $8::jsonb, $7, $10::jsonb, now())
      ON CONFLICT (user_id) DO UPDATE
        SET fluff = EXCLUDED.fluff, upgrades = EXCLUDED.upgrades,
            stats = CASE WHEN $6::boolean
@@ -85,11 +99,24 @@ async function put(request: Request): Promise<Response> {
            characters = CASE WHEN $6::boolean THEN player_progress.characters ELSE EXCLUDED.characters END,
            loadouts = CASE WHEN $9::boolean THEN player_progress.loadouts ELSE EXCLUDED.loadouts END,
            universes = GREATEST(player_progress.universes, EXCLUDED.universes),
+           credited_runs = CASE WHEN $11::boolean THEN player_progress.credited_runs ELSE EXCLUDED.credited_runs END,
            updated_at = now()
        WHERE ${total} < (EXCLUDED.stats->>'totalFluffEarned')::bigint
           OR (${total} = (EXCLUDED.stats->>'totalFluffEarned')::bigint AND ${runs} <= (EXCLUDED.stats->>'runs')::bigint)
      RETURNING ${COLUMNS}`,
-    [userId, p.fluff, JSON.stringify(p.upgrades), JSON.stringify(p.stats), JSON.stringify(p.characters), keepCharacters, p.universes, keepLoadouts ? null : JSON.stringify(p.loadouts), keepLoadouts],
+    [
+      userId,
+      p.fluff,
+      JSON.stringify(p.upgrades),
+      JSON.stringify(p.stats),
+      JSON.stringify(p.characters),
+      keepCharacters,
+      p.universes,
+      keepLoadouts ? null : JSON.stringify(p.loadouts),
+      keepLoadouts,
+      keepCredited ? null : JSON.stringify(p.creditedRuns),
+      keepCredited,
+    ],
   );
   if (stored) return json(200, { accepted: true, ...toProgress(stored) });
   // Refused, but a Universe ended on this device still counts.

@@ -167,4 +167,18 @@ describe('loadouts (remembered Loadouts)', () => {
     expect(sameProgress(p({ loadouts: {} }), p())).toBe(true);
     expect(compareProgress(a, p())).toBe(0);
   });
+
+  it('carries creditedRuns (missing reads as unknown), compares it as a set, and bounds it', () => {
+    const v = validateProgress({ ...p(), creditedRuns: ['k1', 'k2', 'k1'] });
+    expect(v).toEqual({ ok: true, value: { ...p(), creditedRuns: ['k1', 'k2'] } });
+    const plain = validateProgress(p());
+    expect(plain.ok && plain.value.creditedRuns).toBeUndefined();
+    const bad = validateProgress({ ...p(), creditedRuns: 'k1' });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.field).toBe('creditedRuns');
+    expect(sameProgress(p({ creditedRuns: ['k1', 'k2'] }), p({ creditedRuns: ['k2', 'k1'] }))).toBe(true);
+    expect(sameProgress(p({ creditedRuns: ['k1'] }), p({ creditedRuns: ['k2'] }))).toBe(false);
+    expect(sameProgress(p({ creditedRuns: ['k1'] }), p())).toBe(true);
+    expect(compareProgress(p({ creditedRuns: ['k1'] }), p())).toBe(0);
+  });
 });

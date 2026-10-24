@@ -18,8 +18,9 @@ import { getDifficulty } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
+import { creditStatsOf } from '../../meta/accountRun';
 import { endsUniverse, getMeta } from '../../meta/meta';
-import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, GALAXY_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
+import { CITY_CLEARED_FLUFF_MULTIPLIER, CONTINENT_CLEARED_FLUFF_MULTIPLIER, fluffForRun, GALAXY_CLEARED_FLUFF_MULTIPLIER, GLOBE_CLEARED_FLUFF_MULTIPLIER, HOUSE_CLEARED_FLUFF_MULTIPLIER, NEIGHBORHOOD_CLEARED_FLUFF_MULTIPLIER, REGION_CLEARED_FLUFF_MULTIPLIER, SOLAR_SYSTEM_CLEARED_FLUFF_MULTIPLIER, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
 import { formatSize } from '../../data/units';
 import { createLeaderboardPanel, type LeaderboardPanel } from '../leaderboard/panel';
@@ -103,18 +104,48 @@ const VARIANTS = {
   quit: { title: 'Run over', sub: 'Every dust bunny needs a nap.', badge: '💤' },
 } as const;
 
-/** Built-in sections: Fluff earned (meta save) and the leaderboard panel. */
+/**
+ * Built-in sections: Fluff earned and the leaderboard panel. The Fluff section never waits: it
+ * shows `+X` from `fluffForRun` at once. Signed in, a Run the Account knows is credited from the
+ * server's answer (docs/adr/0003), so until then the section reads pending ("added when you're
+ * back online" offline) and settles when `fluffAwarded` fires again for the Run.
+ */
 function registerDefaultSections(): void {
   registerResultsSection({
     id: 'fluff',
     slot: 'fluff',
-    render(el, e) {
-      const award = getMeta().awardRun(e); // idempotent per Run
-      el.append(
-        h('span', { className: 'fluff-earned' }, h('span', { className: 'fluff-icon', textContent: '☁️' }), `+${award.fluff} Fluff`),
-        h('span', { className: 'fluff-detail', textContent: `${fluffBonusLabel(e)}total ${award.total}` }),
-        ...(award.newBestRadius ? [h('span', { className: 'fluff-best', textContent: 'New best size!' })] : []),
-      );
+    render(el, e, game) {
+      // Pending: the Fluff the claim's stats come to (the same bounded subset the server stores).
+      const fluff = fluffForRun(e.reason, creditStatsOf(e.stats));
+      const meta = getMeta();
+      const paint = (): void => {
+        const credit = game.accountRuns.creditOf(e.runKey);
+        const award = credit.state === 'credited' ? credit.award : null;
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const note =
+          credit.state === 'refused'
+            ? credit.why === 'elsewhere'
+              ? 'Already added on another device.'
+              : credit.why === 'rejected'
+                ? 'Not added: something went wrong on this side.'
+                : 'Not added: this Run carried on on another device.'
+            : credit.state === 'pending'
+              ? offline
+                ? 'Added when you’re back online'
+                : 'Adding to your Account…'
+              : null;
+        el.dataset.credit = credit.state;
+        el.replaceChildren(
+          h('span', { className: 'fluff-earned' }, h('span', { className: 'fluff-icon', textContent: '☁️' }), `+${award?.fluff ?? fluff} Fluff`),
+          h('span', { className: 'fluff-detail', textContent: `${fluffBonusLabel(e)}total ${award?.total ?? meta.fluff}` }),
+          ...(note ? [h('span', { className: 'fluff-pending', textContent: note })] : []),
+          ...(award?.newBestRadius ? [h('span', { className: 'fluff-best', textContent: 'New best size!' })] : []),
+        );
+      };
+      paint();
+      return game.events.on('fluffAwarded', (a) => {
+        if (a.runKey === e.runKey) paint();
+      });
     },
   });
   let board: LeaderboardPanel | null = null;
@@ -217,8 +248,8 @@ export function registerResultsScreen(): void {
           if (s.galaxyCleared) rows.push(['🌌', 'Galaxy', inUniverse ? 'Cleared · left the Milky Way' : 'Cleared']);
           if (s.universeCleared) rows.push(['✨', 'Universe', 'Cleared']);
           if (s.hazardsAbsorbed > 0) rows.push(['🤖', 'Hazards absorbed', String(s.hazardsAbsorbed)]);
-          // The player's count after this Run (awardRun is idempotent and counts a Universe victory).
-          const universes = getMeta().awardRun(e).universes;
+          // The player's count once this Run is credited (it may still be pending with the Account).
+          const universes = getMeta().universesAfter(e);
           if (universes > 0) rows.push(['🌀', 'Universes', endsUniverse(e) ? `${universes} · +1` : String(universes)]);
           stats.replaceChildren(
             ...rows.map(([icon, k, val], i) => {

@@ -47,8 +47,8 @@ import { createRun } from './assembly';
 import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
 import { getMeta } from '../meta/meta';
-import { gateRunEnding, getAccountRuns } from '../meta/accountRun';
-import { creditsReplacedOnDevice, getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
+import { getAccountRuns } from '../meta/accountRun';
+import { getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
 import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
 
@@ -134,10 +134,15 @@ export class Game {
    * it back. Another tab picking it up meanwhile makes this page step aside.
    */
   /** The Account's copy of the saved Run for a signed-in player (src/meta/accountRun.ts). */
-  readonly accountRuns = getAccountRuns({ awardRun: (e) => getMeta().awardRun(e) });
+  readonly accountRuns = getAccountRuns({
+    awardRun: (e, opts) => getMeta().awardRun(e, opts),
+    credited: (runKey) => getMeta().credited(runKey),
+    creditedRunsKnown: () => getMeta().creditedRunsKnown(),
+    pinCreditedRuns: (source) => getMeta().pinCreditedRuns(source),
+  });
   readonly handoff = new RunHandoff({
     store: getSuspendedRuns(),
-    meta: { awardRun: (e) => getMeta().awardRun(e) },
+    credit: this.accountRuns,
     onLost: (why) => this.stepAside(why),
     cloud: this.accountRuns,
   });
@@ -338,13 +343,6 @@ export class Game {
     const run = createRun(this.events, full);
     run.input = this.input;
     this.run = run;
-    // Dying or winning while the server take back is unconfirmed: credited once the Account agrees.
-    gateRunEnding(run, this.accountRuns, {
-      waiting: () => this.hud.toast('Checking your Run with your Account…', { tone: 'info' }),
-      lost: () => {
-        if (this.run === run) this.stepAside('otherDevice');
-      },
-    });
     this.view = new RunView(run, this.scene);
     this.rig.snap(run.bunny.x, run.bunny.z, run.bunny.radius, run.tier);
     this.applyAtmosphere();
@@ -369,19 +367,15 @@ export class Game {
   endRun(toTitle = false): Promise<boolean> {
     const run = this.run;
     if (!run || run.ended || this.handoff.busy) return Promise.resolve(false);
-    // Ending credits the Run, so for a signed-in player the server take is waited for first.
-    return this.handoff
-      .takeBack()
-      .then((ok) => ok && this.accountRuns.confirmHeld(run.runKey))
-      .then((ok) => {
-        if (!ok || this.run !== run || run.ended) return false;
-        run.end('quit'); // emits runEnded so meta progress still records the Run
-        if (toTitle) {
-          this.disposeRun();
-          this.go('title');
-        }
-        return true;
-      });
+    return this.handoff.takeBack().then((ok) => {
+      if (!ok || this.run !== run || run.ended) return false;
+      run.end('quit'); // emits runEnded so meta progress still records the Run
+      if (toTitle) {
+        this.disposeRun();
+        this.go('title');
+      }
+      return true;
+    });
   }
 
   /** True while there is a Run in progress that Save & quit can keep. */
@@ -455,15 +449,11 @@ export class Game {
     const snapshot = run.toSnapshot();
     this.events.emit('runSuspended', { snapshot });
     const store = getSuspendedRuns();
-    const meta = getMeta();
     const save = (): boolean => {
-      // The device first, then the Account (src/meta/accountRun.ts).
+      // The device first, then the Account (src/meta/accountRun.ts, which also credits a replaced Run).
       this.accountRuns.tag(snapshot);
-      // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
-      const prev = store.peek();
-      const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
-      const replaced = saveSuspendedRun(store, snapshot, meta);
-      this.accountRuns.stored(snapshot, credited);
+      const replaced = saveSuspendedRun(store, snapshot, this.accountRuns);
+      this.accountRuns.stored(snapshot);
       return replaced;
     };
     void withSavedRunLock(save).catch(save);

@@ -17,15 +17,14 @@
  * keeps its Run. That unlocked write is best effort, for the page going away only: Save & quit
  * lets go of a store still waiting and leaves it to be written under the lock.
  */
-import type { MetaProgress } from '../meta/meta';
 import {
-  creditsReplacedOnDevice,
   pausedRunState,
   storePausedRun,
   takeBackPausedRun,
   withSavedRunLock,
   type LockManagerLike,
   type PausedRunState,
+  type QuitCreditor,
   type SuspendedRunStore,
 } from '../meta/suspendedRun';
 import { newHandoffId, type RunSnapshot } from './snapshot';
@@ -37,8 +36,8 @@ export type HandoffLoss = Exclude<PausedRunState, 'mine'> | 'otherDevice';
 export interface HandoffCloud {
   /** Tags a copy about to be written to the device slot with the Account and lease. */
   tag(snapshot: RunSnapshot): void;
-  /** The copy is in the device slot (whose replace credited `prevLocalKey` on the device; null: none): upload it. */
-  stored(snapshot: RunSnapshot, prevLocalKey: string | null): void;
+  /** The copy is in the device slot: upload it. */
+  stored(snapshot: RunSnapshot): void;
   /** The device took the Run back: take it on the server too, in the background. */
   takenBack(runKey: string): void;
 }
@@ -48,8 +47,8 @@ export type HandoffReason = 'pause' | 'hidden';
 
 export interface RunHandoffOptions {
   store: SuspendedRunStore;
-  /** Credits a different Run the store replaces (as a quit). */
-  meta: Pick<MetaProgress, 'awardRun'>;
+  /** Credits a different Run the store replaces (as a quit): `MetaProgress`, or `AccountRuns` signed in. */
+  credit: QuitCreditor;
   /** The paused Run was picked up (or replaced) elsewhere: the page must drop its copy uncredited. */
   onLost(why: HandoffLoss): void;
   /** Web Locks (default: `navigator.locks` where available; null: none, everything synchronous). */
@@ -72,14 +71,14 @@ export class RunHandoff {
   private released: Held | null = null;
   private taking: Promise<boolean> | null = null;
   private readonly slot: SuspendedRunStore;
-  private readonly meta: Pick<MetaProgress, 'awardRun'>;
+  private readonly credit: QuitCreditor;
   private readonly onLost: (why: HandoffLoss) => void;
   private readonly locks: LockManagerLike | null | undefined;
   private readonly cloud: HandoffCloud | null;
 
   constructor(opts: RunHandoffOptions) {
     this.slot = opts.store;
-    this.meta = opts.meta;
+    this.credit = opts.credit;
     this.onLost = opts.onLost;
     this.locks = opts.locks;
     this.cloud = opts.cloud ?? null;
@@ -126,12 +125,9 @@ export class RunHandoff {
     held.pending = null;
     if (this.released === held) this.released = null;
     this.cloud?.tag(snapshot);
-    // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
-    const prev = this.slot.peek();
-    const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
     // The device first (synchronously), then the Account.
-    storePausedRun(this.slot, snapshot, held.handoffId, this.meta);
-    this.cloud?.stored(snapshot, credited);
+    storePausedRun(this.slot, snapshot, held.handoffId, this.credit);
+    this.cloud?.stored(snapshot);
   }
 
   /** The page is going away: writes a store still waiting for the lock now (pagehide). */

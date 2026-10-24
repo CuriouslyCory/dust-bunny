@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AccountClient, AccountState } from '../net/account';
 import { compareProgress, validateProgress, type Progress } from '../shared/progress';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import { CLOUD_DIRTY_KEY, CLOUD_USER_KEY, createCloudSave, progressOf } from './cloudSave';
 import { MetaProgress } from './meta';
 import { type KeyValueStorage, parseSave, SAVE_KEY, type SaveStorageEvent } from './save';
@@ -10,13 +11,14 @@ const memStorage = (init: Record<string, string> = {}): KeyValueStorage & { map:
   return { map, getItem: (k) => map.get(k) ?? null, setItem: (k, v) => void map.set(k, v) };
 };
 
-const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, universes = 0): Progress => ({
+const prog = (fluff: number, totalFluffEarned: number, runs: number, upgrades: Record<string, number> = {}, universes = 0, creditedRuns: string[] = []): Progress => ({
   fluff,
   upgrades,
   characters: {},
   loadouts: {},
   universes,
   stats: { runs, wins: 0, bestRadius: 5, bestTier: 2, totalFluffEarned, keepsakesEarned: 0 },
+  creditedRuns,
 });
 
 /** In-memory /api/progress with the same accept rule as the real one (per signed-in user). */
@@ -42,8 +44,8 @@ function fakeServer() {
       rows.set(user, { ...stored, universes });
       return Response.json({ accepted: false, progress: rows.get(user) });
     }
-    // A body without Loadouts (an older bundle) keeps the stored ones.
-    rows.set(user, { ...v.value, loadouts: v.value.loadouts ?? stored?.loadouts, universes });
+    // A body without Loadouts or creditedRuns (an older bundle) keeps the stored ones.
+    rows.set(user, { ...v.value, loadouts: v.value.loadouts ?? stored?.loadouts, creditedRuns: v.value.creditedRuns ?? stored?.creditedRuns, universes });
     return Response.json({ accepted: true, progress: rows.get(user) });
   });
   return {
@@ -94,7 +96,8 @@ function fakeAccount() {
 }
 
 function setup(local: Progress | null, storageInit: Record<string, string> = {}) {
-  const meta = new MetaProgress(memStorage());
+  const metaStorage = memStorage();
+  const meta = new MetaProgress(metaStorage);
   if (local) meta.store.update((d) => Object.assign(d, { fluff: local.fluff, upgrades: local.upgrades, stats: local.stats, universes: local.universes }));
   const server = fakeServer();
   const acct = fakeAccount();
@@ -105,7 +108,7 @@ function setup(local: Progress | null, storageInit: Record<string, string> = {})
     acct.signIn(id);
     await vi.runAllTimersAsync();
   };
-  return { meta, server, acct, storage, cloud, signIn };
+  return { meta, metaStorage, server, acct, storage, cloud, signIn };
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -326,6 +329,77 @@ describe('cloud save', () => {
     expect(s.server.rows.get('u1')?.loadouts).toEqual({ lint: [{ type: 'reclaim', rarity: 2 }] });
   });
 
+  it('waits to upload while creditedRuns holds pinned keys beyond the cap, and sends the newest cap once their claims land (docs/adr/0003)', async () => {
+    const s = setup(prog(50, 100, 3));
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    let pinned: string[] = ['k0'];
+    s.meta.pinCreditedRuns(() => pinned); // as the claim queue does: k0's claim is still out
+    for (let i = 0; i < CREDITED_RUNS_MAX + 1; i++) s.meta.awardRun({ runKey: `k${i}`, reason: 'died', stats });
+    expect(s.meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 1);
+    // Not `signIn` (it drains every timer, and a held upload keeps a retry armed): connect, then let its GET answer.
+    s.server.signIn('u1');
+    s.acct.signIn('u1');
+    await vi.advanceTimersByTimeAsync(50);
+    // Nothing sent: the server takes at most CREDITED_RUNS_MAX keys, and a copy without k0 could be adopted elsewhere with k0's Fluff.
+    expect(s.server.puts).toHaveLength(0);
+    expect(s.server.rows.get('u1')).toBeUndefined();
+    expect(s.cloud.status).toBe('syncing');
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('u1');
+    // k0's claim landed: the retry uploads the newest cap (k0's row is far older than the sweep fetches).
+    pinned = [];
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.server.puts).toHaveLength(1);
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(Array.from({ length: CREDITED_RUNS_MAX }, (_, i) => `k${i + 1}`));
+    expect(s.cloud.status).toBe('synced');
+    expect(s.storage.map.get(CLOUD_DIRTY_KEY)).toBe('');
+  });
+
+  it('adopt carries creditedRuns with the Fluff; a server copy without it keeps the device set (docs/adr/0003)', async () => {
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'local-1', reason: 'died', stats: { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 } });
+    await s.signIn('u1');
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['local-1']);
+    // Another device credited two more Runs: its copy wins, keys and all, in one write.
+    s.server.rows.set('u1', prog(999, 2000, 40, {}, 0, ['local-1', 'other-1', 'other-2']));
+    const seen: string[][] = [];
+    s.meta.store.onChange((d) => void seen.push([...d.creditedRuns]));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 999, creditedRuns: ['local-1', 'other-1', 'other-2'] });
+    expect(seen.at(-1)).toEqual(['local-1', 'other-1', 'other-2']);
+    expect(s.meta.awardRun({ runKey: 'other-2', reason: 'quit', stats: { maxRadius: 1, debrisAbsorbed: 1, tierReached: 1 } })).toBeNull();
+    // A stored row from before the ledger (no creditedRuns) that wins keeps the device's set rather than wiping it.
+    const { creditedRuns: _c, ...older } = prog(5000, 9000, 60);
+    s.server.rows.set('u1', older);
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 5000, creditedRuns: ['local-1', 'other-1', 'other-2'] });
+  });
+
+  it('merge loss is repairable: the losing copy’s credit is missing from the winner’s keys, so its ledger row applies once', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    // Offline, this device credits A; meanwhile another device credited B and got further (its copy is on the server).
+    s.server.setDown(true);
+    s.meta.awardRun({ runKey: 'A', reason: 'died', stats });
+    s.server.rows.set('u1', prog(900, 2000, 40, {}, 0, ['B']));
+    s.server.setDown(false);
+    await vi.advanceTimersByTimeAsync(2000);
+    // The server copy won: A's Fluff is gone from this copy, and so is its key, so the ledger row for A applies again.
+    expect(s.meta.data).toMatchObject({ fluff: 900, creditedRuns: ['B'] });
+    const repaired = s.meta.awardRun({ runKey: 'A', reason: 'died', stats });
+    expect(repaired).not.toBeNull();
+    expect(s.meta.awardRun({ runKey: 'B', reason: 'died', stats })).toBeNull(); // B's Fluff is in the copy: never twice
+    expect(s.meta.data.creditedRuns).toEqual(['B', 'A']);
+  });
+
   it('adopts the server copy when another device got further', async () => {
     const s = setup(prog(50, 100, 3));
     await s.signIn('u1');
@@ -475,5 +549,81 @@ describe('cloud save', () => {
     s.meta.buy('fast_feet');
     await vi.runAllTimersAsync();
     expect(s.server.puts.length).toBe(before);
+  });
+});
+
+describe('Universe credits across the merge (docs/adr/0003)', () => {
+  it('a victory this device counted survives the merge by count; the sweep repairs its Fluff without counting it again', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1, area: 'universe' };
+    const s = setup(prog(50, 100, 3));
+    await s.signIn('u1');
+    const win = s.meta.awardRun({ runKey: 'V', reason: 'victory', stats })!; // ended here: counted
+    expect(win.universes).toBe(1);
+    await vi.advanceTimersByTimeAsync(150);
+    // Another device got further without V: its copy wins. The larger Universes count stays, V's key does not.
+    s.server.rows.set('u1', prog(9000, 20000, 60, {}, 0, ['other']));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 9000, universes: 1, creditedRuns: ['other'] });
+    // The sweep brings V's row back: its Fluff is missing from this copy, its Universe is not.
+    const swept = s.meta.awardRun({ runKey: 'V', reason: 'victory', stats }, { countUniverse: false })!;
+    expect(swept.fluff).toBe(win.fluff);
+    expect(s.meta.data).toMatchObject({ fluff: 9000 + win.fluff, universes: 1, creditedRuns: ['other', 'V'] });
+  });
+});
+
+describe('creditedRuns unknown on the device (an old build rewrote the save, docs/adr/0003)', () => {
+  it('uploads without the field, so the server keeps its stored set; an adopt of a copy that carries one makes it known again', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'mine', reason: 'died', stats });
+    await s.signIn('u1');
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['mine']);
+    // An old-build tab rewrites the save without the field (and with a purchase).
+    const raw = JSON.parse(s.metaStorage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = (raw.fluff as number) - 10;
+    s.metaStorage.setItem(SAVE_KEY, JSON.stringify(raw));
+    s.meta.store.update((d) => {
+      d.fluff += 30;
+      d.stats.totalFluffEarned += 30;
+    });
+    expect(s.meta.creditedRunsKnown()).toBe(false);
+    await vi.advanceTimersByTimeAsync(150);
+    const sent = s.server.puts.at(-1)!;
+    expect(sent.creditedRuns).toBeUndefined();
+    expect(sent.fluff).toBe(s.meta.data.fluff);
+    expect(s.server.rows.get('u1')?.creditedRuns).toEqual(['mine']); // kept by the server (`keepCredited`)
+    expect(s.cloud.status).toBe('synced'); // the answer's set is read as the same: no upload loop
+    // Another device gets further: its copy, keys and all, is adopted and the set is known again.
+    s.server.rows.set('u1', prog(999, 2000, 40, {}, 0, ['mine', 'K2']));
+    s.meta.store.update((d) => {
+      d.fluff += 5;
+      d.stats.totalFluffEarned += 5;
+    });
+    await vi.advanceTimersByTimeAsync(150);
+    expect(s.meta.data).toMatchObject({ fluff: 999, creditedRuns: ['mine', 'K2'] });
+    expect(s.meta.creditedRunsKnown()).toBe(true);
+    expect(s.meta.awardRun({ runKey: 'K2', reason: 'died', stats })).toBeNull();
+  });
+
+  it('a server copy equal to this one in everything else lends it its set', async () => {
+    const stats = { maxRadius: 10, debrisAbsorbed: 10, tierReached: 1 };
+    const s = setup(prog(50, 100, 3));
+    s.meta.awardRun({ runKey: 'mine', reason: 'died', stats });
+    await s.signIn('u1');
+    const raw = JSON.parse(s.metaStorage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    s.metaStorage.setItem(SAVE_KEY, JSON.stringify(raw));
+    s.meta.store.refresh();
+    expect(s.meta.creditedRunsKnown()).toBe(false);
+    s.acct.signOut();
+    await vi.runAllTimersAsync();
+    await s.signIn('u1'); // the title's connect: the same copy on both sides
+    expect(s.meta.data.creditedRuns).toEqual(['mine']);
+    expect(s.meta.creditedRunsKnown()).toBe(true);
   });
 });

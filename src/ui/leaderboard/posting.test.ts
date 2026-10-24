@@ -69,7 +69,7 @@ describe('RunPosts', () => {
   it('has an entry per cleared Area plus the Run, and posts them all', async () => {
     const { client, posted } = offlineClient();
     const posts = new RunPosts(client, 'lint', 'casual');
-    posts.finish({ reason: 'died', stats: stats([house, neighborhood]) });
+    posts.finish({ runKey: 'run-1', reason: 'died', stats: stats([house, neighborhood]) });
     expect(posts.list().map((p) => [p.board, p.state])).toEqual([['run', 'unsent'], ['house', 'unsent']]);
     await posts.post('Bea');
     expect(posts.list().map((p) => p.state)).toEqual(['posted', 'posted']);
@@ -81,7 +81,7 @@ describe('RunPosts', () => {
     const { client } = offlineClient();
     const loadout = [{ type: 'reclaim', rarity: 2 } as const, { type: 'reclaim', rarity: 2 } as const];
     const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
-    posts.finish({ reason: 'died', stats: { ...stats([house, neighborhood]), loadout } });
+    posts.finish({ runKey: 'run-1', reason: 'died', stats: { ...stats([house, neighborhood]), loadout } });
     await posts.post('Bea');
     expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
     expect(posts.get('house')?.result?.entry.loadout).toEqual(loadout);
@@ -95,7 +95,7 @@ describe('RunPosts', () => {
     posts.addArea(house);
     // Tucked in mid-Run, after the house (the live `run.loadout` grows).
     loadout.push({ type: 'reclaim', rarity: 2 });
-    posts.finish({ reason: 'died', stats: { ...stats([house, neighborhood]), loadout: [...loadout] } });
+    posts.finish({ runKey: 'run-1', reason: 'died', stats: { ...stats([house, neighborhood]), loadout: [...loadout] } });
     await posts.post('Bea');
     expect(posts.get('house')?.state).toBe('posted');
     expect(posts.get('house')?.result?.entry.loadout ?? []).toEqual([]);
@@ -107,7 +107,7 @@ describe('RunPosts', () => {
     // Resumed with a Keepsake tucked in after the house: the house's stats still say it had none.
     const loadout = [{ type: 'reclaim', rarity: 2 } as const];
     const posts = new RunPosts(client, 'lint', 'casual', true, loadout);
-    posts.finish({ reason: 'died', stats: { ...stats([{ ...house, loadout: [] }, neighborhood]), loadout } });
+    posts.finish({ runKey: 'run-1', reason: 'died', stats: { ...stats([{ ...house, loadout: [] }, neighborhood]), loadout } });
     await posts.post('Bea');
     expect(posts.get('house')?.result?.entry.loadout ?? []).toEqual([]);
     expect(posts.get('run')?.result?.entry.loadout).toEqual(loadout);
@@ -117,7 +117,7 @@ describe('RunPosts', () => {
     const { client } = offlineClient();
     const seen: unknown[] = [];
     const posts = new RunPosts(client, 'lint', 'casual', true, [], (e) => (seen.push(e), 4));
-    const e = { reason: 'died' as const, stats: stats([house, neighborhood]) };
+    const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([house, neighborhood]) };
     posts.finish(e);
     expect(seen).toEqual([e]);
     await posts.post('Bea');
@@ -145,14 +145,14 @@ describe('RunPosts', () => {
     const { client } = offlineClient();
     let fail: Error = new LeaderboardError('too short', 'invalid');
     const posts = new RunPosts({ ...client, submitScore: async () => Promise.reject(fail) }, 'lint', 'casual');
-    posts.finish({ reason: 'quit', stats: stats([]) });
+    posts.finish({ runKey: 'run-1', reason: 'quit', stats: stats([]) });
     await posts.post('Bea');
     expect(posts.get('run')).toMatchObject({ state: 'invalid', error: 'too short' });
     expect(posts.pending).toBe(false);
 
     fail = new LeaderboardError('slow down', 'rate_limited');
     const again = new RunPosts({ ...client, submitScore: async () => Promise.reject(fail) }, 'lint', 'casual');
-    again.finish({ reason: 'quit', stats: stats([]) });
+    again.finish({ runKey: 'run-1', reason: 'quit', stats: stats([]) });
     await again.post('Bea');
     expect(again.get('run')?.state).toBe('failed');
     expect(again.pending).toBe(true);
@@ -172,7 +172,7 @@ describe('installLeaderboardPosting', () => {
     expect(posted).toEqual([`house:Ada Lovelace:${runId}`]);
     expect(toasts).toEqual(['🏆 House board: #1']);
 
-    const e = { reason: 'died' as const, stats: stats([house, neighborhood]) };
+    const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([house, neighborhood]) };
     events.emit('runEnded', e);
     await settle();
     expect(posted).toEqual([`house:Ada Lovelace:${runId}`, `run:Ada Lovelace:${runId}`]);
@@ -186,7 +186,7 @@ describe('installLeaderboardPosting', () => {
     const posting = installLeaderboardPosting(game, { client, account });
     events.emit('runStarted', { seed: 's', characterId: 'lint' });
     events.emit('areaCompleted', { stats: house, characterId: 'lint', difficulty: 'casual' });
-    const e = { reason: 'died' as const, stats: stats([house, neighborhood]) };
+    const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([house, neighborhood]) };
     events.emit('runEnded', e);
     await settle();
     expect(posted).toEqual([]);
@@ -202,7 +202,7 @@ describe('installLeaderboardPosting', () => {
     const { client, posted } = offlineClient();
     const { account } = fakeAccount('signedIn');
     const { game, events } = fakeGame();
-    const e = { reason: 'died' as const, stats: stats([house]) };
+    const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([house]) };
     let seen: ReturnType<ReturnType<typeof installLeaderboardPosting>['forResult']> | null = null;
     events.on('runEnded', (p) => (seen = posting.forResult(p))); // subscribed first, like the results screen
     const posting = installLeaderboardPosting(game, { client, account });
@@ -219,7 +219,7 @@ describe('installLeaderboardPosting', () => {
     const { game, events } = fakeGame('city');
     const posting = installLeaderboardPosting(game, { client, account });
     events.emit('runStarted', { seed: 's', characterId: 'lint' });
-    events.emit('runEnded', { reason: 'died', stats: stats([]) });
+    events.emit('runEnded', { runKey: 'run-1', reason: 'died', stats: stats([]) });
     await settle();
     expect(posted).toEqual([]);
     expect(posting.auto).toBe(false);
@@ -231,12 +231,87 @@ describe('installLeaderboardPosting', () => {
     const { game, events } = fakeGame(undefined, true);
     const posting = installLeaderboardPosting(game, { client, account });
     events.emit('runStarted', { seed: 's', characterId: 'lint' });
-    const e = { reason: 'died' as const, stats: stats([house]) };
+    const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([house]) };
     events.emit('runEnded', e);
     const posts = posting.forResult(e);
     await posts.post('Bea');
     expect(posted).toEqual([]);
     expect(posts.list().map((p) => p.state)).toEqual(['invalid', 'invalid']);
     expect(posts.pending).toBe(false);
+  });
+});
+
+describe('posting waits for a known Run’s credit (docs/adr/0003)', () => {
+  type Outcome = { runKey: string; reason: 'died'; fluff: number; award: { fluff: number } | null; already?: boolean; refused?: 'carriedOn' | 'elsewhere' | 'rejected' };
+  function withCredit(deferred: Set<string>) {
+    const listeners = new Set<(o: Outcome) => void>();
+    const accountRuns = { deferred: (k: string) => deferred.has(k), credits: { onCredit: (fn: (o: Outcome) => void) => (listeners.add(fn), () => listeners.delete(fn)) } };
+    return { accountRuns, settle: (o: Outcome) => listeners.forEach((fn) => fn(o)) };
+  }
+
+  it('posts the Run board entry once the credit lands, and not at all for a Run that carried on elsewhere', async () => {
+    const { client, posted } = offlineClient();
+    const { account } = fakeAccount('signedIn', 'Ada');
+    const { game, events } = fakeGame();
+    const deferred = new Set(['run-1', 'run-2']);
+    const credit = withCredit(deferred);
+    (game as unknown as { accountRuns: unknown }).accountRuns = credit.accountRuns;
+    const posting = installLeaderboardPosting(game, { client, account });
+    events.emit('runStarted', { seed: 's', characterId: 'lint' });
+    events.emit('areaCompleted', { stats: house, characterId: 'lint', difficulty: 'casual' });
+    await settle();
+    const runId = posting.current!.runId;
+    const e1 = { runKey: 'run-1', reason: 'died' as const, stats: stats([house]) };
+    events.emit('runEnded', e1);
+    await settle();
+    expect(posted).toEqual([`house:Ada:${runId}`]); // the Run entry waits
+    expect(posting.forResult(e1).get('run')?.state).toBe('unsent');
+    credit.settle({ runKey: 'run-1', reason: 'died', fluff: 5, award: { fluff: 5 } });
+    await settle();
+    expect(posted).toEqual([`house:Ada:${runId}`, `run:Ada:${runId}`]);
+
+    events.emit('runStarted', { seed: 's2', characterId: 'lint' });
+    const e2 = { runKey: 'run-2', reason: 'died' as const, stats: stats([]) };
+    events.emit('runEnded', e2);
+    credit.settle({ runKey: 'run-2', reason: 'died', fluff: 0, award: null, refused: 'carriedOn' });
+    await settle();
+    expect(posted).toHaveLength(2);
+    expect(posting.forResult(e2).get('run')).toMatchObject({ state: 'invalid', error: 'this Run carried on on another device.' });
+    expect(posting.forResult(e2).pending).toBe(false);
+  });
+
+  it('a credit another tab applied, or a claim the server rejected, still resolves the wait: the Run posts', async () => {
+    for (const outcome of [
+      { fluff: 5, award: null, already: true },
+      { fluff: 0, award: null, refused: 'rejected' as const },
+    ]) {
+      const { client, posted } = offlineClient();
+      const { account } = fakeAccount('signedIn', 'Ada');
+      const { game, events } = fakeGame();
+      const credit = withCredit(new Set(['run-1']));
+      (game as unknown as { accountRuns: unknown }).accountRuns = credit.accountRuns;
+      const posting = installLeaderboardPosting(game, { client, account });
+      events.emit('runStarted', { seed: 's', characterId: 'lint' });
+      const e = { runKey: 'run-1', reason: 'died' as const, stats: stats([]) };
+      events.emit('runEnded', e);
+      await settle();
+      expect(posted).toEqual([]);
+      credit.settle({ runKey: 'run-1', reason: 'died', ...outcome });
+      await settle();
+      expect(posted).toEqual([`run:Ada:${posting.current!.runId}`]);
+      expect(posting.forResult(e).pending).toBe(false);
+    }
+  });
+
+  it('a Run credited at once posts at once', async () => {
+    const { client, posted } = offlineClient();
+    const { account } = fakeAccount('signedIn', 'Ada');
+    const { game, events } = fakeGame();
+    (game as unknown as { accountRuns: unknown }).accountRuns = withCredit(new Set()).accountRuns;
+    installLeaderboardPosting(game, { client, account });
+    events.emit('runStarted', { seed: 's', characterId: 'lint' });
+    events.emit('runEnded', { runKey: 'run-1', reason: 'died' as const, stats: stats([]) });
+    await settle();
+    expect(posted).toHaveLength(1);
   });
 });

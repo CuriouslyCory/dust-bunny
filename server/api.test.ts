@@ -15,12 +15,16 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import authApi from '../api/auth';
 import leaderboardApi from '../api/leaderboard';
 import progressApi from '../api/progress';
+import runCreditApi from '../api/run-credit';
 import savedRunApi from '../api/saved-run';
-import { computeAreaScore, computeScore, scoreTierForRadius } from '../src/shared/score';
+import { computeAreaScore, computeScore, SCORE_TIER_MIN_RADII, scoreTierForRadius } from '../src/shared/score';
 import type { Progress } from '../src/shared/progress';
+import { CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_MAX, type RunCredit } from '../src/shared/runCredit';
 import { MAX_SAVED_RUN_BYTES, SNAPSHOT_VERSION } from '../src/shared/savedRun';
 import { authOptions, resetAuthForTests } from './auth';
-import { query, resetDbForTests } from './db';
+import { ensureSchema, query, resetDbForTests } from './db';
+import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './runCredits';
+import { SCHEMA_PROBE } from './schema';
 
 const DB = process.env.TEST_DATABASE_URL;
 const ORIGIN = 'http://localhost:5173';
@@ -117,6 +121,21 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
   it('reports the configured providers', async () => {
     const res = await call(authApi, '/api/auth/providers');
     expect(await res.json()).toEqual({ enabled: true, providers: ['google', 'discord'] });
+  });
+
+  it('skips the DDL once the newest schema objects exist, and applies it when one is missing', async () => {
+    await ensureSchema();
+    const probe = async () => (await query<{ ready: boolean }>(SCHEMA_PROBE))[0]!.ready;
+    expect(await probe()).toBe(true);
+    // A database from before the credit ledger, or before holder records: the probe says no, and
+    // the next instance applies the DDL.
+    for (const ddl of [`DROP INDEX run_credits_user_idx`, `DROP TABLE run_holders`]) {
+      await query(ddl);
+      expect(await probe()).toBe(false);
+      await resetDbForTests();
+      await ensureSchema();
+      expect(await probe()).toBe(true);
+    }
   });
 
   it('creates every table Better Auth expects', async () => {
@@ -370,7 +389,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       // Pause on device A.
       const put = await send(cookie, 'PUT', { runKey: 'run-1', lease: 'a1', snapshot: runSnapshot('run-1') });
       expect(put.status).toBe(200);
-      expect(await put.json()).toEqual({ stored: true, replaced: null });
+      expect(await put.json()).toEqual({ stored: true, replaced: null, credits: [] });
       expect(await getRun(cookie)).toMatchObject({ runKey: 'run-1', lease: 'a1', version: SNAPSHOT_VERSION, snapshot: runSnapshot('run-1') });
       // Pausing again under the same lease just stores it.
       expect((await send(cookie, 'PUT', { runKey: 'run-1', lease: 'a1', snapshot: runSnapshot('run-1', { savedAt: 2 }) })).status).toBe(200);
@@ -418,7 +437,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       expect(await (await send(cookie, 'DELETE', { runKey: 'done', lease: 'b1' })).json()).toMatchObject({ deleted: false });
       expect(await getRun(cookie)).toBeNull();
       // Another Run is stored over it as over an empty slot (nothing to credit).
-      expect(await (await send(cookie, 'PUT', { runKey: 'next', lease: 'c1', snapshot: runSnapshot('next') })).json()).toEqual({ stored: true, replaced: null });
+      expect(await (await send(cookie, 'PUT', { runKey: 'next', lease: 'c1', snapshot: runSnapshot('next') })).json()).toEqual({ stored: true, replaced: null, credits: [] });
       expect(await getRun(cookie)).toMatchObject({ runKey: 'next', lease: 'c1' });
     });
 
@@ -471,6 +490,346 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       expect(tooBig.status).toBe(413);
       expect(await getRun(cookie)).toBeNull();
       expect((await send(cookie, 'PATCH', {})).status).toBe(405);
+    });
+  });
+
+  describe('Run credit ledger (api/run-credit.ts, docs/adr/0003)', () => {
+    const stats = { maxRadius: 120, debrisAbsorbed: 80, tierReached: 4, area: 'house' };
+    const send = (cookie: string | undefined, method: string, body?: unknown, path = '/api/run-credit') =>
+      call(runCreditApi, path, { method, cookie, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const savedRun = (cookie: string, method: string, body?: unknown) =>
+      call(savedRunApi, '/api/saved-run', { method, cookie, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const claimed = async (cookie: string, body: Record<string, unknown>) => {
+      const res = await send(cookie, 'POST', { reason: 'died', stats, ...body });
+      return { status: res.status, body: (await res.json()) as { credit?: RunCredit; created?: boolean; error?: string } };
+    };
+    const listed = async (cookie: string, limit?: number) => ((await (await send(cookie, 'GET', undefined, limit === undefined ? undefined : `/api/run-credit?limit=${limit}`)).json()) as { credits: RunCredit[] }).credits;
+    /** A snapshot whose stats crediting can read. */
+    const snap = (runKey: string) => runSnapshot(runKey, { stats: { ...stats, seed: 'saved', timeSec: 30 } });
+
+    it('requires a session', async () => {
+      expect((await send(undefined, 'GET')).status).toBe(401);
+      expect((await send(undefined, 'POST', { runKey: 'r', lease: 'l', reason: 'died', stats })).status).toBe(401);
+    });
+
+    it('credits the holder once, marks the row ended, and gives every later claim the same row', async () => {
+      const cookie = await signUp(`Rc${RUN}`);
+      await savedRun(cookie, 'PUT', { runKey: 'run-1', lease: 'a1', snapshot: snap('run-1') });
+      // Another device holds it: refused, nothing written.
+      const other = await claimed(cookie, { runKey: 'run-1', lease: 'b1' });
+      expect(other.status).toBe(409);
+      expect(other.body.error).toBe('carried_on');
+      expect(await listed(cookie)).toEqual([]);
+      // The holder (under a take it never heard back from) claims it: credited, with the picked stats.
+      const first = await claimed(cookie, { runKey: 'run-1', lease: 'a2', prevLease: 'a1' });
+      expect(first.status).toBe(200);
+      expect(first.body.created).toBe(true);
+      expect(first.body.credit).toMatchObject({ runKey: 'run-1', reason: 'died', stats });
+      expect((first.body.credit!.stats as Record<string, unknown>).seed).toBeUndefined();
+      // The row is ended: a take or an upload of the Run is refused, GET shows none.
+      expect((await savedRun(cookie, 'POST', { runKey: 'run-1', lease: 'a1', newLease: 'c1' })).status).toBe(409);
+      const late = await savedRun(cookie, 'PUT', { runKey: 'run-1', lease: 'a1', snapshot: snap('run-1') });
+      expect(late.status).toBe(409);
+      expect(((await late.json()) as { error: string }).error).toBe('run_ended');
+      expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: unknown }).savedRun).toBeNull();
+      // A retry (a lost answer), and a claim from any other lease with other stats: the same row, not created again.
+      for (const body of [
+        { runKey: 'run-1', lease: 'a2', prevLease: 'a1' },
+        { runKey: 'run-1', lease: 'zzz', reason: 'quit', stats: { ...stats, tierReached: 9 } },
+      ]) {
+        const again = await claimed(cookie, body);
+        expect(again.status).toBe(200);
+        expect(again.body.created).toBe(false);
+        expect(again.body.credit).toEqual(first.body.credit);
+      }
+      expect(await listed(cookie)).toEqual([first.body.credit]);
+    });
+
+    it('credits a Run the server never had, and remembers it as ended without touching a Run still going', async () => {
+      const cookie = await signUp(`Rn${RUN}`);
+      await savedRun(cookie, 'PUT', { runKey: 'kept', lease: 'k1', snapshot: snap('kept') });
+      const res = await claimed(cookie, { runKey: 'never-uploaded', lease: 'n1', reason: 'victory' });
+      expect(res.status).toBe(200);
+      expect(res.body.created).toBe(true);
+      // The stored Run is left alone; the never-uploaded one can't be stored late.
+      expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: { runKey: string } }).savedRun).toMatchObject({ runKey: 'kept', lease: 'k1' });
+      expect((await savedRun(cookie, 'PUT', { runKey: 'never-uploaded', lease: 'n1', snapshot: snap('never-uploaded') })).status).toBe(409);
+    });
+
+    it('bounds new ledger rows per Account: past the window’s limit a fresh claim is 429 and writes nothing; a Run already in the ledger still answers', async () => {
+      const cookie = await signUp(`Rrate${RUN}`);
+      for (let i = 0; i < CREDIT_RATE_LIMIT.max; i++) expect((await claimed(cookie, { runKey: `burst-${i}`, lease: `b${i}` })).status).toBe(200);
+      const res = await send(cookie, 'POST', { runKey: 'one-too-many', lease: 'x', reason: 'died', stats });
+      expect(res.status).toBe(429);
+      expect(((await res.json()) as { error: string }).error).toBe('rate_limited');
+      expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0);
+      expect(await query(`SELECT 1 FROM run_holders WHERE run_key = 'one-too-many'`)).toEqual([]);
+      expect(await listed(cookie, RUN_CREDIT_LIST_MAX)).toHaveLength(CREDIT_RATE_LIMIT.max);
+      // A retry (a lost answer) for a credited Run is answered from its row, whatever the rate.
+      const again = await claimed(cookie, { runKey: 'burst-0', lease: 'zzz' });
+      expect(again.status).toBe(200);
+      expect(again.body.created).toBe(false);
+    });
+
+    it('a claim prunes the Account’s stale holder rows, as a store does (a player who never pauses only ever claims)', async () => {
+      const cookie = await signUp(`Rh${RUN}`);
+      expect((await claimed(cookie, { runKey: 'h1', lease: 'l1' })).status).toBe(200);
+      const [{ user_id: userId }] = await query<{ user_id: string }>(`SELECT user_id FROM run_credits WHERE run_key = 'h1'`);
+      await query(`INSERT INTO run_holders (user_id, run_key, lease, ended_at, updated_at) VALUES ($1, 'stale', 's', now() - make_interval(days => $2), now() - make_interval(days => $2))`, [userId, HOLDER_RETENTION_DAYS + 10]);
+      expect((await claimed(cookie, { runKey: 'h2', lease: 'l2' })).status).toBe(200);
+      const left = await query<{ run_key: string }>(`SELECT run_key FROM run_holders WHERE user_id = $1 ORDER BY run_key`, [userId]);
+      expect(left.map((r) => r.run_key)).toEqual(['h1', 'h2']);
+    });
+
+    it('keeps the newest CREDIT_KEEP ledger rows per Account', async () => {
+      const cookie = await signUp(`Rk${RUN}`);
+      expect((await claimed(cookie, { runKey: 'first', lease: 'f1' })).status).toBe(200);
+      const [{ user_id: userId }] = await query<{ user_id: string }>(`SELECT user_id FROM run_credits WHERE run_key = 'first'`);
+      await query(
+        `INSERT INTO run_credits (user_id, run_key, lease, reason, stats, credited_at)
+         SELECT $1, 'seed-' || g, NULL, 'died', '{"maxRadius":1,"debrisAbsorbed":1,"tierReached":1}'::jsonb, now() - interval '1 day' FROM generate_series(1, $2) AS g`,
+        [userId, CREDIT_KEEP],
+      );
+      expect((await claimed(cookie, { runKey: 'newest', lease: 'n1' })).status).toBe(200);
+      const [{ n }] = await query<{ n: string }>(`SELECT count(*) AS n FROM run_credits WHERE user_id = $1`, [userId]);
+      expect(Number(n)).toBe(CREDIT_KEEP);
+      const keys = (await query<{ run_key: string }>(`SELECT run_key FROM run_credits WHERE user_id = $1 ORDER BY id`, [userId])).map((r) => r.run_key);
+      expect(keys[0]).toBe('seed-2'); // `first` and `seed-1`, the two oldest, went
+      expect(keys.at(-1)).toBe('newest');
+      expect((await listed(cookie)).map((c) => c.runKey)[0]).toBe('newest');
+    });
+
+    it('refuses to credit a Run an older client ended and credited itself', async () => {
+      const cookie = await signUp(`Ro${RUN}`);
+      await savedRun(cookie, 'PUT', { runKey: 'old-way', lease: 'o1', snapshot: snap('old-way') });
+      expect(await (await savedRun(cookie, 'DELETE', { runKey: 'old-way', lease: 'o1' })).json()).toMatchObject({ deleted: true });
+      const res = await claimed(cookie, { runKey: 'old-way', lease: 'o1' });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('run_ended');
+      expect(await listed(cookie)).toEqual([]);
+    });
+
+    it('records a replaced Run as a quit only for a ledger client, and refuses a ledgered Run whatever the row holds', async () => {
+      const cookie = await signUp(`Rr${RUN}`);
+      // A client from before the ledger replaces: `replaced` comes back, nothing in the ledger.
+      await savedRun(cookie, 'PUT', { runKey: 'run-a', lease: 'a1', snapshot: snap('run-a') });
+      const plain = (await (await savedRun(cookie, 'PUT', { runKey: 'run-b', lease: 'b1', snapshot: snap('run-b') })).json()) as { replaced: unknown; credits: unknown[] };
+      expect(plain.replaced).toMatchObject({ runKey: 'run-a' });
+      expect(plain.credits).toEqual([]);
+      expect(await listed(cookie)).toEqual([]);
+      // A ledger client replaces run-b: the ledger gets run-b's quit, with the stored snapshot's stats.
+      const ledger = (await (await savedRun(cookie, 'PUT', { runKey: 'run-c', lease: 'c1', snapshot: snap('run-c'), ledger: true })).json()) as { replaced: unknown; credits: RunCredit[] };
+      expect(ledger.replaced).toMatchObject({ runKey: 'run-b' });
+      expect(ledger.credits).toHaveLength(1);
+      expect(ledger.credits[0]).toMatchObject({ runKey: 'run-b', reason: 'quit', stats });
+      expect(await listed(cookie)).toEqual(ledger.credits);
+      // The device that fell behind on run-b (now that run-c is stored) can't store it over run-c: the ledger remembers.
+      const late = await savedRun(cookie, 'PUT', { runKey: 'run-b', lease: 'b1', snapshot: snap('run-b'), ledger: true });
+      expect(late.status).toBe(409);
+      expect(((await late.json()) as { error: string }).error).toBe('run_ended');
+      expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: { runKey: string } }).savedRun).toMatchObject({ runKey: 'run-c' });
+      // Its own claim for run-b gets the replace's row, not a second credit.
+      const claim = await claimed(cookie, { runKey: 'run-b', lease: 'b1', reason: 'quit' });
+      expect(claim.status).toBe(200);
+      expect(claim.body.created).toBe(false);
+      expect(claim.body.credit).toEqual(ledger.credits[0]);
+      // Storing the same Run again under the same lease (a second pause) credits nothing.
+      const again = (await (await savedRun(cookie, 'PUT', { runKey: 'run-c', lease: 'c1', snapshot: snap('run-c'), ledger: true })).json()) as { credits: unknown[] };
+      expect(again.credits).toEqual([]);
+    });
+
+    it('credits a Universe-sized Run with its stats intact: radii are real centimetres', async () => {
+      const cookie = await signUp(`Ru${RUN}`);
+      const universe = { maxRadius: SCORE_TIER_MIN_RADII[SCORE_TIER_MIN_RADII.length - 1]! * 1.5, debrisAbsorbed: 3_000_000, tierReached: SCORE_TIER_MIN_RADII.length, area: 'universe', universeCleared: true,
+        areas: [{ area: 'galaxy', radiusIn: 9.461e19, maxRadius: 2.9e20, debrisAbsorbed: 5000, cleared: true }, { area: 'universe', radiusIn: 9.461e24, maxRadius: 2.9e25, debrisAbsorbed: 7000, cleared: true }] };
+      // The holder's claim keeps every number.
+      const won = await claimed(cookie, { runKey: 'big', lease: 'u1', reason: 'victory', stats: universe });
+      expect(won.status).toBe(200);
+      expect(won.body.credit!.stats).toEqual(universe);
+      // A replace credits the stored Universe Run from its snapshot, not from zeros.
+      await savedRun(cookie, 'PUT', { runKey: 'big-2', lease: 'u2', snapshot: runSnapshot('big-2', { stats: { ...universe, seed: 'saved', timeSec: 9000 } }) });
+      const res = (await (await savedRun(cookie, 'PUT', { runKey: 'next', lease: 'u3', snapshot: snap('next'), ledger: true })).json()) as { credits: RunCredit[] };
+      expect(res.credits[0]).toMatchObject({ runKey: 'big-2', reason: 'quit', stats: universe });
+      // Past the bound is still garbage.
+      expect((await send(cookie, 'POST', { runKey: 'absurd', lease: 'x', reason: 'died', stats: { ...stats, maxRadius: CREDIT_STATS_BOUNDS.radius * 10 } })).status).toBe(400);
+    });
+
+    it('salvages a stored copy whose stats do not read whole, falling back to zeros only for nothing at all', async () => {
+      const cookie = await signUp(`Rs${RUN}`);
+      // A snapshot whose maxRadius is broken but whose other numbers are fine.
+      await savedRun(cookie, 'PUT', { runKey: 'odd', lease: 'o1', snapshot: runSnapshot('odd', { stats: { seed: 's', timeSec: 1, maxRadius: 'big', debrisAbsorbed: 77, tierReached: 3, characterId: 'zap' } }) });
+      let res = (await (await savedRun(cookie, 'PUT', { runKey: 'odd-2', lease: 'o2', snapshot: runSnapshot('odd-2', { stats: { seed: 'none' } }), ledger: true })).json()) as { credits: RunCredit[] };
+      expect(res.credits[0]).toMatchObject({ runKey: 'odd', stats: { maxRadius: 0, debrisAbsorbed: 77, tierReached: 3, characterId: 'zap' } });
+      // No stats at all: zeros, but still credited.
+      res = (await (await savedRun(cookie, 'PUT', { runKey: 'odd-3', lease: 'o3', snapshot: snap('odd-3'), ledger: true })).json()) as { credits: RunCredit[] };
+      expect(res.credits[0]).toMatchObject({ runKey: 'odd-2', stats: { maxRadius: 0, debrisAbsorbed: 0, tierReached: 0 } });
+    });
+
+    it('refuses a ledger client’s claim for a Run a client from before the ledger replaced or ended (credited there), for good', async () => {
+      const cookie = await signUp(`Rleg${RUN}`);
+      // An old tab replaces run-x without `ledger`: it credits `replaced` locally; the server writes no ledger row.
+      await savedRun(cookie, 'PUT', { runKey: 'run-x', lease: 'x1', snapshot: snap('run-x') });
+      const plain = (await (await savedRun(cookie, 'PUT', { runKey: 'run-y', lease: 'y1', snapshot: snap('run-y') })).json()) as { replaced: unknown; credits: unknown[] };
+      expect(plain.replaced).toMatchObject({ runKey: 'run-x' });
+      expect(await listed(cookie)).toEqual([]);
+      // A new tab with a stale synced copy of run-x claims it: already credited elsewhere, so run_ended and no row.
+      const claim = await claimed(cookie, { runKey: 'run-x', lease: 'x1', reason: 'quit' });
+      expect(claim.status).toBe(409);
+      expect(claim.body.error).toBe('run_ended');
+      expect(await listed(cookie)).toEqual([]);
+      // Nor can it be stored or taken again, even after the slot has moved on through other Runs.
+      expect((await savedRun(cookie, 'PUT', { runKey: 'run-z', lease: 'z1', snapshot: snap('run-z'), ledger: true })).status).toBe(200);
+      const late = await savedRun(cookie, 'PUT', { runKey: 'run-x', lease: 'x1', snapshot: snap('run-x'), ledger: true });
+      expect(late.status).toBe(409);
+      expect(((await late.json()) as { error: string }).error).toBe('run_ended');
+      expect((await claimed(cookie, { runKey: 'run-x', lease: 'x1' })).status).toBe(409);
+      // The same for a Run an old tab ended with DELETE, once another Run has taken its slot.
+      await savedRun(cookie, 'PUT', { runKey: 'run-d', lease: 'd1', snapshot: snap('run-d') });
+      expect(await (await savedRun(cookie, 'DELETE', { runKey: 'run-d', lease: 'd1' })).json()).toMatchObject({ deleted: true });
+      await savedRun(cookie, 'PUT', { runKey: 'run-e', lease: 'e1', snapshot: snap('run-e'), ledger: true });
+      const dead = await claimed(cookie, { runKey: 'run-d', lease: 'd1' });
+      expect(dead.status).toBe(409);
+      expect(dead.body.error).toBe('run_ended');
+      expect((await listed(cookie)).map((c) => c.runKey)).toEqual(['run-y']);
+    });
+
+    it('keeps a Run with the device playing it when another device’s new Run replaces it in the slot', async () => {
+      const cookie = await signUp(`Rabc${RUN}`);
+      // A pauses X; B resumes it (X in play on B); C synced a copy of X while it was stored under A's lease.
+      await savedRun(cookie, 'PUT', { runKey: 'X', lease: 'a1', snapshot: snap('X') });
+      expect((await savedRun(cookie, 'POST', { runKey: 'X', lease: 'a1', newLease: 'b1' })).status).toBe(200);
+      // A starts a new Run Y and pauses it: Y replaces X in the slot. X was in play, so nothing is credited.
+      const putY = (await (await savedRun(cookie, 'PUT', { runKey: 'Y', lease: 'a2', snapshot: snap('Y'), ledger: true })).json()) as { replaced: unknown; credits: unknown[] };
+      expect(putY).toMatchObject({ replaced: null, credits: [] });
+      // C, holding its stale copy of X, claims it: X is B's, so refused, and nothing written.
+      const stale = await claimed(cookie, { runKey: 'X', lease: 'a1', reason: 'quit' });
+      expect(stale.status).toBe(409);
+      expect(stale.body.error).toBe('carried_on');
+      expect(await listed(cookie)).toEqual([]);
+      // C can't store it or take it back either.
+      expect((await savedRun(cookie, 'PUT', { runKey: 'X', lease: 'a1', snapshot: snap('X'), ledger: true })).status).toBe(409);
+      expect((await savedRun(cookie, 'POST', { runKey: 'X', lease: 'a1', newLease: 'c1' })).status).toBe(409);
+      // B pauses X: stored again (over Y, which is credited as a quit, as any stored Run a pause replaces).
+      const putX = (await (await savedRun(cookie, 'PUT', { runKey: 'X', lease: 'b1', snapshot: snap('X'), ledger: true })).json()) as { replaced: { runKey: string } | null; credits: RunCredit[] };
+      expect(putX.replaced).toMatchObject({ runKey: 'Y' });
+      expect(putX.credits.map((c) => c.runKey)).toEqual(['Y']);
+      // B resumes and finishes X: credited once, to B; C's claim then gets that row.
+      expect((await savedRun(cookie, 'POST', { runKey: 'X', lease: 'b1', newLease: 'b2' })).status).toBe(200);
+      const done = await claimed(cookie, { runKey: 'X', lease: 'b2', stats: { ...stats, tierReached: 7 } });
+      expect(done.status).toBe(200);
+      expect(done.body.created).toBe(true);
+      const again = await claimed(cookie, { runKey: 'X', lease: 'a1', reason: 'quit' });
+      expect(again.status).toBe(200);
+      expect(again.body.created).toBe(false);
+      expect(again.body.credit).toEqual(done.body.credit);
+    });
+
+    it('lets the device playing a Run end it (and claim it) after another Run replaced it in the slot', async () => {
+      const cookie = await signUp(`Rbd${RUN}`);
+      await savedRun(cookie, 'PUT', { runKey: 'X', lease: 'a1', snapshot: snap('X') });
+      expect((await savedRun(cookie, 'POST', { runKey: 'X', lease: 'a1', newLease: 'b1' })).status).toBe(200);
+      await savedRun(cookie, 'PUT', { runKey: 'Y', lease: 'a2', snapshot: snap('Y'), ledger: true });
+      // B dies on X: credited, and Y (A's, stored) is left alone.
+      const died = await claimed(cookie, { runKey: 'X', lease: 'b1' });
+      expect(died.status).toBe(200);
+      expect(died.body.created).toBe(true);
+      expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: { runKey: string } }).savedRun).toMatchObject({ runKey: 'Y', snapshot: { runKey: 'Y' } });
+      // The same with an old-client DELETE: the holder decides, so B's end counts, and a later claim is refused.
+      await savedRun(cookie, 'PUT', { runKey: 'P', lease: 'p1', snapshot: snap('P') });
+      expect((await savedRun(cookie, 'POST', { runKey: 'P', lease: 'p1', newLease: 'q1' })).status).toBe(200);
+      await savedRun(cookie, 'PUT', { runKey: 'R', lease: 'r1', snapshot: snap('R'), ledger: true });
+      expect(await (await savedRun(cookie, 'DELETE', { runKey: 'P', lease: 'q1' })).json()).toMatchObject({ deleted: true, snapshot: null });
+      expect((await claimed(cookie, { runKey: 'P', lease: 'q1' })).body.error).toBe('run_ended');
+      expect((await listed(cookie)).map((c) => c.runKey)).toEqual(['X']);
+    });
+
+    it('never leaves a Run both credited and resumable when a store and a claim for it race', async () => {
+      const cookie = await signUp(`Rrace${RUN}`);
+      // The pagehide flush: a pause (PUT) and a quit claim for the same Run leave together, from an empty slot.
+      for (let i = 0; i < 6; i++) {
+        const key = `flush-${i}`;
+        const [put, claim] = await Promise.all([
+          savedRun(cookie, 'PUT', { runKey: key, lease: `l${i}`, snapshot: snap(key), ledger: true }),
+          claimed(cookie, { runKey: key, lease: `l${i}`, reason: 'quit' }),
+        ]);
+        expect(claim.status).toBe(200);
+        expect([200, 409]).toContain(put.status);
+        // Whichever went first, the Run is credited once and not stored: GET shows none, a take is refused.
+        expect(((await (await savedRun(cookie, 'GET')).json()) as { savedRun: unknown }).savedRun).toBeNull();
+        expect((await savedRun(cookie, 'POST', { runKey: key, lease: `l${i}`, newLease: `m${i}` })).status).toBe(409);
+        expect((await listed(cookie)).filter((c) => c.runKey === key)).toHaveLength(1);
+      }
+    });
+
+    it('credits a stored Run once when another Run’s store and its holder’s claim race', async () => {
+      const cookie = await signUp(`Rrace2${RUN}`);
+      for (let i = 0; i < 6; i++) {
+        const key = `held-${i}`;
+        await savedRun(cookie, 'PUT', { runKey: key, lease: `h${i}`, snapshot: snap(key) });
+        const [put, claim] = await Promise.all([
+          savedRun(cookie, 'PUT', { runKey: `other-${i}`, lease: `o${i}`, snapshot: snap(`other-${i}`), ledger: true }),
+          claimed(cookie, { runKey: key, lease: `h${i}` }),
+        ]);
+        expect(put.status).toBe(200);
+        expect(claim.status).toBe(200);
+        const credits = ((await put.json()) as { credits: RunCredit[] }).credits.filter((c) => c.runKey === key);
+        // Exactly one of the two created the row; the other got it back.
+        expect(credits.length + (claim.body.created ? 1 : 0)).toBe(1);
+        expect((await listed(cookie)).filter((c) => c.runKey === key)).toHaveLength(1);
+      }
+    });
+
+    it('lets exactly one of racing claims create the row', async () => {
+      const cookie = await signUp(`Rx${RUN}`);
+      const results = await Promise.all(['a', 'b', 'c', 'd'].map((l) => claimed(cookie, { runKey: 'race', lease: l })));
+      expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+      expect(results.filter((r) => r.body.created).length).toBe(1);
+      expect(new Set(results.map((r) => r.body.credit!.id)).size).toBe(1);
+    });
+
+    it('lists the newest first, bounded', async () => {
+      const cookie = await signUp(`Rl${RUN}`);
+      for (let i = 0; i < 3; i++) await claimed(cookie, { runKey: `run-${i}`, lease: `l${i}` });
+      expect((await listed(cookie)).map((c) => c.runKey)).toEqual(['run-2', 'run-1', 'run-0']);
+      expect((await listed(cookie, 2)).map((c) => c.runKey)).toEqual(['run-2', 'run-1']);
+      expect((await listed(cookie, RUN_CREDIT_LIST_MAX + 100)).length).toBe(3);
+      expect((await listed(cookie, -4)).length).toBe(3);
+    });
+
+    it('validates the body and caps its size', async () => {
+      const cookie = await signUp(`Rv${RUN}`);
+      expect((await send(cookie, 'POST', { runKey: '', lease: 'l', reason: 'died', stats })).status).toBe(400);
+      expect((await send(cookie, 'POST', { runKey: 'r', lease: 'l', reason: 'won', stats })).status).toBe(400);
+      expect((await send(cookie, 'POST', { runKey: 'r', lease: 'l', reason: 'died', stats: { maxRadius: 1 } })).status).toBe(400);
+      const huge = { runKey: 'r', lease: 'l', reason: 'died', stats: { ...stats, perks: Array.from({ length: MAX_RUN_CREDIT_BYTES / 4 }, (_, i) => i) } };
+      expect((await send(cookie, 'POST', huge)).status).toBe(413);
+      expect(await listed(cookie)).toEqual([]);
+      expect((await send(cookie, 'DELETE', {})).status).toBe(405);
+    });
+
+    it('keeps creditedRuns with the progress copy, and the stored set when an older bundle omits it', async () => {
+      const cookie = await signUp(`Rp${RUN}`);
+      const progress = (over: Partial<Progress> = {}, total = 100): Progress => ({
+        fluff: total,
+        upgrades: {},
+        characters: {},
+        universes: 0,
+        stats: { runs: 1, wins: 0, bestRadius: 10, bestTier: 2, totalFluffEarned: total, keepsakesEarned: 0 },
+        ...over,
+      });
+      const put = async (body: unknown) => (await (await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(body) })).json()) as { accepted: boolean; progress: Progress };
+      const first = await put(progress({ creditedRuns: ['k1'] }));
+      expect(first.accepted).toBe(true);
+      expect(first.progress.creditedRuns).toEqual(['k1']);
+      // An older bundle (no field) with more progress: accepted, the stored set kept.
+      const older = await put(progress({}, 150));
+      expect(older.accepted).toBe(true);
+      expect(older.progress.creditedRuns).toEqual(['k1']);
+      // A copy with the field replaces the set along with the Fluff.
+      const next = await put(progress({ creditedRuns: ['k1', 'k2'] }, 200));
+      expect(next.progress.creditedRuns).toEqual(['k1', 'k2']);
+      const got = (await (await call(progressApi, '/api/progress', { cookie })).json()) as { progress: Progress };
+      expect(got.progress.creditedRuns).toEqual(['k1', 'k2']);
     });
   });
 

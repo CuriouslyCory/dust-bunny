@@ -75,6 +75,12 @@ export interface SavedRunUpload {
   /** Migrated to `SNAPSHOT_VERSION` when it was older; a newer one exactly as sent. */
   snapshot: Record<string, unknown>;
   version: number;
+  /**
+   * The client credits Runs through the ledger (docs/adr/0003): a different Run this upload
+   * replaces is recorded in `run_credits` by the server. Without it (a client from before the
+   * ledger) the caller credits the returned `replaced` copy itself, as before.
+   */
+  ledger?: boolean;
 }
 
 export type SavedRunCheck<T> = { ok: true; value: T } | { ok: false; message: string; field?: string };
@@ -91,6 +97,7 @@ export function validateSavedRunUpload(body: unknown): SavedRunCheck<SavedRunUpl
   if (!isSavedRunId(body.runKey)) return fail('runKey must be a non-empty string.', 'runKey');
   if (!isSavedRunId(body.lease)) return fail('lease must be a non-empty string.', 'lease');
   if (body.prevLease !== undefined && !isSavedRunId(body.prevLease)) return fail('prevLease must be a non-empty string.', 'prevLease');
+  if (body.ledger !== undefined && typeof body.ledger !== 'boolean') return fail('ledger must be a boolean.', 'ledger');
   const version = snapshotVersion(body.snapshot);
   if (version === null) return fail('snapshot must be a Run snapshot with a version.', 'snapshot');
   const snapshot = migrateRunSnapshot(body.snapshot);
@@ -104,7 +111,14 @@ export function validateSavedRunUpload(body: unknown): SavedRunCheck<SavedRunUpl
   }
   return {
     ok: true,
-    value: { runKey: body.runKey, lease: body.lease, ...(body.prevLease !== undefined ? { prevLease: body.prevLease as string } : {}), snapshot, version: Math.max(version, SNAPSHOT_VERSION) },
+    value: {
+      runKey: body.runKey,
+      lease: body.lease,
+      ...(body.prevLease !== undefined ? { prevLease: body.prevLease as string } : {}),
+      snapshot,
+      version: Math.max(version, SNAPSHOT_VERSION),
+      ...(body.ledger === true ? { ledger: true } : {}),
+    },
   };
 }
 

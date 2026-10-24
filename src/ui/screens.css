@@ -1062,6 +1062,22 @@
   color: var(--ink-soft);
 }
 
+/* Signed in, a Run the Account knows is credited from the server's answer: until then the Fluff is pending. */
+.fluff-pending {
+  font-size: var(--fs-xs);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.results-section-fluff[data-credit='pending'] .fluff-earned {
+  opacity: 0.75;
+}
+
+.results-section-fluff[data-credit='refused'] .fluff-earned {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
 .fluff-best {
   padding: 2px 10px;
   border-radius: var(--radius-pill);

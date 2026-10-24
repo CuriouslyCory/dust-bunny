@@ -6,6 +6,8 @@ import { BASE_BUNNY_STATS, computeStats } from '../entities/stats';
 import { Run } from '../game/run';
 import type { RunStats } from '../game/runStats';
 import { registerPerks } from '../perks/perks';
+import { CREDITED_RUNS_MAX } from '../shared/runCredit';
+import { CREDITED_RUNS_MIRROR_KEY, CREDITED_RUNS_MIRROR_VERSION, LOCAL_CREDITS_MAX } from './creditedRuns';
 import { fluffForRun, VICTORY_FLUFF_MULTIPLIER } from './fluff';
 import { AREA_ORDER } from '../world/types';
 import { endsUniverse, MetaProgress } from './meta';
@@ -132,7 +134,7 @@ describe('upgrade cost curve', () => {
 
 describe('save data', () => {
   it('returns defaults for empty storage', () => {
-    expect(parseSave(null)).toEqual({ data: defaultSave(), status: 'empty' });
+    expect(parseSave(null)).toEqual({ data: defaultSave(), status: 'empty', lostCreditedRuns: false });
   });
 
   it('round-trips through SaveStore', () => {
@@ -314,34 +316,92 @@ describe('save shared between tabs', () => {
     const tabA = new MetaProgress(storage);
     const tabB = new MetaProgress(storage);
     tabA.buy('wide_choice');
-    const award = tabB.awardRun({ reason: 'died', stats: stats() });
+    const award = tabB.awardRun({ runKey: 'r1', reason: 'died', stats: stats() })!;
     expect(award.total).toBe(award.fluff);
     expect(new MetaProgress(storage).data).toMatchObject({ fluff: award.fluff, upgrades: { wide_choice: 1 }, stats: { runs: 1 } });
   });
 });
 
 describe('MetaProgress', () => {
-  it('awards Fluff once per runEnded payload and records stats', () => {
-    const meta = new MetaProgress(memStorage());
-    const e = { reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
-    const a = meta.awardRun(e);
+  it('awards Fluff once per Run key and records stats; the key is remembered with the Fluff', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    const e = { runKey: 'run-a', reason: 'victory' as const, stats: stats({ maxRadius: 50 }) };
+    const a = meta.awardRun(e)!;
     expect(a.fluff).toBe(Math.floor((12 + 50 / 30 + 400 / 1000) * VICTORY_FLUFF_MULTIPLIER));
-    expect(meta.awardRun(e)).toBe(a);
+    expect(meta.credited('run-a')).toBe(true);
+    // The same key again, from any payload (another tab's copy, a ledger row), adds nothing.
+    expect(meta.awardRun(e)).toBeNull();
+    expect(meta.awardRun({ ...e, stats: stats({ maxRadius: 500 }) })).toBeNull();
+    expect(new MetaProgress(storage).awardRun(e)).toBeNull();
     expect(meta.fluff).toBe(a.fluff);
     expect(meta.data.stats).toMatchObject({ runs: 1, wins: 1, bestRadius: 50, bestTier: 3 });
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual(['run-a']);
   });
 
-  it('counts a Universe on each victory in the last Area, once per payload', () => {
+  it('remembers the newest CREDITED_RUNS_MAX keys, oldest dropped first', () => {
+    const meta = new MetaProgress(memStorage());
+    for (let i = 0; i < CREDITED_RUNS_MAX + 5; i++) expect(meta.awardRun({ runKey: `k${i}`, reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    expect(meta.data.creditedRuns[0]).toBe('k5');
+    expect(meta.data.creditedRuns.at(-1)).toBe(`k${CREDITED_RUNS_MAX + 4}`);
+    expect(meta.credited('k4')).toBe(false); // aged out: a repeat would count again (the sweep fetches far fewer than this)
+    expect(meta.data.stats.runs).toBe(CREDITED_RUNS_MAX + 5);
+  });
+
+  it('reads creditedRuns from a save (deduplicated; the cap applies at the next write) and defaults to none', () => {
+    expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: undefined })).data.creditedRuns).toEqual([]);
+    const many = Array.from({ length: CREDITED_RUNS_MAX + 2 }, (_, i) => `k${i}`);
+    const d = parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: ['a', 'a', 7, '', ...many] })).data;
+    // Valid keys once each; not cut back on read (an older key may be pinned by a pending claim, which only MetaProgress learns later).
+    expect(d.creditedRuns).toEqual(['a', ...many]);
+    expect(parseSave(JSON.stringify({ ...defaultSave(), creditedRuns: 'nope' })).data.creditedRuns).toEqual([]);
+    const storage = memStorage();
+    storage.setItem(SAVE_KEY, JSON.stringify({ ...defaultSave(), creditedRuns: ['a', ...many] }));
+    const meta = new MetaProgress(storage);
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 3);
+    expect(meta.awardRun({ runKey: 'new', reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX); // the write trims: the newest 100 stay
+    expect(meta.data.creditedRuns[0]).toBe('k3');
+    expect(meta.data.creditedRuns.at(-1)).toBe('new');
+  });
+
+  it('keeps a pinned key (a claim is still out for it) beyond the cap, and lets it age out once unpinned (docs/adr/0003)', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    let pinned: string[] = ['k0', 'k3'];
+    meta.pinCreditedRuns(() => pinned);
+    for (let i = 0; i < CREDITED_RUNS_MAX + 5; i++) expect(meta.awardRun({ runKey: `k${i}`, reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 2);
+    expect(meta.data.creditedRuns.slice(0, 3)).toEqual(['k0', 'k3', 'k5']); // the pinned keys, then the newest 100
+    expect(meta.awardRun({ runKey: 'k0', reason: 'died', stats: stats() })).toBeNull(); // still held: no second credit
+    expect(meta.credited('k1')).toBe(false);
+    // The save and the mirror carry the whole set: a reload (before the queue registers its pins again) loses nothing.
+    expect(new MetaProgress(storage).data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX + 2);
+    // The claims landed: the next write lets the keys go like any other.
+    pinned = [];
+    expect(meta.awardRun({ runKey: 'k-last', reason: 'died', stats: stats() })).not.toBeNull();
+    expect(meta.data.creditedRuns).toHaveLength(CREDITED_RUNS_MAX);
+    expect(meta.data.creditedRuns[0]).toBe('k6');
+    // An adopt still replaces the set whole: a pinned key the adopted copy lacks is gone with its Fluff, so the claim's answer can restore it.
+    pinned = ['k-last'];
+    meta.store.update((d) => meta.adoptCreditedRuns(d, ['other'], false));
+    expect(meta.credited('k-last')).toBe(false);
+  });
+
+  it('counts a Universe on each victory in the last Area, once per Run; universesAfter looks ahead', () => {
     const storage = memStorage();
     const meta = new MetaProgress(storage);
     const last = AREA_ORDER[AREA_ORDER.length - 1]!;
-    const win = { reason: 'victory' as const, stats: stats({ area: last }) };
+    const win = { runKey: 'w1', reason: 'victory' as const, stats: stats({ area: last }) };
     expect(endsUniverse(win)).toBe(true);
-    expect(meta.awardRun(win).universes).toBe(1);
-    expect(meta.awardRun(win).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'died', stats: stats({ area: last }) }).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: 'city' }) }).universes).toBe(1);
-    expect(meta.awardRun({ reason: 'victory', stats: stats({ area: last }) }).universes).toBe(2);
+    expect(meta.universesAfter(win)).toBe(1); // not credited yet: counts it
+    expect(meta.awardRun(win)!.universes).toBe(1);
+    expect(meta.universesAfter(win)).toBe(1); // credited: as it is
+    expect(meta.awardRun(win)).toBeNull();
+    expect(meta.awardRun({ runKey: 'd1', reason: 'died', stats: stats({ area: last }) })!.universes).toBe(1);
+    expect(meta.awardRun({ runKey: 'w2', reason: 'victory', stats: stats({ area: 'city' }) })!.universes).toBe(1);
+    expect(meta.awardRun({ runKey: 'w3', reason: 'victory', stats: stats({ area: last }) })!.universes).toBe(2);
     expect(new MetaProgress(storage).universes).toBe(2);
   });
 
@@ -357,5 +417,117 @@ describe('MetaProgress', () => {
     expect(reloaded.level('wide_choice')).toBe(1);
     expect(reloaded.fluff).toBe(780);
     expect(reloaded.runModifiers()).toEqual([{ stat: 'perkChoices', op: 'add', value: 1, source: 'upgrade:wide_choice' }]);
+  });
+});
+
+describe('creditedRuns on a device shared with a build from before the ledger (docs/adr/0003)', () => {
+  const died = (runKey: string) => ({ runKey, reason: 'died' as const, stats: stats() });
+
+  it('a save rewritten without creditedRuns gets its keys back from the mirror, and nothing is credited twice', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    for (const k of ['a', 'b', 'c']) expect(meta.awardRun(died(k))).not.toBeNull(); // three ledger rows applied
+    const before = meta.data.fluff;
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ version: CREDITED_RUNS_MIRROR_VERSION, keys: ['a', 'b', 'c'] });
+    // An old-build tab buys an Upgrade: its sanitiser drops the field it doesn't know, the Fluff stays.
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = (raw.fluff as number) - 10;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual([]); // the file alone says "no credit held"
+    // The next sweep replays the same rows: the repaired set refuses them all.
+    for (const k of ['a', 'b', 'c']) expect(meta.awardRun(died(k))).toBeNull();
+    expect(meta.data.fluff).toBe(before - 10);
+    expect(meta.data.stats.runs).toBe(3);
+    expect(meta.data.creditedRuns).toEqual(['a', 'b', 'c']);
+    // A fresh page reads it repaired too, and a new credit writes the whole set back.
+    const next = new MetaProgress(storage);
+    expect(next.data.creditedRuns).toEqual(['a', 'b', 'c']);
+    expect(next.awardRun(died('d'))).not.toBeNull();
+    expect(parseSave(storage.map.get(SAVE_KEY)).data.creditedRuns).toEqual(['a', 'b', 'c', 'd']);
+    expect(next.awardRun(died('a'))).toBeNull();
+  });
+
+  it('a credit with no Account is remembered on the device only: it dedups, and takes no slot from ledger keys', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    expect(meta.awardRun(died('ledger-1'))).not.toBeNull();
+    for (let i = 0; i < CREDITED_RUNS_MAX + 10; i++) expect(meta.awardRun(died(`offline-${i}`), { ledger: false })).not.toBeNull();
+    expect(meta.data.creditedRuns).toEqual(['ledger-1']); // still remembered after 110 signed-out Runs
+    expect(meta.awardRun(died('ledger-1'))).toBeNull(); // so the same ledger row never credits twice
+    expect(meta.credited(`offline-${CREDITED_RUNS_MAX + 9}`)).toBe(true);
+    expect(meta.awardRun(died(`offline-${CREDITED_RUNS_MAX + 9}`), { ledger: false })).toBeNull();
+    expect(new MetaProgress(storage).awardRun(died(`offline-${CREDITED_RUNS_MAX + 9}`))).toBeNull(); // another tab, too
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!).local).toHaveLength(LOCAL_CREDITS_MAX);
+  });
+
+  it('a Universe victory counts only when the device that ended the Run credits it; a row the sweep brings adds Fluff alone', () => {
+    const meta = new MetaProgress(memStorage());
+    const win = { runKey: 'win', reason: 'victory' as const, stats: stats({ area: AREA_ORDER[AREA_ORDER.length - 1] }) };
+    const swept = meta.awardRun(win, { countUniverse: false })!;
+    expect(swept.fluff).toBeGreaterThan(0);
+    expect(swept.universes).toBe(0);
+    expect(meta.data.stats.wins).toBe(1);
+    expect(meta.awardRun(win)).toBeNull();
+  });
+
+  it('a mirror from a newer build is read but never written', () => {
+    const storage = memStorage({ [CREDITED_RUNS_MIRROR_KEY]: JSON.stringify({ version: CREDITED_RUNS_MIRROR_VERSION + 1, keys: ['future'], local: [], later: true }) });
+    const meta = new MetaProgress(storage);
+    expect(meta.data.creditedRuns).toEqual(['future']);
+    expect(meta.awardRun(died('future'))).toBeNull();
+    expect(meta.awardRun(died('now'))).not.toBeNull();
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ version: CREDITED_RUNS_MIRROR_VERSION + 1, keys: ['future'], later: true });
+    expect(meta.awardRun(died('now'))).toBeNull(); // this page still remembers, in memory
+  });
+});
+
+describe('creditedRuns lost to a build from before the ledger: the set is unknown until a cloud adopt restores it (docs/adr/0003)', () => {
+  const died = (runKey: string) => ({ runKey, reason: 'died' as const, stats: stats() });
+
+  it('a save without the field on a device that has used the ledger marks the set unknown; the mirror still repairs what it knows', () => {
+    const storage = memStorage();
+    const meta = new MetaProgress(storage);
+    expect(meta.awardRun(died('mine'))).not.toBeNull();
+    // An old-build tab adopts a cloud copy that holds another device's credit K2 (Fluff 66, key unknown to the mirror) and rewrites the save without the field.
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    raw.fluff = 66;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    const next = new MetaProgress(storage);
+    expect(next.creditedRunsKnown()).toBe(false);
+    expect(next.data.creditedRuns).toEqual(['mine']);
+    expect(JSON.parse(storage.map.get(CREDITED_RUNS_MIRROR_KEY)!)).toMatchObject({ keys: ['mine'], unknown: true });
+    expect(next.awardRun(died('mine'))).toBeNull();
+    // Credits still land meanwhile (the set is "at least these"), and the flag outlives a reload and this build's own writes.
+    expect(next.awardRun(died('new'))).not.toBeNull();
+    expect(new MetaProgress(storage).creditedRunsKnown()).toBe(false);
+    // A cloud adopt of a copy that carries `creditedRuns` restores a known set.
+    next.store.update((d) => next.adoptCreditedRuns(d, ['mine', 'K2', 'new'], false));
+    expect(next.creditedRunsKnown()).toBe(true);
+    expect(next.awardRun(died('K2'))).toBeNull();
+    // An adopt of a row from before the ledger (no set) leaves it as it is; another Account's save starts known and empty.
+    next.store.update((d) => next.adoptCreditedRuns(d, undefined, false));
+    expect(next.creditedRunsKnown()).toBe(true);
+    const flagged = new MetaProgress(storage);
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    flagged.store.refresh();
+    expect(flagged.creditedRunsKnown()).toBe(false);
+    flagged.store.update((d) => flagged.adoptCreditedRuns(d, undefined, true));
+    expect(flagged.creditedRunsKnown()).toBe(true);
+    expect(flagged.data.creditedRuns).toEqual([]);
+  });
+
+  it('a save from before the ledger on a device without a mirror is simply an older save: the set is known (and empty)', () => {
+    const storage = memStorage();
+    const old = new MetaProgress(storage);
+    old.store.update((d) => void (d.fluff = 40));
+    const raw = JSON.parse(storage.map.get(SAVE_KEY)!) as Record<string, unknown>;
+    delete raw.creditedRuns;
+    storage.setItem(SAVE_KEY, JSON.stringify(raw));
+    storage.map.delete(CREDITED_RUNS_MIRROR_KEY);
+    const meta = new MetaProgress(storage);
+    expect(meta.creditedRunsKnown()).toBe(true);
+    expect(meta.data).toMatchObject({ fluff: 40, creditedRuns: [] });
   });
 });
