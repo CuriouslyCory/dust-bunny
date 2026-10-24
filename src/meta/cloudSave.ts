@@ -207,6 +207,9 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
    * flight stay local and upload next. Refused (the server holds more progress): adopt its copy.
    */
   async function upload(p: Progress): Promise<void> {
+    // The device save is a newer build's: this page only has its reading of it and changes nothing
+    // (docs/adr/0001), so it has nothing of its own to send; the newer build syncs it.
+    if (meta.saveStatus === 'newer') return;
     // More keys than the server accepts: claims of this device are still out for the older ones
     // (MetaProgress.trimCreditedRuns). Sending the copy without them would let another device
     // adopt their Fluff without their keys and credit those Runs again from the sweep (docs/adr/0003),
@@ -257,6 +260,8 @@ export function createCloudSave(meta: MetaProgress, account: AccountClient, opts
   }
 
   async function connect(id: string): Promise<void> {
+    // As in `upload`: a newer build's device save is that build's to sync (and to tie to an Account).
+    if (meta.saveStatus === 'newer') return;
     const remote = (await call()).progress;
     if (userId !== id) return;
     const local = current();

@@ -5,6 +5,8 @@
 import { installPerfWatchdog } from '../fx/perfWatchdog';
 import { getQuality, onQualityChange, setQuality } from '../fx/quality';
 import type { Game } from '../game/game';
+import { getMeta } from '../meta/meta';
+import { installSaveNotice } from './saveNotice';
 import { settings, type GraphicsQuality } from './settings';
 
 /**
@@ -33,6 +35,9 @@ export function installUi(game: Game): void {
     root.classList.toggle('in-run', !!game.run);
   });
   root.dataset.screen = game.screens.current?.id ?? '';
+
+  // The device save is a newer build's: say that nothing here is saved until a reload.
+  installSaveNotice(getMeta(), document.getElementById('ui') ?? document.body);
 
   // Sustained low frame rate on High during play: drop to Low once (saved; Settings can undo).
   installPerfWatchdog({

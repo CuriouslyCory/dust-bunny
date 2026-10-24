@@ -16,7 +16,7 @@ import { AREA_ORDER } from '../world/types';
 import { CreditedRunsMirrorStore } from './creditedRuns';
 import { fluffForRun } from './fluff';
 import { addToHoard, countOf, emptyCharacterHoard, hasKeepsakes, repairLoadout, sameLoadout, type CharacterHoard } from './hoard';
-import { browserStorage, browserStorageEvents, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore, type StorageEventSource } from './save';
+import { browserStorage, browserStorageEvents, type KeyValueStorage, type SaveData, type SaveSettings, SaveStore, type StorageEventSource, type StoreStatus } from './save';
 import { levelOf, upgradeCost, upgradeModifiers } from './upgrades';
 
 declare module '../core/events' {
@@ -176,6 +176,15 @@ export class MetaProgress {
 
   get data() {
     return this.store.data;
+  }
+
+  /**
+   * Whether progress made in this page is saved: `newer` while the device save is a newer build's
+   * (read, never written: nothing here is saved until the page reloads on that build, docs/adr/0001);
+   * `unavailable` when storage refused the last write.
+   */
+  get saveStatus(): StoreStatus {
+    return this.store.writeStatus;
   }
 
   get fluff(): number {

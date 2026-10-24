@@ -35,14 +35,27 @@
  *   reads as empty.
  */
 import type { Game } from '../game/game';
-import { isNewerSnapshot, parseRunSnapshot, type RunSnapshot } from '../game/snapshot';
+import { parseRunSnapshot, SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import { repairLoadout } from './hoard';
 import type { MetaProgress } from './meta';
 import { browserStorage, type KeyValueStorage } from './save';
+import { type VersionedFormat, VersionedStore } from './versionedStore';
 
 export const SUSPENDED_RUN_KEY = 'dust-bunny:suspended-run:v1';
 
-type Storage = KeyValueStorage & { removeItem?(key: string): void };
+type Storage = KeyValueStorage;
+
+/**
+ * The slot (./versionedStore.ts): a newer build's snapshot is never written over or removed, and a
+ * write that doesn't reach storage stays in this page's memory. `parseRunSnapshot` migrates an
+ * older snapshot itself, and reads a newer one, or anything else it can't resume, as none.
+ */
+const SLOT_FORMAT: VersionedFormat<RunSnapshot | null, RunSnapshot> = {
+  key: SUSPENDED_RUN_KEY,
+  version: SNAPSHOT_VERSION,
+  empty: () => null,
+  parse: (o) => parseRunSnapshot(o),
+};
 
 /** What an `onChange` listener is told. `external`: another tab or window changed the slot. */
 export interface SuspendedRunChange {
@@ -50,14 +63,19 @@ export interface SuspendedRunChange {
 }
 
 export class SuspendedRunStore {
-  private memory: string | null = null;
-  /** The last write didn't reach storage: `memory` is the truth for this page from then on. */
-  private stale = false;
+  /** The slot; after a write that didn't reach storage, this page's copy in memory is the truth for it. */
+  private readonly slot: VersionedStore<RunSnapshot | null, RunSnapshot>;
   private listeners = new Set<(change: SuspendedRunChange) => void>();
   /** The signed-in Account (null: none). A copy tagged with another Account (or any, signed out) reads as empty. */
   private viewer: string | null = null;
 
-  constructor(private readonly storage: Storage | null) {}
+  /** No storage at all: the slot lives in this page's memory, and that is not a failed write. */
+  private readonly memoryOnly: boolean;
+
+  constructor(storage: Storage | null) {
+    this.slot = new VersionedStore(storage, SLOT_FORMAT);
+    this.memoryOnly = storage === null;
+  }
 
   /** Sets who is signed in (src/meta/accountRun.ts); tells listeners when it changes what the slot shows. */
   setViewer(userId: string | null): void {
@@ -66,63 +84,17 @@ export class SuspendedRunStore {
     this.emit({ external: false });
   }
 
-  private parsed(): unknown {
-    const raw = this.read();
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as unknown;
-    } catch {
-      return null;
-    }
-  }
-
-  /** What storage itself holds is a newer build's saved Run (whatever this page serves from memory). */
-  private storageHoldsNewer(): boolean {
-    if (!this.storage) return false;
-    try {
-      const raw = this.storage.getItem(SUSPENDED_RUN_KEY);
-      return !!raw && isNewerSnapshot(JSON.parse(raw));
-    } catch {
-      return false;
-    }
-  }
-
   /** The slot holds a saved Run from a newer build: kept as it is, unread (docs/adr/0001). */
   get newer(): boolean {
-    return isNewerSnapshot(this.parsed());
+    return this.slot.read().found === 'newer';
   }
 
-  private read(): string | null {
-    if (!this.storage || this.stale) return this.memory;
-    try {
-      return this.storage.getItem(SUSPENDED_RUN_KEY);
-    } catch {
-      return this.memory;
-    }
-  }
-
-  private write(value: string | null): void {
-    // A newer build's saved Run is never deleted or overwritten here: this page keeps its own copy
-    // in memory instead, as when storage is full.
-    if (this.storageHoldsNewer()) {
-      this.memory = value;
-      this.stale = true;
-      this.emit({ external: false });
-      return;
-    }
-    this.memory = value;
-    if (this.storage) {
-      try {
-        if (value !== null) this.storage.setItem(SUSPENDED_RUN_KEY, value);
-        else if (this.storage.removeItem) this.storage.removeItem(SUSPENDED_RUN_KEY);
-        else this.storage.setItem(SUSPENDED_RUN_KEY, '');
-        this.stale = false;
-      } catch {
-        // Storage full or disabled: the in-memory copy serves this page (a saved Run is still
-        // resumable here, and a taken one can't be taken again).
-        this.stale = true;
-      }
-    }
+  private write(value: RunSnapshot | null): void {
+    // A newer build's saved Run is never deleted or overwritten here, and when storage is full or
+    // disabled the in-memory copy serves this page (a saved Run is still resumable here, and a
+    // taken one can't be taken again).
+    if (value) this.slot.write(value);
+    else this.slot.remove();
     this.emit({ external: false });
   }
 
@@ -135,23 +107,16 @@ export class SuspendedRunStore {
    * was serving its in-memory copy; storage now holds something newer, so that is the truth again.
    */
   storageChanged(): void {
-    if (this.stale && this.storage) {
-      try {
-        this.memory = this.storage.getItem(SUSPENDED_RUN_KEY);
-        this.stale = false;
-      } catch {
-        // Still unreadable: keep serving memory.
-      }
-    }
+    if (!this.memoryOnly) this.slot.dropMemory();
     this.emit({ external: true });
   }
 
   /**
    * The last write didn't reach storage: this page is serving its own copy, and storage may still
-   * hold something else (another tab's Run).
+   * hold something else (another tab's Run). Never, without storage at all: memory is the slot then.
    */
   get unsaved(): boolean {
-    return this.stale;
+    return !this.memoryOnly && this.slot.inMemory;
   }
 
   /**
@@ -159,9 +124,8 @@ export class SuspendedRunStore {
    * touching storage (whatever it holds was never replaced). No-op when the last write stuck.
    */
   dropUnsaved(): void {
-    if (!this.stale) return;
-    this.stale = false;
-    this.memory = null;
+    if (!this.unsaved) return;
+    this.slot.dropMemory();
     this.emit({ external: false });
   }
 
@@ -177,17 +141,17 @@ export class SuspendedRunStore {
 
   /** The saved Run whoever's Account it is kept for (null: none, or unreadable). */
   peekAny(): RunSnapshot | null {
-    return parseRunSnapshot(this.parsed());
+    return this.slot.read().value;
   }
 
   get has(): boolean {
     return this.peek() !== null;
   }
 
-  /** Stores the saved Run. False when it only reached this page's memory (storage full or locked). */
+  /** Stores the saved Run. False when it only reached this page's memory (storage full or locked, or a newer build's Run in the slot). */
   save(snapshot: RunSnapshot): boolean {
-    this.write(JSON.stringify(snapshot));
-    return !this.stale;
+    this.write(snapshot);
+    return !this.unsaved;
   }
 
   /**
@@ -198,8 +162,8 @@ export class SuspendedRunStore {
     const s = this.peek();
     if (!s?.account || s.runKey !== runKey || s.account.lease !== lease || s.account.synced) return false;
     s.account = { userId: s.account.userId, lease, synced: true };
-    this.write(JSON.stringify(s));
-    return !this.stale;
+    this.write(s);
+    return !this.unsaved;
   }
 
   /** Reads and clears the saved Run (Resume). */
@@ -210,7 +174,7 @@ export class SuspendedRunStore {
   }
 
   clear(): void {
-    if (this.read() !== null || this.memory !== null) this.write(null);
+    if (this.slot.inMemory || this.slot.read().raw) this.write(null);
   }
 
   /** Called after every change to the slot: this page's writes and (via `storageChanged`) other tabs'. */

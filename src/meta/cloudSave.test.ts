@@ -123,6 +123,26 @@ describe('cloud save', () => {
     expect(s.cloud.status).toBe('synced');
   });
 
+  it('neither uploads nor adopts while the device save is a newer build’s (docs/adr/0001)', async () => {
+    const newer = JSON.stringify({ version: 99, fluff: 70, upgrades: { fast_feet: 1 }, stats: { runs: 4, totalFluffEarned: 100 }, somethingNew: true });
+    const metaStorage = memStorage({ [SAVE_KEY]: newer });
+    const meta = new MetaProgress(metaStorage);
+    const server = fakeServer();
+    const acct = fakeAccount();
+    const storage = memStorage();
+    createCloudSave(meta, acct.client, { fetch: server.fetch, storage, debounceMs: 100, retryMs: 1000 });
+    server.rows.set('u2', prog(300, 500, 12, { magnetism: 2 }));
+    for (const id of ['u1', 'u2']) {
+      server.signIn(id);
+      acct.signIn(id);
+      await vi.runAllTimersAsync();
+    }
+    expect(server.puts).toEqual([]);
+    expect(metaStorage.map.get(SAVE_KEY)).toBe(newer);
+    expect(meta.fluff).toBe(70);
+    expect(storage.map.has(CLOUD_USER_KEY)).toBe(false);
+  });
+
   it('does not upload a fresh save, and adopts the account copy when it has more', async () => {
     const s = setup(null);
     s.server.rows.set('u1', prog(300, 500, 12, { magnetism: 2 }));
