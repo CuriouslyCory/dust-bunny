@@ -177,12 +177,9 @@ export class VersionedStore<T, W = T> {
     return this.put(null);
   }
 
-  /**
-   * Reads come from storage again: this page's value kept in memory is dropped (another tab wrote,
-   * or the caller gives it up). Kept while storage can't be read at all.
-   */
+  /** Reads come from storage again: this page's value kept in memory is dropped (another tab wrote, or the caller gives it up). */
   dropMemory(): void {
-    if (this.memory && this.readStorage() !== undefined) this.memory = null;
+    this.memory = null;
   }
 
   /** Whether reads are serving this page's own value kept in memory. */

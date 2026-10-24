@@ -134,17 +134,15 @@ describe('VersionedStore', () => {
     expect(store.read()).toMatchObject({ value: { name: 'mine', count: 3 }, found: 'current' });
   });
 
-  it('keeps its memory while storage can’t be read at all', () => {
+  it('serves its memory while storage can’t be read at all', () => {
     const storage = memStorage();
     const store = new VersionedStore(storage, format);
     storage.locked = true;
     expect(store.read()).toMatchObject({ value: format.empty(), status: 'unavailable', raw: undefined });
     expect(store.write({ name: 'mine', count: 1 })).toBe('unavailable');
+    expect(store.read()).toMatchObject({ value: { name: 'mine', count: 1 }, status: 'unavailable', found: 'memory' });
     store.dropMemory();
-    expect(store.read().value).toEqual({ name: 'mine', count: 1 });
-    storage.locked = false;
-    store.dropMemory();
-    expect(store.read()).toMatchObject({ value: format.empty(), found: 'empty' });
+    expect(store.read()).toMatchObject({ value: format.empty(), status: 'unavailable', raw: undefined });
   });
 
   it('works in memory without storage', () => {
