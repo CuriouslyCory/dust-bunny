@@ -32,7 +32,7 @@ import { CHARACTER_PERK_EFFECTS as FX, CHARACTER_PERKS, perStack } from '../data
 import { TUNING } from '../data/tuning';
 import type { Run } from '../game/run';
 import type { System } from '../game/system';
-import { getAbilitySystem, hazardRadius, isBoss } from '../abilities/system';
+import { hazardRadius, isBoss } from '../abilities/system';
 import { pickShedType, planShed, scatterDebris } from '../hazards/shed';
 import { growthFactorAt } from '../systems/absorb';
 import { installCombatHooks } from './combat';
@@ -178,16 +178,11 @@ export class TumblePerks implements System {
     const b = run.bunny;
     const reach = perStack(FX.heavyLandingRadius, stacks)! * b.radius;
     const seconds = perStack(FX.heavyLandingStun, stacks)!;
-    const abilities = getAbilitySystem(run);
     let hit = 0;
     for (const h of run.hazards.hazards) {
       if (h.dead || h.intangible || isBoss(h)) continue;
       if (Math.hypot(h.x - b.x, h.z - b.z) - b.radius - hazardRadius(h) > reach) continue;
-      if (abilities) abilities.stunHazard(h, seconds);
-      else {
-        h.stunnedFor = Math.max(h.stunnedFor ?? 0, seconds);
-        h.stun?.(seconds);
-      }
+      run.hazards.status.stun(h, seconds, 'perk');
       hit++;
     }
     this.view.burst(b.x, b.z, b.radius + reach);

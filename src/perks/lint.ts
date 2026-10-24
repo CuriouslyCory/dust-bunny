@@ -14,12 +14,12 @@
  *                  tangible, unclogged Hazard whose disc overlaps it is clogged (stunned like the
  *                  Decoy's clog, hazardClogged) and the streak is used up.
  *   Unnoticed      when a clog ends, a non-boss Hazard ignores Lint for 1.5 / 2 / 2.5 s
- *                  (`hazard.ignoresBunnyFor`, see ignoresBunny in src/hazards/common.ts).
+ *                  (HazardStatus.ignoreBunny, see ignoresBunny in src/hazards/common.ts).
  *
- * Clogs: the LintPerks System tracks every clog (hazardClogged with seconds > 0: the Decoy's, or
- * Lint Trail's) as `hazard.cloggedFor`. A clog that lands on a clogged Hazard extends it. When the
- * time runs out the clog ends (Loose Threads, Unnoticed), once per clog; a Hazard that dies or
- * leaves with the Area first gets no end effects.
+ * Clogs: the Decoy and Lint Trail clog through run.hazards.status (src/hazards/status.ts), which
+ * counts `hazard.cloggedFor` down; a clog that lands on a clogged Hazard extends it. When the time
+ * runs out the clog ends (hazardUnclogged: Loose Threads, Unnoticed), once per clog; a Hazard that
+ * dies or leaves with the Area first gets no end effects.
  */
 import { CHARACTER_PERK_EFFECTS as FX, CHARACTER_PERKS, perStack } from '../data/perks';
 import type { StatKey } from '../entities/stats';
@@ -29,16 +29,10 @@ import { hazardRadius } from '../abilities/system';
 import '../abilities/events';
 import type { Hazard } from '../hazards';
 import { pickShedType, scatterDebris } from '../hazards/shed';
+import { isClogged } from '../hazards/status';
 import type { Rng } from '../core/rng';
 import type { PerkDef } from './index';
 import { LintTrailView } from './lintView';
-
-declare module '../hazards' {
-  interface Hazard {
-    /** Seconds left of a clog (the Decoy's or Lint Trail's), tracked on Lint Runs (Smother reads it). */
-    cloggedFor?: number;
-  }
-}
 
 export const LINT_PERKS_SYSTEM_ID = 'lintPerks';
 /** Debris type Loose Threads drops when the Run has it (else the shed type closest in size). */
@@ -82,8 +76,6 @@ function segmentDistance(px: number, pz: number, ax: number, az: number, bx: num
 export class LintPerks implements System {
   readonly id = LINT_PERKS_SYSTEM_ID;
   readonly order = 295;
-  /** Hazards with a clog running. */
-  readonly clogged = new Set<Hazard>();
   readonly streaks: Streak[] = [];
   private readonly rng: Rng;
   private area: string;
@@ -92,22 +84,14 @@ export class LintPerks implements System {
     this.rng = run.rng.fork('lintPerks');
     this.area = run.area;
     run.disposables.add(
-      run.events.on('hazardClogged', (e) => {
-        if (e.seconds <= 0) return;
+      run.events.on('hazardUnclogged', (e) => {
         const h = run.hazards.hazards.find((x) => x.id === e.hazardId);
-        if (h) this.clog(h, e.seconds);
+        if (h) this.clogEnded(run, h);
       }),
     );
     // Smother, ahead of any earlier override (Lint has no Amass, but keep the chain).
     const prev = run.hazards.contactOverride;
     run.hazards.contactOverride = (r, h) => this.smother(r, h) || (prev?.(r, h) ?? false);
-  }
-
-  /** Starts (or extends) a clog on a Hazard. */
-  clog(h: Hazard, seconds: number): void {
-    if (h.dead) return;
-    h.cloggedFor = Math.max(h.cloggedFor ?? 0, seconds);
-    this.clogged.add(h);
   }
 
   update(dt: number, run: Run): void {
@@ -116,22 +100,7 @@ export class LintPerks implements System {
       this.area = run.area;
       this.clearStreaks();
     }
-    this.tickClogs(dt, run);
     this.trail(run);
-  }
-
-  private tickClogs(dt: number, run: Run): void {
-    for (const h of [...this.clogged]) {
-      if (h.dead || !run.hazards.hazards.includes(h)) {
-        h.cloggedFor = 0;
-        this.clogged.delete(h);
-        continue;
-      }
-      h.cloggedFor = Math.max(0, (h.cloggedFor ?? 0) - dt);
-      if (h.cloggedFor > 0) continue;
-      this.clogged.delete(h);
-      this.clogEnded(run, h);
-    }
   }
 
   /** A clog ran out: Loose Threads, then Unnoticed. */
@@ -145,12 +114,12 @@ export class LintPerks implements System {
       scatterDebris(run, this.rng, h.x, h.z, pieces, size, edge + size, edge + b.radius * FX.looseThreadsSpread, type);
     }
     const ignore = perStack(FX.unnoticedFor, run.perkStacks('unnoticed'));
-    if (ignore && !h.def.boss) h.ignoresBunnyFor = Math.max(h.ignoresBunnyFor ?? 0, ignore);
+    if (ignore && !h.def.boss) run.hazards.status.ignoreBunny(h, ignore);
   }
 
   /** Smother: true if it absorbed the (clogged, non-boss, small enough) Hazard Lint touched. */
   private smother(run: Run, h: Hazard): boolean {
-    if (run.perkStacks('smother') <= 0 || h.def.boss || !((h.cloggedFor ?? 0) > 0)) return false;
+    if (run.perkStacks('smother') <= 0 || h.def.boss || !isClogged(h)) return false;
     const b = run.bunny;
     if (h.size > FX.smotherRatio * b.radius * b.stats.get('absorbRatio')) return false;
     run.hazards.absorb(h);
@@ -190,7 +159,7 @@ export class LintPerks implements System {
     const seconds = perStack(FX.lintTrailClog, stacks);
     if (!seconds) return false;
     for (const h of run.hazards.hazards) {
-      if (h.dead || h.intangible || h.def.boss || (h.cloggedFor ?? 0) > 0) continue;
+      if (h.dead || h.intangible || h.def.boss || isClogged(h)) continue;
       const reach = hazardRadius(h) + s.width / 2;
       let hit = false;
       for (let i = 1; i < s.points.length && !hit; i++) {
@@ -199,9 +168,9 @@ export class LintPerks implements System {
         hit = segmentDistance(h.x, h.z, a.x, a.z, c.x, c.z) <= reach;
       }
       if (!hit) continue;
-      // Stunned like a Decoy clog (AbilitySystem.stunHazard); the event starts the clog above.
-      h.stunnedFor = Math.max(h.stunnedFor ?? 0, seconds);
-      h.stun?.(seconds);
+      // Stunned and clogged like a Decoy clog.
+      run.hazards.status.stun(h, seconds, 'perk');
+      run.hazards.status.clog(h, seconds);
       run.events.emit('hazardClogged', { hazardId: h.id, defId: h.def.id, boss: false, seconds });
       return true;
     }
@@ -215,7 +184,6 @@ export class LintPerks implements System {
 
   dispose(): void {
     this.clearStreaks();
-    this.clogged.clear();
   }
 }
 

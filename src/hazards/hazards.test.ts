@@ -140,7 +140,7 @@ describe('absorbing Hazards', () => {
     events.on('bossDefeated', () => order.push('bossDefeated'));
     events.on('exitOpened', () => order.push('exitOpened'));
     for (let i = 1; i <= 3; i++) {
-      boss.abilityStun(run, 2, 'amass');
+      run.hazards.status.stun(boss, 2, 'wall');
       boss.onContact(run);
       // One hit per stun.
       boss.onContact(run);
@@ -170,6 +170,7 @@ describe('absorbing Hazards', () => {
     boss.onContact(run);
     expect(boss.hittable).toBe(false);
     // Recovered, but still inside the grace: touching it does nothing.
+    run.hazards.status.clear(boss);
     boss.state = 'hunt';
     b.invulnerable = 0;
     const hp = b.health;
@@ -324,7 +325,7 @@ describe('roguelike hooks', () => {
     const b = run.bunny;
     b.setRadius(5);
     const h = run.hazards.spawn('roomba', b.x + 200, b.z);
-    h.stunnedFor = 1;
+    run.hazards.status.stun(h, 1, 'perk');
     const [x0, z0] = [h.x, h.z];
     run.hazards.update(1 / 60, run);
     expect([h.x, h.z]).toEqual([x0, z0]);

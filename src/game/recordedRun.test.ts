@@ -10,7 +10,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventBus } from '../core/events';
-import { creditStatsOf } from '../meta/accountRun';
+import { creditStatsOf } from '../meta/savedRuns';
 import { createRun } from './assembly';
 import type { Run } from './run';
 import { parseRunSnapshot, type RunSnapshot } from './snapshot';

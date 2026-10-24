@@ -9,7 +9,11 @@
  * never an overwrite with a copy from page load), and with a `storage` event source it follows
  * other tabs' writes as they happen.
  *
- * To change the shape: bump SAVE_VERSION, keep the key, add a step to migrate(). Purely additive
+ * Storage goes through a VersionedStore (./versionedStore.ts): a save from a newer build is read
+ * as far as it is understood and never written (docs/adr/0001).
+ *
+ * To change the shape: bump SAVE_VERSION, keep the key, add a step to SAVE_FORMAT.migrations (and
+ * a test with a stored example of the old shape). Purely additive
  * fields with a sanitised default (like `lastDifficulty`, `characters`, `lastLoadout`, `universes`,
  * `creditedRuns`) don't need a bump.
  */
@@ -17,6 +21,7 @@ import type { KeepsakeRef } from '../data/keepsakes';
 import { DEFAULT_DIFFICULTY, isDifficultyId, type DifficultyId } from '../shared/difficulty';
 import { isRunKey } from '../shared/runCredit';
 import { hasKeepsakes, repairLoadout, sanitizeCharacterHoard, type CharacterHoard } from './hoard';
+import { decodeVersioned, encodeVersioned, type KeyValueStorage, type Reading, type StoredFound, type StoreStatus, type VersionedFormat, VersionedStore } from './versionedStore';
 
 export const SAVE_KEY = 'dust-bunny:save:v1';
 export const SAVE_VERSION = 1;
@@ -68,7 +73,8 @@ export interface SaveData {
   creditedRuns: string[];
 }
 
-export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'corrupt';
+/** How a stored save read. `newer`: a newer build wrote it, so this build reads it but never writes it. */
+export type SaveStatus = 'empty' | 'ok' | 'migrated' | 'newer' | 'corrupt';
 
 export function defaultSave(): SaveData {
   return {
@@ -139,25 +145,35 @@ function sanitizeV1(o: Record<string, unknown>): SaveData {
   return d;
 }
 
-/** Brings any known older shape up to the current version. */
-export function migrate(o: Record<string, unknown>): { data: SaveData; migrated: boolean } {
-  const version = typeof o.version === 'number' ? o.version : 0;
-  if (version === 0) {
-    // Pre-versioning prototype shape: { fluff, upgrades, character, bestRadius }.
-    return {
-      data: sanitizeV1({
-        fluff: o.fluff,
-        upgrades: o.upgrades,
-        lastCharacterId: o.lastCharacterId ?? o.character,
-        settings: o.settings,
-        stats: isObj(o.stats) ? o.stats : { bestRadius: o.bestRadius },
-      }),
-      migrated: true,
-    };
-  }
-  // v1, or a newer version written by a later build: read what we understand.
-  return { data: sanitizeV1(o), migrated: version !== SAVE_VERSION };
+/**
+ * The device save as a versioned value (./versionedStore.ts, docs/adr/0001): older shapes are
+ * migrated step by step; a newer build's save is read as far as `sanitizeV1` understands it and is
+ * never written by this build. A read also says whether the stored value had `creditedRuns` at all.
+ */
+interface StoredSave {
+  data: SaveData;
+  lostCreditedRuns: boolean;
 }
+
+export const SAVE_FORMAT: VersionedFormat<StoredSave, SaveData> = {
+  key: SAVE_KEY,
+  version: SAVE_VERSION,
+  empty: () => ({ data: defaultSave(), lostCreditedRuns: false }),
+  parse: (o) => ({ data: sanitizeV1(o), lostCreditedRuns: !Array.isArray(o.creditedRuns) }),
+  migrations: {
+    // Pre-versioning prototype shape: { fluff, upgrades, character, bestRadius }.
+    0: (o) => ({
+      fluff: o.fluff,
+      upgrades: o.upgrades,
+      lastCharacterId: o.lastCharacterId ?? o.character,
+      settings: o.settings,
+      stats: isObj(o.stats) ? o.stats : { bestRadius: o.bestRadius },
+    }),
+  },
+  serialize: (data) => data,
+};
+
+const STATUS_OF: Record<Exclude<StoredFound, 'memory'>, SaveStatus> = { empty: 'empty', current: 'ok', migrated: 'migrated', newer: 'newer', corrupt: 'corrupt' };
 
 export interface ParsedSave {
   data: SaveData;
@@ -171,27 +187,18 @@ export interface ParsedSave {
 }
 
 export function parseSave(raw: string | null | undefined): ParsedSave {
-  if (raw == null || raw === '') return { data: defaultSave(), status: 'empty', lostCreditedRuns: false };
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
-  }
-  if (!isObj(parsed)) return { data: defaultSave(), status: 'corrupt', lostCreditedRuns: false };
-  const { data, migrated } = migrate(parsed);
-  return { data, status: migrated ? 'migrated' : 'ok', lostCreditedRuns: !Array.isArray(parsed.creditedRuns) };
+  return fromRead(decodeVersioned(SAVE_FORMAT, raw));
+}
+
+function fromRead({ value, found }: { value: StoredSave; found: StoredFound }): ParsedSave {
+  return { data: value.data, status: found === 'memory' ? 'ok' : STATUS_OF[found], lostCreditedRuns: value.lostCreditedRuns };
 }
 
 export function serializeSave(data: SaveData): string {
-  return JSON.stringify(data);
+  return encodeVersioned(SAVE_FORMAT, data);
 }
 
-/** The subset of Storage we use (inject a Map-backed one in tests). */
-export interface KeyValueStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-}
+export type { KeyValueStorage, StoreStatus } from './versionedStore';
 
 export function browserStorage(): KeyValueStorage | null {
   try {
@@ -224,6 +231,11 @@ export function browserStorageEvents(): StorageEventSource | null {
  * what is stored (`update` re-reads it first), so a change from another tab is built on rather
  * than overwritten, and with `events` another tab's write is picked up as it happens (listeners
  * are notified, as for a local change).
+ *
+ * A save written by a newer build (an old tab still open after a deploy) is read as far as this
+ * build understands it and never written (docs/adr/0001): `update`, `updateIf` and `save` refuse,
+ * leave `data` and the stored value as they are, and `writeStatus` says `newer`. Nothing this page
+ * does is saved until it runs the newer build; the UI says so (src/ui/saveNotice.ts).
  */
 export class SaveStore {
   data: SaveData;
@@ -232,6 +244,9 @@ export class SaveStore {
   private listeners = new Set<(data: SaveData) => void>();
   /** The stored value `data` was last read from or written as (undefined: never read). */
   private raw: string | null | undefined;
+  /** Whether writes reach storage, as of the last read or write. */
+  private writable: StoreStatus;
+  private readonly slot: VersionedStore<StoredSave, SaveData>;
   private readonly offEvents: () => void = () => undefined;
 
   /**
@@ -246,8 +261,11 @@ export class SaveStore {
     events: StorageEventSource | null = null,
     private readonly repair: ((data: SaveData, read: Pick<ParsedSave, 'status' | 'lostCreditedRuns'>) => void) | null = null,
   ) {
-    const raw = this.readRaw();
-    const { data, status } = raw === undefined ? parseSave(null) : this.load(raw);
+    // `data` is this page's copy, so a refused write needs no second copy in the slot's memory.
+    this.slot = new VersionedStore(storage, { ...SAVE_FORMAT, key }, { memory: false });
+    const read = this.slot.read();
+    this.writable = read.status;
+    const { data, status } = read.raw === undefined ? parseSave(null) : this.load(read);
     this.data = data;
     this.status = status;
     if (events) {
@@ -261,22 +279,18 @@ export class SaveStore {
     }
   }
 
-  /** The stored value, or undefined when storage is unavailable or throws. */
-  private readRaw(): string | null | undefined {
-    try {
-      return this.storage ? this.storage.getItem(this.key) : undefined;
-    } catch {
-      return undefined;
-    }
+  /** Whether this page's changes reach storage: `newer` while a newer build's save is stored (never written here). */
+  get writeStatus(): StoreStatus {
+    return this.writable;
   }
 
   /** Parses a stored value, backing a corrupt one up to `<key>:corrupt` (it is overwritten on the next save). */
-  private load(raw: string | null): { data: SaveData; status: SaveStatus } {
-    this.raw = raw;
-    const parsed = parseSave(raw);
-    if (parsed.status === 'corrupt' && raw != null) {
+  private load(read: Reading<StoredSave>): ParsedSave {
+    this.raw = read.raw;
+    const parsed = fromRead(read);
+    if (parsed.status === 'corrupt' && read.raw != null) {
       try {
-        this.storage?.setItem(`${this.key}:corrupt`, raw);
+        this.storage?.setItem(`${this.key}:corrupt`, read.raw);
       } catch {
         /* ignore */
       }
@@ -290,39 +304,47 @@ export class SaveStore {
    * tab wrote). Unreadable storage, or a write of ours that failed, keeps `data`. True if replaced.
    */
   refresh(): boolean {
-    const raw = this.readRaw();
-    if (raw === undefined || raw === this.raw) return false;
-    this.data = this.load(raw).data;
+    const read = this.slot.read();
+    this.writable = read.status;
+    if (read.raw === undefined || read.raw === this.raw) return false;
+    this.data = this.load(read).data;
     return true;
   }
 
-  /** Writes to storage; returns false if storage is unavailable or full. */
-  save(): boolean {
-    try {
-      if (!this.storage) return false;
-      const raw = serializeSave(this.data);
-      this.storage.setItem(this.key, raw);
-      this.raw = raw;
-      return true;
-    } catch {
-      return false;
-    }
+  /**
+   * Writes `data` to storage. Anything but `ok` wrote nothing: storage is unavailable or full
+   * (`unavailable`), or holds a newer build's save (`newer`, left byte for byte as it is).
+   */
+  save(): StoreStatus {
+    const raw = serializeSave(this.data);
+    this.writable = this.slot.write(this.data);
+    if (this.writable === 'ok') this.raw = raw;
+    return this.writable;
   }
 
-  /** Mutate the latest stored data, persist and notify listeners. */
-  update(fn: (data: SaveData) => void): void {
+  /**
+   * Mutate the latest stored data, persist and notify listeners. While a newer build's save is
+   * stored, `fn` doesn't run and nothing changes. Returns where the change went (`writeStatus`).
+   */
+  update(fn: (data: SaveData) => void): StoreStatus {
     this.updateIf((d) => {
       fn(d);
       return true;
     });
+    return this.writable;
   }
 
   /**
    * Like `update`, but only writes and notifies when `fn` returns true: put checks (can this be
-   * afforded?) inside `fn`, so they see another tab's changes. Returns what `fn` returned.
+   * afforded?) inside `fn`, so they see another tab's changes. Returns what `fn` returned (false,
+   * without running it, while a newer build's save is stored).
    */
   updateIf(fn: (data: SaveData) => boolean): boolean {
     const refreshed = this.refresh();
+    if (this.writable === 'newer') {
+      if (refreshed) this.notify();
+      return false;
+    }
     const changed = fn(this.data);
     if (changed) this.save();
     if (changed || refreshed) this.notify();

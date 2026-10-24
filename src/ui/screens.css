@@ -190,6 +190,26 @@
   display: none;
 }
 
+/* On every screen while the device save is a newer build's (src/ui/saveNotice.ts). */
+.save-notice {
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + var(--safe-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 24px));
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: rgba(20, 10, 5, 0.78);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: #ffe9cf;
+  pointer-events: auto;
+}
+
 .title-hint {
   margin-top: 6px;
   color: rgba(255, 236, 214, 0.86);

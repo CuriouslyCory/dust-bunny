@@ -48,9 +48,10 @@ function moveToOpenFloor(run: Run): void {
   throw new Error('no open floor');
 }
 
-/** Clogs a Hazard as the Decoy does (stun + hazardClogged). */
+/** Clogs a Hazard as the Decoy does (stun + clog + hazardClogged). */
 function clog(run: Run, h: Hazard, seconds: number): void {
-  h.stunnedFor = seconds;
+  run.hazards.status.stun(h, seconds, 'decoy');
+  run.hazards.status.clog(h, seconds);
   run.events.emit('hazardClogged', { hazardId: h.id, defId: h.def.id, boss: !!h.def.boss, seconds });
 }
 
@@ -173,7 +174,6 @@ describe('Loose Threads', () => {
     run.hazards.clear();
     step(run, 0.5);
     expect(debrisCount(run)).toBe(0);
-    expect(getLintPerks(run)!.clogged.size).toBe(0);
   });
 });
 
@@ -200,7 +200,7 @@ describe('Lint Trail', () => {
     const mid = (x0 + b.x) / 2;
     const a = place(run, 'roomba', mid, b.z);
     a.z = b.z + a.size * 2 + b.radius * 2;
-    a.stunnedFor = 5; // parked off the streak
+    run.hazards.status.stun(a, 5, 'perk'); // parked off the streak
     step(run, DT * 2);
     expect(clogs).toHaveLength(0);
     a.z = b.z; // crosses
@@ -261,7 +261,7 @@ describe('Unnoticed', () => {
     expect(h.ignoresBunnyFor).toBe(0);
     expect(aimTarget(run, h.x, h.z, 1e6, h)).not.toBeNull();
     b.invulnerable = 0;
-    h.stunnedFor = 0;
+    run.hazards.status.clear(h);
     b.teleport(h.x + h.size * 0.5, h.z);
     run.hazards.update(DT, run);
     expect(b.health).toBeLessThan(health);

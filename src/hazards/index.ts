@@ -10,9 +10,11 @@
  *   - otherwise, if `manager.contactOverride` is set and returns true for it, that handled the
  *     contact (src/abilities: Tumble's Amass swallows small Hazards and stops charging bosses)
  *   - otherwise → hazard.onContact(run) (deal damage, knockback, suction... your call); while the
- *     Hazard ignores the Bunny (`ignoresBunnyFor`, counted down here; ignoresBunny) it runs with
- *     `bunny.harmless` set, so it still separates its body but its hit lands nothing
+ *     Hazard ignores the Bunny (`ignoresBunnyFor`; ignoresBunny) it runs with `bunny.harmless`
+ *     set, so it still separates its body but its hit lands nothing
  *   An `intangible` Hazard (the Expansion) never touches, so none of these apply to it.
+ * Status effects (stun, clog, Grounded, Unnoticed) and boss Hits go through `manager.status`
+ * (./status.ts), which the manager ticks once per frame before any Hazard updates.
  * Spawning policy is pluggable via `manager.director`.
  */
 import type { Object3D } from 'three';
@@ -23,6 +25,7 @@ import type { Run } from '../game/run';
 import { SYSTEM_ORDER, type System } from '../game/system';
 import { canAbsorb } from '../systems/absorb';
 import { ignoresBunny } from './common';
+import { HazardStatus, type StunCause } from './status';
 import type { RoomType } from '../world/types';
 import './events';
 
@@ -52,11 +55,19 @@ export interface Hazard {
    * false), so it is never absorbed or contacted, and Abilities and Spiky Dash ignore it.
    */
   readonly intangible?: boolean;
+  /** Seconds of Stun left: no movement or attacks. Written only by HazardStatus (./status.ts), like the timers below. */
+  readonly stunnedFor?: number;
+  /** Seconds of Clog left (the Decoy's or a Lint Trail streak's; Lint's Perks read it). */
+  readonly cloggedFor?: number;
+  /** Seconds a boss stays Grounded after a Discharge: it can't be Discharged again meanwhile. */
+  readonly groundedFor?: number;
   /**
    * Seconds this Hazard ignores the Bunny (Lint's Unnoticed): no aiming at it (aimTarget), no
-   * chasing it and no contact damage. Counted down by the manager; read through ignoresBunny.
+   * chasing it and no contact damage. Read through ignoresBunny.
    */
-  ignoresBunnyFor?: number;
+  readonly ignoresBunnyFor?: number;
+  /** Reaction to a stun HazardStatus just applied (a boss drops its charge); the stun itself is `stunnedFor`. */
+  onStunned?(cause: StunCause, seconds: number): void;
   /** Bunny touches the Hazard and is too small to absorb it. */
   onContact?(run: Run): void;
   onAbsorbed?(run: Run): void;
@@ -118,6 +129,8 @@ export class HazardManager implements System {
   director: HazardDirector | null = null;
   /** Asked first on every non-absorbing contact (see file header). */
   contactOverride: ContactOverride | null = null;
+  /** Status effects and the boss Hit ledger (./status.ts). */
+  readonly status: HazardStatus;
   private nextId = 1;
   /** Hazards absorbed this tick (removed with hazardRemoved { absorbed: true }). */
   private readonly absorbedNow = new Set<Hazard>();
@@ -125,7 +138,9 @@ export class HazardManager implements System {
   constructor(
     private readonly run: Run,
     readonly rng: Rng,
-  ) {}
+  ) {
+    this.status = new HazardStatus(run);
+  }
 
   spawn(defId: string, x: number, z: number): Hazard {
     const def = hazardRegistry.require(defId);
@@ -155,13 +170,13 @@ export class HazardManager implements System {
   }
 
   update(dt: number, run: Run): void {
+    this.status.tick(this.hazards, dt);
     this.director?.(dt, run, this);
     const b = run.bunny;
     const absorbed = this.absorbedNow;
     absorbed.clear();
     for (const h of [...this.hazards]) {
       if (h.dead) continue;
-      if (h.ignoresBunnyFor) h.ignoresBunnyFor = Math.max(0, h.ignoresBunnyFor - dt);
       h.update(dt, run);
       if (h.dead || !HazardManager.touches(run, h)) continue;
       if (canAbsorb(b.radius, b.stats.get('absorbRatio'), h.size)) {

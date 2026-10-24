@@ -18,7 +18,7 @@ import { getDifficulty } from '../../data/difficulty';
 import { getTier } from '../../data/tiers';
 import type { Game } from '../../game/game';
 import { button, fmtTime, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea } from '../components';
-import { creditStatsOf } from '../../meta/accountRun';
+import { creditStatsOf } from '../../meta/savedRuns';
 import { endsUniverse, getMeta } from '../../meta/meta';
 import { clearedFluffBonus, fluffForRun, VICTORY_FLUFF_MULTIPLIER } from '../../meta/fluff';
 import { AREAS } from '../../data/areas';
@@ -143,7 +143,7 @@ function registerDefaultSections(): void {
       const fluff = fluffForRun(e.reason, creditStatsOf(e.stats));
       const meta = getMeta();
       const paint = (): void => {
-        const credit = game.accountRuns.creditOf(e.runKey);
+        const credit = game.savedRuns.creditOf(e.runKey);
         const award = credit.state === 'credited' ? credit.award : null;
         const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
         const note =

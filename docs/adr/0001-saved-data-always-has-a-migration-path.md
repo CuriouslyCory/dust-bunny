@@ -15,8 +15,10 @@ We decided this because Vercel deploys swap the build under players who still ha
 
 ## Consequences
 
-Current code that doesn't meet this yet:
+Every value the game keeps in localStorage goes through one module, `VersionedStore` (`src/meta/versionedStore.ts`): the caller gives the key, the current version, a parse function and the migration steps, and the module runs the migrations, reads a newer version as far as it is understood without ever writing it, keeps a write storage refuses in memory, and reports `ok`, `newer` or `unavailable`. The device save, the saved Run slot, the known Runs, the Run credit claims and the credited Runs mirror all use it, so the rule is written and tested once.
 
-- `migrate()` in `src/meta/save.ts` reads a newer save as v1, which drops fields it doesn't know, and the next `save()` writes that back. An older build must not rewrite a save whose version is newer than its own.
+Current code that didn't meet this, and how it was fixed or what remains:
+
+- `migrate()` in `src/meta/save.ts` read a newer save as v1, which dropped fields it didn't know, and the next `save()` wrote that back. (Done, issue #66: `SaveStore` is on `VersionedStore`; with a newer save stored, `update`, `updateIf` and `save` refuse and say `newer`, the stored value is left byte for byte, and the player sees a banner saying nothing in that tab is saved until they reload. The cloud save neither connects nor uploads from such a tab.)
 - The saved Run has `SNAPSHOT_VERSION` but no migration. Another version reads as no saved Run, and the slot deletes it (`src/meta/suspendedRun.ts`). A snapshot from an older version needs a migration step; one from a newer version must be left in the slot (and on the server). (Done with the Account's saved Run, ADR 0002: `migrateRunSnapshot` in `src/shared/savedRun.ts`, and the slot and server leave a newer one alone.)
 - The cloud save (`Progress`, `src/shared/progress.ts`) has no version field. It changes additively today: `loadouts` is an example, where a copy without it means "unknown" and the other side's are kept. The server also converts old Hoard keys on read and write. Its first breaking change must add a version field, and the server, which always runs the newest build, migrates stored rows when it reads them.

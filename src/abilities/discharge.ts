@@ -23,6 +23,7 @@ import type { Debris } from '../entities/debris';
 import type { Hazard } from '../hazards';
 import { bunnyCanAbsorb } from '../hazards/common';
 import { scatterDebrisPieces } from '../hazards/shed';
+import { isGrounded } from '../hazards/status';
 import { maxSpeedFor } from '../systems/movement';
 import { AbilitySystem, hazardRadius, isBoss, registerAbilityController, type AbilityController } from './system';
 import { BoltView, SparkMarkerView } from './view';
@@ -122,7 +123,7 @@ export class DischargeAbility implements AbilityController {
   /** Can this Hazard be shorted out right now? */
   canTarget(h: Hazard): boolean {
     if (h.dead || h.intangible || bunnyCanAbsorb(this.system.run, h.size)) return false;
-    if (isBoss(h)) return !(h.groundedFor && h.groundedFor > 0) && this.system.canStunBoss(h);
+    if (isBoss(h)) return !isGrounded(h) && this.system.run.hazards.status.canStun(h, 'discharge');
     return true;
   }
 
@@ -185,8 +186,8 @@ export class DischargeAbility implements AbilityController {
     run.entityRoot.add(bolt.root);
     this.bolts.push(bolt);
     if (isBoss(h)) {
-      this.system.stunBoss(h, p.bossStun, 'discharge');
-      h.groundedFor = p.groundedFor;
+      run.hazards.status.stun(h, p.bossStun, 'discharge');
+      run.hazards.status.ground(h, p.groundedFor);
     } else {
       h.dead = true;
       scrap.push(...scatterDebrisPieces(run, this.system.rng, h.x, h.z, p.scrapPieces, p.scrapSize * b.radius, hr * 0.3, hr + b.radius * 1.5));

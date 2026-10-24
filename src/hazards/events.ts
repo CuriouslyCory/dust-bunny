@@ -1,5 +1,5 @@
 /** Hazard-related events, added to GameEvents by augmentation (see src/core/events.ts). */
-export {};
+import type { StunCause } from './status';
 
 declare module '../core/events' {
   interface GameEvents {
@@ -12,11 +12,14 @@ declare module '../core/events' {
     /** An area boss arrived. `absorbRadius` = Bunny radius needed to absorb it. */
     bossSpawned: { hazardId: number; absorbRadius: number; name: string };
     /**
-     * The boss is stunned and can be rammed: it crashed into a wall (`cause` 'wall'), Sagittarius A*
-     * swallowed star clusters too fast ('indigestion'), or an Ability stunned it ('decoy' clog,
-     * 'amass': a charge into an Amassing Tumble or a Collapse, 'discharge').
+     * The boss is stunned for `seconds` and can be rammed (emitted by HazardStatus.stun): it crashed
+     * into a wall (`cause` 'wall'), Sagittarius A* swallowed star clusters too fast ('indigestion'),
+     * Spiky Dash ('spiky'), or an Ability stunned it ('decoy' clog, 'amass': a charge into an
+     * Amassing Tumble or a Collapse, 'discharge').
      */
-    bossStunned: { hazardId: number; cause?: 'wall' | 'indigestion' | 'decoy' | 'amass' | 'discharge' };
+    bossStunned: { hazardId: number; cause: StunCause; seconds: number };
+    /** A clog ran out on a live Hazard (HazardStatus; not for one that died or left first). */
+    hazardUnclogged: { hazardId: number; defId: string };
     /**
      * Sagittarius A* swallowed a star cluster (Debris `typeId`): its `fullness` (meals of the last
      * few seconds) out of the `threshold` that stuns it.

@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest';
 describe('leaderboard submissions with max Loadouts (balance bot)', () => {
   it('every submission of a short seeded Run validates', () => {
     const root = fileURLToPath(new URL('../..', import.meta.url));
-    // s4: the bot clears the house within the 7 minutes, so an Area board entry is checked too.
-    const out = execFileSync(process.execPath, ['--import', 'tsx', 'scripts/sim.ts', '--quiet', '--validate', '--loadout=max', '--chars=zap', '--minutes=7', 's4'], {
+    // s5: the bot clears the house within the 7 minutes, so an Area board entry is checked too.
+    const out = execFileSync(process.execPath, ['--import', 'tsx', 'scripts/sim.ts', '--quiet', '--validate', '--loadout=max', '--chars=zap', '--minutes=7', 's5'], {
       cwd: root,
       encoding: 'utf8',
     });

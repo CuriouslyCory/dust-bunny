@@ -105,14 +105,10 @@ export class DecoyAbility implements AbilityController {
     const run = this.system.run;
     for (const h of run.hazards.hazards) {
       if (h.dead || h.ranged || h.intangible || !touchesDecoy(h, d)) continue;
-      let seconds = 0;
-      if (isBoss(h)) {
-        seconds = this.p.bossClogStun;
-        if (!this.system.stunBoss(h, seconds, 'decoy')) seconds = 0;
-      } else {
-        seconds = this.p.clogStun;
-        this.system.stunHazard(h, seconds);
-      }
+      // A boss inside its Ability-stun limit pops the Decoy without a clog (seconds 0).
+      let seconds = isBoss(h) ? this.p.bossClogStun : this.p.clogStun;
+      if (run.hazards.status.stun(h, seconds, 'decoy')) run.hazards.status.clog(h, seconds);
+      else seconds = 0;
       run.events.emit('hazardClogged', { hazardId: h.id, defId: h.def.id, boss: !!h.def.boss, seconds });
       this.end('clogged');
       return true;
