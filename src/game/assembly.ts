@@ -19,6 +19,7 @@ import { Rng } from '../core/rng';
 import { HazardDirector } from '../hazards/director';
 import { HazardFx } from '../hazards/fx';
 import '../hazards/content';
+import { installCharacterPerks } from '../perks/character';
 import { installCombatHooks } from '../perks/combat';
 import { registerPerks } from '../perks/perks';
 import { createPickupDirector } from '../pickups/director';
@@ -68,6 +69,7 @@ export function installGameplay(run: Run, rules: GameplayRules = {}): void {
   }
   if (rules.pickups !== false) run.pickups.director ??= createPickupDirector();
   if (rules.abilities !== false) installAbilities(run);
+  installCharacterPerks(run);
 }
 
 /** The Run's Hazard director, if Hazard spawning is installed. */

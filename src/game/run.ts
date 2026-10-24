@@ -53,7 +53,7 @@ export interface RunConfig {
   area?: AreaId;
   /** Extra stat modifiers applied at start (permanent Upgrades from the Shop). */
   modifiers?: StatModifier[];
-  /** Perks granted at start (debug / testing). */
+  /** Perks granted at start (debug / testing). Another Character's Perks are skipped. */
   perks?: string[];
   /** Keepsakes tucked in for this Run (0–2, the Character's own types). Fixed for the Run. */
   loadout?: Loadout;
@@ -217,7 +217,11 @@ export class Run {
       this.beginArea();
       return;
     }
-    for (const id of config.perks ?? []) this.applyPerk(id);
+    for (const id of config.perks ?? []) {
+      // Another Character's Perks are skipped (`pnpm sim --perks=` covers every Character).
+      const owner = perkRegistry.get(id)?.character;
+      if (!owner || owner === config.characterId) this.applyPerk(id);
+    }
     if (!config.area || config.area === 'house') this.beginArea();
     if (config.area && config.area !== 'house') {
       // Debug / testing start: a Bunny the size it would be after the previous area's boss.
@@ -498,6 +502,13 @@ export class Run {
     this.debris.remove(d);
     this.debrisAbsorbed++;
     this.absorbMass(d.size, d.type.mass, d.type.id, { x: d.x, y: d.size * 0.5, z: d.z }, 'debris');
+  }
+
+  /** Perk stacks taken so far (resumed ones included); changes whenever a Perk is applied. */
+  get perkVersion(): number {
+    let n = 0;
+    for (const v of this.perks.values()) n += v;
+    return n;
   }
 
   perkStacks(id: string): number {

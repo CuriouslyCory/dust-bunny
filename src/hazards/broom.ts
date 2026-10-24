@@ -73,7 +73,7 @@ export class Broom extends BaseHazard {
     const b = run.bunny;
     if (this.state === 'idle' && this.timer <= 0) {
       // Aim the arc centre at the Bunny (or the Decoy) when it is in range, otherwise sweep somewhere nearby.
-      const t = aimTarget(run, this.pivotX, this.pivotZ, BROOM.aggroRange + b.radius);
+      const t = aimTarget(run, this.pivotX, this.pivotZ, BROOM.aggroRange + b.radius, this);
       const dx = (t?.x ?? b.x) - this.pivotX;
       const dz = (t?.z ?? b.z) - this.pivotZ;
       const near = !!t && Math.hypot(dx, dz) < BROOM.aggroRange + t.radius;

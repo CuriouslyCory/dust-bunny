@@ -396,6 +396,22 @@
   display: none;
 }
 
+/* A Character Perk: its Character's name on a pill in that Character's fur colour. */
+.perk-card-character {
+  border-color: var(--perk-owner);
+}
+
+.perk-owner {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--perk-owner);
+  color: #1d1b24;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 @media (max-width: 640px) {
   .perk-cards {
     gap: 10px;

@@ -97,7 +97,7 @@ export class UprightVacuum extends BaseHazard {
     this.timer -= dt;
     if (c.spinNode) this.spin(c.spinNode, dt * (c.spinRate ?? 0));
     const range = suctionReachFor(c.coneRange, b.stats.get('suctionMultiplier'));
-    const t = aimTarget(run, this.x, this.z, range + this.size);
+    const t = aimTarget(run, this.x, this.z, range + this.size, this);
     if (t) this.yaw = turnTowards(this.yaw, yawOf(t.x - this.x, t.z - this.z), c.turnRate * dt);
     const speed = this.tierSpeed(run, c.speed) * (this.state === 'on' ? 0.5 : 1);
     const m = moveCircle(run.house, this.x, this.z, this.size, c.height, Math.sin(this.yaw) * speed * dt, Math.cos(this.yaw) * speed * dt);

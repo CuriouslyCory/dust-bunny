@@ -101,7 +101,7 @@ export class Pulsar extends BaseHazard {
     const rate = tierValue(c.sweepRate, run.tier);
     this.beamYaw = wrapAngle(this.beamYaw + this.dir * rate * dt);
     this.timer -= dt;
-    const t = aimTarget(run, this.x, this.z, range);
+    const t = aimTarget(run, this.x, this.z, range, this);
     switch (this.state) {
       case 'idle': {
         if (!t) break;
