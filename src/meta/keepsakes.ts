@@ -14,7 +14,8 @@
  *   never showed (the Run ended first) stays open on the results screen until the player leaves it.
  *   Leaving without choosing keeps the first offer.
  * - Credited on `bossDefeated`, so a Run that later ends in death or a quit keeps them.
- * - Unranked Runs (`?debug`, `?area=` starts) drop nothing and don't count the boss as beaten.
+ * - Unranked Runs (`?debug`, `?area=` starts, cheats from the moment they come on) drop nothing and
+ *   don't count the boss as beaten.
  * - Hits don't matter: how a boss is beaten never changes the reward.
  *
  *   const tracker = new KeepsakeTracker(meta, (e) => events.emit('keepsakesDropped', e));
@@ -129,6 +130,11 @@ export class KeepsakeTracker {
     const drops = (resumed?.drops ?? []).map((d) => ({ ...d, ref: { ...d.ref }, locked: true }));
     this.current = { ...info, drops, result: null, settled: false, salt: resumed?.salt ?? this.newSalt() };
     return this.current;
+  }
+
+  /** Cheats came on mid-Run: no more drops (those already credited stay). */
+  unrank(): void {
+    if (this.current) this.current.ranked = false;
   }
 
   /** What a saved Run keeps of this tracker (Save & quit; null without a Run). */

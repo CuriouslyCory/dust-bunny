@@ -1,0 +1,190 @@
+/* ── Cheats: the pause menu's code field ─────────────────── */
+.cheat-code {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.cheat-code-form {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.cheat-code-form[hidden] {
+  display: none;
+}
+
+.cheat-code-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 3px;
+  text-align: center;
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.cheat-code-input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.cheat-code-msg {
+  margin: 0;
+  min-height: 0;
+  font-size: var(--fs-sm);
+  color: var(--berry-700);
+}
+
+.cheat-code-msg:empty {
+  display: none;
+}
+
+.cheat-code-form.shake {
+  animation: cheat-shake 0.4s var(--ease-out);
+}
+
+@keyframes cheat-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+/* ── Cheats panel ─────────────────────────────────────────── */
+.cheats-panel {
+  width: min(640px, 100%);
+}
+
+.cheats-panel .panel-title {
+  animation: cheat-wobble 2.4s ease-in-out infinite;
+}
+
+@keyframes cheat-wobble {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.cheats-body {
+  display: grid;
+  gap: 14px;
+}
+
+.cheat-group > :not(legend) {
+  clear: both;
+}
+
+.cheat-acts,
+.cheat-perks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.cheat-act.cheat-here {
+  opacity: 1;
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+.cheat-perk {
+  justify-content: flex-start;
+}
+
+.cheat-perk .btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+.cheat-perk-count {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.cheat-perk.cheat-maxed {
+  opacity: 0.6;
+}
+
+.cheat-perk.cheat-maxed .cheat-perk-count {
+  color: var(--mint-700);
+}
+
+.cheat-hint {
+  margin: 0 0 4px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  text-align: left;
+}
+
+.cheat-tier {
+  font-weight: 700;
+  color: var(--accent-700);
+}
+
+.cheat-pranks {
+  padding: 8px 0 4px;
+}
+
+.cheat-status {
+  margin: 0;
+  min-height: 1.4em;
+  font-weight: 700;
+  color: var(--accent-700);
+}
+
+.cheat-status.pop {
+  animation: cheat-pop 0.35s var(--ease-bounce);
+}
+
+@keyframes cheat-pop {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/* ── Page-wide gags ───────────────────────────────────────── */
+.cheat-disco {
+  animation: cheat-disco 4s linear infinite;
+}
+
+@keyframes cheat-disco {
+  from {
+    filter: hue-rotate(0deg) saturate(1.6);
+  }
+  to {
+    filter: hue-rotate(360deg) saturate(1.6);
+  }
+}
+
+.cheat-australia {
+  transform: rotate(180deg);
+}
+
+.cheat-comic-sans,
+.cheat-comic-sans * {
+  font-family: 'Comic Sans MS', 'Comic Sans', 'Comic Neue', 'Chalkboard SE', cursive !important;
+}

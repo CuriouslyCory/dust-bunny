@@ -10,6 +10,7 @@ import { AREAS, areaUnit } from '../data/areas';
 import { CAP_PRIORITY, getCharacter } from '../data/characters';
 import { difficultyModifiers, getDifficulty, type DifficultyDef, type DifficultyId } from '../data/difficulty';
 import { DEBRIS_TYPES } from '../data/debris';
+import { TUNING } from '../data/tuning';
 import { isLoadoutFor, LOADOUT_SLOTS, type KeepsakeRef, type Loadout } from '../data/keepsakes';
 import { tierForRadius } from '../data/tiers';
 import { Bunny } from '../entities/bunny';
@@ -69,7 +70,7 @@ export interface RunConfig {
  * Each generator works in its Area's unit (`AREAS[area].unit`).
  */
 const AREA_WORLDS: Record<AreaId, { generate: (seed: string) => HouseLayout; cellSize?: number; startRadius: number }> = {
-  house: { generate: generateHouse, startRadius: 0 },
+  house: { generate: generateHouse, cellSize: TUNING.debris.cellSize, startRadius: 0 },
   neighborhood: { generate: generateNeighborhood, cellSize: NEIGHBORHOOD.debrisCellSize, startRadius: NEIGHBORHOOD.debugStartRadius },
   city: { generate: generateCity, cellSize: CITY.debrisCellSize, startRadius: CITY.debugStartRadius },
   region: { generate: generateRegion, cellSize: REGION.debrisCellSize, startRadius: REGION.debugStartRadius * areaUnit('region') },
@@ -265,6 +266,18 @@ export class Run {
     if (area === 'universe') this.universeCleared = true;
   }
 
+  private unmarkCleared(area: AreaId): void {
+    if (area === 'house') this.houseCleared = false;
+    if (area === 'neighborhood') this.neighborhoodCleared = false;
+    if (area === 'city') this.cityCleared = false;
+    if (area === 'region') this.regionCleared = false;
+    if (area === 'continent') this.continentCleared = false;
+    if (area === 'globe') this.globeCleared = false;
+    if (area === 'solar_system') this.solarSystemCleared = false;
+    if (area === 'galaxy') this.galaxyCleared = false;
+    if (area === 'universe') this.universeCleared = false;
+  }
+
   /** Opens the current area's exit once its boss is absorbed (emits exitOpened). */
   openExit(): void {
     this.markCleared(this.area);
@@ -360,6 +373,36 @@ export class Run {
     if (area === 'solar_system') this.solarSystemAt = this.time;
     if (area === 'galaxy') this.galaxyAt = this.time;
     if (area === 'universe') this.universeAt = this.time;
+    this.arrive(area);
+  }
+
+  /**
+   * Cheats (src/cheats): moves the Run to any Area, earlier ones included. A later Area is entered
+   * as with `enterArea` (the Bunny grown to at least that Area's start size first). An earlier one
+   * is entered at its start size (`radius` world units of that Area), and it and every Area after it
+   * count as not cleared again, so their bosses come back. The Run's Tier is left as it is.
+   */
+  jumpToArea(area: AreaId, radius: number): void {
+    if (this.ended || area === this.area) return;
+    const to = AREA_ORDER.indexOf(area);
+    if (to > AREA_ORDER.indexOf(this.area)) {
+      if (this.bunny.realRadius < areaStartRadius(area)) this.bunny.setRadius(areaStartRadius(area) / this.bunny.unit);
+      this.enterArea(area);
+      return;
+    }
+    for (const a of AREA_ORDER.slice(to)) {
+      this.unmarkCleared(a);
+      if (a !== area) this.setAreaTime(a, null);
+    }
+    this.areasDone = this.areasDone.filter((s) => AREA_ORDER.indexOf(s.area) < to);
+    if (to <= AREA_ORDER.indexOf('galaxy')) this.bunny.form = 'dust';
+    this.area = area;
+    this.setAreaTime(area, this.time);
+    this.arrive(area, radius);
+  }
+
+  /** Swaps in `area`'s world and puts the Bunny at its spawn (at `radius` world units, if given). */
+  private arrive(area: AreaId, radius?: number): void {
     const world = AREA_WORLDS[area];
     this.house = world.generate(this.config.seed);
     this.debris.reset(world.cellSize ?? this.debris.hash.cellSize);
@@ -367,7 +410,10 @@ export class Run {
     this.pickups.clearFloor();
     this.bunny.rebase(AREAS[area].unit);
     const arrival = AREAS[area].arrivalRadius;
-    if (arrival !== undefined) this.bunny.leapTo(arrival);
+    if (radius !== undefined) {
+      this.bunny.setRadius(radius);
+      this.bunny.maxRadius = this.bunny.radius;
+    } else if (arrival !== undefined) this.bunny.leapTo(arrival);
     this.bunny.teleport(this.house.spawn.x, this.house.spawn.z);
     // Fresh air: arriving in a new area restores a heart (not on Hardcore).
     this.bunny.heal(this.difficulty.areaHeal);
@@ -483,7 +529,7 @@ export class Run {
     return at[area];
   }
 
-  private setAreaTime(area: AreaId, sec: number): void {
+  private setAreaTime(area: AreaId, sec: number | null): void {
     if (area === 'neighborhood') this.neighborhoodAt = sec;
     if (area === 'city') this.cityAt = sec;
     if (area === 'region') this.regionAt = sec;

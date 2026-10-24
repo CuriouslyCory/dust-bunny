@@ -190,6 +190,8 @@ export class BunnyView {
   private readonly body = new Group();
   private readonly rollGroup = new Group();
   private readonly eyes = new Group();
+  /** Extra props worn on the body (cheats: the party hat), in units of the Bunny's radius; turns with the heading. */
+  readonly accessories = new Group();
   private readonly pupils: Group[] = [];
   private readonly lids: Mesh[] = [];
   private readonly ball: Mesh;
@@ -336,6 +338,7 @@ export class BunnyView {
     this.body.add(this.rollGroup);
     this.buildEyes();
     this.body.add(this.eyes);
+    this.body.add(this.accessories);
     this.root.add(this.body);
 
     const cs = new ContactShadows();
@@ -587,6 +590,11 @@ export class BunnyView {
     return this.stuck.length;
   }
 
+  /** Scales each eye in place (1: as built). Cheats use it. */
+  setEyeScale(scale: number): void {
+    for (const eye of this.eyes.children) eye.scale.setScalar(scale);
+  }
+
   update(alpha: number, frameDt: number): void {
     const b = this.bunny;
     const dt = Math.min(frameDt, 0.1);
@@ -728,6 +736,7 @@ export class BunnyView {
       this.eyes.visible = open > 0.03;
     } else this.eyes.visible = true;
     this.eyes.position.y = Math.sin(this.time * 6) * r * 0.015 * Math.min(1, speedN);
+    this.accessories.scale.setScalar(r);
 
     // Contact shadow on the floor, under the (squashed) ball.
     this.shadow.position.y = -r * sy + 0.05;
