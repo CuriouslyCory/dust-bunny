@@ -252,6 +252,19 @@ function savedRunIf(store: SuspendedRunStore, runKey: string | undefined): RunSn
 }
 
 /**
+ * Whether saving `next` over `prev` credits `prev` here, on the device: a different Run, unless
+ * `prev` is a copy of the Account's saved Run the server confirmed (mirrored from the server, say,
+ * by any tab) and `next` goes to the same Account. The server's copy of that Run may have been
+ * taken by another device since, which will credit it when it ends; so it is credited only from
+ * the server's answer to `next`'s upload, which hands back a stored copy it really replaced
+ * (src/meta/accountRun.ts, `stored`; docs/adr/0002).
+ */
+export function creditsReplacedOnDevice(prev: RunSnapshot, next: RunSnapshot): boolean {
+  if (prev.runKey === next.runKey) return false;
+  return !(prev.account?.synced && next.account?.userId === prev.account.userId);
+}
+
+/**
  * Save & quit: stores `snapshot` in the slot. A different Run already there (saved from another
  * tab or window) is replaced and counted as a quit, as New run would (its Fluff and stats
  * credited); the same Run saved again (same `runKey`) credits nothing. A write that doesn't reach
@@ -263,7 +276,7 @@ export function saveSuspendedRun(store: SuspendedRunStore, snapshot: RunSnapshot
   const replaced = !!prev && prev.runKey !== snapshot.runKey;
   // Credited only once it is really gone: after a failed write the old Run is still in storage, and
   // another tab or a reload can still resume or abandon it (and be credited then).
-  if (store.save(snapshot) && prev && replaced) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (store.save(snapshot) && prev && replaced && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
   return replaced;
 }
 
@@ -325,7 +338,7 @@ export function storePausedRun(store: SuspendedRunStore, snapshot: RunSnapshot, 
   snapshot.handoffId = handoffId;
   const prev = store.peek();
   const stored = store.save(snapshot);
-  if (stored && prev && prev.runKey !== snapshot.runKey) meta.awardRun({ reason: 'quit', stats: prev.stats });
+  if (stored && prev && creditsReplacedOnDevice(prev, snapshot)) meta.awardRun({ reason: 'quit', stats: prev.stats });
   return stored;
 }
 

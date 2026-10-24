@@ -48,7 +48,7 @@ import type { Run, RunConfig } from './run';
 import type { RunSnapshot } from './snapshot';
 import { getMeta } from '../meta/meta';
 import { gateRunEnding, getAccountRuns } from '../meta/accountRun';
-import { getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
+import { creditsReplacedOnDevice, getSuspendedRuns, saveSuspendedRun, withSavedRunLock } from '../meta/suspendedRun';
 import { RunHandoff, type HandoffLoss, type HandoffReason } from './handoff';
 import { RunView } from './runView';
 
@@ -458,10 +458,12 @@ export class Game {
     const meta = getMeta();
     const save = (): boolean => {
       // The device first, then the Account (src/meta/accountRun.ts).
-      const prev = store.peek()?.runKey ?? null;
       this.accountRuns.tag(snapshot);
+      // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
+      const prev = store.peek();
+      const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
       const replaced = saveSuspendedRun(store, snapshot, meta);
-      this.accountRuns.stored(snapshot, prev);
+      this.accountRuns.stored(snapshot, credited);
       return replaced;
     };
     void withSavedRunLock(save).catch(save);

@@ -9,7 +9,7 @@ import type { Game } from '../game/game';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import type { ServerSavedRun } from '../shared/savedRun';
-import { AccountRuns, gateRunEnding, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
+import { abandonSavedRun, AccountRuns, gateRunEnding, SavedRunNetError, type PutResult, type SavedRunApi, type TakeResult } from './accountRun';
 import { MetaProgress } from './meta';
 import { abandonSuspendedRun, resumeSuspendedRun, SUSPENDED_RUN_KEY, SuspendedRunStore } from './suspendedRun';
 
@@ -60,8 +60,10 @@ class FakeServer {
     const view = ({ ended: _ended, ...r }: Row): ServerSavedRun => ({ ...structuredClone(r), updatedAt: new Date(0).toISOString() });
     return {
       get: async () => {
+        // Read as the request arrives; a slow answer (`gate`, `hold`) reports the row as it was then.
+        const row = this.row && !this.row.ended ? view(this.row) : null;
         await net('get');
-        return this.row && !this.row.ended ? view(this.row) : null;
+        return row;
       },
       put: async (b): Promise<PutResult> => {
         await net('put');
@@ -296,7 +298,8 @@ describe('Account saved Run (two devices, one server)', () => {
     await settle(a.runs);
     a.handoff.forget();
     a.runs.newRun();
-    // The device slot still holds `first`: its replace credits it, so the server's replace doesn't again.
+    // The device slot still holds `first`, confirmed by the server: the slot's replace leaves it to the
+    // server's answer, which hands it back (nobody took it), and it is credited from that, once.
     a.handoff.store(snapshot('second'), 'pause');
     await settle(a.runs);
     expect(a.meta.calls).toHaveLength(1);
@@ -702,5 +705,115 @@ describe('Account saved Run (two devices, one server)', () => {
     expect(server.row).toMatchObject({ runKey: s.runKey, snapshot: null, ended: true });
     expect(a.store.peek()).toBeNull();
     expect(a.meta.calls).toEqual([]);
+  });
+  describe('a title read that overlaps Resume or New run is read again, not mirrored', () => {
+    it('New run: the abandoned (and credited) Run is not restored into the slot and credited again', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const b = device(server);
+      b.handoff.store(snapshot(), 'pause');
+      await settle(b.runs);
+      b.handoff.forget(); // Save & quit on B
+      await a.runs.syncTitle(); // A's title shows it, from the Account
+      let open!: () => void;
+      server.hold.get = new Promise((r) => (open = r));
+      const syncing = a.runs.syncTitle(); // the title refreshes (an Account event, say)
+      await new Promise((r) => setTimeout(r, 5));
+      expect(server.calls.at(-1)).toBe('get'); // read before New run, answered after it
+      const shown = a.store.peek()!;
+      expect(await a.runs.abandon(shown, () => abandonSuspendedRun(a.store, a.meta))).toBe('done');
+      expect(a.meta.calls).toHaveLength(1);
+      open();
+      await syncing;
+      expect(a.store.peek()).toBeNull();
+      // The new Run starts: nothing left to abandon (and credit) again.
+      a.runs.newRun();
+      expect(abandonSavedRun(a.store, a.meta, a.runs)).toBe(false);
+      expect(a.meta.calls).toHaveLength(1);
+    });
+
+    it('Resume: the Run this page now plays is not mirrored back into the slot', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const s = snapshot();
+      a.handoff.store(s, 'pause');
+      await settle(a.runs);
+      a.handoff.forget();
+      let open!: () => void;
+      server.hold.get = new Promise((r) => (open = r));
+      const syncing = a.runs.syncTitle();
+      await new Promise((r) => setTimeout(r, 5));
+      const shown = a.store.peek()!;
+      const { game } = fakeGame();
+      expect(await a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey))).toBe('mine');
+      open();
+      await syncing;
+      expect(a.store.peek()).toBeNull();
+      expect(a.meta.calls).toEqual([]);
+    });
+
+    it('a title read waits for a Resume still on its way', async () => {
+      const server = new FakeServer();
+      const a = device(server);
+      const s = snapshot();
+      a.handoff.store(s, 'pause');
+      await settle(a.runs);
+      a.handoff.forget();
+      let open!: () => void;
+      server.hold.take = new Promise((r) => (open = r));
+      const shown = a.store.peek()!;
+      const { game } = fakeGame();
+      const resuming = a.runs.resume(shown, () => resumeSuspendedRun(game, a.store, new MetaProgress(null), shown.runKey));
+      const syncing = a.runs.syncTitle();
+      await new Promise((r) => setTimeout(r, 5));
+      expect(server.calls.filter((c) => c === 'get')).toEqual([]);
+      open();
+      expect(await resuming).toBe('mine');
+      await syncing;
+      expect(a.store.peek()).toBeNull();
+    });
+  });
+
+  it('a mirrored Account copy replaced on pause is credited only by the server, so a Run taken elsewhere isn’t credited twice', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const b = device(server);
+    const r = snapshot('r');
+    b.handoff.store(r, 'pause');
+    await settle(b.runs);
+    // Another tab of A's browser (one slot) mirrors R from the server on its title.
+    const titleTab = new AccountRuns({ api: server.api(), store: a.store, meta: a.meta, retryMs: 1, maxRetryMs: 4, hidden: () => false });
+    titleTab.setUser('u1');
+    await titleTab.syncTitle();
+    expect(a.store.peek()).toMatchObject({ runKey: r.runKey, account: { synced: true } });
+    // B unpauses R: the server take is confirmed, so B will credit R when it ends.
+    expect(await b.handoff.takeBack()).toBe(true);
+    await settle(b.runs);
+    expect(await b.runs.confirmHeld(r.runKey)).toBe(true);
+    // This tab of A plays S and pauses: S replaces the stale copy of R in the slot...
+    a.runs.newRun();
+    a.handoff.store(snapshot('s'), 'pause');
+    await settle(a.runs);
+    // ...but R is B's Run in progress: no stored copy came back from the server, so nothing is credited here.
+    expect(a.meta.calls).toEqual([]);
+    expect(b.lostRuns).toEqual([]);
+  });
+
+  it('a mirrored Account copy nobody took is credited once, from the server’s answer, when Save & quit replaces it', async () => {
+    const server = new FakeServer();
+    const a = device(server);
+    const b = device(server);
+    const r = snapshot('r');
+    b.handoff.store(r, 'pause');
+    await settle(b.runs);
+    b.handoff.forget(); // B's Save & quit: R stays on the server
+    await a.runs.syncTitle();
+    expect(a.store.peek()?.runKey).toBe(r.runKey);
+    a.runs.newRun();
+    a.handoff.store(snapshot('s'), 'pause');
+    expect(a.meta.calls).toEqual([]); // not by the slot's replace...
+    await settle(a.runs);
+    expect(a.meta.calls).toHaveLength(1); // ...but by the server's, which handed R back
+    expect(b.meta.calls).toEqual([]);
   });
 });

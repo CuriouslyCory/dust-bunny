@@ -19,6 +19,7 @@
  */
 import type { MetaProgress } from '../meta/meta';
 import {
+  creditsReplacedOnDevice,
   pausedRunState,
   storePausedRun,
   takeBackPausedRun,
@@ -36,7 +37,7 @@ export type HandoffLoss = Exclude<PausedRunState, 'mine'> | 'otherDevice';
 export interface HandoffCloud {
   /** Tags a copy about to be written to the device slot with the Account and lease. */
   tag(snapshot: RunSnapshot): void;
-  /** The copy is in the device slot (which held `prevLocalKey` before): upload it. */
+  /** The copy is in the device slot (whose replace credited `prevLocalKey` on the device; null: none): upload it. */
   stored(snapshot: RunSnapshot, prevLocalKey: string | null): void;
   /** The device took the Run back: take it on the server too, in the background. */
   takenBack(runKey: string): void;
@@ -124,11 +125,13 @@ export class RunHandoff {
     const snapshot = held.pending;
     held.pending = null;
     if (this.released === held) this.released = null;
-    const prev = this.slot.peek()?.runKey ?? null;
     this.cloud?.tag(snapshot);
+    // A replaced Account copy is credited from the server's answer, not here (`creditsReplacedOnDevice`).
+    const prev = this.slot.peek();
+    const credited = prev && creditsReplacedOnDevice(prev, snapshot) ? prev.runKey : null;
     // The device first (synchronously), then the Account.
     storePausedRun(this.slot, snapshot, held.handoffId, this.meta);
-    this.cloud?.stored(snapshot, prev);
+    this.cloud?.stored(snapshot, credited);
   }
 
   /** The page is going away: writes a store still waiting for the lock now (pagehide). */

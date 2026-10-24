@@ -119,6 +119,25 @@ describe('Pause hand-off rules (two tabs, one storage)', () => {
     expect(tabB.peek()?.runKey).toBe(b.runKey);
   });
 
+  it('a server-confirmed Account copy replaced in the slot is left for the server to credit (Save & quit and pause)', () => {
+    const tag = (s: RunSnapshot, synced: boolean): RunSnapshot => ({ ...s, account: { userId: 'u1', lease: 'l-' + s.runKey, synced } });
+    for (const replace of [
+      (store: SuspendedRunStore, s: RunSnapshot, meta: ReturnType<typeof awards>) => saveSuspendedRun(store, s, meta),
+      (store: SuspendedRunStore, s: RunSnapshot, meta: ReturnType<typeof awards>) => storePausedRun(store, s, 'h2', meta),
+    ]) {
+      const store = new SuspendedRunStore(memStorage());
+      store.setViewer('u1');
+      const meta = awards();
+      store.save(tag(snapshot(), true)); // mirrored from the server: it may be another device's Run in progress by now
+      replace(store, tag(snapshot(), false), meta);
+      expect(meta.calls).toEqual([]);
+      // A copy the server never confirmed is only this device's: the slot credits it, as before.
+      store.save(tag(snapshot(), false));
+      replace(store, tag(snapshot(), false), meta);
+      expect(meta.calls.map((c) => c.reason)).toEqual(['quit']);
+    }
+  });
+
   it('pausing the same Run again credits nothing, and only the newest hand-off owns it', () => {
     const store = new SuspendedRunStore(memStorage());
     const meta = awards();
