@@ -1,0 +1,81 @@
+name: Cleanup Neon preview branch
+
+on:
+  # Run trusted base-branch code, including for PRs opened before this workflow existed.
+  # Do not check out or execute code from the PR head in this privileged workflow.
+  pull_request_target:
+    types: [closed]
+  delete:
+
+permissions: {}
+
+concurrency:
+  group: cleanup-neon-${{ github.event.pull_request.head.ref || github.event.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: >-
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'delete' && github.event.ref_type == 'branch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Delete the matching preview branch if it exists
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        with:
+          script: |
+            const gitBranch = context.payload.pull_request?.head.ref ?? context.payload.ref;
+            if (!gitBranch || gitBranch === context.payload.repository.default_branch) {
+              throw new Error('Refusing to clean up an empty or default Git branch.');
+            }
+
+            const { NEON_PROJECT_ID: projectId, NEON_API_KEY: apiKey } = process.env;
+            if (!projectId || !apiKey) {
+              throw new Error('Configure the NEON_PROJECT_ID repository variable and NEON_API_KEY repository secret.');
+            }
+
+            const branchName = `preview/${gitBranch}`;
+            const branchesUrl = `https://console.neon.tech/api/v2/projects/${encodeURIComponent(projectId)}/branches`;
+            const headers = { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' };
+            const request = (url, method = 'GET') => fetch(url, {
+              method,
+              headers,
+              signal: AbortSignal.timeout(30_000),
+            });
+
+            // Search can return partial matches; only an exact name is eligible for deletion.
+            let branch;
+            let cursor;
+            do {
+              const url = new URL(branchesUrl);
+              url.searchParams.set('search', branchName);
+              url.searchParams.set('limit', '100');
+              if (cursor) url.searchParams.set('cursor', cursor);
+              const response = await request(url);
+              if (!response.ok) {
+                throw new Error(`Neon branch lookup failed (HTTP ${response.status}).`);
+              }
+              const page = await response.json();
+              branch = page.branches.find(candidate => candidate.name === branchName);
+              cursor = page.pagination?.next;
+            } while (!branch && cursor);
+
+            if (!branch) {
+              core.info('Matching Neon preview branch is already absent; nothing to delete.');
+              return;
+            }
+            if (branch.default || branch.primary || branch.protected) {
+              throw new Error('Refusing to delete a default or protected Neon branch.');
+            }
+
+            const response = await request(`${branchesUrl}/${encodeURIComponent(branch.id)}`, 'DELETE');
+            // A concurrent cleanup (including Vercel's webhook) may have removed it after lookup.
+            if (!response.ok && response.status !== 404) {
+              throw new Error(`Neon branch deletion failed (HTTP ${response.status}).`);
+            }
+            core.info('Neon preview branch deleted or already absent.');

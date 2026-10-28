@@ -44,3 +44,28 @@ Tables are created on first request, and columns added since (`difficulty`, `use
 3. Accounts: set `BETTER_AUTH_SECRET` (`openssl rand -base64 32`), `BETTER_AUTH_URL` (the production origin, e.g. `https://dustbunny.example`) and the OAuth apps' `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET`. Register `<origin>/api/auth/callback/google` and `<origin>/api/auth/callback/discord` as redirect URIs with each provider. A provider without both values is hidden; without the secret, accounts are off and everyone plays anonymously. See `.env.example`.
 4. Optionally set `LEADERBOARD_IP_SALT` to a random string, and `SITE_URL` (e.g. `https://dustbunny.example`) if the site is served from a custom domain. Social-card image URLs are made absolute at build time from `SITE_URL`, falling back to Vercel's production domain.
 5. Deploy (or redeploy after adding the env vars). If `DATABASE_URL` is missing, the API returns 503 and the game falls back to the local leaderboard.
+
+### Preview database cleanup
+
+When the Vercel integration creates a Neon branch named `preview/<git-branch>`,
+[cleanup-neon.yml](.github/workflows/cleanup-neon.yml) deletes it when a same-repository
+PR is merged or closed, or when its remote Git branch is deleted (even without a PR).
+Tag deletions and fork PRs are ignored. The workflow only targets the exact preview
+name, refuses default/protected database branches, and succeeds if the branch is
+already gone. `production` and `vercel-dev` are outside its naming scope.
+
+To enable it, merge the workflow into `main` and configure **GitHub repository
+Settings → Secrets and variables → Actions**:
+
+- Repository **variable** `NEON_PROJECT_ID`: the Vercel-connected Neon project's ID,
+  from **Neon → Project Settings**.
+- Repository **secret** `NEON_API_KEY`: a Neon API key with access to that project,
+  from **Neon → Account Settings → API Keys**.
+
+Missing configuration or Neon API errors fail the workflow so cleanup failures are
+visible in Actions. It runs trusted base-branch code on PR closure and never checks
+out the PR head. No database migrations or production deployment changes are needed.
+
+Existing stale preview branches need a one-time cleanup in Neon; old merge/delete
+events are not replayed. Deleting a preview database leaves retained Vercel preview
+URLs unable to connect to it. See [Neon's preview cleanup guide](https://neon.com/docs/guides/vercel-branch-cleanup).
