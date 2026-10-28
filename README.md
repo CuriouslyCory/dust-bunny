@@ -57,8 +57,9 @@ already gone. `production` and `vercel-dev` are outside its naming scope.
 To enable it, merge the workflow into `main` and configure **GitHub repository
 Settings → Secrets and variables → Actions**:
 
-- Repository **variable** `NEON_PROJECT_ID`: the Vercel-connected Neon project's ID,
-  from **Neon → Project Settings**.
+- Repository **variable or secret** `NEON_PROJECT_ID`: the Vercel-connected Neon
+  project's ID, from **Neon → Project Settings**. A variable takes precedence if both
+  are configured.
 - Repository **secret** `NEON_API_KEY`: a Neon API key with access to that project,
   from **Neon → Account Settings → API Keys**.
 
