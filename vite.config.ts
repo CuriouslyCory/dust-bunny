@@ -1,6 +1,10 @@
 /// <reference types="vitest/config" />
+import { createHash } from 'node:crypto';
+import { readFile, readdir } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
-import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { join, relative, resolve, sep } from 'node:path';
+import { build, defineConfig, loadEnv, type Plugin } from 'vite';
+import { manifestModelFiles, precacheUrls } from './src/pwa/rules';
 
 /**
  * Social cards need absolute image URLs. On Vercel builds, prefix `/og.png` with the production
@@ -86,8 +90,57 @@ function devStaticPages(): Plugin {
   };
 }
 
+async function listFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
+  return entries.filter((e) => e.isFile()).map((e) => relative(dir, join(e.parentPath, e.name)).split(sep).join('/'));
+}
+
+/**
+ * Builds the offline service worker (src/pwa/sw.ts) into dist/sw.js once the app is written. Its
+ * precache is the build files `precacheUrls` picks (src/pwa/rules.ts); its version hashes them and
+ * the worker's source, so every deploy that changes a precached file ships a new worker.
+ */
+function serviceWorker(): Plugin {
+  let root = process.cwd();
+  let outDir = 'dist';
+  return {
+    name: 'service-worker',
+    apply: 'build',
+    configResolved(config) {
+      root = config.root;
+      outDir = resolve(config.root, config.build.outDir);
+    },
+    closeBundle: {
+      sequential: true,
+      order: 'post',
+      async handler() {
+        const files = await listFiles(outDir);
+        const manifest = JSON.parse(await readFile(join(outDir, 'models/manifest.json'), 'utf8')) as Record<string, unknown>;
+        const urls = precacheUrls(files, manifestModelFiles(manifest));
+        const hash = createHash('sha256');
+        for (const src of ['src/pwa/sw.ts', 'src/pwa/rules.ts']) hash.update(await readFile(join(root, src)));
+        for (const url of urls) hash.update(url).update(await readFile(join(outDir, url)));
+        await build({
+          configFile: false,
+          root,
+          publicDir: false,
+          logLevel: 'warn',
+          define: { __SW_PRECACHE__: JSON.stringify(urls), __SW_VERSION__: JSON.stringify(hash.digest('hex').slice(0, 16)) },
+          build: {
+            outDir,
+            emptyOutDir: false,
+            copyPublicDir: false,
+            target: 'es2022',
+            lib: { entry: resolve(root, 'src/pwa/sw.ts'), formats: ['iife'], name: 'dustBunnyServiceWorker', fileName: () => 'sw.js' },
+          },
+        });
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [absoluteSocialUrls(), devApi(), devStaticPages()],
+  plugins: [absoluteSocialUrls(), devApi(), devStaticPages(), serviceWorker()],
   build: {
     outDir: 'dist',
     target: 'es2022',

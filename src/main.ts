@@ -21,6 +21,7 @@ import { installCloudSave } from './meta/cloudSave';
 import { installRoguelike } from './meta/install';
 import { getMeta } from './meta/meta';
 import { account } from './net/account';
+import { installServiceWorker } from './pwa/register';
 import { installStory } from './story/install';
 import { registerAccountScreen } from './ui/account/screen';
 import { installAreaHud } from './ui/areaHud';
@@ -46,6 +47,8 @@ async function boot(): Promise<void> {
   const loading = showLoading(canvas.parentElement ?? document.body);
   await loadModelOverrides(8000, loading.progress);
   loading.done();
+  // After the models load, so the worker's precache doesn't compete with them on a first visit.
+  installServiceWorker({ debug: params.has('debug') });
 
   const game = new Game(canvas, ui, { debug: params.has('debug') });
   if (params.has('seed')) game.nextRunConfig.seed = params.get('seed')!;
