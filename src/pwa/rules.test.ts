@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { fallbackPage, installCacheMode, isPrecached, manifestModelFiles, precacheUrls, routeFor } from './rules';
+import { fallbackPage, installCacheMode, isDebugUrl, isPrecached, manifestModelFiles, precacheUrls, routeFor } from './rules';
 
 const ORIGIN = 'https://dustbunny.example';
 const route = (path: string, opts: { method?: string; navigate?: boolean } = {}) =>
@@ -87,9 +87,16 @@ describe('routeFor', () => {
     expect(route('/privacy', { navigate: true })).toBe('navigate');
   });
 
-  it('revalidates the models manifest and serves the rest from the precache', () => {
+  it('bypasses ?debug page loads', () => {
+    expect(route('/?debug', { navigate: true })).toBe('bypass');
+    expect(route('/?debug&autostart&seed=x', { navigate: true })).toBe('bypass');
+    expect(isDebugUrl(new URL('/?seed=a&debug', ORIGIN))).toBe(true);
+    expect(isDebugUrl(new URL('/?seed=debug', ORIGIN))).toBe(false);
+  });
+
+  it('loads models network first and serves the rest from the precache', () => {
     expect(route('/models/manifest.json')).toBe('revalidate');
-    expect(route('/models/couch.glb')).toBe('precache');
+    expect(route('/models/couch.glb')).toBe('revalidate');
     expect(route('/assets/three-def.js')).toBe('precache');
     expect(route('/favicon.svg')).toBe('precache');
   });

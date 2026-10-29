@@ -1,7 +1,8 @@
 /**
  * Registers the offline service worker (src/pwa/sw.ts, built to /sw.js) in production builds.
  * `pnpm dev` and `?debug` sessions never register it and unregister any left from earlier visits,
- * so development never runs stale code.
+ * so development never runs stale code. Until then the old worker passes a `?debug` page and its
+ * requests straight to the network (src/pwa/sw.ts).
  */
 export function installServiceWorker(opts: { debug: boolean }): void {
   if (!('serviceWorker' in navigator)) return;

@@ -7,7 +7,7 @@
  * (skipWaiting + clients.claim) and deletes the older precaches. Page loads go to the network
  * first, so an online launch always runs the deployed build even before the new worker is ready.
  */
-import { FONT_CACHE, PRECACHE_PREFIX, fallbackPage, installCacheMode, routeFor } from './rules';
+import { FONT_CACHE, PRECACHE_PREFIX, fallbackPage, installCacheMode, isDebugUrl, routeFor } from './rules';
 
 declare const __SW_PRECACHE__: string[];
 declare const __SW_VERSION__: string;
@@ -18,11 +18,12 @@ interface ExtendableEvent extends Event {
 }
 interface FetchEvent extends ExtendableEvent {
   readonly request: Request;
+  readonly clientId: string;
   respondWith(response: Response | Promise<Response>): void;
 }
 interface WorkerScope {
   readonly location: Location;
-  readonly clients: { claim(): Promise<void> };
+  readonly clients: { claim(): Promise<void>; get(id: string): Promise<{ readonly url: string } | undefined> };
   skipWaiting(): Promise<void>;
   addEventListener(type: 'install' | 'activate', listener: (e: ExtendableEvent) => void): void;
   addEventListener(type: 'fetch', listener: (e: FetchEvent) => void): void;
@@ -56,8 +57,21 @@ sw.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const route = routeFor(request.method, url, sw.location.origin, request.mode === 'navigate');
   if (route === 'bypass') return;
-  event.respondWith(respond(route, request, url));
+  event.respondWith(
+    (async () => {
+      // A ?debug page (src/pwa/register.ts unregisters the worker, but it stays in control of a page
+      // it loaded) gets everything from the network, so debugging never runs cached code.
+      if (await fromDebugPage(event.clientId)) return fetch(request);
+      return respond(route, request, url);
+    })(),
+  );
 });
+
+async function fromDebugPage(clientId: string): Promise<boolean> {
+  if (!clientId) return false;
+  const client = await sw.clients.get(clientId);
+  return !!client && isDebugUrl(new URL(client.url));
+}
 
 async function respond(route: Exclude<ReturnType<typeof routeFor>, 'bypass'>, request: Request, url: URL): Promise<Response> {
   switch (route) {

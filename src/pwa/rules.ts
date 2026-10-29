@@ -13,7 +13,7 @@ export type Route =
   | 'bypass'
   /** A page load: network first, falling back to the precached page (`fallbackPage`). */
   | 'navigate'
-  /** Network first, falling back to the precached copy; the network copy is not stored. */
+  /** Network first (the browser's HTTP cache rules apply), falling back to the precached copy; not stored. */
   | 'revalidate'
   /** The precached copy if there is one, otherwise the network. */
   | 'precache'
@@ -74,18 +74,26 @@ export function isApiPath(path: string): boolean {
   return path === '/api' || path.startsWith('/api/');
 }
 
+/** A `?debug` page: the worker passes it and everything it requests straight to the network. */
+export function isDebugUrl(url: URL): boolean {
+  return url.searchParams.has('debug');
+}
+
 /**
  * The route for a request. `navigate` is the request's mode === 'navigate'. Anything that isn't a
- * GET, the API (page loads included: OAuth callbacks land under /api/auth), the worker script and
- * other origins (except Google Fonts) are bypassed.
+ * GET, the API (page loads included: OAuth callbacks land under /api/auth), the worker script,
+ * `?debug` page loads and other origins (except Google Fonts) are bypassed. Models (the manifest
+ * and the GLBs) go network first, so online they stay as consistent as without a worker (the
+ * manifest's scales and fits always meet the GLBs they were written for) and offline they come
+ * from the precached build together.
  */
 export function routeFor(method: string, url: URL, origin: string, navigate: boolean): Route {
   if (method !== 'GET') return 'bypass';
   if (url.origin !== origin) return FONT_HOSTS.has(url.hostname) && url.protocol === 'https:' ? 'font' : 'bypass';
   const path = url.pathname;
   if (isApiPath(path) || path === '/sw.js') return 'bypass';
-  if (navigate) return 'navigate';
-  if (path === '/models/manifest.json') return 'revalidate';
+  if (navigate) return isDebugUrl(url) ? 'bypass' : 'navigate';
+  if (path.startsWith('/models/')) return 'revalidate';
   return 'precache';
 }
 
