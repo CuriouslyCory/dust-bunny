@@ -13,6 +13,13 @@ export function isSocialProvider(v: unknown): v is SocialProvider {
   return typeof v === 'string' && (SOCIAL_PROVIDERS as readonly string[]).includes(v);
 }
 
+/**
+ * Header naming the Account a Delete account confirmation was shown for. The server deletes only
+ * when it matches the session's user (another tab may have switched Accounts since), else 409
+ * `ACCOUNT_CHANGED` and nothing is deleted.
+ */
+export const DELETE_ACCOUNT_USER_HEADER = 'x-delete-account-user';
+
 /** `GET /api/auth/providers`: whether accounts work on this deployment, and with which providers. */
 export interface AccountConfig {
   enabled: boolean;

@@ -135,6 +135,25 @@ describe('account client', () => {
       expect(heard).toEqual([]);
     });
 
+    it('names the confirmed Account; when the session is someone else’s now (another tab switched), deletes nothing and shows who is signed in', async () => {
+      let session: unknown = USER;
+      const { fetch, calls } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(session),
+        '/delete-user': () => jsonResponse({ code: 'ACCOUNT_CHANGED', message: 'x' }, 409),
+      });
+      const a = createAccountClient({ fetch });
+      await a.refresh();
+      const heard: string[] = [];
+      a.onDeleted((id) => heard.push(id));
+      session = { user: { id: 'u2', name: 'Other', image: null }, session: {} }; // another tab signed in as u2
+      expect(await a.deleteAccount()).toBe('changed');
+      const sent = calls.find((c) => c.path === '/delete-user')!;
+      expect(new Headers(sent.init?.headers).get('x-delete-account-user')).toBe('u1');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u2' } });
+      expect(heard).toEqual([]);
+    });
+
     it('stays signed in, with an error, when the server can’t be reached', async () => {
       const { a } = client(() => jsonResponse({ message: 'down' }, 503));
       await a.refresh();

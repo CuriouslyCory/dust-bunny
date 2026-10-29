@@ -15,7 +15,7 @@
  * (and postMessage) and closes itself; the session is then re-read. When the popup can't open,
  * the whole page goes to the provider and comes back to the current URL.
  */
-import { isSocialProvider, type AccountConfig, type SocialProvider } from '../shared/account';
+import { DELETE_ACCOUNT_USER_HEADER, isSocialProvider, type AccountConfig, type SocialProvider } from '../shared/account';
 
 export interface AccountUser {
   id: string;
@@ -74,8 +74,10 @@ class AccountRequestError extends Error {
 /**
  * `deleteAccount()`: `reauth` when the server wants a recent sign-in first (the session is older
  * than Better Auth's `freshAge`, a day, or gone); signing in again and retrying then works.
+ * `changed`: the session belongs to another Account than the one confirmed (another tab switched);
+ * nothing was deleted and the state now shows who is signed in.
  */
-export type DeleteAccountResult = 'deleted' | 'reauth' | 'failed';
+export type DeleteAccountResult = 'deleted' | 'reauth' | 'changed' | 'failed';
 
 function isAuthComplete(v: unknown): v is AuthCompleteMessage {
   return typeof v === 'object' && v !== null && (v as { type?: unknown }).type === 'dust-bunny:auth-complete';
@@ -243,8 +245,9 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     },
 
     /**
-     * Deletes the signed-in Account on the server (api/auth.ts → server/accountDeletion.ts). Once it
-     * is gone the client is signed out and `onDeleted` listeners hear the Account's id; on failure
+     * Deletes the signed-in Account on the server (api/auth.ts → server/accountDeletion.ts), and only
+     * that one: the request names it, and the server refuses if the session is someone else's. Once
+     * it is gone the client is signed out and `onDeleted` listeners hear the Account's id; on failure
      * nothing changes here and `error` is set.
      */
     async deleteAccount(): Promise<DeleteAccountResult> {
@@ -252,8 +255,12 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
       if (state.status !== 'signedIn' || !user) return 'failed';
       set({ error: null });
       try {
-        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json', [DELETE_ACCOUNT_USER_HEADER]: user.id }, body: '{}' });
       } catch (err) {
+        if (err instanceof AccountRequestError && err.code === 'ACCOUNT_CHANGED') {
+          await loadSession().catch(() => undefined);
+          return 'changed';
+        }
         if (err instanceof AccountRequestError && (err.code === 'SESSION_EXPIRED' || err.status === 401)) return 'reauth';
         set({ error: 'Could not delete your account. Check your connection and try again.' });
         return 'failed';

@@ -15,11 +15,25 @@
  * anonymising (and is anonymised) or fails its foreign key afterwards. Better Auth's own delete
  * then finds nothing left and clears the session cookie.
  */
+import { APIError } from 'better-auth/api';
+import { DELETE_ACCOUNT_USER_HEADER } from '../src/shared/account.js';
 import { FALLBACK_NAME } from '../src/shared/leaderboard.js';
 import { transaction } from './db.js';
 
 /** The anonymous name a deleted Account's kept scores show. */
 export const DELETED_ACCOUNT_NAME = FALLBACK_NAME;
+
+/**
+ * Better Auth's `beforeDelete`: the confirmation must name the session's user
+ * (`DELETE_ACCOUNT_USER_HEADER`). A tab showing Account A while the shared cookie now belongs to B
+ * (another tab signed in as B) gets 409 `ACCOUNT_CHANGED`, and nothing is deleted.
+ */
+export async function beforeDeleteAccount(user: { id: string }, request?: Request): Promise<void> {
+  if (request?.headers.get(DELETE_ACCOUNT_USER_HEADER) !== user.id) {
+    throw new APIError('CONFLICT', { code: 'ACCOUNT_CHANGED', message: 'You are signed in to a different account now. Nothing was deleted.' });
+  }
+  await deleteAccount(user.id);
+}
 
 export async function deleteAccount(userId: string): Promise<void> {
   await transaction(async (q) => {

@@ -21,6 +21,7 @@ import { computeAreaScore, computeScore, SCORE_TIER_MIN_RADII, scoreTierForRadiu
 import type { Progress } from '../src/shared/progress';
 import { CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_MAX, type RunCredit } from '../src/shared/runCredit';
 import { MAX_SAVED_RUN_BYTES, SNAPSHOT_VERSION } from '../src/shared/savedRun';
+import { DELETE_ACCOUNT_USER_HEADER } from '../src/shared/account';
 import { authOptions, resetAuthForTests } from './auth';
 import { ensureSchema, query, resetDbForTests } from './db';
 import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './accountRuns';
@@ -849,7 +850,9 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
   });
 
   describe('Delete account (POST /api/auth/delete-user, server/accountDeletion.ts)', () => {
-    const del = (cookie?: string) => call(authApi, '/api/auth/delete-user', { method: 'POST', cookie, body: '{}' });
+    /** `confirmed`: the Account the confirmation was shown for (sent as DELETE_ACCOUNT_USER_HEADER). */
+    const del = (cookie?: string, confirmed?: string) =>
+      call(authApi, '/api/auth/delete-user', { method: 'POST', cookie, body: '{}', headers: confirmed ? { [DELETE_ACCOUNT_USER_HEADER]: confirmed } : {} });
     const postScore = (board: string, body: unknown, cookie?: string) =>
       call(leaderboardApi, `/api/leaderboard?board=${board}`, { method: 'POST', cookie, body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-delete` } });
     const posted = async (res: Promise<Response>) => {
@@ -894,7 +897,7 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       keptAreas.push(houseHi, houseLint);
       for (const t of ['player_progress', 'saved_runs', 'run_credits', 'run_holders']) expect(await countFor(t, 'user_id', userId)).toBeGreaterThan(0);
 
-      const res = await del(cookie);
+      const res = await del(cookie, userId);
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true, message: 'User deleted' });
 
@@ -926,11 +929,25 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
       expect(((await (await call(runCreditApi, '/api/run-credit', { cookie: again })).json()) as { credits: unknown[] }).credits).toEqual([]);
     });
 
+    it('deletes nothing when the confirmation names another Account than the session (another tab switched), or none', async () => {
+      const cookie = await signUp(`Swap${RUN}`);
+      const userId = await userIdOf(cookie);
+      expect((await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(progress(5, 10, 1)) })).status).toBe(200);
+      for (const confirmed of ['someone-else', undefined]) {
+        const res = await del(cookie, confirmed);
+        expect(res.status).toBe(409);
+        expect(((await res.json()) as { code: string }).code).toBe('ACCOUNT_CHANGED');
+      }
+      expect(await countFor('"user"', 'id', userId)).toBe(1);
+      expect(await countFor('player_progress', 'user_id', userId)).toBe(1);
+      expect(((await (await call(authApi, '/api/auth/get-session', { cookie })).json()) as { user: { id: string } }).user.id).toBe(userId);
+    });
+
     it('asks for a recent sign-in, and deletes nothing, when the session is older than a day', async () => {
       const cookie = await signUp(`Stale${RUN}`);
       const userId = await userIdOf(cookie);
       await query(`UPDATE "session" SET "createdAt" = now() - interval '2 days' WHERE "userId" = $1`, [userId]);
-      const res = await del(cookie);
+      const res = await del(cookie, userId);
       expect(res.status).toBe(400);
       expect(((await res.json()) as { code: string }).code).toBe('SESSION_EXPIRED');
       expect(await countFor('"user"', 'id', userId)).toBe(1);

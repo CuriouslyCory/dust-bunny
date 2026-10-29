@@ -84,6 +84,11 @@ export function registerAccountScreen(client: AccountClient = defaultAccount): v
           notice = 'Your account was deleted. You can keep playing without one.';
           setStep('none');
         } else if (result === 'reauth') setStep('reauth');
+        else if (result === 'changed') {
+          // Another tab signed in as someone else: nothing was deleted, and this one starts over.
+          notice = 'You are signed in to a different account now. Nothing was deleted.';
+          setStep('none');
+        }
         else setStep('confirm'); // the error is shown; try again
       }
 

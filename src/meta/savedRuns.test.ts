@@ -1271,11 +1271,12 @@ describe('a deleted Account (server/accountDeletion.ts; src/net/account.ts delet
   /** The device's account client, over the test server: `/delete-user` deletes u1's rows as the user row's cascade does. */
   const accountFor = (server: TestServer) => {
     let session: unknown = { user: { id: USER, name: 'Dusty' } };
-    const fetch = (async (url: string | URL | Request) => {
+    const fetch = (async (url: string | URL | Request, init?: RequestInit) => {
       const path = String(url).replace('/api/auth', '');
       if (path === '/providers') return Response.json({ enabled: true, providers: ['google'] });
       if (path === '/get-session') return Response.json(session);
       if (path === '/delete-user') {
+        expect(new Headers(init?.headers).get('x-delete-account-user')).toBe(USER);
         server.store.deleteAccount(USER);
         session = null;
         return Response.json({ success: true, message: 'User deleted' });
