@@ -183,6 +183,31 @@ describe('account client', () => {
       expect(other.state).toMatchObject({ status: 'signedIn', user: { id: 'u2' } });
     });
 
+    it('drops a session read that started before the deletion (it would name the deleted Account)', async () => {
+      let release!: () => void;
+      let slow = false;
+      const { fetch } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+        '/delete-user': () => jsonResponse({ success: true, message: 'User deleted' }),
+      });
+      const gated = (async (url: string | URL | Request, init?: RequestInit) => {
+        const res = await fetch(url, init);
+        if (slow && String(url).endsWith('/get-session')) await new Promise<void>((r) => (release = r));
+        return res;
+      }) as typeof globalThis.fetch;
+      const a = createAccountClient({ fetch: gated });
+      await a.refresh();
+      slow = true;
+      const stale = a.refresh(); // read the old session; its answer comes after the deletion
+      await new Promise((r) => setTimeout(r, 0));
+      slow = false;
+      expect(await a.deleteAccount()).toBe('deleted');
+      release();
+      await stale;
+      expect(a.state).toMatchObject({ status: 'signedOut', user: null });
+    });
+
     it('waits longer than other calls for the server to answer', async () => {
       const { fetch } = fakeFetch({
         '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),

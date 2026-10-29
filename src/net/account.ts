@@ -163,8 +163,13 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     return body;
   }
 
+  /** Bumped when an Account is deleted: a session read started before then may still name it, and is dropped. */
+  let sessionEpoch = 0;
+
   async function loadSession(): Promise<void> {
+    const epoch = sessionEpoch;
     const user = toUser(await request('/get-session'));
+    if (epoch !== sessionEpoch) return;
     set({ status: user ? 'signedIn' : 'signedOut', user });
   }
 
@@ -195,6 +200,7 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
 
   /** An Account was deleted: signed in as it, this client signs out; either way listeners forget it (another tab's deletion arrives here too). */
   function deleted(userId: string): void {
+    sessionEpoch++;
     if (state.user?.id === userId) set({ status: 'signedOut', user: null, pending: false, error: null });
     for (const fn of deletedListeners) fn(userId);
   }
