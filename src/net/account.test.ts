@@ -154,6 +154,22 @@ describe('account client', () => {
       expect(heard).toEqual([]);
     });
 
+    it('waits longer than other calls for the server to answer', async () => {
+      const { fetch } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+      });
+      const slow = (async (url: string | URL | Request, init?: RequestInit) => {
+        if (!String(url).endsWith('/delete-user')) return fetch(url, init);
+        await new Promise((r) => setTimeout(r, 60));
+        if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+        return jsonResponse({ success: true, message: 'User deleted' });
+      }) as typeof globalThis.fetch;
+      const a = createAccountClient({ fetch: slow, timeoutMs: 20 });
+      await a.refresh();
+      expect(await a.deleteAccount()).toBe('deleted');
+    });
+
     it('stays signed in, with an error, when the server can’t be reached', async () => {
       const { a } = client(() => jsonResponse({ message: 'down' }, 503));
       await a.refresh();

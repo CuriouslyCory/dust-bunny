@@ -56,6 +56,8 @@ export interface AccountClientOptions {
 }
 
 const POPUP_FEATURES = 'popup,width=500,height=700';
+/** How long `deleteAccount` waits for the server (other calls: `timeoutMs`, 6 s by default). */
+const DELETE_TIMEOUT_MS = 20_000;
 const COMPLETE_PATH = '/auth-complete.html';
 
 class Unavailable extends Error {}
@@ -114,9 +116,9 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     for (const l of listeners) l(state);
   }
 
-  async function request(path: string, init?: RequestInit): Promise<unknown> {
+  async function request(path: string, init?: RequestInit, timeout = timeoutMs): Promise<unknown> {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     let res: Response;
     try {
       res = await doFetch(baseUrl + path, { credentials: 'same-origin', ...init, signal: ctrl.signal, headers: { Accept: 'application/json', ...init?.headers } });
@@ -255,7 +257,9 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
       if (state.status !== 'signedIn' || !user) return 'failed';
       set({ error: null });
       try {
-        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json', [DELETE_ACCOUNT_USER_HEADER]: user.id }, body: '{}' });
+        // A longer wait than other calls (a cold start, then one transaction with the cascades): an
+        // answer lost after the server committed would leave this device holding the deleted Account.
+        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json', [DELETE_ACCOUNT_USER_HEADER]: user.id }, body: '{}' }, DELETE_TIMEOUT_MS);
       } catch (err) {
         if (err instanceof AccountRequestError && err.code === 'ACCOUNT_CHANGED') {
           await loadSession().catch(() => undefined);
