@@ -6,6 +6,7 @@
  *   ?difficulty=arcade  Difficulty (casual | arcade | hardcore; otherwise the last one picked)
  *   ?autostart      skip the title screen (and the story: no intro, no narrator)
  *   ?area=neighborhood|city|region|continent|globe|solar_system|galaxy|universe  start Runs in a later area (skips the earlier ones; debug / testing)
+ *   ?account=delete opens Delete account (sign in first if needed); /delete-account redirects here
  */
 import './styles.css';
 import { installAudio } from './audio';
@@ -23,7 +24,7 @@ import { getMeta } from './meta/meta';
 import { account } from './net/account';
 import { installServiceWorker } from './pwa/register';
 import { installStory } from './story/install';
-import { registerAccountScreen } from './ui/account/screen';
+import { DELETE_ACCOUNT_PARAM, registerAccountScreen, type AccountParams } from './ui/account/screen';
 import { installAreaHud } from './ui/areaHud';
 import { installUi } from './ui/install';
 import { installLeaderboardPosting } from './ui/leaderboard/posting';
@@ -71,6 +72,7 @@ async function boot(): Promise<void> {
 
   game.start('title');
   if (params.has('autostart')) game.startRun();
+  else if (params.get(DELETE_ACCOUNT_PARAM.name) === DELETE_ACCOUNT_PARAM.value) game.go('account', { back: 'title', deleteAccount: true } satisfies AccountParams);
 }
 
 boot().catch((err) => {

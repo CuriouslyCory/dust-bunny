@@ -9,7 +9,8 @@ import { createRun } from '../game/assembly';
 import { RunHandoff, type HandoffLoss } from '../game/handoff';
 import { SNAPSHOT_VERSION, type RunSnapshot } from '../game/snapshot';
 import { CREDITED_RUNS_MAX, pickCreditStats, RUN_CREDIT_LIST_LIMIT } from '../shared/runCredit';
-import { SavedRuns, creditStatsOf, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION } from './savedRuns';
+import { createAccountClient } from '../net/account';
+import { SavedRuns, creditStatsOf, installSavedRuns, KNOWN_RUNS_KEY, KNOWN_RUNS_VERSION } from './savedRuns';
 import { MetaProgress, type RunCreditInput } from './meta';
 import { RUN_CREDITS_KEY, type CreditOutcome } from './runCredits';
 import { SUSPENDED_RUN_KEY } from './suspendedRun';
@@ -1263,5 +1264,75 @@ describe('SavedRuns: the second review round (docs/adr/0003)', () => {
     expect(a.outcomes).toHaveLength(1);
     expect(a.credited()).toEqual([r.runKey]);
     expect(a.meta.data.stats.runs).toBe(1);
+  });
+});
+
+describe('a deleted Account (server/accountDeletion.ts; src/net/account.ts deleteAccount)', () => {
+  /** The device's account client, over the test server: `/delete-user` deletes u1's rows as the user row's cascade does. */
+  const accountFor = (server: TestServer) => {
+    let session: unknown = { user: { id: USER, name: 'Dusty' } };
+    const fetch = (async (url: string | URL | Request) => {
+      const path = String(url).replace('/api/auth', '');
+      if (path === '/providers') return Response.json({ enabled: true, providers: ['google'] });
+      if (path === '/get-session') return Response.json(session);
+      if (path === '/delete-user') {
+        server.store.deleteAccount(USER);
+        session = null;
+        return Response.json({ success: true, message: 'User deleted' });
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof globalThis.fetch;
+    return {
+      client: createAccountClient({ fetch }),
+      signInAs: (id: string) => (session = { user: { id, name: 'Dusty' } }),
+    };
+  };
+
+  it('drops its saved Run from the device slot and its waiting claims; signing in again offers nothing and credits nothing', async () => {
+    const server = new TestServer();
+    const a = device(server);
+    const { client, signInAs } = accountFor(server);
+    installSavedRuns(a.runs, client);
+    await client.refresh();
+    expect(a.link.user).toBe(USER);
+
+    // A paused Run, stored on the server, and a Run that ended offline (its claim still waiting).
+    const paused = snapshot('paused');
+    a.handoff.store(paused, 'pause');
+    await settle(a.runs);
+    expect(server.row?.runKey).toBe(paused.runKey);
+    a.link.offline = true;
+    const ended = snapshot('ended');
+    a.end(ended);
+    expect(a.credits.has(ended.runKey)).toBe(true);
+    a.link.offline = false;
+
+    expect(await client.deleteAccount()).toBe('deleted');
+    expect(server.row).toBeNull();
+    expect(a.runs.signedIn).toBe(false);
+    // The device slot no longer holds the Account's Run (not just hidden from the signed-out view).
+    expect(a.store.peekAny()).toBeNull();
+    expect(a.storage.map.has(SUSPENDED_RUN_KEY)).toBe(false);
+    const claims = JSON.parse(a.storage.map.get(RUN_CREDITS_KEY) ?? '{"claims":[],"settled":[]}') as { claims: Array<{ userId: string }>; settled: Array<{ userId: string }> };
+    expect([...claims.claims, ...claims.settled].filter((c) => c.userId === USER)).toEqual([]);
+
+    // Signing in again with the same provider makes a fresh Account.
+    signInAs('u1-again');
+    await client.refresh();
+    expect(a.link.user).toBe('u1-again');
+    await settle(a.runs);
+    expect((await a.runs.syncTitle()).fromAccount).toBeNull();
+    expect(a.store.peek()).toBeNull();
+    expect(server.store.creditsOf('u1-again')).toEqual([]);
+    expect(server.store.slotOf('u1-again')).toBeNull();
+  });
+
+  it('leaves a saved Run kept for another Account, or for no Account, alone', async () => {
+    const server = new TestServer();
+    const a = device(server, null);
+    const s = snapshot('signed-out');
+    a.saveAndQuit(s);
+    a.runs.forgetAccount(USER);
+    expect(a.store.peek()?.runKey).toBe(s.runKey);
   });
 });

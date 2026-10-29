@@ -6,6 +6,8 @@
  *   await account.refresh();              // on boot: providers + current session
  *   await account.signIn('discord');      // popup (redirect when popups are blocked)
  *   await account.signOut();
+ *   await account.deleteAccount();         // 'deleted' | 'reauth' (sign in again first) | 'failed'
+ *   account.onDeleted((userId) => …);      // forget what the device kept for that Account
  *
  * Sign-in opens the provider in a popup so the game keeps its state (for example an unsubmitted
  * score on the results screen); signIn() resolves once the popup is on its way and `pending` is
@@ -58,6 +60,23 @@ const COMPLETE_PATH = '/auth-complete.html';
 
 class Unavailable extends Error {}
 
+/** The server answered with an error (`code` is Better Auth's, e.g. `SESSION_EXPIRED`). */
+class AccountRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * `deleteAccount()`: `reauth` when the server wants a recent sign-in first (the session is older
+ * than Better Auth's `freshAge`, a day, or gone); signing in again and retrying then works.
+ */
+export type DeleteAccountResult = 'deleted' | 'reauth' | 'failed';
+
 function isAuthComplete(v: unknown): v is AuthCompleteMessage {
   return typeof v === 'object' && v !== null && (v as { type?: unknown }).type === 'dust-bunny:auth-complete';
 }
@@ -85,6 +104,7 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
 
   let state: AccountState = { status: 'unknown', user: null, providers: [], pending: false, error: null };
   const listeners = new Set<(s: AccountState) => void>();
+  const deletedListeners = new Set<(userId: string) => void>();
   let refreshing: Promise<AccountState> | null = null;
 
   function set(patch: Partial<AccountState>): void {
@@ -108,7 +128,10 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     const body: unknown = await res.json().catch(() => {
       throw new Unavailable('bad json');
     });
-    if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `Account error ${res.status}`);
+    if (!res.ok) {
+      const err = body as { message?: unknown; code?: unknown } | null;
+      throw new AccountRequestError(res.status, typeof err?.code === 'string' ? err.code : null, typeof err?.message === 'string' ? err.message : `Account error ${res.status}`);
+    }
     return body;
   }
 
@@ -217,6 +240,33 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
         throw err;
       }
       set({ status: 'signedOut', user: null, pending: false, error: null });
+    },
+
+    /**
+     * Deletes the signed-in Account on the server (api/auth.ts → server/accountDeletion.ts). Once it
+     * is gone the client is signed out and `onDeleted` listeners hear the Account's id; on failure
+     * nothing changes here and `error` is set.
+     */
+    async deleteAccount(): Promise<DeleteAccountResult> {
+      const user = state.user;
+      if (state.status !== 'signedIn' || !user) return 'failed';
+      set({ error: null });
+      try {
+        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      } catch (err) {
+        if (err instanceof AccountRequestError && (err.code === 'SESSION_EXPIRED' || err.status === 401)) return 'reauth';
+        set({ error: 'Could not delete your account. Check your connection and try again.' });
+        return 'failed';
+      }
+      set({ status: 'signedOut', user: null, pending: false, error: null });
+      for (const fn of deletedListeners) fn(user.id);
+      return 'deleted';
+    },
+
+    /** Called with the Account's id after `deleteAccount` deleted it. */
+    onDeleted(fn: (userId: string) => void): () => void {
+      deletedListeners.add(fn);
+      return () => deletedListeners.delete(fn);
     },
 
     /** Reads `?error=` left by a redirect-fallback sign-in and strips it from the address bar. */

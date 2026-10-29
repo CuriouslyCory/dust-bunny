@@ -100,4 +100,53 @@ describe('account client', () => {
     expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' } });
     expect(a.state.error).toMatch(/Could not sign out/);
   });
+
+  describe('deleteAccount', () => {
+    const client = (deleteUser: () => Response) => {
+      const f = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+        '/delete-user': deleteUser,
+      });
+      return { ...f, a: createAccountClient({ fetch: f.fetch }) };
+    };
+
+    it('signs out once the server deleted the Account, then tells onDeleted listeners', async () => {
+      const { a, calls } = client(() => jsonResponse({ success: true, message: 'User deleted' }));
+      await a.refresh();
+      const heard: Array<[string, string]> = [];
+      a.onDeleted((id) => heard.push([id, a.state.status]));
+      expect(await a.deleteAccount()).toBe('deleted');
+      expect(calls.at(-1)).toMatchObject({ path: '/delete-user', init: { method: 'POST' } });
+      expect(a.state).toMatchObject({ status: 'signedOut', user: null, error: null });
+      expect(heard).toEqual([['u1', 'signedOut']]);
+    });
+
+    it.each([
+      ['a session older than freshAge', () => jsonResponse({ code: 'SESSION_EXPIRED', message: 'Session expired.' }, 400)],
+      ['a session that is gone', () => jsonResponse({ code: 'UNAUTHORIZED', message: 'Unauthorized' }, 401)],
+    ])('asks to sign in again for %s, and changes nothing', async (_, answer) => {
+      const { a } = client(answer);
+      await a.refresh();
+      const heard: string[] = [];
+      a.onDeleted((id) => heard.push(id));
+      expect(await a.deleteAccount()).toBe('reauth');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' }, error: null });
+      expect(heard).toEqual([]);
+    });
+
+    it('stays signed in, with an error, when the server can’t be reached', async () => {
+      const { a } = client(() => jsonResponse({ message: 'down' }, 503));
+      await a.refresh();
+      expect(await a.deleteAccount()).toBe('failed');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' } });
+      expect(a.state.error).toMatch(/Could not delete your account/);
+    });
+
+    it('does nothing when signed out', async () => {
+      const { a, calls } = client(() => jsonResponse({ success: true }));
+      expect(await a.deleteAccount()).toBe('failed');
+      expect(calls.some((c) => c.path === '/delete-user')).toBe(false);
+    });
+  });
 });
