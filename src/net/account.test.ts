@@ -154,6 +154,35 @@ describe('account client', () => {
       expect(heard).toEqual([]);
     });
 
+    it('tells the game’s other tabs: one signed in as the deleted Account signs out, and each forgets it', async () => {
+      // A shared channel: each tab hears the others' messages, not its own (as a BroadcastChannel).
+      const tabs: Array<(d: unknown) => void> = [];
+      const channel = () => {
+        let me: ((d: unknown) => void) | null = null;
+        return { post: (m: unknown) => tabs.filter((t) => t !== me).forEach((t) => t(m)), listen: (fn: (d: unknown) => void) => void tabs.push((me = fn)) };
+      };
+      const tab = (user: unknown) =>
+        createAccountClient({
+          channel: channel(),
+          fetch: fakeFetch({
+            '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+            '/get-session': () => jsonResponse(user),
+            '/delete-user': () => jsonResponse({ success: true, message: 'User deleted' }),
+          }).fetch,
+        });
+      const a = tab(USER);
+      const b = tab(USER);
+      const other = tab({ user: { id: 'u2', name: 'Other', image: null }, session: {} });
+      await Promise.all([a.refresh(), b.refresh(), other.refresh()]);
+      const heard: string[] = [];
+      for (const [name, t] of [['a', a], ['b', b], ['other', other]] as const) t.onDeleted((id) => heard.push(`${name}:${id}`));
+
+      expect(await a.deleteAccount()).toBe('deleted');
+      expect(heard.sort()).toEqual(['a:u1', 'b:u1', 'other:u1']);
+      expect(b.state).toMatchObject({ status: 'signedOut', user: null });
+      expect(other.state).toMatchObject({ status: 'signedIn', user: { id: 'u2' } });
+    });
+
     it('waits longer than other calls for the server to answer', async () => {
       const { fetch } = fakeFetch({
         '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
