@@ -33,7 +33,7 @@ The apps are [Capacitor 8](https://capacitorjs.com) projects in `ios/` and `andr
 ```sh
 pnpm install
 pnpm cap:sync     # builds dist-native/ and copies it into ios/ and android/
-pnpm cap:check    # every model in public/models/manifest.json is in both projects
+pnpm cap:check    # every model in public/models/manifest.json is in both projects, and no E2E build is left
 npx cap open ios
 npx cap open android
 ```

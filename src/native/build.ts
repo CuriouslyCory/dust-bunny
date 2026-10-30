@@ -19,6 +19,8 @@ export interface BuildEnv {
   e2e?: string;
   /** VERCEL_ENV, to tell a production deploy. */
   vercelEnv?: string;
+  /** VERCEL_PROJECT_PRODUCTION_URL (a host): the production deploy's own address, also production. */
+  vercelProductionUrl?: string;
 }
 
 /**
@@ -39,7 +41,8 @@ export function resolveApiOrigin(env: BuildEnv): string {
   }
   const origin = set || (env.mode === 'native' ? PRODUCTION_ORIGIN : '');
   if (env.e2e && env.command === 'build') {
-    const production = origin ? origin === PRODUCTION_ORIGIN : env.vercelEnv === 'production';
+    const productionOrigins = [PRODUCTION_ORIGIN, ...(env.vercelProductionUrl ? [`https://${env.vercelProductionUrl.replace(/^https?:\/\//, '').replace(/\/+$/, '')}`] : [])];
+    const production = origin ? productionOrigins.includes(origin) : env.vercelEnv === 'production';
     if (production) {
       throw new Error(`VITE_E2E builds must not call the production API (${PRODUCTION_ORIGIN}): set VITE_API_ORIGIN to a dev server or a preview.`);
     }
@@ -54,10 +57,34 @@ export function filesWithE2E(files: Iterable<[string, string]>): string[] {
   return out;
 }
 
+/**
+ * A release sync must not carry an E2E build (`cap sync` after `pnpm cap:*:test` leaves one in the
+ * native projects): problems with a synced `capacitor.config.json` and web build's files.
+ */
+export function releaseSyncProblems(capConfig: string, files: Iterable<[string, string]>): string[] {
+  const problems: string[] = [];
+  let config: { server?: { cleartext?: boolean }; android?: { allowMixedContent?: boolean } };
+  try {
+    config = JSON.parse(capConfig) as typeof config;
+  } catch {
+    return ['capacitor.config.json is missing or not JSON'];
+  }
+  if (config.server?.cleartext) problems.push('capacitor.config.json allows cleartext (server.cleartext)');
+  if (config.android?.allowMixedContent) problems.push('capacitor.config.json allows mixed content (android.allowMixedContent)');
+  for (const f of filesWithE2E(files)) problems.push(`E2E code in ${f}`);
+  return problems;
+}
+
 /** Native projects `cap sync` copies the web build into, and where its models land. */
 export const NATIVE_MODEL_DIRS = {
   ios: 'ios/App/App/public/models',
   android: 'android/app/src/main/assets/public/models',
+} as const;
+
+/** Each native project's synced `capacitor.config.json`. */
+export const NATIVE_CONFIG_FILES = {
+  ios: 'ios/App/App/capacitor.config.json',
+  android: 'android/app/src/main/assets/capacitor.config.json',
 } as const;
 
 export type NativePlatform = keyof typeof NATIVE_MODEL_DIRS;

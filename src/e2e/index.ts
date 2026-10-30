@@ -15,9 +15,11 @@
  *
  * Markers go to the console (`[e2e] …`, Capacitor/Console in logcat, the App process on iOS) and to
  * one visible status line (`#e2e-status`, aria-live) for screenshots and accessibility snapshots:
- *   title-ready · models <loaded>/<total> · screen <id> · area <id> · run-ended <reason>
+ *   models <loaded>/<expected> · title-ready · screen <id> · area <id> · run-ended <reason>
  *   board-loaded | board-offline · submit ok <rank> | submit err <code>
- *   external <url>  (any resource from outside the app's origin: the offline proof)
+ *   external <url>  (any resource or fetch from outside the app's origin: the offline proof)
+ * `expected` is the manifest's model count when the app was built (VITE_E2E_MODELS, vite.config.ts),
+ * so a missing manifest or loader reads as `0/158`, not a passing `0/0`.
  */
 import { exposeDebugTools } from '../debug/debug';
 import type { Game } from '../game/game';
@@ -49,26 +51,39 @@ export function mark(text: string): void {
   line.textContent = `${E2E_MARKER} ${shown.join(' · ')}`;
 }
 
-/** From boot: marks every resource loaded from outside the app's origin. */
+/** After the model overrides load: how many did, out of the manifest's count at build time. */
+export function modelsLoaded(loaded: number): void {
+  mark(`models ${loaded}/${import.meta.env.VITE_E2E_MODELS ?? '?'}`);
+}
+
+/**
+ * From boot: marks every resource loaded, and every fetch made, outside the app's origin. Fetches
+ * are wrapped too because a request that fails offline may leave no Resource Timing entry.
+ */
 export function watchExternal(): void {
-  if (typeof PerformanceObserver === 'undefined') return;
   const seen = new Set<string>();
-  const check = (entries: PerformanceEntryList) => {
-    for (const e of entries) {
-      let url: URL;
-      try {
-        url = new URL(e.name, location.href);
-      } catch {
-        continue;
-      }
-      if ((url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'capacitor:') && url.origin !== location.origin && !seen.has(url.href)) {
-        seen.add(url.href);
-        mark(`external ${url.href}`);
-      }
+  const note = (href: string) => {
+    let url: URL;
+    try {
+      url = new URL(href, location.href);
+    } catch {
+      return;
+    }
+    if ((url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'capacitor:') && url.origin !== location.origin && !seen.has(url.href)) {
+      seen.add(url.href);
+      mark(`external ${url.href}`);
     }
   };
-  check(performance.getEntriesByType('resource'));
-  new PerformanceObserver((list) => check(list.getEntries())).observe({ type: 'resource' });
+  const fetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    note(input instanceof Request ? input.url : String(input));
+    return fetch(input, init);
+  };
+  if (typeof PerformanceObserver === 'undefined') return;
+  for (const e of performance.getEntriesByType('resource')) note(e.name);
+  new PerformanceObserver((list) => {
+    for (const e of list.getEntries()) note(e.name);
+  }).observe({ type: 'resource' });
 }
 
 /** Marks every board read and submit the game makes through the leaderboard client. */

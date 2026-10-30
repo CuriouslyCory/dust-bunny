@@ -25,6 +25,7 @@ fi
 cd "$(dirname "$0")/.."
 export VITE_E2E="${VITE_E2E:-submit}"
 export VITE_API_ORIGIN="${VITE_API_ORIGIN:-http://localhost:5173}"
+VITE_API_ORIGIN="${VITE_API_ORIGIN%/}"
 app_id=com.curiouslycory.dustbunny
 
 echo "▸ E2E build (VITE_E2E=$VITE_E2E, API $VITE_API_ORIGIN)"
@@ -51,8 +52,8 @@ else
   echo "▸ gradlew assembleDebug"
   (cd android && ./gradlew -q assembleDebug)
   adb install -r android/app/build/outputs/apk/debug/app-debug.apk
-  if [[ "$VITE_API_ORIGIN" =~ ^http://(localhost|127\.0\.0\.1):([0-9]+)$ ]]; then
-    port="${BASH_REMATCH[2]}"
+  if [[ "$VITE_API_ORIGIN" =~ ^http://(localhost|127\.0\.0\.1)(:([0-9]+))?$ ]]; then
+    port="${BASH_REMATCH[3]:-80}"
     adb reverse "tcp:$port" "tcp:$port" >/dev/null
     echo "▸ adb reverse tcp:$port → this machine"
   fi

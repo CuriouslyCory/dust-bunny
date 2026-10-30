@@ -51,13 +51,9 @@ async function boot(): Promise<void> {
   account.consumeRedirectError();
   void account.refresh();
   const loading = showLoading(canvas.parentElement ?? document.body);
-  let modelCount = 0;
   // E2E builds wait longer: a slow emulator must not fall back to procedural models unnoticed.
-  const models = await loadModelOverrides(e2e ? 60_000 : 8000, (done, total) => {
-    modelCount = total;
-    loading.progress(done, total);
-  });
-  e2e?.mark(`models ${models.length}/${modelCount}`);
+  const models = await loadModelOverrides(e2e ? 60_000 : 8000, loading.progress);
+  e2e?.modelsLoaded(models.length);
   loading.done();
   // After the models load, so the worker's precache doesn't compete with them on a first visit.
   // Not in the apps: the bundle is already offline, and a worker could serve a stale build after an update.

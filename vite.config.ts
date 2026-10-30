@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { join, relative, resolve, sep } from 'node:path';
@@ -178,7 +179,18 @@ export default defineConfig(({ mode, command }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
   const native = mode === 'native';
   const e2e = env.VITE_E2E ?? '';
-  const apiOrigin = resolveApiOrigin({ mode, command, apiOrigin: env.VITE_API_ORIGIN, e2e, vercelEnv: env.VERCEL_ENV });
+  const apiOrigin = resolveApiOrigin({
+    mode,
+    command,
+    apiOrigin: env.VITE_API_ORIGIN,
+    e2e,
+    vercelEnv: env.VERCEL_ENV,
+    vercelProductionUrl: env.VERCEL_PROJECT_PRODUCTION_URL,
+  });
+  // What E2E builds expect `loadModelOverrides` to load (src/e2e/index.ts).
+  const e2eModels = e2e
+    ? Object.keys(JSON.parse(readFileSync('public/models/manifest.json', 'utf8')) as Record<string, unknown>).filter((id) => !id.startsWith('$')).length
+    : 0;
   return {
     plugins: [
       absoluteSocialUrls(),
@@ -191,6 +203,7 @@ export default defineConfig(({ mode, command }) => {
     define: {
       'import.meta.env.VITE_API_ORIGIN': JSON.stringify(apiOrigin),
       'import.meta.env.VITE_E2E': JSON.stringify(e2e),
+      'import.meta.env.VITE_E2E_MODELS': JSON.stringify(String(e2eModels)),
     },
     build: {
       // The apps' web build: what `cap sync` copies into ios/ and android/ (capacitor.config.ts).
