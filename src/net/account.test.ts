@@ -100,4 +100,142 @@ describe('account client', () => {
     expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' } });
     expect(a.state.error).toMatch(/Could not sign out/);
   });
+
+  describe('deleteAccount', () => {
+    const client = (deleteUser: () => Response) => {
+      const f = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+        '/delete-user': deleteUser,
+      });
+      return { ...f, a: createAccountClient({ fetch: f.fetch }) };
+    };
+
+    it('signs out once the server deleted the Account, then tells onDeleted listeners', async () => {
+      const { a, calls } = client(() => jsonResponse({ success: true, message: 'User deleted' }));
+      await a.refresh();
+      const heard: Array<[string, string]> = [];
+      a.onDeleted((id) => heard.push([id, a.state.status]));
+      expect(await a.deleteAccount()).toBe('deleted');
+      expect(calls.at(-1)).toMatchObject({ path: '/delete-user', init: { method: 'POST' } });
+      expect(a.state).toMatchObject({ status: 'signedOut', user: null, error: null });
+      expect(heard).toEqual([['u1', 'signedOut']]);
+    });
+
+    it.each([
+      ['a session older than freshAge', () => jsonResponse({ code: 'SESSION_EXPIRED', message: 'Session expired.' }, 400)],
+      ['a session that is gone', () => jsonResponse({ code: 'UNAUTHORIZED', message: 'Unauthorized' }, 401)],
+    ])('asks to sign in again for %s, and changes nothing', async (_, answer) => {
+      const { a } = client(answer);
+      await a.refresh();
+      const heard: string[] = [];
+      a.onDeleted((id) => heard.push(id));
+      expect(await a.deleteAccount()).toBe('reauth');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' }, error: null });
+      expect(heard).toEqual([]);
+    });
+
+    it('names the confirmed Account; when the session is someone else’s now (another tab switched), deletes nothing and shows who is signed in', async () => {
+      let session: unknown = USER;
+      const { fetch, calls } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(session),
+        '/delete-user': () => jsonResponse({ code: 'ACCOUNT_CHANGED', message: 'x' }, 409),
+      });
+      const a = createAccountClient({ fetch });
+      await a.refresh();
+      const heard: string[] = [];
+      a.onDeleted((id) => heard.push(id));
+      session = { user: { id: 'u2', name: 'Other', image: null }, session: {} }; // another tab signed in as u2
+      expect(await a.deleteAccount()).toBe('changed');
+      const sent = calls.find((c) => c.path === '/delete-user')!;
+      expect(new Headers(sent.init?.headers).get('x-delete-account-user')).toBe('u1');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u2' } });
+      expect(heard).toEqual([]);
+    });
+
+    it('tells the game’s other tabs: one signed in as the deleted Account signs out, and each forgets it', async () => {
+      // A shared channel: each tab hears the others' messages, not its own (as a BroadcastChannel).
+      const tabs: Array<(d: unknown) => void> = [];
+      const channel = () => {
+        let me: ((d: unknown) => void) | null = null;
+        return { post: (m: unknown) => tabs.filter((t) => t !== me).forEach((t) => t(m)), listen: (fn: (d: unknown) => void) => void tabs.push((me = fn)) };
+      };
+      const tab = (user: unknown) =>
+        createAccountClient({
+          channel: channel(),
+          fetch: fakeFetch({
+            '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+            '/get-session': () => jsonResponse(user),
+            '/delete-user': () => jsonResponse({ success: true, message: 'User deleted' }),
+          }).fetch,
+        });
+      const a = tab(USER);
+      const b = tab(USER);
+      const other = tab({ user: { id: 'u2', name: 'Other', image: null }, session: {} });
+      await Promise.all([a.refresh(), b.refresh(), other.refresh()]);
+      const heard: string[] = [];
+      for (const [name, t] of [['a', a], ['b', b], ['other', other]] as const) t.onDeleted((id) => heard.push(`${name}:${id}`));
+
+      expect(await a.deleteAccount()).toBe('deleted');
+      expect(heard.sort()).toEqual(['a:u1', 'b:u1', 'other:u1']);
+      expect(b.state).toMatchObject({ status: 'signedOut', user: null });
+      expect(other.state).toMatchObject({ status: 'signedIn', user: { id: 'u2' } });
+    });
+
+    it('drops a session read that started before the deletion (it would name the deleted Account)', async () => {
+      let release!: () => void;
+      let slow = false;
+      const { fetch } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+        '/delete-user': () => jsonResponse({ success: true, message: 'User deleted' }),
+      });
+      const gated = (async (url: string | URL | Request, init?: RequestInit) => {
+        const res = await fetch(url, init);
+        if (slow && String(url).endsWith('/get-session')) await new Promise<void>((r) => (release = r));
+        return res;
+      }) as typeof globalThis.fetch;
+      const a = createAccountClient({ fetch: gated });
+      await a.refresh();
+      slow = true;
+      const stale = a.refresh(); // read the old session; its answer comes after the deletion
+      await new Promise((r) => setTimeout(r, 0));
+      slow = false;
+      expect(await a.deleteAccount()).toBe('deleted');
+      release();
+      await stale;
+      expect(a.state).toMatchObject({ status: 'signedOut', user: null });
+    });
+
+    it('waits longer than other calls for the server to answer', async () => {
+      const { fetch } = fakeFetch({
+        '/providers': () => jsonResponse({ enabled: true, providers: ['google'] }),
+        '/get-session': () => jsonResponse(USER),
+      });
+      const slow = (async (url: string | URL | Request, init?: RequestInit) => {
+        if (!String(url).endsWith('/delete-user')) return fetch(url, init);
+        await new Promise((r) => setTimeout(r, 60));
+        if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+        return jsonResponse({ success: true, message: 'User deleted' });
+      }) as typeof globalThis.fetch;
+      const a = createAccountClient({ fetch: slow, timeoutMs: 20 });
+      await a.refresh();
+      expect(await a.deleteAccount()).toBe('deleted');
+    });
+
+    it('stays signed in, with an error, when the server can’t be reached', async () => {
+      const { a } = client(() => jsonResponse({ message: 'down' }, 503));
+      await a.refresh();
+      expect(await a.deleteAccount()).toBe('failed');
+      expect(a.state).toMatchObject({ status: 'signedIn', user: { id: 'u1' } });
+      expect(a.state.error).toMatch(/Could not delete your account/);
+    });
+
+    it('does nothing when signed out', async () => {
+      const { a, calls } = client(() => jsonResponse({ success: true }));
+      expect(await a.deleteAccount()).toBe('failed');
+      expect(calls.some((c) => c.path === '/delete-user')).toBe(false);
+    });
+  });
 });

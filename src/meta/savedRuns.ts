@@ -380,6 +380,16 @@ export class SavedRuns {
     for (const fn of this.userListeners) fn(userId);
   }
 
+  /**
+   * The Account was deleted (src/net/account.ts `onDeleted`): a saved Run kept for it leaves the
+   * device slot rather than waiting there (another Account is never offered it, docs/adr/0002), and
+   * its claims still waiting are dropped, as the server's ledger is gone. Other copies stay.
+   */
+  forgetAccount(userId: string): void {
+    if (this.slot.peekAny()?.account?.userId === userId) this.slot.clear();
+    this.credits.forget(userId);
+  }
+
   /** Called when the signed-in Account changes (the title syncs again). */
   onUser(fn: (userId: string | null) => void): () => void {
     this.userListeners.add(fn);
@@ -972,12 +982,13 @@ export function getSavedRuns(meta: SavedRunsMeta): SavedRuns {
 }
 
 /**
- * Follows the signed-in Account (which also replays its waiting claims), writes waiting pause
+ * Follows the signed-in Account (which also replays its waiting claims) and forgets a deleted one, writes waiting pause
  * stores and sends waiting uploads and claims on pagehide, and replays claims when the browser
  * comes back online (call once at boot).
  */
 export function installSavedRuns(runs: SavedRuns, account: AccountClient): void {
   account.subscribe((s) => runs.setUser(s.status === 'signedIn' ? (s.user?.id ?? null) : null));
+  account.onDeleted((userId) => runs.forgetAccount(userId));
   if (typeof window === 'undefined') return;
   window.addEventListener('pagehide', () => runs.flush());
   window.addEventListener('online', () => runs.credits.replay());

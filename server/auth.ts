@@ -10,6 +10,7 @@
  */
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { SOCIAL_PROVIDERS, type SocialProvider } from '../src/shared/account.js';
+import { beforeDeleteAccount } from './accountDeletion.js';
 import { ensureSchema, getPool, hasDatabase } from './db.js';
 
 type Env = Record<string, string | undefined>;
@@ -76,6 +77,11 @@ export function authOptions(env: Env = process.env): BetterAuthOptions {
     },
     // Signing in with a second provider that reports the same verified email links the accounts.
     account: { accountLinking: { enabled: true } },
+    // Delete account (POST /api/auth/delete-user): needs a session signed in within the last day
+    // (Better Auth's default `freshAge`), else 400 SESSION_EXPIRED and the game asks to sign in
+    // again. beforeDelete checks the request names this user, then removes the Account and everything
+    // it owns (./accountDeletion.ts).
+    user: { deleteUser: { enabled: true, beforeDelete: beforeDeleteAccount } },
     telemetry: { enabled: false },
   };
 }

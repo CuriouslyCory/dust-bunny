@@ -4,6 +4,7 @@
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
+  "redirects": [{ "source": "/delete-account", "destination": "/?account=delete", "permanent": false }],
   "rewrites": [
     { "source": "/api/auth/:path*", "destination": "/api/auth" },
     { "source": "/privacy", "destination": "/privacy.html" },

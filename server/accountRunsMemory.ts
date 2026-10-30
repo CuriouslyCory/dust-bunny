@@ -65,6 +65,11 @@ export class MemoryAccountRunStore implements AccountRunStore {
     return fn(this.rowsOf(userId));
   }
 
+  /** The Account was deleted (server/accountDeletion.ts): its rows go with the user row, as `ON DELETE CASCADE` takes them. */
+  deleteAccount(userId: string): void {
+    this.accounts.delete(userId);
+  }
+
   // --- Inspection, for tests ---
 
   /** The Account's slot as stored, or null. */

@@ -296,6 +296,11 @@ export class RunCreditQueue {
     this.replay();
   }
 
+  /** Drops every claim and settled answer kept for `userId` (the Account was deleted). */
+  forget(userId: string): void {
+    this.change((file) => ({ claims: file.claims.filter((c) => c.userId !== userId), settled: file.settled.filter((s) => s.userId !== userId) }));
+  }
+
   /** Claims waiting for the signed-in Account (tests, debugging). */
   get pending(): number {
     return this.mine().length;

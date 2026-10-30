@@ -245,3 +245,41 @@
   opacity: 0.8;
   cursor: help;
 }
+
+/* Delete account: the quiet entry under Sign out, then the confirmation. */
+.acct-delete {
+  align-self: center;
+  color: var(--danger);
+}
+
+.acct-delete-summary {
+  font-size: var(--fs-sm);
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.acct-delete-summary p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.acct-delete-summary ul {
+  margin: 4px 0 10px;
+  padding-left: 1.2em;
+}
+
+.acct-delete-summary li + li {
+  margin-top: 2px;
+}
+
+.acct-delete-summary .acct-delete-warn {
+  margin-top: 4px;
+  color: var(--danger);
+}
+
+.acct-delete-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}

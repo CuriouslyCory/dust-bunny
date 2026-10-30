@@ -6,6 +6,8 @@
  *   await account.refresh();              // on boot: providers + current session
  *   await account.signIn('discord');      // popup (redirect when popups are blocked)
  *   await account.signOut();
+ *   await account.deleteAccount();         // 'deleted' | 'reauth' (sign in again first) | 'failed'
+ *   account.onDeleted((userId) => …);      // forget what the device kept for that Account
  *
  * Sign-in opens the provider in a popup so the game keeps its state (for example an unsubmitted
  * score on the results screen); signIn() resolves once the popup is on its way and `pending` is
@@ -13,7 +15,7 @@
  * (and postMessage) and closes itself; the session is then re-read. When the popup can't open,
  * the whole page goes to the provider and comes back to the current URL.
  */
-import { isSocialProvider, type AccountConfig, type SocialProvider } from '../shared/account';
+import { DELETE_ACCOUNT_USER_HEADER, isSocialProvider, type AccountConfig, type SocialProvider } from '../shared/account';
 
 export interface AccountUser {
   id: string;
@@ -41,6 +43,24 @@ export interface AuthCompleteMessage {
   error: string | null;
 }
 
+/** Sent on `AUTH_CHANNEL` by the tab that deleted an Account: the game's other tabs sign out of it and forget it too. */
+export interface AccountDeletedMessage {
+  type: 'dust-bunny:account-deleted';
+  userId: string;
+}
+
+/** The game's tabs talking over `AUTH_CHANNEL` (a BroadcastChannel in a browser; tests pass their own). */
+export interface AuthChannel {
+  post(message: unknown): void;
+  listen(fn: (data: unknown) => void): void;
+}
+
+function broadcastChannel(): AuthChannel | null {
+  if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') return null;
+  const bc = new BroadcastChannel(AUTH_CHANNEL);
+  return { post: (m) => bc.postMessage(m), listen: (fn) => void (bc.onmessage = (e) => fn(e.data)) };
+}
+
 export interface AccountClientOptions {
   baseUrl?: string;
   fetch?: typeof fetch;
@@ -51,15 +71,42 @@ export interface AccountClientOptions {
   /** Current page URL, used as the redirect fallback's return address. */
   currentUrl?: () => string;
   timeoutMs?: number;
+  /** The game's other tabs (`AUTH_CHANNEL`). Defaults to a BroadcastChannel in a browser, none elsewhere. */
+  channel?: AuthChannel | null;
 }
 
 const POPUP_FEATURES = 'popup,width=500,height=700';
+/** How long `deleteAccount` waits for the server (other calls: `timeoutMs`, 6 s by default). */
+const DELETE_TIMEOUT_MS = 20_000;
 const COMPLETE_PATH = '/auth-complete.html';
 
 class Unavailable extends Error {}
 
+/** The server answered with an error (`code` is Better Auth's, e.g. `SESSION_EXPIRED`). */
+class AccountRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | null,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * `deleteAccount()`: `reauth` when the server wants a recent sign-in first (the session is older
+ * than Better Auth's `freshAge`, a day, or gone); signing in again and retrying then works.
+ * `changed`: the session belongs to another Account than the one confirmed (another tab switched);
+ * nothing was deleted and the state now shows who is signed in.
+ */
+export type DeleteAccountResult = 'deleted' | 'reauth' | 'changed' | 'failed';
+
 function isAuthComplete(v: unknown): v is AuthCompleteMessage {
   return typeof v === 'object' && v !== null && (v as { type?: unknown }).type === 'dust-bunny:auth-complete';
+}
+
+function isAccountDeleted(v: unknown): v is AccountDeletedMessage {
+  return typeof v === 'object' && v !== null && (v as { type?: unknown }).type === 'dust-bunny:account-deleted' && typeof (v as { userId?: unknown }).userId === 'string';
 }
 
 function toUser(v: unknown): AccountUser | null {
@@ -85,6 +132,7 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
 
   let state: AccountState = { status: 'unknown', user: null, providers: [], pending: false, error: null };
   const listeners = new Set<(s: AccountState) => void>();
+  const deletedListeners = new Set<(userId: string) => void>();
   let refreshing: Promise<AccountState> | null = null;
 
   function set(patch: Partial<AccountState>): void {
@@ -92,9 +140,9 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     for (const l of listeners) l(state);
   }
 
-  async function request(path: string, init?: RequestInit): Promise<unknown> {
+  async function request(path: string, init?: RequestInit, timeout = timeoutMs): Promise<unknown> {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const timer = setTimeout(() => ctrl.abort(), timeout);
     let res: Response;
     try {
       res = await doFetch(baseUrl + path, { credentials: 'same-origin', ...init, signal: ctrl.signal, headers: { Accept: 'application/json', ...init?.headers } });
@@ -108,12 +156,20 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     const body: unknown = await res.json().catch(() => {
       throw new Unavailable('bad json');
     });
-    if (!res.ok) throw new Error((body as { message?: string } | null)?.message ?? `Account error ${res.status}`);
+    if (!res.ok) {
+      const err = body as { message?: unknown; code?: unknown } | null;
+      throw new AccountRequestError(res.status, typeof err?.code === 'string' ? err.code : null, typeof err?.message === 'string' ? err.message : `Account error ${res.status}`);
+    }
     return body;
   }
 
+  /** Bumped when an Account is deleted: a session read started before then may still name it, and is dropped. */
+  let sessionEpoch = 0;
+
   async function loadSession(): Promise<void> {
+    const epoch = sessionEpoch;
     const user = toUser(await request('/get-session'));
+    if (epoch !== sessionEpoch) return;
     set({ status: user ? 'signedIn' : 'signedOut', user });
   }
 
@@ -142,16 +198,24 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     set({ pending: false, error: state.status !== 'signedIn' && msg.error ? signInErrorMessage(msg.error) : null });
   }
 
+  /** An Account was deleted: signed in as it, this client signs out; either way listeners forget it (another tab's deletion arrives here too). */
+  function deleted(userId: string): void {
+    sessionEpoch++;
+    if (state.user?.id === userId) set({ status: 'signedOut', user: null, pending: false, error: null });
+    for (const fn of deletedListeners) fn(userId);
+  }
+
+  const channel = opts.channel !== undefined ? opts.channel : broadcastChannel();
+  channel?.listen((data) => {
+    if (isAuthComplete(data)) void onAuthComplete(data);
+    else if (isAccountDeleted(data)) deleted(data.userId);
+  });
+
   let popup: Window | null = null;
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('message', (e) => {
       if (e.origin === location.origin && isAuthComplete(e.data)) void onAuthComplete(e.data);
     });
-    if (typeof BroadcastChannel !== 'undefined') {
-      new BroadcastChannel(AUTH_CHANNEL).onmessage = (e) => {
-        if (isAuthComplete(e.data)) void onAuthComplete(e.data);
-      };
-    }
     // Provider pages can cut the link to the popup (COOP makes popup.closed read true while it is
     // still open), so "closed" is only trusted when the player comes back to the game.
     window.addEventListener('focus', () => {
@@ -217,6 +281,42 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
         throw err;
       }
       set({ status: 'signedOut', user: null, pending: false, error: null });
+    },
+
+    /**
+     * Deletes the signed-in Account on the server (api/auth.ts → server/accountDeletion.ts), and only
+     * that one: the request names it, and the server refuses if the session is someone else's. Once
+     * it is gone the client is signed out and `onDeleted` listeners hear the Account's id, here and
+     * in the game's other tabs (`AUTH_CHANNEL`); on failure
+     * nothing changes here and `error` is set.
+     */
+    async deleteAccount(): Promise<DeleteAccountResult> {
+      const user = state.user;
+      if (state.status !== 'signedIn' || !user) return 'failed';
+      set({ error: null });
+      try {
+        // A longer wait than other calls (a cold start, then one transaction with the cascades): an
+        // answer lost after the server committed would leave this device holding the deleted Account.
+        await request('/delete-user', { method: 'POST', headers: { 'Content-Type': 'application/json', [DELETE_ACCOUNT_USER_HEADER]: user.id }, body: '{}' }, DELETE_TIMEOUT_MS);
+      } catch (err) {
+        if (err instanceof AccountRequestError && err.code === 'ACCOUNT_CHANGED') {
+          await loadSession().catch(() => undefined);
+          return 'changed';
+        }
+        if (err instanceof AccountRequestError && (err.code === 'SESSION_EXPIRED' || err.status === 401)) return 'reauth';
+        set({ error: 'Could not delete your account. Check your connection and try again.' });
+        return 'failed';
+      }
+      deleted(user.id);
+      const message: AccountDeletedMessage = { type: 'dust-bunny:account-deleted', userId: user.id };
+      channel?.post(message);
+      return 'deleted';
+    },
+
+    /** Called with the Account's id after `deleteAccount` deleted it, in this tab or another. */
+    onDeleted(fn: (userId: string) => void): () => void {
+      deletedListeners.add(fn);
+      return () => deletedListeners.delete(fn);
     },
 
     /** Reads `?error=` left by a redirect-fallback sign-in and strips it from the address bar. */

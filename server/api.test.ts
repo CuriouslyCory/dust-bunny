@@ -21,6 +21,7 @@ import { computeAreaScore, computeScore, SCORE_TIER_MIN_RADII, scoreTierForRadiu
 import type { Progress } from '../src/shared/progress';
 import { CREDIT_STATS_BOUNDS, MAX_RUN_CREDIT_BYTES, RUN_CREDIT_LIST_MAX, type RunCredit } from '../src/shared/runCredit';
 import { MAX_SAVED_RUN_BYTES, SNAPSHOT_VERSION } from '../src/shared/savedRun';
+import { DELETE_ACCOUNT_USER_HEADER } from '../src/shared/account';
 import { authOptions, resetAuthForTests } from './auth';
 import { ensureSchema, query, resetDbForTests } from './db';
 import { CREDIT_KEEP, CREDIT_RATE_LIMIT, HOLDER_RETENTION_DAYS } from './accountRuns';
@@ -846,6 +847,111 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     } finally {
       process.env.BETTER_AUTH_SECRET = secret;
     }
+  });
+
+  describe('Delete account (POST /api/auth/delete-user, server/accountDeletion.ts)', () => {
+    /** `confirmed`: the Account the confirmation was shown for (sent as DELETE_ACCOUNT_USER_HEADER). */
+    const del = (cookie?: string, confirmed?: string) =>
+      call(authApi, '/api/auth/delete-user', { method: 'POST', cookie, body: '{}', headers: confirmed ? { [DELETE_ACCOUNT_USER_HEADER]: confirmed } : {} });
+    const postScore = (board: string, body: unknown, cookie?: string) =>
+      call(leaderboardApi, `/api/leaderboard?board=${board}`, { method: 'POST', cookie, body: JSON.stringify(body), headers: { 'x-forwarded-for': `${IP}-delete` } });
+    const posted = async (res: Promise<Response>) => {
+      const r = await res;
+      expect(r.status).toBe(201);
+      return ((await r.json()) as { entry: { id: string } }).entry.id;
+    };
+    const userIdOf = async (cookie: string) => ((await (await call(authApi, '/api/auth/get-session', { cookie })).json()) as { user: { id: string } }).user.id;
+    const countFor = async (table: string, column: string, userId: string) => (await query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table} WHERE ${column} = $1`, [userId]))[0]!.n;
+    /** Scores renamed by a deletion escape the suite's name-based cleanup. */
+    const keptRuns: string[] = [];
+    const keptAreas: string[] = [];
+
+    afterAll(async () => {
+      await query(`DELETE FROM leaderboard_scores WHERE id = ANY($1::bigint[])`, [keptRuns]);
+      await query(`DELETE FROM area_scores WHERE id = ANY($1::bigint[])`, [keptAreas]);
+    });
+
+    it('requires a session', async () => {
+      expect((await del()).status).toBe(401);
+    });
+
+    it('deletes the user, sessions, cloud save, saved Run and ledger; keeps each board’s best score as an anonymous entry', async () => {
+      const name = `Del${RUN}`;
+      const cookie = await signUp(name);
+      const userId = await userIdOf(cookie);
+      const stats = { maxRadius: 120, debrisAbsorbed: 80, tierReached: 4, area: 'house' };
+
+      expect((await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(progress(50, 100, 3)) })).status).toBe(200);
+      expect((await call(savedRunApi, '/api/saved-run', { method: 'PUT', cookie, body: JSON.stringify({ runKey: 'del-saved', lease: 'd1', snapshot: runSnapshot('del-saved'), ledger: true }) })).status).toBe(200);
+      expect((await call(runCreditApi, '/api/run-credit', { method: 'POST', cookie, body: JSON.stringify({ runKey: 'del-ended', lease: 'd0', reason: 'died', stats }) })).status).toBe(200);
+
+      // Run board: two Lint Runs (the better one is the Lint board's) and a Tumble Run. House board: two Zap clears and a Lint one.
+      const runLo = await posted(postScore('run', submission(`T${RUN}dr1`, { maxRadius: 1.5 }), cookie));
+      const runHi = await posted(postScore('run', submission(`T${RUN}dr2`, { maxRadius: 2 }), cookie));
+      const runTumble = await posted(postScore('run', { ...submission(`T${RUN}dr3`, { maxRadius: 1.2 }), character: 'tumble' }, cookie));
+      const houseLo = await posted(postScore('house', areaSub(`T${RUN}dh1`, { maxRadius: 40 }), cookie));
+      const houseHi = await posted(postScore('house', areaSub(`T${RUN}dh2`, { maxRadius: 50 }), cookie));
+      const houseLint = await posted(postScore('house', { ...areaSub(`T${RUN}dh3`, { maxRadius: 30 }), character: 'lint' }, cookie));
+      const anon = await posted(postScore('run', submission(`T${RUN}dra`)));
+      keptRuns.push(runHi, runTumble);
+      keptAreas.push(houseHi, houseLint);
+      for (const t of ['player_progress', 'saved_runs', 'run_credits', 'run_holders']) expect(await countFor(t, 'user_id', userId)).toBeGreaterThan(0);
+
+      const res = await del(cookie, userId);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ success: true, message: 'User deleted' });
+
+      expect(await countFor('"user"', 'id', userId)).toBe(0);
+      for (const t of ['"session"', '"account"']) expect(await countFor(t, '"userId"', userId)).toBe(0);
+      for (const t of ['player_progress', 'saved_runs', 'run_credits', 'run_holders', 'leaderboard_scores', 'area_scores']) expect(await countFor(t, 'user_id', userId)).toBe(0);
+
+      type ScoreRow = { id: string; name: string; user_id: string | null; ip_hash: string | null };
+      const rows = async (table: string, ids: string[]) => query<ScoreRow>(`SELECT id::text, name, user_id, ip_hash FROM ${table} WHERE id = ANY($1::bigint[]) ORDER BY ${table}.id`, [ids]);
+      const anonymous = (id: string): ScoreRow => ({ id, name: 'Anonymous Bunny', user_id: null, ip_hash: null });
+      expect(await rows('leaderboard_scores', [runLo, runHi, runTumble])).toEqual([anonymous(runHi), anonymous(runTumble)]);
+      expect(await rows('area_scores', [houseLo, houseHi, houseLint])).toEqual([anonymous(houseHi), anonymous(houseLint)]);
+      const [other] = await rows('leaderboard_scores', [anon]);
+      expect(other).toMatchObject({ name: `T${RUN}dra`, user_id: null });
+      expect(other!.ip_hash).toBeTruthy();
+      const top = (await (await call(leaderboardApi, '/api/leaderboard?board=house&character=lint')).json()) as { entries: Array<{ id: string; name: string; verified: boolean }> };
+      const listedEntry = top.entries.find((e) => e.id === houseLint);
+      if (listedEntry) expect(listedEntry).toMatchObject({ name: 'Anonymous Bunny', verified: false });
+
+      // The old session is gone.
+      expect(await (await call(authApi, '/api/auth/get-session', { cookie })).json()).toBeNull();
+      expect((await call(progressApi, '/api/progress', { cookie })).status).toBe(401);
+
+      // Signing in again (same email) makes a fresh Account: no cloud save, saved Run or credits.
+      const again = await signUp(name);
+      expect(await userIdOf(again)).not.toBe(userId);
+      expect(((await (await call(progressApi, '/api/progress', { cookie: again })).json()) as { progress: unknown }).progress).toBeNull();
+      expect(((await (await call(savedRunApi, '/api/saved-run', { cookie: again })).json()) as { savedRun: unknown }).savedRun).toBeNull();
+      expect(((await (await call(runCreditApi, '/api/run-credit', { cookie: again })).json()) as { credits: unknown[] }).credits).toEqual([]);
+    });
+
+    it('deletes nothing when the confirmation names another Account than the session (another tab switched), or none', async () => {
+      const cookie = await signUp(`Swap${RUN}`);
+      const userId = await userIdOf(cookie);
+      expect((await call(progressApi, '/api/progress', { method: 'PUT', cookie, body: JSON.stringify(progress(5, 10, 1)) })).status).toBe(200);
+      for (const confirmed of ['someone-else', undefined]) {
+        const res = await del(cookie, confirmed);
+        expect(res.status).toBe(409);
+        expect(((await res.json()) as { code: string }).code).toBe('ACCOUNT_CHANGED');
+      }
+      expect(await countFor('"user"', 'id', userId)).toBe(1);
+      expect(await countFor('player_progress', 'user_id', userId)).toBe(1);
+      expect(((await (await call(authApi, '/api/auth/get-session', { cookie })).json()) as { user: { id: string } }).user.id).toBe(userId);
+    });
+
+    it('asks for a recent sign-in, and deletes nothing, when the session is older than a day', async () => {
+      const cookie = await signUp(`Stale${RUN}`);
+      const userId = await userIdOf(cookie);
+      await query(`UPDATE "session" SET "createdAt" = now() - interval '2 days' WHERE "userId" = $1`, [userId]);
+      const res = await del(cookie, userId);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('SESSION_EXPIRED');
+      expect(await countFor('"user"', 'id', userId)).toBe(1);
+    });
   });
 
   it('signs out', async () => {
