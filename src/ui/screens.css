@@ -446,6 +446,74 @@
   text-align: center;
 }
 
+.howto-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.howto-nav .btn {
+  flex: 1 0 auto;
+  min-height: 44px;
+}
+
+.howto-nav .btn[aria-pressed='true'] {
+  background: var(--cocoa-800);
+  color: var(--paper);
+}
+
+.howto-panel .howto-body.howto-reference {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.howto-group {
+  display: grid;
+  gap: 12px;
+}
+
+.howto-card {
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.howto-card h4 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+}
+
+.howto-note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.howto-card > * + * {
+  margin-top: 8px;
+}
+
+.howto-rarities {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+
+.howto-rarities dt {
+  font-weight: 800;
+}
+
+.howto-rarities dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 .howto-body {
   display: grid;
   gap: 18px;

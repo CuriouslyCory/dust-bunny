@@ -21,6 +21,7 @@
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "@types/three": "^0.186.0",
+    "happy-dom": "^21.0.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",

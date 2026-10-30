@@ -4,11 +4,12 @@
  * mid-Run, else title).
  */
 import type { Game } from '../../game/game';
-import { button, focusFirst, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
+import { button, focusFirst, focusOnControl, handleMenuKeys, isKey, panel, scrollArea, segmented, slider, toggle } from '../components';
 import { h, registerScreen, screenRegistry } from '../screens';
 import { settings, type GraphicsQuality, type TouchControlsMode } from '../settings';
 import { requestIntro, storyAvailable } from '../../story';
 import { playFromMenu } from './builtin';
+import { howToPlayGuide } from '../howToPlayGuide';
 
 export interface BackParams {
   back?: string;
@@ -118,70 +119,74 @@ export function registerMenuScreens(): void {
         h('li', { className: 'rule' }, h('span', { className: 'rule-icon', textContent: icon }), h('div', {}, h('strong', { textContent: title }), h('p', { textContent: text })));
       const touchRow = (icon: string, what: string): HTMLElement => h('li', {}, h('span', { className: 'keys touch-key', textContent: icon }), h('span', { textContent: what }));
       const done = button('Got it!', () => game.go(back), { variant: 'primary' });
-      const el = panel(
-        { title: 'How to play', className: 'howto-panel' },
-        scrollArea(
-          'howto-body',
+      const body = scrollArea(
+        'howto-body',
+        h(
+          'section',
+          { className: 'howto-controls' },
+          h('h3', { textContent: 'Controls' }),
           h(
-            'section',
-            { className: 'howto-controls' },
-            h('h3', { textContent: 'Controls' }),
-            h(
-              'ul',
-              { className: 'controls-list controls-keys' },
-              keyRow(['W', 'A', 'S', 'D'], 'Roll (or arrow keys)'),
-              keyRow(['Click'], 'Hold to roll toward the cursor'),
-              keyRow(['Space'], 'Dash (Shift works too)'),
-              keyRow(['E'], 'Ability: tap (Lint, Zap) or hold (Tumble). Right-click works too'),
-              keyRow(['Enter'], 'Dismiss a message (or leave a cleared Area)'),
-              keyRow(['Esc'], 'Pause'),
-              keyRow(['M'], 'Mute sound'),
-            ),
-            h('p', { className: 'touch-note' }, h('strong', { textContent: 'On touch: ' }), 'put your thumb anywhere on the left half to steer, tap the dash button on the right.'),
-            // Shown instead of the keys on touch devices (.touch on the root).
-            h(
-              'ul',
-              { className: 'controls-list controls-touch' },
-              touchRow('👍', 'Drag anywhere on the left half to roll'),
-              touchRow('💨', 'Tap the dash button on the right'),
-              touchRow('✨', 'Tap or hold the Ability button next to it'),
-              touchRow('✕', 'Tap ✕ on a message to dismiss it'),
-              touchRow('⏸️', 'Pause button, top right'),
-            ),
+            'ul',
+            { className: 'controls-list controls-keys' },
+            keyRow(['W', 'A', 'S', 'D'], 'Roll (or arrow keys)'),
+            keyRow(['Click'], 'Hold to roll toward the cursor'),
+            keyRow(['Space'], 'Dash (Shift works too)'),
+            keyRow(['E'], 'Ability: tap (Lint, Zap) or hold (Tumble). Right-click works too'),
+            keyRow(['Enter'], 'Dismiss a message (or leave a cleared Area)'),
+            keyRow(['Esc'], 'Pause'),
+            keyRow(['M'], 'Mute sound'),
           ),
+          h('p', { className: 'touch-note' }, h('strong', { textContent: 'On touch: ' }), 'put your thumb anywhere on the left half to steer, tap the dash button on the right.'),
+          // Shown instead of the keys on touch devices (.touch on the root).
           h(
-            'section',
-            {},
-            h('h3', { textContent: 'Rules' }),
-            h(
-              'ul',
-              { className: 'rules-list' },
-              rule('🧶', 'Absorb Debris', 'Roll into anything smaller than you to stick it on and grow.'),
-              rule('🪑', 'Bigger is blocked', 'Things too large are Obstacles. Grow and come back later.'),
-              rule('⭐', 'Tier up', 'Each Tier widens the view, opens new rooms and lets you pick a Perk.'),
-              rule('🤖', 'Dodge the cleaners', 'Roombas, brooms and mops hurt. Once you are big enough, absorb them too.'),
-              rule('🚪', 'Head outside', 'Absorb the Robo-Vac 9000 at Dust Titan and the front door opens onto the neighborhood.'),
-              rule('🏙️', 'Hit the city', 'Absorb the Street Sweeper at Dust Cyclone and the road barrier lifts: roll on downtown.'),
-              rule('🛣️', 'Take the highway', 'Absorb the Garbage Truck at Dust Colossus and the on-ramp opens onto the region.'),
-              rule('🌍', 'Roll west', 'Out in the region, towns are Debris. Absorb the Incinerator at Dust Front and the motorway west opens onto the continent.'),
-              rule('🚀', 'Leave the atmosphere', 'On the continent, mountain ranges are Debris. Absorb the Ice Sheet at Dust Pangaea and the launch corridor north opens up to orbit.'),
-              rule('🛰️', 'Escape orbit', 'In orbit the map wraps around the planet: roll off one edge and you come back on the other. Absorb the Orbital Sweeper at Dust Planet and the escape trajectory over the North Pole opens.'),
-              rule('☀️', 'Cross the heliopause', 'In the Solar System, planets are Debris; Jupiter is in the way until Dust Star. Absorb the Sun at Dust Star and the heliopause opens onto the galaxy.'),
-              rule('🌌', 'Leave the Milky Way', 'In the Galaxy, stars and nebulae are Debris and black holes pull hard. Absorb Sagittarius A* at Dust Cluster and the way out of the halo opens.'),
-              rule('👑', 'Win', 'In the Universe, galaxies are Debris and voids slow you down. Absorb the Expansion at Everything.'),
-            ),
+            'ul',
+            { className: 'controls-list controls-touch' },
+            touchRow('👍', 'Drag anywhere on the left half to roll'),
+            touchRow('💨', 'Tap the dash button on the right'),
+            touchRow('✨', 'Tap or hold the Ability button next to it'),
+            touchRow('✕', 'Tap ✕ on a message to dismiss it'),
+            touchRow('⏸️', 'Pause button, top right'),
           ),
         ),
+        h(
+          'section',
+          {},
+          h('h3', { textContent: 'Rules' }),
+          h(
+            'ul',
+            { className: 'rules-list' },
+            rule('🧶', 'Absorb Debris', 'Roll into anything smaller than you to stick it on and grow.'),
+            rule('🪑', 'Bigger is blocked', 'Things too large are Obstacles. Grow and come back later.'),
+            rule('⭐', 'Tier up', 'Each Tier widens the view, opens new rooms and lets you pick a Perk.'),
+            rule('🤖', 'Dodge the cleaners', 'Roombas, brooms and mops hurt. Once you are big enough, absorb them too.'),
+            rule('🚪', 'Head outside', 'Absorb the Robo-Vac 9000 at Dust Titan and the front door opens onto the neighborhood.'),
+            rule('🏙️', 'Hit the city', 'Absorb the Street Sweeper at Dust Cyclone and the road barrier lifts: roll on downtown.'),
+            rule('🛣️', 'Take the highway', 'Absorb the Garbage Truck at Dust Colossus and the on-ramp opens onto the region.'),
+            rule('🌍', 'Roll west', 'Out in the region, towns are Debris. Absorb the Incinerator at Dust Front and the motorway west opens onto the continent.'),
+            rule('🚀', 'Leave the atmosphere', 'On the continent, mountain ranges are Debris. Absorb the Ice Sheet at Dust Pangaea and the launch corridor north opens up to orbit.'),
+            rule('🛰️', 'Escape orbit', 'In orbit the map wraps around the planet: roll off one edge and you come back on the other. Absorb the Orbital Sweeper at Dust Planet and the escape trajectory over the North Pole opens.'),
+            rule('☀️', 'Cross the heliopause', 'In the Solar System, planets are Debris; Jupiter is in the way until Dust Star. Absorb the Sun at Dust Star and the heliopause opens onto the galaxy.'),
+            rule('🌌', 'Leave the Milky Way', 'In the Galaxy, stars and nebulae are Debris and black holes pull hard. Absorb Sagittarius A* at Dust Cluster and the way out of the halo opens.'),
+            rule('👑', 'Win', 'In the Universe, galaxies are Debris and voids slow you down. Absorb the Expansion at Everything.'),
+          ),
+        ),
+      );
+      const guide = howToPlayGuide(body);
+      const el = panel(
+        { title: 'How to play', className: 'howto-panel' },
+        guide.navigation,
+        body,
         h('div', { className: 'panel-actions' }, done),
       );
       return {
         el,
         enter(params) {
           back = backTarget(game, params);
-          focusFirst(el, done);
+          guide.reset();
+          focusFirst(el);
         },
         onKey(e) {
-          if (!e.repeat && isKey(e, 'Escape', 'Enter')) {
+          if (!e.repeat && (isKey(e, 'Escape') || (isKey(e, 'Enter') && !focusOnControl()))) {
             game.go(back);
             return true;
           }
