@@ -29,6 +29,7 @@ import {
 } from '../shared/leaderboard';
 import { parseLoadout } from '../shared/keepsakes';
 import { computeAreaScore, computeScore } from '../shared/score';
+import { apiUrl } from '../platform';
 
 export type { AreaLeaderboardEntry, AreaScoreSubmission, LeaderboardEntry, ScoreSubmission } from '../shared/leaderboard';
 
@@ -91,7 +92,7 @@ function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
 }
 
 export function createLeaderboardClient(opts: LeaderboardClientOptions = {}) {
-  const baseUrl = opts.baseUrl ?? '/api/leaderboard';
+  const baseUrl = opts.baseUrl ?? apiUrl('/api/leaderboard');
   const timeoutMs = opts.timeoutMs ?? 4000;
   const postTimeoutMs = opts.postTimeoutMs ?? 10_000;
   const offlineRetryMs = opts.offlineRetryMs ?? 30_000;

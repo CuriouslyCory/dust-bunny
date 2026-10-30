@@ -26,11 +26,25 @@ Without a `.env`, `pnpm dev` serves only the game: there are no accounts and the
 
 Project structure, the game loop, events and extension points are documented in `docs/architecture.md`.
 
+## iOS and Android apps
+
+The apps are [Capacitor 8](https://capacitorjs.com) projects in `ios/` and `android/` that bundle the game (Vite mode `native`, built to `dist-native/`) and play it offline, signed out, against the production leaderboard. From a fresh clone:
+
+```sh
+pnpm install
+pnpm cap:sync     # builds dist-native/ and copies it into ios/ and android/
+pnpm cap:check    # every model in public/models/manifest.json is in both projects, and no E2E build is left
+npx cap open ios
+npx cap open android
+```
+
+Needs Xcode 26 or later for iOS, and for Android, Android Studio 2025.2.1 or later with SDK 36 and JDK 21. Build output, the copied web build and signing files stay out of git. `pnpm cap:ios:test` and `pnpm cap:android:test` build an end-to-end test version instead and install it on a simulator or emulator (see "Native apps" in `docs/architecture.md`). [native.yml](.github/workflows/native.yml) builds both apps on every PR. Signing and store uploads are not set up yet.
+
 ## API
 
 Vercel functions in `api/`, backed by Neon Postgres (`pg` with a pool, shared code in `server/`):
 
-- `GET /api/leaderboard[?character=lint|tumble|zap]` returns `{ entries }`, the top 20.
+- `GET /api/leaderboard[?character=lint|tumble|zap]` returns `{ entries }`, the top 20. The leaderboard (and only the leaderboard) also answers the apps' origins, `capacitor://localhost` and `https://localhost`, with CORS headers (no credentials).
 - `POST /api/leaderboard` with `{ name, character, difficulty, maxRadius, debrisAbsorbed, tierReached, durationMs, victory, score }` returns `201 { entry, rank, nameCensored }`. The server validates the fields, recomputes the score (`src/shared/score.ts`, × the Difficulty's multiplier: Casual 1, Arcade 1.25, Hardcore 1.6; a missing `difficulty` counts as Casual), and rate-limits by hashed IP. All Difficulties share one board; each entry carries its `difficulty`, and `verified: true` when it was posted while signed in (otherwise it is anonymous). Errors come back as JSON `{ error, message, field? }`.
 - `/api/auth/*`: accounts, through [Better Auth](https://better-auth.com) with Google and Discord sign-in (self-hosted, because Neon's managed Auth has no Discord). `GET /api/auth/providers` says which providers are configured.
 - `GET /api/progress` / `PUT /api/progress`: the signed-in player's cloud save (Fluff, Upgrades, lifetime stats). A `PUT` with less lifetime Fluff than the stored copy is refused and the stored copy returned.

@@ -34,6 +34,7 @@ import { fluffForRun } from './fluff';
 import type { MetaProgress, RunAward } from './meta';
 import type { KeyValueStorage, SaveStorageEvent, StorageEventSource } from './save';
 import { type VersionedFormat, VersionedStore } from './versionedStore';
+import { apiUrl } from '../platform';
 
 export const RUN_CREDITS_KEY = 'dust-bunny:run-credits:v1';
 export const RUN_CREDITS_VERSION = 1;
@@ -87,7 +88,7 @@ export interface RunCreditApi {
 }
 
 export function createRunCreditApi(opts: JsonCallerOptions & { baseUrl?: string } = {}): RunCreditApi {
-  const baseUrl = opts.baseUrl ?? '/api/run-credit';
+  const baseUrl = opts.baseUrl ?? apiUrl('/api/run-credit');
   const call = createJsonCaller(opts);
   const toCredit = (raw: unknown): RunCredit | null => {
     const r = raw as Partial<RunCredit> | null;

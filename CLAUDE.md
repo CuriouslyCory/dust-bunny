@@ -8,6 +8,7 @@ A three.js roguelike where the player is a dust bunny that grows by absorbing fl
 - `pnpm build`: `tsc --noEmit && vite build` → `dist/`
 - `pnpm test`: Vitest unit tests (`pnpm typecheck` for types only)
 - `pnpm sim`: headless balance bot that prints Tier timings
+- `pnpm cap:sync`: native web build (`dist-native/`) → `cap sync` into `ios/` and `android/`; `pnpm cap:check` checks the bundled models; `pnpm cap:ios:test` / `pnpm cap:android:test` run the E2E test build on a simulator or emulator (see "Native apps" in `docs/architecture.md`)
 
 Read `docs/architecture.md` first. It covers the module map, game loop, events, extension points (Hazards, Pickups, Perks, screens, models) and debug hooks.
 

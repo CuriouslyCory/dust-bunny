@@ -962,3 +962,76 @@ describe.skipIf(!DB)('API integration (TEST_DATABASE_URL)', () => {
     expect(await after.json()).toBeNull();
   });
 });
+
+/**
+ * The Capacitor apps serve the game from `capacitor://localhost` (iOS) and `https://localhost`
+ * (Android) and call the production API cross-origin. Only the leaderboard is opened to them for
+ * now; account endpoints wait for in-app sign-in. Runs without a database: the headers are the same
+ * whether the handler answers 200, 400 or 503.
+ */
+describe('CORS for the app origins', () => {
+  const fromOrigin = (handler: Handler, path: string, origin: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers);
+    headers.set('origin', origin);
+    headers.set('x-forwarded-for', `${IP}-cors`);
+    if (init.body) headers.set('content-type', 'application/json');
+    return handler.fetch(new Request(`https://dustbunny.example${path}`, { ...init, headers }));
+  };
+  const preflight = (handler: Handler, path: string, origin: string, method = 'POST') =>
+    fromOrigin(handler, path, origin, { method: 'OPTIONS', headers: { 'access-control-request-method': method, 'access-control-request-headers': 'content-type' } });
+
+  for (const origin of ['capacitor://localhost', 'https://localhost']) {
+    describe(origin, () => {
+      for (const board of ['', '?board=house', '?board=universe']) {
+        it(`answers the preflight for /api/leaderboard${board}`, async () => {
+          const res = await preflight(leaderboardApi, `/api/leaderboard${board}`, origin);
+          expect(res.status).toBe(204);
+          expect(res.headers.get('access-control-allow-origin')).toBe(origin);
+          expect(res.headers.get('access-control-allow-methods')).toMatch(/POST/);
+          expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toMatch(/content-type/);
+          expect(res.headers.get('access-control-allow-credentials')).toBeNull();
+          expect(res.headers.get('vary')).toMatch(/Origin/);
+        });
+
+        it(`allows reads and submits of /api/leaderboard${board}`, async () => {
+          const read = await fromOrigin(leaderboardApi, `/api/leaderboard${board}`, origin);
+          expect(read.headers.get('access-control-allow-origin')).toBe(origin);
+          expect(read.headers.get('vary')).toMatch(/Origin/);
+          // An empty body is rejected (or the database is missing) before anything is stored.
+          const submit = await fromOrigin(leaderboardApi, `/api/leaderboard${board}`, origin, { method: 'POST', body: '{}' });
+          expect([400, 503]).toContain(submit.status);
+          expect(submit.headers.get('access-control-allow-origin')).toBe(origin);
+        });
+      }
+
+      it('keeps account endpoints closed', async () => {
+        for (const [handler, path] of [
+          [authApi, '/api/auth/get-session'],
+          [authApi, '/api/auth/providers'],
+          [progressApi, '/api/progress'],
+          [savedRunApi, '/api/saved-run'],
+          [runCreditApi, '/api/run-credit'],
+        ] as const) {
+          const pre = await preflight(handler, path, origin, 'GET');
+          expect(pre.headers.get('access-control-allow-origin'), path).toBeNull();
+          const read = await fromOrigin(handler, path, origin);
+          expect(read.headers.get('access-control-allow-origin'), path).toBeNull();
+        }
+      });
+    });
+  }
+
+  for (const origin of ['https://evil.example', 'http://localhost', 'capacitor://evil.example', 'null']) {
+    it(`gives ${origin} no allow header`, async () => {
+      const pre = await preflight(leaderboardApi, '/api/leaderboard', origin);
+      expect(pre.headers.get('access-control-allow-origin')).toBeNull();
+      const read = await fromOrigin(leaderboardApi, '/api/leaderboard', origin);
+      expect(read.headers.get('access-control-allow-origin')).toBeNull();
+    });
+  }
+
+  it('leaves same-origin requests without CORS headers', async () => {
+    const res = await leaderboardApi.fetch(new Request('https://dustbunny.example/api/leaderboard'));
+    expect(res.headers.get('access-control-allow-origin')).toBeNull();
+  });
+});

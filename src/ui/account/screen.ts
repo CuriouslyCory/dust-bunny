@@ -10,6 +10,7 @@
 import type { Game } from '../../game/game';
 import { account as defaultAccount, type AccountClient, type AccountState } from '../../net/account';
 import { getCloudSave, type CloudSaveStatus } from '../../meta/cloudSave';
+import { NATIVE_APP } from '../../platform';
 import { button, focusFirst, handleMenuKeys, isKey, panel } from '../components';
 import { h, registerScreen } from '../screens';
 import { avatar, providerButtons } from './widgets';
@@ -177,7 +178,11 @@ export function registerAccountScreen(client: AccountClient = defaultAccount): v
           body.replaceChildren(
             h('p', {
               className: 'acct-pitch',
-              textContent: s.status === 'unknown' ? 'Checking…' : 'Accounts are not available right now. Keep playing: scores post as anonymous and progress stays on this device.',
+              textContent: s.status === 'unknown'
+                ? 'Checking…'
+                : NATIVE_APP
+                  ? 'Signing in isn’t available in the app yet. Keep playing: scores post as anonymous and progress stays on this device.'
+                  : 'Accounts are not available right now. Keep playing: scores post as anonymous and progress stays on this device.',
             }),
           );
         }

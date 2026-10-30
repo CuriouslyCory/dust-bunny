@@ -16,6 +16,7 @@
  * the whole page goes to the provider and comes back to the current URL.
  */
 import { DELETE_ACCOUNT_USER_HEADER, isSocialProvider, type AccountConfig, type SocialProvider } from '../shared/account';
+import { apiUrl, NATIVE_APP } from '../platform';
 
 export interface AccountUser {
   id: string;
@@ -73,6 +74,11 @@ export interface AccountClientOptions {
   timeoutMs?: number;
   /** The game's other tabs (`AUTH_CHANNEL`). Defaults to a BroadcastChannel in a browser, none elsewhere. */
   channel?: AuthChannel | null;
+  /**
+   * False: never asks the server and stays `unavailable` (everyone plays anonymously). The native
+   * apps until in-app sign-in: the popup and cookie flow doesn't work from the app's origin.
+   */
+  enabled?: boolean;
 }
 
 const POPUP_FEATURES = 'popup,width=500,height=700';
@@ -123,7 +129,7 @@ export function signInErrorMessage(code: string): string {
 }
 
 export function createAccountClient(opts: AccountClientOptions = {}) {
-  const baseUrl = opts.baseUrl ?? '/api/auth';
+  const baseUrl = opts.baseUrl ?? apiUrl('/api/auth');
   const doFetch = opts.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const timeoutMs = opts.timeoutMs ?? 6000;
   const openPopup = opts.openPopup ?? (() => (typeof window === 'undefined' ? null : window.open('', 'dust-bunny-sign-in', POPUP_FEATURES)));
@@ -174,6 +180,10 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
   }
 
   async function doRefresh(): Promise<AccountState> {
+    if (opts.enabled === false) {
+      set({ status: 'unavailable', user: null, providers: [] });
+      return state;
+    }
     try {
       if (state.status === 'unknown' || state.status === 'unavailable') {
         const config = (await request('/providers')) as AccountConfig;
@@ -247,6 +257,7 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
     },
 
     async signIn(provider: SocialProvider): Promise<void> {
+      if (opts.enabled === false) return;
       set({ error: null });
       // Open the window synchronously, inside the click, so popup blockers allow it.
       popup = openPopup();
@@ -335,4 +346,4 @@ export function createAccountClient(opts: AccountClientOptions = {}) {
 export type AccountClient = ReturnType<typeof createAccountClient>;
 
 /** Default client for the game. */
-export const account = createAccountClient();
+export const account = createAccountClient({ enabled: !NATIVE_APP });
