@@ -112,7 +112,9 @@ describe('How to play reference', () => {
     topic('Keepsakes').click();
     expect(screen.onKey?.(new KeyboardEvent('keydown', { code: 'Escape' }))).toBe(true);
     expect(go).toHaveBeenLastCalledWith('paused');
+    go.mockClear();
     screen.el.querySelector<HTMLButtonElement>('.panel-actions button')!.click();
+    expect(go).toHaveBeenCalledTimes(1);
     expect(go).toHaveBeenLastCalledWith('paused');
   });
 
