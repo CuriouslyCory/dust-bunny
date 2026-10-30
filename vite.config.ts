@@ -4,6 +4,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { join, relative, resolve, sep } from 'node:path';
 import { build, defineConfig, loadEnv, type Plugin } from 'vite';
+import { APP_ORIGINS } from './server/http';
+import { filesWithE2E, resolveApiOrigin } from './src/native/build';
 import { manifestModelFiles, precacheUrls } from './src/pwa/rules';
 
 /**
@@ -90,6 +92,39 @@ function devStaticPages(): Plugin {
   };
 }
 
+/**
+ * The native apps bundle everything: Google Fonts' stylesheet gives way to the same families from
+ * @fontsource (src/native/fonts.css), so the app looks the same offline and calls nothing outside it.
+ */
+function bundledFonts(): Plugin {
+  return {
+    name: 'bundled-fonts',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html) {
+        const out = html
+          .replace(/\s*<link rel="preconnect" href="https:\/\/fonts\.(googleapis|gstatic)\.com"[^>]*>/g, '')
+          .replace(/<link href="https:\/\/fonts\.googleapis\.com\/[^"]*" rel="stylesheet" \/>/, '<link rel="stylesheet" href="/src/native/fonts.css" />');
+        if (out.includes('fonts.googleapis.com') || !out.includes('/src/native/fonts.css')) throw new Error('bundled-fonts: index.html no longer matches the Google Fonts tags it replaces');
+        return out;
+      },
+    },
+  };
+}
+
+/** A build without VITE_E2E must not contain the E2E hooks (src/e2e/index.ts): fails it if a marker is left. */
+function noE2E(): Plugin {
+  return {
+    name: 'no-e2e',
+    apply: 'build',
+    generateBundle(_, bundle) {
+      const files = Object.values(bundle).map((f): [string, string] => [f.fileName, f.type === 'chunk' ? f.code : typeof f.source === 'string' ? f.source : '']);
+      const found = filesWithE2E(files);
+      if (found.length) this.error(`E2E code in a build without VITE_E2E: ${found.join(', ')}`);
+    },
+  };
+}
+
 async function listFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
   return entries.filter((e) => e.isFile()).map((e) => relative(dir, join(e.parentPath, e.name)).split(sep).join('/'));
@@ -139,28 +174,53 @@ function serviceWorker(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [absoluteSocialUrls(), devApi(), devStaticPages(), serviceWorker()],
-  build: {
-    outDir: 'dist',
-    target: 'es2022',
-    // three.js core alone is ~560 kB minified (~140 kB gzip) and can't be split further;
-    // the warning limit sits just above it so any other chunk that grows past that still warns.
-    chunkSizeWarningLimit: 600,
-    rolldownOptions: {
-      output: {
-        codeSplitting: {
-          groups: [
-            // three.js core in its own long-cached chunk (game code changes more often).
-            // GLTFLoader (three/examples) stays a separate lazy chunk.
-            { name: 'three', test: /node_modules[\\/]three[\\/]build[\\/]/ },
-          ],
+export default defineConfig(({ mode, command }) => {
+  const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
+  const native = mode === 'native';
+  const e2e = env.VITE_E2E ?? '';
+  const apiOrigin = resolveApiOrigin({ mode, command, apiOrigin: env.VITE_API_ORIGIN, e2e, vercelEnv: env.VERCEL_ENV });
+  return {
+    plugins: [
+      absoluteSocialUrls(),
+      devApi(),
+      devStaticPages(),
+      // The apps (Vite mode `native`, src/platform.ts) bundle fonts and run without the service worker.
+      ...(native ? [bundledFonts()] : [serviceWorker()]),
+      ...(e2e ? [] : [noE2E()]),
+    ],
+    define: {
+      'import.meta.env.VITE_API_ORIGIN': JSON.stringify(apiOrigin),
+      'import.meta.env.VITE_E2E': JSON.stringify(e2e),
+    },
+    build: {
+      // The apps' web build: what `cap sync` copies into ios/ and android/ (capacitor.config.ts).
+      outDir: native ? 'dist-native' : 'dist',
+      target: 'es2022',
+      // three.js core alone is ~560 kB minified (~140 kB gzip) and can't be split further;
+      // the warning limit sits just above it so any other chunk that grows past that still warns.
+      chunkSizeWarningLimit: 600,
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              // three.js core in its own long-cached chunk (game code changes more often).
+              // GLTFLoader (three/examples) stays a separate lazy chunk.
+              { name: 'three', test: /node_modules[\\/]three[\\/]build[\\/]/ },
+            ],
+          },
         },
       },
     },
-  },
-  test: {
-    include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
-    environment: 'node',
-  },
+    server: {
+      // Vite answers preflights itself (before devApi): let the apps' E2E builds call this dev API
+      // too (server/http.ts `withAppCors` does the same on Vercel). Vite's default plus the app origins.
+      cors: { origin: [/^https?:\/\/(?:(?:[^:]+\.)?localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/, ...APP_ORIGINS] },
+      // Native projects hold copies of the build (and their own build output): not app sources.
+      watch: { ignored: ['**/ios/**', '**/android/**', '**/dist-native/**'] },
+    },
+    test: {
+      include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
+      environment: 'node',
+    },
+  };
 });

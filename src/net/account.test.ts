@@ -29,6 +29,16 @@ describe('account client', () => {
     expect((await createAccountClient({ fetch }).refresh()).status).toBe('unavailable');
   });
 
+  it('turned off (the native apps) stays unavailable without asking the server', async () => {
+    const { calls, fetch } = fakeFetch({ '/providers': () => jsonResponse({ enabled: true, providers: ['discord'] }) });
+    const openPopup = vi.fn(() => null);
+    const a = createAccountClient({ fetch, openPopup, enabled: false });
+    expect((await a.refresh()).status).toBe('unavailable');
+    await a.signIn('discord');
+    expect(openPopup).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
   it('loads providers and the session', async () => {
     let session: unknown = null;
     const { fetch } = fakeFetch({

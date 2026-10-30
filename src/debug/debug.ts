@@ -4,8 +4,11 @@
  *   - FPS / Debris / draw-call readout in the HUD
  *   - G: grow ×1.25 radius · Shift+G: shrink · T: jump to next Tier · ]/[: sim speed ×2 / ÷2
  *   - N: clear the current area (open its exit) and roll on to the next one
+ * E2E builds of the apps (src/e2e/index.ts) expose the same tools without `?debug`
+ * (`exposeDebugTools`), so their Runs stay ranked.
  */
 import type { BunnyForm } from '../entities/bunny';
+import type { RunEndReason } from '../game/runStats';
 import { getTier, MAX_TIER } from '../data/tiers';
 import type { Game } from '../game/game';
 import { areaStartRadius } from '../game/run';
@@ -36,6 +39,11 @@ export interface DebugTools {
    * the ending, from shot `from` (0-based, default the first), then the results.
    */
   playEnding(from?: number): void;
+  /**
+   * Ends the Run now through the Game's normal routing (`runEnded`: credited, posted when ranked,
+   * then the results), unlike `playEnding`. Default reason `quit`.
+   */
+  endRun(reason?: RunEndReason): void;
 }
 
 declare global {
@@ -44,7 +52,8 @@ declare global {
   }
 }
 
-export function installDebug(game: Game): DebugTools {
+/** `window.__game` with `debugTools`; doesn't touch `game.debug`, so Runs keep their ranking. */
+export function exposeDebugTools(game: Game): DebugTools {
   const goTo = (area: AreaId) => {
     const run = game.run;
     if (!run) return;
@@ -91,6 +100,9 @@ export function installDebug(game: Game): DebugTools {
       const params: EndingParams = { result: { runKey: run.runKey, reason: 'victory', stats: run.getStats() }, from };
       game.go('ending', params);
     },
+    endRun(reason = 'quit') {
+      game.run?.end(reason);
+    },
     advance(seconds) {
       const run = game.run;
       if (!run) return;
@@ -99,7 +111,11 @@ export function installDebug(game: Game): DebugTools {
     },
   };
   window.__game = Object.assign(game, { debugTools: tools });
+  return tools;
+}
 
+export function installDebug(game: Game): DebugTools {
+  const tools = exposeDebugTools(game);
   window.addEventListener('keydown', (e) => {
     if (!game.simulating || e.repeat) return;
     if (e.code === 'KeyG') tools.grow(e.shiftKey ? 0.8 : 1.25);

@@ -29,6 +29,7 @@ import { CREDITED_RUNS_MAX } from '../shared/runCredit';
 import type { MetaProgress } from './meta';
 import { repairLoadout } from './hoard';
 import { browserStorage, defaultSave, type KeyValueStorage, type SaveData } from './save';
+import { apiUrl } from '../platform';
 
 /** localStorage key: id of the account this device's save was last synced with. */
 export const CLOUD_USER_KEY = 'dust-bunny:cloud-user';
@@ -83,7 +84,7 @@ class StatusError extends Error {
 }
 
 export function createCloudSave(meta: MetaProgress, account: AccountClient, opts: CloudSaveOptions = {}) {
-  const baseUrl = opts.baseUrl ?? '/api/progress';
+  const baseUrl = opts.baseUrl ?? apiUrl('/api/progress');
   const doFetch = opts.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const storage = opts.storage === undefined ? browserStorage() : opts.storage;
   const debounceMs = opts.debounceMs ?? 1500;

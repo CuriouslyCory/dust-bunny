@@ -9,15 +9,26 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.api.json",
-    "sim": "tsx scripts/sim.ts"
+    "sim": "tsx scripts/sim.ts",
+    "cap:build": "vite build --mode native",
+    "cap:sync": "pnpm cap:build && cap sync",
+    "cap:check": "tsx scripts/capCheck.ts",
+    "cap:ios:test": "scripts/cap-test.sh ios",
+    "cap:android:test": "scripts/cap-test.sh android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@vercel/functions": "^3.10.1",
     "better-auth": "1.7.12",
     "pg": "^8.23.1",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
+    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource/nunito": "^5.3.0",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
     "@types/three": "^0.186.0",

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Dust Bunny</string>
+    <string name="title_activity_main">Dust Bunny</string>
+    <string name="package_name">com.curiouslycory.dustbunny</string>
+    <string name="custom_url_scheme">com.curiouslycory.dustbunny</string>
+</resources>

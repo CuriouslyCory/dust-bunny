@@ -33,6 +33,7 @@ import { COMPACT_QUERY } from './components';
 import { absorbedName, isBossHazard, onLoose } from './looseEvents';
 import { showBossIntro } from './screens/bossIntro';
 import { h } from './screens';
+import { NATIVE_APP } from '../platform';
 import { settings } from './settings';
 import { ToastBatcher } from './toasts';
 import './hud.css';
@@ -676,7 +677,8 @@ function counterWidgets(hud: Hud, game: Game): void {
     if (game.screens.current?.id === 'playing') game.go('paused');
   });
   hud.addWidget({ id: 'pause', slot: 'top-right', el: pause });
-  fullscreenWidget(hud);
+  // The apps already run full screen; a WebView's Fullscreen API does nothing useful there.
+  if (!NATIVE_APP) fullscreenWidget(hud);
 
   const value = h('span', { className: 'count-value' });
   const count = h('div', { className: 'hud-card hud-counter' }, h('span', { className: 'count-icon', textContent: '✦' }), value);

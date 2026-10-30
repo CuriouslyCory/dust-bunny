@@ -77,6 +77,7 @@ import {
   type PausedRunState,
 } from './suspendedRun';
 import type { KeepsakeRef } from '../data/keepsakes';
+import { apiUrl } from '../platform';
 
 export { SavedRunAuthError, SavedRunNetError } from './accountHttp';
 
@@ -101,7 +102,7 @@ export interface SavedRunApi {
 export type SavedRunApiOptions = JsonCallerOptions & { baseUrl?: string };
 
 export function createSavedRunApi(opts: SavedRunApiOptions = {}): SavedRunApi {
-  const baseUrl = opts.baseUrl ?? '/api/saved-run';
+  const baseUrl = opts.baseUrl ?? apiUrl('/api/saved-run');
   const call = createJsonCaller(opts);
   return {
     async get() {

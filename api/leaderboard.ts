@@ -3,6 +3,10 @@
  *
  *   GET  /api/leaderboard[?board=…][&character=lint|tumble|zap]  -> 200 { entries } (top 20)
  *   POST /api/leaderboard[?board=…]  body: submission            -> 201 { entry, rank, nameCensored }
+ *   OPTIONS (from the Capacitor apps' origins)                   -> 204 CORS preflight
+ *
+ * The apps (`APP_ORIGINS` in server/http.ts) read and submit cross-origin; their responses carry
+ * `Access-Control-Allow-Origin` (`withAppCors`). Without credentials, so app posts are anonymous.
  *
  * Boards: `run` (default: whole Runs, body ScoreSubmission, rows LeaderboardEntry) and one Area
  * board per Area, `house` | `neighborhood` | `city` | `region` | `continent` | `globe` | `solar_system` | `galaxy` | `universe` (a Run clearing that Area, body
@@ -55,7 +59,7 @@ import {
 } from '../src/shared/leaderboard.js';
 import { sessionUser } from '../server/auth.js';
 import { ensureSchema, query } from '../server/db.js';
-import { errorResponse, HttpError, json, readJson } from '../server/http.js';
+import { errorResponse, HttpError, json, readJson, withAppCors } from '../server/http.js';
 
 const MAX_BODY_BYTES = 2048;
 /**
@@ -293,16 +297,19 @@ async function submit(request: Request, url: URL): Promise<Response> {
   return json(existing ? 200 : 201, { entry, rank, nameCensored: ins.nameCensored });
 }
 
-export default {
-  async fetch(request: Request): Promise<Response> {
-    try {
-      const url = new URL(request.url);
-      if (request.method === 'GET') return await getTop(url);
-      if (request.method === 'POST') return await submit(request, url);
-      return json(405, { error: 'method_not_allowed', message: 'Use GET or POST.' }, { Allow: 'GET, POST' });
-    } catch (err) {
-      // DB/network failures become 503 "unavailable", so the client falls back to local scores.
-      return errorResponse(err, 'leaderboard');
-    }
+export default withAppCors(
+  {
+    async fetch(request: Request): Promise<Response> {
+      try {
+        const url = new URL(request.url);
+        if (request.method === 'GET') return await getTop(url);
+        if (request.method === 'POST') return await submit(request, url);
+        return json(405, { error: 'method_not_allowed', message: 'Use GET or POST.' }, { Allow: 'GET, POST' });
+      } catch (err) {
+        // DB/network failures become 503 "unavailable", so the client falls back to local scores.
+        return errorResponse(err, 'leaderboard');
+      }
+    },
   },
-};
+  ['GET', 'POST'],
+);

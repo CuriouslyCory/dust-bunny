@@ -1,0 +1,11 @@
+/*
+ * The Google Fonts families index.html loads on the web (Fredoka 500–700, Nunito 500–900), bundled
+ * into the native apps instead (vite.config.ts, `bundledFonts`): latin subset, woff2 only.
+ */
+@font-face { font-family: 'Fredoka'; font-style: normal; font-display: swap; font-weight: 500; src: url('@fontsource/fredoka/files/fredoka-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-style: normal; font-display: swap; font-weight: 600; src: url('@fontsource/fredoka/files/fredoka-latin-600-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-style: normal; font-display: swap; font-weight: 700; src: url('@fontsource/fredoka/files/fredoka-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-display: swap; font-weight: 500; src: url('@fontsource/nunito/files/nunito-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-display: swap; font-weight: 700; src: url('@fontsource/nunito/files/nunito-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-display: swap; font-weight: 800; src: url('@fontsource/nunito/files/nunito-latin-800-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Nunito'; font-style: normal; font-display: swap; font-weight: 900; src: url('@fontsource/nunito/files/nunito-latin-900-normal.woff2') format('woff2'); }
