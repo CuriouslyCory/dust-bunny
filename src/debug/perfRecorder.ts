@@ -250,6 +250,7 @@ export class PerfRecorder {
           'WebKit coarsens timers to about 1 ms.',
           'Shader compiles on entering an Area land in that Area’s first bucket.',
           'Percentiles at or over maxMs read maxMs; see maxMs for the real worst frame.',
+          'heapMb is performance.memory (Chromium only), which Chromium rounds and refreshes slowly unless precise memory info is on: read it as a coarse trend.',
         ],
       },
       overall: { ...all.stats(), heapMb: this.heap.toJSON() },
