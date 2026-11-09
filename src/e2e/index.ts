@@ -10,7 +10,10 @@
  *           few seconds of play, and keeps playing there: no results, so no API call (the offline check).
  * Their waits count simulated Run time, not the clock: an emulator's software GL can take longer
  * than that to draw the first frames, and a Run under a second long isn't a valid submission.
- *   other   (e.g. `1`) the markers and `window.__game.debugTools` only.
+ *   perf    the frame recorder (src/debug/perf.ts): autostarts a seeded House Run, records from its
+ *           start, and sends the report so far to the dev server on every runEnded and on Stop
+ *           (keeps recording across Runs until Stop). For a real device: see "Perf reports from a device".
+ *   other   (e.g. `1`) the markers and `window.__game.debugTools` (perf included) only.
  * Every scenario exposes `window.__game` and its debugTools without `game.debug`.
  *
  * Markers go to the console (`[e2e] …`, Capacitor/Console in logcat, the App process on iOS) and to
@@ -18,10 +21,11 @@
  *   models <loaded>/<expected> · title-ready · screen <id> · area <id> · run-ended <reason>
  *   board-loaded | board-offline · submit ok <rank> | submit err <code>
  *   external <url>  (any resource or fetch from outside the app's origin: the offline proof)
+ *   perf recording · perf sent <file> | perf send-failed <error>
  * `expected` is the manifest's model count when the app was built (VITE_E2E_MODELS, vite.config.ts),
  * so a missing manifest or loader reads as `0/158`, not a passing `0/0`.
  */
-import { exposeDebugTools } from '../debug/debug';
+import { exposeDebugTools, installPerfTools } from '../debug/debug';
 import type { Game } from '../game/game';
 import { E2E_MARKER } from '../native/build';
 import { leaderboard, LeaderboardError, type LeaderboardClient } from '../net/leaderboard';
@@ -138,16 +142,36 @@ export function installE2E(game: Game, scenario: string): void {
   watchScreens(game);
   game.events.on('areaEntered', (e) => mark(`area ${e.area}`));
   game.events.on('runEnded', (e) => mark(`run-ended ${e.reason}`));
+  // The markers come from here, never from src/debug/perf.ts: release builds must not contain them.
+  const perf = installPerfTools(game, tools, {
+    widget: scenario === 'perf',
+    onSent: (r) => mark(r.ok ? `perf sent ${r.file}` : `perf send-failed ${r.error ?? ''}`),
+  });
   mark('title-ready');
 
-  if (scenario !== 'submit' && scenario !== 'house') return;
+  if (scenario === 'perf') {
+    void perf.then((p) => {
+      const start = () => {
+        if (p.isRecording) return;
+        p.start();
+        mark('perf recording');
+      };
+      if (game.run) start();
+      else {
+        const off = game.events.on('runStarted', () => {
+          off();
+          start();
+        });
+      }
+      game.events.on('runEnded', () => void p.send());
+    });
+  }
+  if (scenario !== 'submit' && scenario !== 'house' && scenario !== 'perf') return;
   if (!leaderboard.getPlayerName()) leaderboard.setPlayerName(PLAYER_NAME);
   game.nextRunConfig.seed = SEED;
   after(1.5, () => {
     game.startRun();
     if (scenario === 'submit') afterRunTime(game, 4, () => tools.endRun());
-    else {
-      afterRunTime(game, 5, () => tools.nextArea());
-    }
+    else if (scenario === 'house') afterRunTime(game, 5, () => tools.nextArea());
   });
 }
