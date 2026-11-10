@@ -26,19 +26,25 @@ export const CAN_DOWNLOAD: boolean = !NATIVE_APP;
 const SEND_TIMEOUT_MS = 15_000;
 
 export async function sendReport(report: PerfReport): Promise<SendResult> {
+  // A timer, not AbortSignal.timeout: the iOS app supports iOS 15, whose WebView lacks it.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), SEND_TIMEOUT_MS);
   try {
     // text/plain keeps it a simple request (no preflight); the server parses it anyway.
     const res = await fetch(apiUrl(PERF_ROUTE), {
       method: 'POST',
       headers: { 'content-type': 'text/plain' },
       body: JSON.stringify(report),
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      signal: ctrl.signal,
     });
     const body = (await res.json().catch(() => null)) as { file?: unknown; error?: unknown } | null;
     if (res.ok && typeof body?.file === 'string') return { ok: true, file: body.file };
     return { ok: false, error: typeof body?.error === 'string' ? body.error : `HTTP ${res.status}` };
   } catch (err) {
+    if (ctrl.signal.aborted) return { ok: false, error: 'timeout' };
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
