@@ -25,7 +25,8 @@
  *   models <loaded>/<expected> · title-ready · screen <id> · area <id> · run-ended <reason>
  *   board-loaded | board-offline · submit ok <rank> | submit err <code>
  *   external <url>  (any resource or fetch from outside the app's origin: the offline proof)
- *   perf recording · perf sent <file> | perf send-failed <error> · tour done
+ *   perf recording · perf sent <file> | perf send-failed <error> · perf load-failed <error>
+ *   tour done | tour aborted <reason>
  * `expected` is the manifest's model count when the app was built (VITE_E2E_MODELS, vite.config.ts),
  * so a missing manifest or loader reads as `0/158`, not a passing `0/0`.
  */
@@ -156,11 +157,15 @@ export function installE2E(game: Game, scenario: string): void {
   const perf = installPerfTools(game, tools, {
     widget: recording,
     onSent: (r) => mark(r.ok ? `perf sent ${r.file}` : `perf send-failed ${r.error ?? ''}`),
+  }).catch((err: unknown) => {
+    mark(`perf load-failed ${err instanceof Error ? err.message : String(err)}`);
+    return null;
   });
   mark('title-ready');
 
   if (recording) {
     void perf.then((p) => {
+      if (!p) return;
       const start = () => {
         if (p.isRecording) return;
         p.start();
@@ -183,21 +188,26 @@ export function installE2E(game: Game, scenario: string): void {
 }
 
 /** The `tour` scenario: the autopilot plays the Run through every Area, then stops the recording. */
-function tour(game: Game, tools: DebugTools, perf: Promise<PerfTools>): void {
+function tour(game: Game, tools: DebugTools, perf: Promise<PerfTools | null>): void {
   game.input.add(new Autopilot(game));
   keepPlaying(game);
   game.events.on('runStarted', () => {
     if (game.run) immortal(game.run);
   });
+  // A Run that ends first stops Run time, so the steps below never fire again.
+  let done = false;
+  game.events.on('runEnded', (e) => {
+    if (!done) mark(`tour aborted ${e.reason}`);
+  });
   // Steps by Run time, so pauses and drafts don't eat into an Area's share.
   const step = (n: number) =>
     afterRunTime(game, (n * TOUR_AREA_S) / 2, () => {
-      if (game.run?.ended) return;
       if (n % 2) tools.nextTier();
       else tools.nextArea();
       if (n < AREA_ORDER.length * 2) return step(n + 1);
+      done = true;
       void perf.then((p) => {
-        if (p.isRecording) p.stop();
+        if (p?.isRecording) p.stop();
         mark('tour done');
       });
     });

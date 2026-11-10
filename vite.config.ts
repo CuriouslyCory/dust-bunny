@@ -100,29 +100,36 @@ function devPerfReports(): Plugin {
           res.setHeader('content-type', 'application/json');
           res.end(JSON.stringify(body));
         };
-        if (req.method !== 'POST') return reply(405, { error: 'POST only' });
-        // Reads the whole body but keeps no more than the cap.
-        const chunks: Buffer[] = [];
-        let bytes = 0;
-        for await (const chunk of req as AsyncIterable<Buffer>) {
-          bytes += chunk.length;
-          if (bytes <= PERF_MAX_BYTES) chunks.push(chunk);
-        }
-        const body = Buffer.concat(chunks);
-        const check = checkPerfUpload(bytes > PERF_MAX_BYTES ? '' : body.toString('utf8'), bytes);
-        if (!check.ok) return reply(check.status, { error: check.error });
-        await mkdir(join(root, PERF_DIR), { recursive: true });
-        const at = new Date();
-        for (let n = 0; ; n++) {
-          const file = `${PERF_DIR}/${perfReportFileName(at, check.platform, n)}`;
-          try {
-            await writeFile(join(root, file), body, { flag: 'wx' });
-          } catch (err) {
-            if ((err as NodeJS.ErrnoException).code === 'EEXIST' && n < 99) continue;
-            throw err;
+        try {
+          if (req.method !== 'POST') return reply(405, { error: 'POST only' });
+          // Reads the whole body but keeps no more than the cap.
+          const chunks: Buffer[] = [];
+          let bytes = 0;
+          for await (const chunk of req as AsyncIterable<Buffer>) {
+            bytes += chunk.length;
+            if (bytes <= PERF_MAX_BYTES) chunks.push(chunk);
           }
-          server.config.logger.info(`perf report → ${file}`, { timestamp: true });
-          return reply(200, { file });
+          const body = Buffer.concat(chunks);
+          const check = checkPerfUpload(bytes > PERF_MAX_BYTES ? '' : body.toString('utf8'), bytes);
+          if (!check.ok) return reply(check.status, { error: check.error });
+          await mkdir(join(root, PERF_DIR), { recursive: true });
+          const at = new Date();
+          for (let n = 0; ; n++) {
+            const file = `${PERF_DIR}/${perfReportFileName(at, check.platform, n)}`;
+            try {
+              await writeFile(join(root, file), body, { flag: 'wx' });
+            } catch (err) {
+              if ((err as NodeJS.ErrnoException).code === 'EEXIST' && n < 99) continue;
+              throw err;
+            }
+            server.config.logger.info(`perf report → ${file}`, { timestamp: true });
+            return reply(200, { file });
+          }
+        } catch (err) {
+          // A client gone mid-upload, or a failed write (EACCES, ENOSPC): Connect doesn't catch async handlers.
+          server.config.logger.error(`perf report failed: ${err instanceof Error ? err.message : String(err)}`, { timestamp: true });
+          if (!res.headersSent) reply(500, { error: 'write failed' });
+          else res.end();
         }
       });
     },

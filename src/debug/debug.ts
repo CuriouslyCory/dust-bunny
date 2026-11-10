@@ -126,7 +126,7 @@ export async function installPerfTools(game: Game, tools: DebugTools, opts?: Per
 
 export function installDebug(game: Game): DebugTools {
   const tools = exposeDebugTools(game);
-  void installPerfTools(game, tools);
+  installPerfTools(game, tools).catch((err) => console.warn('Frame recorder failed to load', err));
   window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyL' && !e.repeat) tools.perf?.toggle();
     if (!game.simulating || e.repeat) return;
