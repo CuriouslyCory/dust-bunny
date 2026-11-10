@@ -10,7 +10,14 @@
  *           few seconds of play, and keeps playing there: no results, so no API call (the offline check).
  * Their waits count simulated Run time, not the clock: an emulator's software GL can take longer
  * than that to draw the first frames, and a Run under a second long isn't a valid submission.
- *   other   (e.g. `1`) the markers and `window.__game.debugTools` only.
+ *   perf    the frame recorder (src/debug/perf.ts): autostarts a seeded House Run, records from its
+ *           start, and sends the report so far to the dev server on every runEnded and on Stop
+ *           (keeps recording across Runs until Stop). For a real device: see "Perf reports from a device".
+ *   tour    `perf` with nobody playing (./autopilot.ts): the autopilot steers, takes Perks and moves
+ *           past paused screens, the Bunny can't die, and every TOUR_AREA_S of Run time it grows a
+ *           Tier (halfway) or rolls on to the next Area (debugTools); after the Universe it stops
+ *           the recording, which sends the report (about 15 minutes in all).
+ *   other   (e.g. `1`) the markers and `window.__game.debugTools` (perf included) only.
  * Every scenario exposes `window.__game` and its debugTools without `game.debug`.
  *
  * Markers go to the console (`[e2e] …`, Capacitor/Console in logcat, the App process on iOS) and to
@@ -18,16 +25,23 @@
  *   models <loaded>/<expected> · title-ready · screen <id> · area <id> · run-ended <reason>
  *   board-loaded | board-offline · submit ok <rank> | submit err <code>
  *   external <url>  (any resource or fetch from outside the app's origin: the offline proof)
+ *   perf recording · perf sent <file> | perf send-failed <error> · perf load-failed <error>
+ *   tour done | tour aborted <reason>
  * `expected` is the manifest's model count when the app was built (VITE_E2E_MODELS, vite.config.ts),
  * so a missing manifest or loader reads as `0/158`, not a passing `0/0`.
  */
-import { exposeDebugTools } from '../debug/debug';
+import { exposeDebugTools, installPerfTools, type DebugTools } from '../debug/debug';
+import type { PerfTools } from '../debug/perf';
 import type { Game } from '../game/game';
 import { E2E_MARKER } from '../native/build';
 import { leaderboard, LeaderboardError, type LeaderboardClient } from '../net/leaderboard';
+import { AREA_ORDER } from '../world/types';
+import { Autopilot, immortal, keepPlaying } from './autopilot';
 
 const SEED = 'e2e';
 const PLAYER_NAME = 'E2E Bunny';
+/** `tour`: Run seconds per Area (a Tier up halfway through each), so the nine take 15 minutes. */
+const TOUR_AREA_S = 100;
 /** Status line: the newest markers, oldest first. */
 const SHOWN = 8;
 
@@ -138,16 +152,64 @@ export function installE2E(game: Game, scenario: string): void {
   watchScreens(game);
   game.events.on('areaEntered', (e) => mark(`area ${e.area}`));
   game.events.on('runEnded', (e) => mark(`run-ended ${e.reason}`));
+  // The markers come from here, never from src/debug/perf.ts: release builds must not contain them.
+  const recording = scenario === 'perf' || scenario === 'tour';
+  const perf = installPerfTools(game, tools, {
+    widget: recording,
+    onSent: (r) => mark(r.ok ? `perf sent ${r.file}` : `perf send-failed ${r.error ?? ''}`),
+  }).catch((err: unknown) => {
+    mark(`perf load-failed ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  });
   mark('title-ready');
 
-  if (scenario !== 'submit' && scenario !== 'house') return;
+  if (recording) {
+    void perf.then((p) => {
+      if (!p) return;
+      const start = () => {
+        if (p.isRecording) return;
+        p.start();
+        mark('perf recording');
+      };
+      if (game.run) start();
+      else game.events.once('runStarted', start);
+      game.events.on('runEnded', () => void p.send());
+    });
+  }
+  if (scenario === 'tour') tour(game, tools, perf);
+  if (scenario !== 'submit' && scenario !== 'house' && !recording) return;
   if (!leaderboard.getPlayerName()) leaderboard.setPlayerName(PLAYER_NAME);
   game.nextRunConfig.seed = SEED;
   after(1.5, () => {
     game.startRun();
     if (scenario === 'submit') afterRunTime(game, 4, () => tools.endRun());
-    else {
-      afterRunTime(game, 5, () => tools.nextArea());
-    }
+    else if (scenario === 'house') afterRunTime(game, 5, () => tools.nextArea());
   });
+}
+
+/** The `tour` scenario: the autopilot plays the Run through every Area, then stops the recording. */
+function tour(game: Game, tools: DebugTools, perf: Promise<PerfTools | null>): void {
+  game.input.add(new Autopilot(game));
+  keepPlaying(game);
+  game.events.on('runStarted', () => {
+    if (game.run) immortal(game.run);
+  });
+  // A Run that ends first stops Run time, so the steps below never fire again.
+  let done = false;
+  game.events.on('runEnded', (e) => {
+    if (!done) mark(`tour aborted ${e.reason}`);
+  });
+  // Steps by Run time, so pauses and drafts don't eat into an Area's share.
+  const step = (n: number) =>
+    afterRunTime(game, (n * TOUR_AREA_S) / 2, () => {
+      if (n % 2) tools.nextTier();
+      else tools.nextArea();
+      if (n < AREA_ORDER.length * 2) return step(n + 1);
+      done = true;
+      void perf.then((p) => {
+        if (p?.isRecording) p.stop();
+        mark('tour done');
+      });
+    });
+  step(1);
 }

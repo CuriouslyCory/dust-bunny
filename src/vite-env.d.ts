@@ -7,4 +7,6 @@ interface ImportMetaEnv {
   readonly VITE_E2E?: string;
   /** E2E builds: models in public/models/manifest.json at build time (src/e2e/index.ts). */
   readonly VITE_E2E_MODELS?: string;
+  /** Short commit the build came from ('' if unknown; vite.config.ts), for frame reports (src/debug/perf.ts). */
+  readonly VITE_BUILD_SHA?: string;
 }

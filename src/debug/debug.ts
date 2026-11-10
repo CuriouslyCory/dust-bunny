@@ -4,6 +4,7 @@
  *   - FPS / Debris / draw-call readout in the HUD
  *   - G: grow ×1.25 radius · Shift+G: shrink · T: jump to next Tier · ]/[: sim speed ×2 / ÷2
  *   - N: clear the current area (open its exit) and roll on to the next one
+ *   - L: start / stop the frame recorder (debugTools.perf, ./perf.ts; loaded on demand)
  * E2E builds of the apps (src/e2e/index.ts) expose the same tools without `?debug`
  * (`exposeDebugTools`), so their Runs stay ranked.
  */
@@ -15,6 +16,7 @@ import { areaStartRadius } from '../game/run';
 import { nextArea, type AreaId } from '../world/types';
 import { h } from '../ui/screens';
 import type { EndingParams } from '../story/endingScreen';
+import type { PerfOptions, PerfTools } from './perf';
 
 export interface DebugTools {
   grow(factor?: number): void;
@@ -44,6 +46,8 @@ export interface DebugTools {
    * then the results), unlike `playEnding`. Default reason `quit`.
    */
   endRun(reason?: RunEndReason): void;
+  /** The frame recorder (./perf.ts): set once `installPerfTools` has loaded it. */
+  perf?: PerfTools;
 }
 
 declare global {
@@ -114,9 +118,17 @@ export function exposeDebugTools(game: Game): DebugTools {
   return tools;
 }
 
+/** Loads the frame recorder (its own chunk) into `tools.perf`. */
+export async function installPerfTools(game: Game, tools: DebugTools, opts?: PerfOptions): Promise<PerfTools> {
+  const { installPerf } = await import('./perf');
+  return (tools.perf = installPerf(game, opts));
+}
+
 export function installDebug(game: Game): DebugTools {
   const tools = exposeDebugTools(game);
+  installPerfTools(game, tools).catch((err) => console.warn('Frame recorder failed to load', err));
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyL' && !e.repeat) tools.perf?.toggle();
     if (!game.simulating || e.repeat) return;
     if (e.code === 'KeyG') tools.grow(e.shiftKey ? 0.8 : 1.25);
     else if (e.code === 'KeyT') tools.nextTier();
@@ -139,7 +151,7 @@ export function installDebug(game: Game): DebugTools {
         run ? `${run.debris.count} debris` : '',
         run ? `r ${run.bunny.radius.toFixed(2)}` : '',
         g.loop.timeScale !== 1 ? `×${g.loop.timeScale}` : '',
-        'G grow · T tier · N next area · [ ] speed',
+        'G grow · T tier · N next area · [ ] speed · L rec',
       ]
         .filter(Boolean)
         .join(' · ');

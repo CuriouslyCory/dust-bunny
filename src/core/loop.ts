@@ -15,6 +15,11 @@ export class FixedLoop {
   /** Simulation speed multiplier (debug). */
   timeScale = 1;
   fps = 0;
+  /**
+   * Debug frame recorder (src/debug/perf.ts): called after each frame's render with the raw rAF
+   * interval (before the 250 ms clamp) and the CPU time of that frame's update + render, in ms.
+   */
+  frameObserver: ((intervalMs: number, cpuMs: number) => void) | null = null;
 
   private acc = 0;
   private last = 0;
@@ -44,7 +49,9 @@ export class FixedLoop {
 
   private frame = (now: number): void => {
     if (!this.running) return;
-    const frameDt = Math.min(0.25, (now - this.last) / 1000);
+    const t0 = this.frameObserver ? performance.now() : 0;
+    const intervalMs = now - this.last;
+    const frameDt = Math.min(0.25, intervalMs / 1000);
     this.last = now;
     this.acc += frameDt * this.timeScale;
     let steps = 0;
@@ -64,6 +71,7 @@ export class FixedLoop {
     }
 
     this.cb.render(this.acc / this.step, frameDt);
+    this.frameObserver?.(intervalMs, performance.now() - t0);
     this.raf = requestAnimationFrame(this.frame);
   };
 }

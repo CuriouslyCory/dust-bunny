@@ -4,7 +4,7 @@ A three.js roguelike where the player is a dust bunny that grows by absorbing fl
 
 ## Commands
 
-- `pnpm dev`: Vite dev server (`/?debug&autostart&seed=x` for debug hooks)
+- `pnpm dev`: Vite dev server (`/?debug&autostart&seed=x` for debug hooks; `L` records frame times, written to `perf-reports/` on Stop)
 - `pnpm build`: `tsc --noEmit && vite build` → `dist/`
 - `pnpm test`: Vitest unit tests (`pnpm typecheck` for types only)
 - `pnpm sim`: headless balance bot that prints Tier timings
