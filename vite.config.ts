@@ -79,15 +79,14 @@ function devApi(): Plugin {
   };
 }
 
-/** Origins the dev server answers: Vite's default (localhost) plus the apps' (`server.cors`, `devPerfReports`). */
+/** Origins the dev server answers (`server.cors`): Vite's default (localhost) plus the apps'. */
 const DEV_ORIGINS = [/^https?:\/\/(?:(?:[^:]+\.)?localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/, ...APP_ORIGINS];
 
 /**
  * `POST /__perf`: the frame recorder's report (src/debug/perf.ts) written to
  * `perf-reports/<UTC timestamp>-<platform>.json`, answering `{ file }`. Its own plugin, since devApi
- * stops without DATABASE_URL; `pnpm dev` only, so it never ships. Sets its own CORS headers (the
- * apps' E2E builds post from capacitor://localhost and https://localhost), whatever order Vite's
- * `server.cors` middleware runs in.
+ * stops without DATABASE_URL; `pnpm dev` only, so it never ships. CORS for the apps' E2E builds
+ * (capacitor://localhost, https://localhost) comes from `server.cors`, which Vite runs first.
  */
 function devPerfReports(): Plugin {
   return {
@@ -96,22 +95,11 @@ function devPerfReports(): Plugin {
     configureServer(server) {
       const root = server.config.root;
       server.middlewares.use(PERF_ROUTE, async (req, res) => {
-        const origin = req.headers.origin;
-        if (origin && DEV_ORIGINS.some((o) => (typeof o === 'string' ? o === origin : o.test(origin)))) {
-          res.setHeader('access-control-allow-origin', origin);
-          res.setHeader('vary', 'Origin');
-        }
         const reply = (status: number, body: unknown) => {
           res.statusCode = status;
           res.setHeader('content-type', 'application/json');
           res.end(JSON.stringify(body));
         };
-        if (req.method === 'OPTIONS') {
-          res.setHeader('access-control-allow-methods', 'POST');
-          res.setHeader('access-control-allow-headers', 'content-type');
-          res.statusCode = 204;
-          return res.end();
-        }
         if (req.method !== 'POST') return reply(405, { error: 'POST only' });
         // Reads the whole body but keeps no more than the cap.
         const chunks: Buffer[] = [];
@@ -120,14 +108,15 @@ function devPerfReports(): Plugin {
           bytes += chunk.length;
           if (bytes <= PERF_MAX_BYTES) chunks.push(chunk);
         }
-        const check = checkPerfUpload(bytes > PERF_MAX_BYTES ? '' : Buffer.concat(chunks).toString('utf8'), bytes);
+        const body = Buffer.concat(chunks);
+        const check = checkPerfUpload(bytes > PERF_MAX_BYTES ? '' : body.toString('utf8'), bytes);
         if (!check.ok) return reply(check.status, { error: check.error });
         await mkdir(join(root, PERF_DIR), { recursive: true });
         const at = new Date();
         for (let n = 0; ; n++) {
           const file = `${PERF_DIR}/${perfReportFileName(at, check.platform, n)}`;
           try {
-            await writeFile(join(root, file), Buffer.concat(chunks), { flag: 'wx' });
+            await writeFile(join(root, file), body, { flag: 'wx' });
           } catch (err) {
             if ((err as NodeJS.ErrnoException).code === 'EEXIST' && n < 99) continue;
             throw err;

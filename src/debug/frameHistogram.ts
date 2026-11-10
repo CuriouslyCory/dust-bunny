@@ -8,7 +8,7 @@ export const BIN_MS = 0.25;
 export const MAX_MS = 125;
 const BINS = MAX_MS / BIN_MS;
 
-const round3 = (v: number): number => Math.round(v * 1000) / 1000;
+export const round3 = (v: number): number => Math.round(v * 1000) / 1000;
 
 export interface HistogramJson {
   count: number;

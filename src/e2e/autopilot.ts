@@ -112,8 +112,8 @@ export function immortal(run: Run): void {
 
 /**
  * Moves past the screens that pause a Run once they have been up a moment: takes the first Perk
- * card, skips story cards, and resumes from the others (Keepsake reveal, pause). The boss intro
- * ends by itself.
+ * card and resumes from the others (Keepsake reveal, pause). The boss intro ends by itself, and
+ * E2E builds show no story cards (main.ts).
  */
 export function keepPlaying(game: Game): void {
   let shown = '';
@@ -128,9 +128,7 @@ export function keepPlaying(game: Game): void {
     }
     if (!run || run.ended || document.hidden || id === 'playing' || id === 'bossIntro' || now - since < SCREEN_WAIT_MS) return;
     since = now;
-    const el = game.screens.currentScreen?.el;
-    const button = el?.querySelector<HTMLButtonElement>(id === 'perkDraft' ? '.perk-card' : '.story-skip');
-    if (button) button.click();
-    else if (id !== 'perkDraft') game.go(run.perkDraft.active ? 'perkDraft' : 'playing');
+    if (id === 'perkDraft') game.screens.currentScreen?.el.querySelector<HTMLButtonElement>('.perk-card')?.click();
+    else game.go(run.perkDraft.active ? 'perkDraft' : 'playing');
   }, 250);
 }

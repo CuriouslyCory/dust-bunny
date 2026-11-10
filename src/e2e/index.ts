@@ -167,12 +167,7 @@ export function installE2E(game: Game, scenario: string): void {
         mark('perf recording');
       };
       if (game.run) start();
-      else {
-        const off = game.events.on('runStarted', () => {
-          off();
-          start();
-        });
-      }
+      else game.events.once('runStarted', start);
       game.events.on('runEnded', () => void p.send());
     });
   }
@@ -195,17 +190,16 @@ function tour(game: Game, tools: DebugTools, perf: Promise<PerfTools>): void {
     if (game.run) immortal(game.run);
   });
   // Steps by Run time, so pauses and drafts don't eat into an Area's share.
-  let step = 1;
-  const timer = window.setInterval(() => {
-    const run = game.run;
-    if (!run || run.ended || run.time < (step * TOUR_AREA_S) / 2) return;
-    if (step % 2) tools.nextTier();
-    else tools.nextArea();
-    if (++step <= AREA_ORDER.length * 2) return;
-    window.clearInterval(timer);
-    void perf.then((p) => {
-      if (p.isRecording) p.stop();
-      mark('tour done');
+  const step = (n: number) =>
+    afterRunTime(game, (n * TOUR_AREA_S) / 2, () => {
+      if (game.run?.ended) return;
+      if (n % 2) tools.nextTier();
+      else tools.nextArea();
+      if (n < AREA_ORDER.length * 2) return step(n + 1);
+      void perf.then((p) => {
+        if (p.isRecording) p.stop();
+        mark('tour done');
+      });
     });
-  }, 250);
+  step(1);
 }

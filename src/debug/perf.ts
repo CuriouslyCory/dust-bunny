@@ -15,7 +15,7 @@ import type { Game } from '../game/game';
 import { NATIVE_APP } from '../platform';
 import { h } from '../ui/screens';
 import { CAN_DOWNLOAD, CAN_SEND, copyText, downloadReport, sendReport, type SendResult } from './perfExport';
-import { PerfRecorder, type FrameSample, type PerfMeta, type PerfReport } from './perfRecorder';
+import { clock, PerfRecorder, type FrameSample, type PerfMeta, type PerfReport } from './perfRecorder';
 
 export interface PerfTools {
   readonly isRecording: boolean;
@@ -195,10 +195,7 @@ function perfWidget() {
     },
     recording(elapsedS: () => number) {
       show(false);
-      const tick = () => {
-        const t = Math.floor(elapsedS());
-        rec.textContent = `■ Stop ${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-      };
+      const tick = () => (rec.textContent = `■ Stop ${clock(elapsedS())}`);
       tick();
       window.clearInterval(timer);
       timer = window.setInterval(tick, 1000);

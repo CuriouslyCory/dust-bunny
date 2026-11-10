@@ -13,7 +13,7 @@
  */
 import { getTier } from '../data/tiers';
 import type { Quality } from '../fx/quality';
-import { BIN_MS, FrameHistogram, MAX_MS, Stat, type HistogramJson, type StatJson } from './frameHistogram';
+import { BIN_MS, FrameHistogram, MAX_MS, round3, Stat, type HistogramJson, type StatJson } from './frameHistogram';
 
 /** What the frame looked like, read once per frame by ./perf.ts. */
 export interface FrameSample {
@@ -96,8 +96,6 @@ const HEAP_EVERY_MS = 1000;
 const HEAP_SERIES_EVERY = 10;
 const DISPLAY_HZ = [30, 48, 50, 60, 72, 90, 120, 144, 165, 240];
 
-const round3 = (v: number): number => Math.round(v * 1000) / 1000;
-
 class Bucket {
   readonly frame = new FrameHistogram();
   readonly cpu = new FrameHistogram();
@@ -150,7 +148,6 @@ export class PerfRecorder {
   private excluded = { total: 0, notSimulating: 0, hidden: 0, timeScale: 0, afterGap: 0 };
   private heap = new Stat();
   private heapSeries: Array<[number, number]> = [];
-  private heapSamples = 0;
   private lastHeapMs = -Infinity;
   private runs: PerfReport['meta']['runs'] = [];
   private qualityChanges: PerfReport['qualityChanges'] = [];
@@ -171,7 +168,6 @@ export class PerfRecorder {
     this.excluded = { total: 0, notSimulating: 0, hidden: 0, timeScale: 0, afterGap: 0 };
     this.heap = new Stat();
     this.heapSeries = [];
-    this.heapSamples = 0;
     this.lastHeapMs = -Infinity;
     this.runs = [];
     this.qualityChanges = [];
@@ -271,7 +267,7 @@ export class PerfRecorder {
     const mb = this.readHeapMb();
     if (mb === null) return;
     this.heap.add(mb);
-    if (this.heapSamples++ % HEAP_SERIES_EVERY === 0 && this.heapSeries.length < MAX_HEAP_SERIES) this.heapSeries.push([round3(this.elapsedS), round3(mb)]);
+    if ((this.heap.count - 1) % HEAP_SERIES_EVERY === 0 && this.heapSeries.length < MAX_HEAP_SERIES) this.heapSeries.push([round3(this.elapsedS), round3(mb)]);
   }
 }
 
@@ -280,7 +276,8 @@ function defaultHeapMb(): number | null {
   return mem ? mem.usedJSHeapSize / 1048576 : null;
 }
 
-const clock = (s: number): string => {
+/** `mm:ss`, or `h:mm:ss` from an hour. */
+export const clock = (s: number): string => {
   const t = Math.floor(s);
   const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
   const ss = String(t % 60).padStart(2, '0');
